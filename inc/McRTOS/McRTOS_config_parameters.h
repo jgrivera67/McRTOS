@@ -1,0 +1,168 @@
+/**
+ * @file McRTOS_config_parameters.h
+ *
+ * McRTOS compile-time configuration parameters
+ *
+ * @author German Rivera 
+ */ 
+#ifndef _McRTOS_CONFIG_PARAMS_H
+#define _McRTOS_CONFIG_PARAMS_H
+
+#include <stdint.h>
+#include "hardware_abstractions.h"
+#include "arm_defs.h"
+
+/*
+ * NOTE: MCRTOS_DYNAMIC_OBJECT_CREATION needs to be enabled to allow
+ * application threads to create other threads and other McRTOS resources.
+ *
+ * By default dynamic creation of McRTOS objects from application threads
+ * is disabled.
+ */
+#if 0
+#define MCRTOS_DYNAMIC_OBJECT_CREATION
+#endif
+
+/**
+ * Tick Timer frequency in Hz
+ */
+#define RTOS_TICK_TIMER_FREQUENCY    UINT32_C(500)  /* 500 Hz or every 2 ms */
+//#define RTOS_TICK_TIMER_FREQUENCY    UINT32_C(1000)  /* 1 KHz or every 1 ms */
+//#define RTOS_TICK_TIMER_FREQUENCY    UINT32_C(100) /* 100 Hz or every 10 ms */
+
+/**
+ * Tick timer period in milliseconds
+ */
+#define RTOS_MILLISECONDS_PER_TICK (1000 / RTOS_TICK_TIMER_FREQUENCY)
+
+/**
+ * Number of ticks for a system heartbeat
+ */
+#define RTOS_HEARTBEAT_TICKS    UINT32_C(64)
+
+/**
+ * Execution stack size for threads (in number of stack entries)
+ */
+#define RTOS_THREAD_STACK_NUM_ENTRIES   UINT32_C(256)
+
+/**
+ * Thread stack size in bytes
+ */
+#define RTOS_THREAD_STACK_SIZE_IN_BYTES \
+        (RTOS_THREAD_STACK_NUM_ENTRIES * ARM_CPU_WORD_SIZE_IN_BYTES)
+
+/**
+ * Stack overflow buffer size (in number of stack entries) for 
+ * interrupt stacks
+ */
+#define RTOS_THREAD_STACK_OVERFLOW_BUFFER_SIZE_IN_ENTRIES \
+        (RTOS_THREAD_STACK_NUM_ENTRIES / 10)
+
+/**
+ * Execution stack size for interrupts (in number of stack entries) 
+ */
+#define RTOS_INTERRUPT_STACK_NUM_ENTRIES    UINT32_C(128)
+
+/**
+ * Stack overflow buffer size (in number of stack entries) for 
+ * interrupt stacks
+ */
+#define RTOS_INTERRUPT_STACK_OVERFLOW_BUFFER_SIZE_IN_ENTRIES \
+        (RTOS_INTERRUPT_STACK_NUM_ENTRIES / 10)
+
+/**
+ * Number of thread priorities supported
+ */
+#define RTOS_NUM_THREAD_PRIORITIES  ARM_CPU_WORD_SIZE_IN_BITS
+
+/**
+ * Time slice in number of timer ticks for each thread of the priority.
+ * Threads with the same priority are scheduled in a round-robin fashion, 
+ * giving each thread the CPU for this number of ticks.
+ */
+#define RTOS_THREAD_TIME_SLICE_IN_TICKS UINT8_C(8)
+
+/**
+ * Maximum size of the fdc_info struct in bytes
+ */
+#define RTOS_MAX_FDC_INFO_SIZE  UINT32_C(4*1024)
+
+/**
+ * Maximum number of failure records that can be captured
+ */
+#define RTOS_MAX_NUM_FAILURE_RECORDS    UINT32_C(16)
+
+/**
+ * Maximum number of unexpected exception records that can be captured
+ */
+#define RTOS_MAX_NUM_UNEXPECTED_EXCEPTION_RECORDS   UINT32_C(16)
+
+/**
+ * Size of the context switch trace buffer in number of entries
+ */
+#define RTOS_NUM_CONTEXT_SWITCH_TRACE_BUFFER_ENTRIES    UINT16_C(128)
+
+/**
+ * Number of console channels
+ */
+#define RTOS_NUM_CONSOLE_CHANNELS UINT8_C(2)
+
+/**
+ * Number of LCD channels
+ */
+#define RTOS_NUM_LCD_CHANNELS UINT8_C(3)
+
+/*
+ * Application-dependent parameters
+ */
+
+/**
+ * Maximum number of application threads that can exist in the system
+ */
+#define RTOS_MAX_NUM_APP_THREADS UINT8_C(16)
+
+/*
+ * If the total size of application thread stacks is larger than 25% of
+ * the SoC SRAM, use DRAM for the application thread stacks
+ */
+#if (RTOS_MAX_NUM_APP_THREADS * RTOS_THREAD_STACK_SIZE_IN_BYTES) > \
+    (SOC_SRAM_SIZE / 4)
+#   if defined(RTOS_APP_THREAD_STACK_DRAM_POOL_SIZE)
+#       define RTOS_USE_DRAM_FOR_APP_THREAD_STACKS
+
+        C_ASSERT(
+            RTOS_MAX_TOTAL_APP_THREAD_STACKS_SIZE <=
+            RTOS_APP_THREAD_STACK_DRAM_POOL_SIZE);
+#   else
+#       error "Cannot allocate app thread stacks"
+#   endif
+#else
+#   undef RTOS_USE_DRAM_FOR_APP_THREAD_STACKS
+#endif
+
+/**
+ * Maximum number of software timers that can exist in the system
+ */
+#define RTOS_MAX_NUM_APP_TIMERS             UINT8_C(8)
+
+/**
+ * Maximum number of mutexes that can exist in the system
+ */
+#define RTOS_MAX_NUM_APP_MUTEXES            UINT8_C(8)
+
+/**
+ * Maximum number of condition variables that can exist in the system
+ */
+#define RTOS_MAX_NUM_APP_CONDVARS           UINT8_C(8)
+
+/**
+ * Maximum number of message channels that can exist in the system
+ */
+#define RTOS_MAX_NUM_APP_MSG_CHANNELS       UINT8_C(8)
+
+/**
+ * Maximum number of message channels that can exist in the system
+ */
+#define RTOS_MAX_NUM_APP_OBJECT_POOLS       UINT8_C(8)
+
+#endif /* _McRTOS_CONFIG_PARAMS_H */
