@@ -36,7 +36,7 @@
 *                   "ARM Cross Development with Eclipse" from James P. Lynch
 ****************************************************************************/
 
-#include "lpc2478_arm_defs.h"
+#include "arm_defs.h"
    
 /*
  * Imports and exports

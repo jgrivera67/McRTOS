@@ -3,6 +3,8 @@
  *
  * McRTOS interrupt service routines
  *
+ * Copyright (C) 2013 German Rivera
+ *
  * @author German Rivera 
  */
 
@@ -264,8 +266,8 @@ GEN_ISR_FUNCTION timer0, \
                  timer_interrupt_handler
 
 GEN_ISR_FUNCTION uart0, \
-                 clear_uart_interrupt_source, \
-                 uart_interrupt_handler
+                 uart_interrupt_pre_handler, \
+                 uart_interrupt_post_handler
 
 GEN_ISR_FUNCTION gpio_ports, \
                  clear_gpio_ports_interrupt_source, \

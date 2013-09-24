@@ -3,6 +3,8 @@
  *
  * Hardware abstraction layer for the lpc2478-stk LCD
  *
+ * Copyright (C) 2013 German Rivera
+ *
  * @author German Rivera 
  */ 
 

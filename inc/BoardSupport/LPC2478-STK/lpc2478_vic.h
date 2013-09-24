@@ -4,7 +4,7 @@
 #include "utils.h"
 #include "compile_time_checks.h"
 #include "hardware_abstractions.h"
-#include "lpc2478_arm_defs.h"
+#include "arm_defs.h"
 
 /**
  * grivera: Base address for the LPC2478 VIC
@@ -15,13 +15,6 @@
  * grivera: Register space size for the VIC
  */
 #define LPC2478_VIC_SIZE    UINT32_C(0xF04)
-
-/**
- * grivera: function signature for an interrupt service routine
- */
-typedef void isr_function_t(void);
-
-C_ASSERT(sizeof(isr_function_t *) == sizeof(uint32_t));
 
 /**
  * grivera: Memory-mapped I/O registers of the LPC2478 VIC

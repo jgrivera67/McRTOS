@@ -3,6 +3,8 @@
  *
  * Hardware abstraction layer for the LCD
  *
+ * Copyright (C) 2013 German Rivera
+ *
  * @author German Rivera 
  */ 
 #ifndef LCD_H

@@ -3,6 +3,8 @@
  *
  * Touch screen abstraction layer implemented for the lpc2478-stk board
  *
+ * Copyright (C) 2013 German Rivera
+ *
  * @author German Rivera 
  */ 
 

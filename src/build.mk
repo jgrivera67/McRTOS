@@ -1,6 +1,14 @@
 #
+# McRTOS application top-level build makefile 
+#
+# Copyright (C) 2013 German Rivera
+# 
 # NOTE: This Makefile must be run only from the obj directory
 #
+ifndef APPLICATION
+    $(error APPLICATION not defined)
+endif
+
 ifndef PLATFORM
     $(error PLATFORM not defined)
 endif
@@ -43,8 +51,15 @@ endif
 
 ifeq "$(PLATFORM)" "LM4F120-LaunchPad"
     SYSTEM_ON_CHIP = LM4F120_SOC
-    CPU_ARCHITECTURE = armv7e-m
+    CPU_ARCHITECTURE = arm_cortex_m  #armv7e-m
     MCU  = cortex-m4
+    CODETYPE = thumb
+endif
+
+ifeq "$(PLATFORM)" "FRDM-KL25Z"
+    SYSTEM_ON_CHIP = KL25Z_SOC
+    CPU_ARCHITECTURE = arm_cortex_m
+    MCU = cortex-m0plus
     CODETYPE = thumb
 endif
 
@@ -52,7 +67,7 @@ ifndef CPU_ARCHITECTURE
     $(error unsupported platform $(PLATFORM))
 endif
 
-LDSCRIPT = $(PROJECT_DIR)/$(PLATFORM)-flash.ld
+LDSCRIPT = $(PROJECT_DIR)/$(SYSTEM_ON_CHIP)-flash.ld
 
 
 # $(call source-to-object, source-file-list)
@@ -76,11 +91,11 @@ endef
 modules      := \
 		McRTOS \
 		BoardSupport \
-		Applications/$(PLATFORM)/McRTOS-demo
+		Applications/$(APPLICATION)
 
 #
 # NOTE: 'programs' is populated by included
-# Applications/$(PLATFORM)/*/module.mk makefiles
+# Applications/*/module.mk makefiles
 #
 programs     := 
 
@@ -106,6 +121,10 @@ lst_files = 	$(subst .elf,.lst,$(programs))
 include_dirs := $(INCLUDE_DIR)/McRTOS \
 	        $(INCLUDE_DIR)/BoardSupport \
 	        $(INCLUDE_DIR)/BoardSupport/$(PLATFORM) \
+
+ifeq "$(CPU_ARCHITECTURE)" "arm_cortex_m"
+    include_dirs += $(INCLUDE_DIR)/BoardSupport/CMSIS
+endif
 
 CPPFLAGS     += $(addprefix -I ,$(include_dirs)) \
 		-D$(SYSTEM_ON_CHIP) 
@@ -141,6 +160,7 @@ CFLAGS  = 	$(MCFLAGS) $(OPT) -gdwarf-2 -fomit-frame-pointer \
 		-Werror \
 		-mapcs-frame \
 		-Wstack-usage=256 \
+		-Wundef \
 		$(CPPFLAGS) \
 		${COMMON_CFLAGS} ${CMD_LINE_CFLAGS}
 

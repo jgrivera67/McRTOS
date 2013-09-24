@@ -3,6 +3,8 @@
  *
  * Failure data capture declarations
  *
+ * Copyright (C) 2013 German Rivera
+ *
  * @author German Rivera 
  */ 
 #ifndef _FAILURE_DATA_CAPTURE_H
@@ -69,56 +71,50 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
         }						        \
     } while (0)
 
-#define FDC_ASSERT3(_cond, _arg1, _arg2, _arg3) \
-        FDC_ASSERT(_cond, _arg1, _arg2)
-
 #else
 
-#if 0
-#define FDC_ASSERT(_cond, _arg1, _arg2) \
-        FDC_ASSERT3(_cond, _arg1, _arg2, 0)
+#if DEFINED_ARM_CLASSIC_ARCH()
 
-#define FDC_ASSERT3(_cond, _arg1, _arg2, _arg3) \
-    do {					                \
-        if (_INFREQUENTLY_TRUE_(!(_cond))) {                    \
-            capture_assert_failure(                             \
-                #_cond,                                         \
-                (uintptr_t)(_arg1),                             \
-                (uintptr_t)(_arg2),                             \
-                (uintptr_t)(_arg3));                            \
-        }						        \
-    } while (0)
-#endif /* #if 0 */
-
-#define FDC_ASSERT(_cond, _arg1, _arg2) \
-        FDC_ASSERT3(_cond, _arg1, _arg2, 0)
-
-#define FDC_ASSERT3(_cond, _arg1, _arg2, _arg3) \
+#   define FDC_ASSERT(_cond, _arg1, _arg2) \
     do {                                                                \
         asm volatile (                                                  \
             "teq    %[cond], #0\n\t"                                    \
             "moveq  r0, %[cond_str]\n\t"                                \
             "moveq  r1, %[arg1]\n\t"                                    \
             "moveq  r2, %[arg2]\n\t"                                    \
-            "moveq  r3, %[arg3]\n\t"                                    \
             "bleq   capture_assert_failure"                             \
             :                                                           \
             : [cond] "r" (_cond),                                       \
               [cond_str] "r" (#_cond),                                  \
               [arg1] "r" (_arg1),                                       \
-              [arg2] "r" (_arg2),                                       \
-              [arg3] "r" (_arg3)                                        \
-            : "cc", "r0", "r1", "r2", "r3"                              \
+              [arg2] "r" (_arg2)                                        \
+            : "cc", "r0", "r1", "r2"                                    \
         );                                                              \
     } while (0)
+
+#elif DEFINED_ARM_CORTEX_M_ARCH()
+
+#   define FDC_ASSERT(_cond, _arg1, _arg2) \
+    do {					                \
+        if (_INFREQUENTLY_TRUE_(!(_cond))) {                    \
+            capture_assert_failure(                             \
+                #_cond,                                         \
+                (uintptr_t)(_arg1),                             \
+                (uintptr_t)(_arg2));                            \
+        }						        \
+    } while (0)
+
+#endif
 
 #endif /* CPPUTEST_COMPILATION */
 
 
-#define FDC_ASSERT_CPU_INTERRUPTS_DISABLED() \
-        __FDC_ASSERT_ARM_INTERRUPTS_DISABLED(ARM_INTERRUPTS_DISABLED_MASK)
+#if DEFINED_ARM_CLASSIC_ARCH()
 
-#define __FDC_ASSERT_ARM_INTERRUPTS_DISABLED(_interrupt_mask) \
+#   define FDC_ASSERT_CPU_INTERRUPTS_DISABLED() \
+           __FDC_ASSERT_ARM_INTERRUPTS_DISABLED(ARM_INTERRUPTS_DISABLED_MASK)
+
+#   define __FDC_ASSERT_ARM_INTERRUPTS_DISABLED(_interrupt_mask) \
     do {                                                                    \
         uint32_t currentCpsr;                                               \
         CAPTURE_ARM_CPSR_REGISTER(currentCpsr);                             \
@@ -128,7 +124,7 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
             currentCpsr, _interrupt_mask);                                  \
     } while (0)
 
-#define FDC_ASSERT_PRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED() \
+#   define FDC_ASSERT_PRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED() \
     do {                                                                    \
         uint32_t currentCpsr;                                               \
         CAPTURE_ARM_CPSR_REGISTER(currentCpsr);                             \
@@ -137,6 +133,21 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
         FDC_ASSERT(                                                         \
             CPU_INTERRUPTS_ARE_ENABLED(currentCpsr), currentCpsr, 0);       \
     } while (0)
+
+#elif DEFINED_ARM_CORTEX_M_ARCH()
+
+#   define FDC_ASSERT_CPU_INTERRUPTS_DISABLED() \
+    FDC_ASSERT(CPU_INTERRUPTS_ARE_DISABLED(__get_PRIMASK()), 0, 0)
+   
+#   define FDC_ASSERT_PRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED() \
+    do {                                                                    \
+        FDC_ASSERT(                                                         \
+            CPU_MODE_IS_PRIVILEGED(__get_CONTROL()), 0, 0);                 \
+        FDC_ASSERT(                                                         \
+            CPU_INTERRUPTS_ARE_ENABLED(__get_PRIMASK()), 0, 0);             \
+    } while (0)
+
+#endif
 
 #define FDC_ASSERT_COMING_FROM_RESET() \
     check_isr_reset_entry_asserts()
@@ -150,20 +161,47 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
 #define FDC_ASSERT_VALID_MMIO_ADDRESS(_io_addr) \
     FDC_ASSERT(BOARD_VALID_MMIO_ADDRESS(_io_addr), _io_addr, 0)
 
-/**
- * Check that a code address is in flash memory
- */
-#define FDC_ASSERT_VALID_CODE_ADDRESS(_code_addr, _context_p) \
-    FDC_ASSERT(                                                         \
-        BOARD_VALID_FLASH_ADDRESS(_code_addr) &&                        \
-        (uintptr_t)(_code_addr) % ARM_CPU_WORD_SIZE_IN_BYTES == 0,      \
-        _code_addr, _context_p)
+#if DEFINED_ARM_CLASSIC_ARCH()
+    /**
+     * Check that a code address is in flash memory and word aligned
+     */
+#   define FDC_ASSERT_VALID_CODE_ADDRESS(_code_addr, _context_p) \
+            FDC_ASSERT(                                                 \
+                BOARD_VALID_FLASH_ADDRESS(_code_addr) &&                \
+                (uintptr_t)(_code_addr) % sizeof(uint32_t) == 0,        \
+                _code_addr, _context_p)
 
-/**
- * Check that a function pointer points to flash memory
- */
-#define FDC_ASSERT_VALID_FUNCTION_POINTER(_func_ptr) \
-        FDC_ASSERT_VALID_CODE_ADDRESS(_func_ptr, NULL)
+    /**
+     * Check that a function pointer points to flash memory
+     */
+#   define FDC_ASSERT_VALID_FUNCTION_POINTER(_func_ptr) \
+           FDC_ASSERT_VALID_CODE_ADDRESS(_func_ptr, NULL)
+                
+#elif DEFINED_ARM_CORTEX_M_ARCH()
+    /**
+     * Check that a code address is in flash memory and half-word aligned
+     */
+#   define FDC_ASSERT_VALID_CODE_ADDRESS(_code_addr, _context_p) \
+            FDC_ASSERT(                                                 \
+                BOARD_VALID_FLASH_ADDRESS(_code_addr) &&                \
+                (uintptr_t)(_code_addr) % sizeof(uint16_t) == 0,        \
+                _code_addr, _context_p)
+
+    /**
+     * Check that lowest bit of function pointer is set (code compiled for
+     * thumb mode) and points to flash memory
+     */
+#   define FDC_ASSERT_VALID_FUNCTION_POINTER(_func_ptr) \
+            do {                                                            \
+                FDC_ASSERT(                                                 \
+                    ((uintptr_t)(_func_ptr) & 0x1) != 0, _func_ptr, 0);     \
+                FDC_ASSERT_VALID_CODE_ADDRESS(                              \
+                    (uintptr_t)(_func_ptr) & ~0x1, NULL);                   \
+            } while (0)
+
+#else
+#   error "CPU architecture not supported"
+#endif /* !DEFINED_ARM_CORTEX_M_ARCH() */
 
 /**
  * Check that a data pointer points to RAM memory
@@ -238,8 +276,8 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
 #define FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(_thread_callers_only) \
         check_rtos_public_kernel_service_preconditions(_thread_callers_only)
 
-#define FDC_ASSERT_RTOS_INTERRUPT_HANDLER_PRECONDITIONS(_rtos_interrupt_p) \
-        check_rtos_interrupt_handler_preconditions(_rtos_interrupt_p)
+#define FDC_ASSERT_RTOS_INTERRUPT_E_HANDLER_PRECONDITIONS(_rtos_interrupt_p) \
+        check_rtos_interrupt_e_handler_preconditions(_rtos_interrupt_p)
 
 #define FDC_TRACE_RTOS_CONTEXT_SWITCH(_rtos_execution_context_p) \
         fdc_trace_rtos_context_switch(_rtos_execution_context_p)
@@ -270,17 +308,25 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
 #define FDC_ASSERT_GLIST_ELEM_INVARIANTS(_elem_p)
 #define FDC_ASSERT_INTERRUPT_SOURCE_IS_SET(_interrupt_channel)
 #define FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(_thread_callers_only)
-#define FDC_ASSERT_RTOS_INTERRUPT_HANDLER_PRECONDITIONS(_rtos_interrupt_p)
+#define FDC_ASSERT_RTOS_INTERRUPT_E_HANDLER_PRECONDITIONS(_rtos_interrupt_p)
 #define FDC_TRACE_RTOS_CONTEXT_SWITCH(_rtos_execution_context_p)
 
 #endif /* _RELIABILITY_CHECKS_ */
 
 
+#if DEFINED_ARM_CLASSIC_ARCH()
 /**
  * Capture current value of the ARM core CPSR register
  */
-#define CAPTURE_ARM_CPSR_REGISTER(_cspr_value) \
-    asm volatile ("mrs %[cspr_value], cpsr" : [cspr_value] "=r" (_cspr_value))
+#   define CAPTURE_ARM_CPSR_REGISTER(_cpsr_value) \
+    asm volatile ("mrs %[cpsr_value], cpsr" : [cpsr_value] "=r" (_cpsr_value))
+
+#elif DEFINED_ARM_CORTEX_M_ARCH()
+
+#   define CAPTURE_ARM_PSR_REGISTER(_psr_value) \
+    asm volatile ("mrs %[psr_value], psr" : [psr_value] "=r" (_psr_value))
+
+#endif
 
 /**
  * Capture current value of the ARM core LR (r14) register
@@ -377,7 +423,7 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
 #define DBG_ASSERT_RTOS_EXECUTION_CONTEXT_INVARIANTS( \
             _rtos_execution_context_p)
 
-#define DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(                \
+#define DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS( \
             _rtos_execution_context_p)
 
 #define DBG_ASSERT_RTOS_THREAD_INVARIANTS(_rtos_thread_p)
@@ -443,22 +489,93 @@ typedef uint32_t fdc_context_switch_trace_entry_t;
 
 enum fdc_cst_context_type
 {
-    FDC_CST_APPLICATION_THREAD =    0x1,
-    FDC_CST_SYSTEM_THREAD =         0x2,
-    FDC_CST_INTERRUPT =             0x4,
+    FDC_CST_RESET =                 0x1,
+    FDC_CST_APPLICATION_THREAD =    0x2,
+    FDC_CST_SYSTEM_THREAD =         0x4,
+    FDC_CST_INTERRUPT =             0x8,
 };
 
-/**
- * Lowest 4 bits of the current ARM CPU mode (the actual mode is 1bbbb)
- */
-#define FDC_CST_CURRENT_CPU_MODE_MASK          MULTI_BIT_MASK(27, 24)
-#define FDC_CST_CURRENT_CPU_MODE_SHIFT         24
+#if DEFINED_ARM_CLASSIC_ARCH()
+    /**
+     * Lowest 4 bits of the current ARM CPU mode (the actual mode is 1bbbb)
+     */
+#   define FDC_CST_CURRENT_CPU_MODE_MASK          MULTI_BIT_MASK(27, 24)
+#   define FDC_CST_CURRENT_CPU_MODE_SHIFT         24
 
-/**
- * Lowest 4 bits of the target ARM CPU mode is (the actual mode is 1bbbb)
- */
-#define FDC_CST_TARGET_CPU_MODE_MASK          MULTI_BIT_MASK(31, 28)
-#define FDC_CST_TARGET_CPU_MODE_SHIFT         28
+    /**
+     * Lowest 4 bits of the target ARM CPU mode (the actual mode is 1bbbb)
+     */
+#   define FDC_CST_TARGET_CPU_MODE_MASK          MULTI_BIT_MASK(31, 28)
+#   define FDC_CST_TARGET_CPU_MODE_SHIFT         28
+
+#elif DEFINED_ARM_CORTEX_M_ARCH()
+    /**
+     * Current CPU mode:
+     * 0 - thread mode
+     * 1 - handler mode
+     */
+#   define FDC_CST_CURRENT_CPU_MODE_MASK        BIT(24)
+#   define FDC_CST_CURRENT_CPU_MODE_SHIFT       24
+
+    /**
+     * Current control register's privilege mode
+     * 0 - privileged mode
+     * 1 - unprivileged mode
+     */
+#   define FDC_CST_CURRENT_CONTROL_PRIVILEGE_MODE_MASK  BIT(25)
+#   define FDC_CST_CURRENT_CONTROL_PRIVILEGE_MODE_SHIFT 25
+
+    /**
+     * Current control register's stack pointer mode
+     * 0 - MSP mode
+     * 1 - PSP mode
+     */
+#   define FDC_CST_CURRENT_CONTROL_SP_MODE_MASK     BIT(26)
+#   define FDC_CST_CURRENT_CONTROL_SP_MODE_SHIFT    26
+
+    /**
+     * Current LR on exception entry register's stack pointer mode
+     * 0 - MSP mode
+     * 1 - PSP mode
+     */
+#   define FDC_CST_CURRENT_LR_EXC_SP_MODE_MASK  BIT(27)
+#   define FDC_CST_CURRENT_LR_EXC_SP_MODE_SHIFT 27
+
+    /**
+     * Target CPU mode
+     * 0 - thread mode
+     * 1 - handler mode
+     */
+#   define FDC_CST_TARGET_CPU_MODE_MASK        BIT(28)
+#   define FDC_CST_TARGET_CPU_MODE_SHIFT       28
+
+    /**
+     * Target control register's privilege mode
+     * 0 - privileged mode
+     * 1 - unprivileged mode
+     */
+#   define FDC_CST_TARGET_CONTROL_PRIVILEGE_MODE_MASK  BIT(29)
+#   define FDC_CST_TARGET_CONTROL_PRIVILEGE_MODE_SHIFT 29
+
+    /**
+     * Target control register's stack pointer mode
+     * 0 - MSP mode
+     * 1 - PSP mode
+     */
+#   define FDC_CST_TARGET_CONTROL_SP_MODE_MASK         BIT(30)
+#   define FDC_CST_TARGET_CONTROL_SP_MODE_SHIFT        30
+
+    /**
+     * Target LR on exception entry register's stack pointer mode
+     * 0 - MSP mode
+     * 1 - PSP mode
+     */
+#   define FDC_CST_TARGET_LR_EXC_SP_MODE_MASK         BIT(31)
+#   define FDC_CST_TARGET_LR_EXC_SP_MODE_SHIFT        31
+
+#else
+#   error "CPU architecture not supported"
+#endif
 
 
 /**
@@ -478,7 +595,7 @@ struct failure_record {
     /**
      * Failure data arguments
      */
-    uintptr_t   fr_failure_args[3];
+    uintptr_t   fr_failure_args[2];
 
     /**
      * Pointer to failure description string literal
@@ -505,9 +622,13 @@ C_ASSERT(sizeof(struct failure_record) <= 32);
 enum unexpected_exception_types
 {
     UET_INVALID_EXCEPTION_TYPE =    0x0,
+#if DEFINED_ARM_CLASSIC_ARCH()
     UET_UNDEFINED_INSTRUCTION =     0x1,
     UET_DATA_ABORT =                0x2,
     UET_PREFETCH_ABORT =            0x3
+#elif DEFINED_ARM_CORTEX_M_ARCH()
+    UET_HARD_FAULT =                0x1,
+#endif
 };
 
 /**
@@ -608,6 +729,9 @@ struct fdc_info
     /**
      * Counters of interrupts received for each interrupt channel
      */
+#   if DEFINED_ARM_CORTEX_M_ARCH()
+    uint32_t fdc_systick_interrupt_counter;
+#   endif
     uint32_t fdc_interrupt_channel_counters[SOC_NUM_INTERRUPT_CHANNELS];
 
     /**
@@ -650,8 +774,12 @@ bool is_cpu_little_endian(void);
 void capture_assert_failure(
         const char *cond_str,
         uintptr_t arg1,
-        uintptr_t arg2,
-        uintptr_t arg3);
+        uintptr_t arg2);
+
+#if DEFINED_ARM_CORTEX_M_ARCH()
+void capture_unexpected_hard_fault(
+    void *location, uintptr_t arg, uint32_t psr);
+#endif
 
 fdc_error_t capture_fdc_error(
         const char *error_description,
@@ -682,14 +810,19 @@ void capture_unexpected_prefetch_abort(
 _NEVER_RETURN_
 void fatal_error_handler(_IN_ fdc_error_t fdc_error);
 
-void debug_break_point(void);
-
 void
 check_rtos_public_kernel_service_preconditions(bool thread_callers_only);
 
 void
-check_rtos_interrupt_handler_preconditions(
+check_rtos_interrupt_entry_preconditions(
+    _IN_ struct rtos_interrupt *rtos_interrupt_p);
+
+void
+check_rtos_interrupt_e_handler_preconditions(
     _IN_ const struct rtos_interrupt *rtos_interrupt_p);
+
+void
+check_synchronous_context_switch_preconditions(void);
 
 #endif /* _FAILURE_DATA_CAPTURE_H */
 

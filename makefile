@@ -1,13 +1,17 @@
 #
-# McRTOS Top level makefile 
+# McRTOS application top-level makefile 
 #
-# Author: German Rivera - April, 2013
+# Copyright (C) 2013 German Rivera
+# 
+# Author: German Rivera - September, 2013
 #
 
+APPLICATION := autonomous_car
+
 #
-# PLATFORM values: LPC2478-STK, LM4F120-LaunchPad
+# PLATFORM values: LPC2478-STK, LM4F120-LaunchPad, FRDM-KL25Z
 #
-PLATFORM := LPC2478-STK
+PLATFORM := FRDM-KL25Z
 
 #
 # BUILD_FLAVOR values: debug, reliability, performance
@@ -24,6 +28,7 @@ POWERSHELL := powershell.exe -executionPolicy RemoteSigned
 RUN_BUILD_MAKEFILE := $(MAKE) --file=../$(SOURCE_DIR)/build.mk \
 			      --directory=$(OBJECT_DIR) \
 			      $(BUILD_TARGET) \
+			      APPLICATION='$(APPLICATION)' \
 			      PLATFORM='$(PLATFORM)' \
 			      BUILD_FLAVOR='$(BUILD_FLAVOR)' \
 			      CMD_LINE_CFLAGS='$(CMD_LINE_CFLAGS)' \

@@ -3,6 +3,8 @@
  *
  * Hardware abstractions to be implemented for each supported board.
  *
+ * Copyright (C) 2013 German Rivera
+ *
  * @author German Rivera 
  */ 
 #ifndef _HARDWARE_ABSTRACTIONS_H
@@ -22,11 +24,18 @@
 
 #if defined(LPC2478_SOC)
 
-#include "lpc2478_stk_board_public.h"
+#   include "lpc2478_stk_board_public.h"
+
+#   define LCD_SUPPORTED
+#   define DRAM_SUPPORTED
+
+#elif defined(KL25Z_SOC)
+
+#   include "kl25z_soc.h"
 
 #elif defined(LM4F120_SOC)
 
-#error "TODO: Add #include here for LM4F120_launchpad"
+#   error "TODO: Add #include here for LM4F120_launchpad"
 
 #else
 
@@ -54,6 +63,12 @@
  */
 #define BUTTON1_PRESSED_MASK    BIT(0)
 #define BUTTON2_PRESSED_MASK    BIT(1)
+
+/**
+ * CPU clock frequency in Hz
+ */
+#define CPU_CLOCK_FREQ_IN_HZ \
+        (SOC_CPU_CLOCK_FREQ_IN_MEGA_HZ * UINT32_C(1000000))
 
 /**
  * Convert from CPU clock cycles to nanoseconds
@@ -100,8 +115,16 @@ typedef _RANGE_(0, SOC_NUM_CPU_CORES - 1)
 /** 
  * Interrupt channel type
  */
-typedef _RANGE_(0, SOC_NUM_INTERRUPT_CHANNELS - 1)
-        uint8_t interrupt_channel_t;
+#if DEFINED_ARM_CORTEX_M_ARCH()
+    /*
+     * IRQ number of systick interrupt is -1
+     */
+    typedef _RANGE_(-1, SOC_NUM_INTERRUPT_CHANNELS - 1)
+            int8_t interrupt_channel_t;
+#else
+    typedef _RANGE_(0, SOC_NUM_INTERRUPT_CHANNELS - 1)
+            uint8_t interrupt_channel_t;
+#endif
 
 /** 
  * Interrupt priority type (0 is the highest priority)
@@ -120,6 +143,13 @@ typedef void isr_function_t(void);
 typedef uint32_t cpu_clock_cycles_t;
 
 C_ASSERT(sizeof(cpu_clock_cycles_t) == sizeof(int32_t));
+
+/**
+ * function signature for an interrupt service routine
+ */
+typedef void isr_function_t(void);
+
+C_ASSERT(sizeof(isr_function_t *) == sizeof(uint32_t));
 
 /**
  * Pin configuration parameters
@@ -152,6 +182,8 @@ struct adc_device;
  */
 
 void board_init(void);
+
+bool software_reset_happened(void);
 
 void install_isr(
     interrupt_channel_t channel,
@@ -197,13 +229,17 @@ void uart_putchar_with_polling(
 _REQUIRES_MUTUAL_EXCLUSION_
 uint8_t
 uart_getchar(
-    _IN_ const struct uart_device *uart_device_p,
-    _IN_ bool wait);
+    _IN_ const struct uart_device *uart_device_p);
 
-void clear_uart_interrupt_source(
+_REQUIRES_MUTUAL_EXCLUSION_
+uint8_t
+uart_getchar_with_polling(
+    _IN_ const struct uart_device *uart_device_p);
+
+void uart_interrupt_pre_handler(
         _IN_ const struct uart_device *uart_device_p);
 
-void uart_interrupt_handler(
+void uart_interrupt_post_handler(
         _IN_ const struct uart_device *uart_device_p);
 
 void clear_timer_interrupt_source(
@@ -249,10 +285,6 @@ void init_trimpot(void);
 uint32_t read_trimpot(void);
 
 void toggle_heartbeat_led(void);
-
-void toggle_usb_host_link_led(void);
-
-void toggle_usb_device_link_led(void);
 
 uint32_t read_buttons(
             _IN_ const struct buttons_device *buttons_device_p);

@@ -3,6 +3,8 @@
  *
  * McRTOS kernel services
  *
+ * Copyright (C) 2013 German Rivera
+ *
  * @author German Rivera 
  */ 
 #ifndef _McRTOS_KERNEL_SERVICES_H
@@ -54,25 +56,13 @@ typedef _RANGE_(RTOS_UNPRIVILEGED_THREAD_MODE, RTOS_INTERRUPT_MODE)
 enum rtos_execution_context_types
 {
     RTOS_INVALID_CONTEXT =      0x0,
-    RTOS_THREAD_CONTEXT =       0x1,
-    RTOS_INTERRUPT_CONTEXT =    0x2
+    RTOS_RESET_CONTEXT =        0x1,
+    RTOS_THREAD_CONTEXT =       0x2,
+    RTOS_INTERRUPT_CONTEXT =    0x8
 };
-
-typedef _RANGE_(RTOS_THREAD_CONTEXT, RTOS_INTERRUPT_CONTEXT)
+        
+typedef _RANGE_(RTOS_RESET_CONTEXT, RTOS_INTERRUPT_CONTEXT)
         uint8_t rtos_execution_context_type_t;
-
-/**
- * Generic circular buffer writer types
- */
-enum rtos_gcb_writer_types
-{
-    RTOS_GCB_WRITER_INVALID =     0x0,
-    RTOS_GCB_WRITER_INTERRUPT =   0x1,
-    RTOS_GCB_WRITER_THREAD =      0x2,
-};
-
-typedef _RANGE_(RTOS_GCB_WRITER_INTERRUPT, RTOS_GCB_WRITER_THREAD)
-        uint8_t rtos_gcb_writer_type_t;
 
 /**
  * Execution stack entry type
@@ -175,21 +165,6 @@ struct rtos_execution_context
      */ 
     const char *ctx_name_p;
 
-#if DEFINED_ARM_CLASSIC_ARCH()
-    /**
-     * CPU general registers, including stack pointer and program counter
-     *
-     * NOTE: The RTOS_ENTER_ISR() assembly language macro uses this field.
-     */
-    cpu_register_t ctx_cpu_registers[CPU_NUM_REGISTERS];
-#else
-    /**
-     * For ARMv7-M, only the stack pointer register is kept here. Other registers
-     * are saved on the context's stack.
-     */
-    cpu_register_t ctx_stack_pointer_register;
-#endif
-
     /**
      * CPU execution mode
      */
@@ -210,6 +185,24 @@ struct rtos_execution_context
      * (Value from  enum rtos_execution_context_switched_out_reasons)
      */
     uint8_t ctx_last_switched_out_reason;
+
+#if DEFINED_ARM_CLASSIC_ARCH()
+    /**
+     * CPU general registers, including stack pointer and program counter
+     *
+     * NOTE: The RTOS_ENTER_ISR() assembly language macro uses this field.
+     */
+    cpu_register_t ctx_cpu_registers[CPU_NUM_REGISTERS];
+#elif DEFINED_ARM_CORTEX_M_ARCH()
+    /**
+     * For Cortex-M, registers R0-R3, R12, LR, PC and PSR are automatically saved
+     * on the stack by the CPU, upon entering an exception. So, only the remaining
+     * registers need to be saved here.
+     */
+    cpu_register_t ctx_cpu_saved_registers[CPU_NUM_SAVED_REGISTERS];
+#else
+#   error "CPU architrecture not supported"
+#endif
 
     /**
      * Switched-out reason history
@@ -287,9 +280,20 @@ struct rtos_execution_context
 };
 
 C_ASSERT(
+    offsetof(struct rtos_execution_context, ctx_cpu_mode) ==
+    RTOS_CTX_CPU_MODE_OFFSET);
+
+#if DEFINED_ARM_CLASSIC_ARCH()
+C_ASSERT(
     offsetof(struct rtos_execution_context, ctx_cpu_registers) ==
     RTOS_CTX_CPU_REGISTERS_OFFSET);
 
+#elif DEFINED_ARM_CORTEX_M_ARCH()
+C_ASSERT(
+    offsetof(struct rtos_execution_context, ctx_cpu_saved_registers) ==
+    RTOS_CTX_CPU_REGISTERS_OFFSET);
+
+#endif
 /**
  * McRTOS timerobject
  */
@@ -409,52 +413,57 @@ C_ASSERT(sizeof(struct rtos_condvar) % SOC_CACHE_LINE_SIZE_IN_BYTES == 0);
 /**
  * McRTOS generic circular buffer
  */
-struct rtos_generic_circular_buffer
+struct rtos_circular_buffer
 {
-#   define      RTOS_CIRCULAR_BUFFER_SIGNATURE  GEN_SIGNATURE('C', 'B', 'U', 'F')
-    uint32_t    gcb_signature;
+#   define RTOS_POINTER_CIRCULAR_BUFFER_SIGNATURE   GEN_SIGNATURE('C', 'B', 'P', 'T')
+#   define RTOS_BYTE_CIRCULAR_BUFFER_SIGNATURE      GEN_SIGNATURE('C', 'B', 'B', 'Y')
+    const uint32_t cb_signature;
+
+    /**
+     * Pointer to the symbolic name of the circular buffer for debugging purposes
+     */ 
+    const char *const cb_name_p;
 
     /**
      * Total number of entries of the circular buffer
      */
-    uint16_t    gcb_num_entries;
+    const uint16_t cb_num_entries;
 
     /**
      * Number of entries currently filled
      */
-    uint16_t    gcb_entries_filled;
+    volatile uint16_t cb_entries_filled;
 
     /**
      * Next entry filled to read
      */
-    uint16_t    gcb_read_cursor;
+    uint16_t cb_read_cursor;
 
     /**
      * Next entry unfilled to write
      */
-    uint16_t    gcb_write_cursor;
+    uint16_t cb_write_cursor;
 
     /**
-     * Writer type
+     * Pointer to the storage array for the circular buffer entries
      */
-    rtos_gcb_writer_type_t gcb_writer_type;
+    void *const cb_storage_array_p;
 
     /**
-     * Mutex to serialize access to the circular buffer
-     * (Only used if gcb_writer_type is RTOS_MSG_PRODUCER_THREAD)
+     * Pointer to mutex to serialize access to the circular buffer, or
+     * NULL if serialization is to be done by disabling interrupts.
      */
-    struct rtos_mutex gcb_mutex;
+    struct rtos_mutex *const cb_mutex_p;
 
     /**
      * Condvar signaled by writers when the circular buffer becomes not empty
      */
-    struct rtos_condvar gcb_not_empty_condvar;
+    struct rtos_condvar cb_not_empty_condvar;
 
     /**
      * Condvar signaled by readers when the circular buffer becomes not full.
-     * (Only used if gcb_writer_type is RTOS_MSG_PRODUCER_THREAD)
      */
-    struct rtos_condvar gcb_not_full_condvar;
+    struct rtos_condvar cb_not_full_condvar;
 };
 
 /**
@@ -470,7 +479,7 @@ struct rtos_8bit_msg_channel
      */
     uint8_t     *mch_entries_p;
 
-    struct rtos_generic_circular_buffer mch_circular_buffer;
+    struct rtos_circular_buffer mch_circular_buffer;
 
 } __attribute__ ((aligned(SOC_CACHE_LINE_SIZE_IN_BYTES)));
 
@@ -489,7 +498,7 @@ struct rtos_16bit_msg_channel
      */
     uint16_t     *mch_entries_p;
 
-    struct rtos_generic_circular_buffer mch_circular_buffer;
+    struct rtos_circular_buffer mch_circular_buffer;
 
 } __attribute__ ((aligned(SOC_CACHE_LINE_SIZE_IN_BYTES)));
 
@@ -508,7 +517,7 @@ struct rtos_32bit_msg_channel
      */
     uint32_t     *mch_entries_p;
 
-    struct rtos_generic_circular_buffer mch_circular_buffer;
+    struct rtos_circular_buffer mch_circular_buffer;
 
 } __attribute__ ((aligned(SOC_CACHE_LINE_SIZE_IN_BYTES)));
 
@@ -527,7 +536,7 @@ struct rtos_object_pool
      */
     void        **opl_object_pointers_p;
 
-    struct rtos_generic_circular_buffer opl_free_objects;
+    struct rtos_circular_buffer opl_free_objects;
 
 }  __attribute__ ((aligned(SOC_CACHE_LINE_SIZE_IN_BYTES)));
 
@@ -604,10 +613,12 @@ struct rtos_thread
      */
     rtos_console_channels_t thr_console_channel;
 
+#   ifdef LCD_SUPPORTED
     /**
      * LCD channel assigned to the thread
      */
     rtos_lcd_channels_t thr_lcd_channel;
+#   endif
 
     /**
      * Thread state history
@@ -710,6 +721,9 @@ rtos_k_thread_abort(_IN_ fdc_error_t fdc_error);
 _THREAD_CALLERS_ONLY_
 const struct rtos_thread *
 rtos_k_thread_self(void);
+
+bool
+rtos_k_caller_is_thread(void);
 
 const char *
 rtos_k_thread_name(
@@ -853,7 +867,6 @@ rtos_k_capture_failure_data(
     _IN_ const char *failure_str,
     _IN_ uintptr_t arg1,
     _IN_ uintptr_t arg2,
-    _IN_ uintptr_t arg3,
     _IN_ void *failure_location);
 
 _THREAD_CALLERS_ONLY_
@@ -862,9 +875,14 @@ rtos_k_console_putchar(
     _UNUSED_ void *unused_arg_p,
     _IN_ uint8_t c);
 
+void
+rtos_k_console_putchar_with_polling(
+    _UNUSED_ void *unused_arg_p,
+    _IN_ uint8_t c);
+
 _THREAD_CALLERS_ONLY_
 uint8_t
-rtos_k_console_getchar(_IN_ bool wait);
+rtos_k_console_getchar(void);
 
 void
 rtos_k_lcd_putchar(
@@ -885,6 +903,41 @@ rtos_k_app_system_call(
 void rtos_tick_timer_interrupt_handler(
     struct rtos_interrupt *timer_interrupt_p);
 
+void rtos_k_pointer_circular_buffer_init(
+        _IN_  const char *name_p,
+        _IN_ uint16_t num_entries,
+        _IN_ void **storage_array_p,
+        _IN_ struct rtos_mutex *cb_mutex_p,
+        _IN_ cpu_id_t cpu_id,
+        _OUT_ struct rtos_circular_buffer *circ_buf_p);
+
+bool rtos_k_pointer_circular_buffer_write(
+        _INOUT_ struct rtos_circular_buffer *circ_buf_p,
+        _IN_ void *entry_value,
+        _IN_ bool wait_if_full);
+
+bool rtos_k_pointer_circular_buffer_read(
+        _INOUT_ struct rtos_circular_buffer *circ_buf_p,
+        _OUT_ void **entry_value_p,
+        _IN_ bool wait_if_empty);
+
+void rtos_k_byte_circular_buffer_init(
+        _IN_  const char *name_p,
+        _IN_ uint16_t num_entries,
+        _IN_ uint8_t *storage_array_p,
+        _IN_ struct rtos_mutex *cb_mutex_p,
+        _IN_ cpu_id_t cpu_id,
+        _OUT_ struct rtos_circular_buffer *circ_buf_p);
+
+bool rtos_k_byte_circular_buffer_write(
+        _INOUT_ struct rtos_circular_buffer *circ_buf_p,
+        _IN_ uint8_t entry_value,
+        _IN_ bool wait_if_full);
+
+bool rtos_k_byte_circular_buffer_read(
+        _INOUT_ struct rtos_circular_buffer *circ_buf_p,
+        _OUT_ uint8_t *entry_value_p,
+        _IN_ bool wait_if_empty);
 
 #define ATOMIC_POST_INCREMENT_UINT32(_counter_p) \
         rtos_k_atomic_fetch_add_uint32(_counter_p, 1)
@@ -892,11 +945,14 @@ void rtos_tick_timer_interrupt_handler(
 #define ATOMIC_POST_DECREMENT_UINT32(_counter_p) \
         rtos_k_atomic_fetch_sub_uint32(_counter_p, 1)
 
-#define ATOMIC_POST_INCREMENT_POINTER(_pointer_p)                           \
-        ((void *)rtos_k_atomic_fetch_add_uint32(                            \
-                    (uint32_t *)&(_pointer_p),                              \
-                    sizeof(*(_pointer_p))))
+#define ATOMIC_POST_INCREMENT_POINTER(_pointer_p)                       \
+        ((void *)rtos_k_atomic_fetch_add_uint32(                        \
+                    (uint32_t *)&(_pointer_p), sizeof(*(_pointer_p))))
 
 C_ASSERT(sizeof(void *) == sizeof(uint32_t));
+
+void rtos_k_debugger(
+        _IN_ const struct rtos_execution_context *current_execution_context_p,
+        _IN_ const uint32_t *stack_p);
 
 #endif /* _McRTOS_KERNEL_SERVICES_H */

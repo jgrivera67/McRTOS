@@ -3,6 +3,8 @@
  *
  * McRTOS execution controller
  *
+ * Copyright (C) 2013 German Rivera
+ *
  * @author German Rivera 
  */ 
 
@@ -273,7 +275,7 @@ void rtos_thread_scheduler(void)
 
 /**
  * Per-CPU tick timer handler. This function is invoked from the
- * isr_rtos_tick_timer() ISRs.
+ * tick timer ISR.
  */
 void
 rtos_tick_timer_interrupt_handler(
@@ -281,15 +283,13 @@ rtos_tick_timer_interrupt_handler(
 {
     cpu_id_t cpu_id = timer_interrupt_p->int_cpu_id;
 
+    FDC_ASSERT_RTOS_INTERRUPT_E_HANDLER_PRECONDITIONS(timer_interrupt_p);
+
     DBG_ASSERT(cpu_id == SOC_GET_CURRENT_CPU_ID(),
         cpu_id, SOC_GET_CURRENT_CPU_ID());
 
     struct rtos_cpu_controller *cpu_controller_p =
         &g_McRTOS_p->rts_cpu_controllers[cpu_id];
-
-#if 0 // TODO
-    DBG_ASSERT_PRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED();
-#endif
 
     /*
      * Disable interrupts in the ARM core
@@ -445,11 +445,10 @@ rtos_stop_interrupts_disabled_time_measure(
 
         delta_cpu_cycles -= g_McRTOS_p->rts_cpu_cycles_measure_overhead;
 
-        FDC_ASSERT3(
+        FDC_ASSERT(
             CPU_CLOCK_CYCLES_TO_MICROSECONDS(delta_cpu_cycles) <= 500,
             CPU_CLOCK_CYCLES_TO_MICROSECONDS(delta_cpu_cycles),
-            end_time_stamp,
-            cpu_controller_p->cpc_interrupts_disabled_start_time_stamp);
+            end_time_stamp);
 
         if (delta_cpu_cycles > cpu_controller_p->cpc_longest_time_interrupts_disabled)
         {

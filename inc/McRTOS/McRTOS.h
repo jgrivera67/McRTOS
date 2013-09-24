@@ -3,6 +3,8 @@
  *
  * McRTOS public interfaces
  *
+ * Copyright (C) 2013 German Rivera
+ *
  * @author German Rivera 
  */ 
 #ifndef _McRTOS_H
@@ -43,6 +45,7 @@ enum rtos_console_channels
 
 C_ASSERT(RTOS_CONSOLE_CHANNEL_NONE == RTOS_NUM_CONSOLE_CHANNELS);
 
+#ifdef LCD_SUPPORTED
 /**
  * LCD channels
  */
@@ -59,6 +62,7 @@ enum rtos_lcd_channels
 };
 
 C_ASSERT(RTOS_LCD_CHANNEL_NONE == RTOS_NUM_LCD_CHANNELS);
+#endif /* LCD_SUPPORTED */
 
 /** 
  * Thread priority type (0 is the highest priority)
@@ -129,11 +133,13 @@ C_ASSERT(
 typedef _RANGE_(0, RTOS_NUM_CONSOLE_CHANNELS)
         uint8_t rtos_console_channels_t;
 
+#ifdef LCD_SUPPORTED
 /**
  * Range type for LCD channels
  */
 typedef _RANGE_(0, RTOS_NUM_LCD_CHANNELS)
         uint8_t rtos_lcd_channels_t;
+#endif
 
 /**
  * Thread function type
@@ -191,10 +197,12 @@ struct rtos_thread_creation_params
      */
     rtos_console_channels_t p_console_channel;
 
+#   ifdef LCD_SUPPORTED
     /**
      * Stdio LCD channel assigned to the thread
      */
     rtos_lcd_channels_t p_lcd_channel;
+#   endif
 
     /**
      * Pointer to area to store the pointer to the created McRTOS thread object
@@ -492,7 +500,6 @@ rtos_capture_failure_data(
     _IN_ const char *failure_str,
     _IN_ uintptr_t arg1,
     _IN_ uintptr_t arg2,
-    _IN_ uintptr_t arg3,
     _IN_ void *failure_location);
 
 _THREAD_CALLERS_ONLY_
@@ -503,7 +510,7 @@ rtos_console_putchar(
 
 _THREAD_CALLERS_ONLY_
 uint8_t
-rtos_console_getchar(_IN_ bool wait);
+rtos_console_getchar(void);
 
 void
 rtos_lcd_putchar(

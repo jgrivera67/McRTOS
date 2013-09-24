@@ -1,3 +1,12 @@
+/**
+ * @file lcd.h
+ *
+ * LPC2478 LCD controller declarations
+ *
+ * Copyright (C) 2013 German Rivera
+ *
+ * @author German Rivera 
+ */ 
 #ifndef _LCD_H
 #define _LCD_H
 

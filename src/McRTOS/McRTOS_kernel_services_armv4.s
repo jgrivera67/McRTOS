@@ -3,6 +3,8 @@
  *
  * McRTOS CPU-specific kernel services for ARM v4 processors
  *
+ * Copyright (C) 2013 German Rivera
+ *
  * @author German Rivera 
  */ 
 

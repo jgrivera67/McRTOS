@@ -1,7 +1,9 @@
-/*
- * DESCRIPTION:
+/**
+ *  @file lpc2478_stk_board.h
  *
  * Olimex LPC-2478-STK board-specific private definitions
+ *
+ * Copyright (C) 2013 German Rivera
  */ 
 
 #ifndef __LPC_2478_STK_BOARD__

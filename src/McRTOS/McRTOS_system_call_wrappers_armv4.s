@@ -3,6 +3,8 @@
  *
  * McRTOS System call wrapper functions, to invoke system calls from C code.
  *
+ * Copyright (C) 2013 German Rivera
+ *
  * @author German Rivera 
  */ 
 

@@ -3,6 +3,8 @@
  *
  * LPC2478-STK board-specific public declarations
  *
+ * Copyright (C) 2013 German Rivera
+ *
  * @author German Rivera 
  */ 
 #ifndef _LPC2478_STK_BOARD_PUBLIC_H
@@ -180,5 +182,9 @@ C_ASSERT(LCD_FRAME_BUFFER_BASE_ADDR % sizeof(uint64_t) == 0);
 #define AVAILABLE_SDRAM_START_ADDR  (BOARD_SDRAM_BASE + sizeof(struct sdram_map))
 
 C_ASSERT(AVAILABLE_SDRAM_START_ADDR < BOARD_SDRAM_BASE + BOARD_SDRAM_SIZE);
+
+void toggle_usb_host_link_led(void);
+
+void toggle_usb_device_link_led(void);
 
 #endif /* _LPC2478_STK_BOARD_PUBLIC_H */

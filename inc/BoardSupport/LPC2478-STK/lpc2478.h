@@ -1,12 +1,9 @@
-/*
- * MODULE:
- *
- *  lpc2478.h
- *
- * DESCRIPTION:
+/**
+ *  @file lpc2478.h
  *
  *  LPC2478 on-chip specific standard definitions file
  *
+ * Copyright (C) 2013 German Rivera
  */
 
 #ifndef __LPC2478_H

@@ -4,6 +4,8 @@
  * McRTOS kernel services. These functions can only be invoked from
  * privileged code.
  *
+ * Copyright (C) 2013 German Rivera
+ *
  * @author German Rivera 
  */ 
 
@@ -17,27 +19,20 @@
 TODO("Remove this pragma")
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
-static void
-rtos_execution_context_init(
-    _OUT_ struct rtos_execution_context *execution_context_p,
-    _IN_  const char *context_name_p,
-    _IN_  cpu_id_t cpu_id,
-    _IN_  rtos_execution_context_type_t context_type,
-    _IN_  fdc_context_switch_trace_entry_t prefilled_trace_entry,
-    _IN_  rtos_cpu_mode_t rtos_cpu_mode,
-    _IN_  cpu_status_register_t cpu_status_register,
-    _IN_  cpu_register_t cpu_pc_register,
-    _IN_  cpu_register_t cpu_r0_register,
-    _IN_  rtos_execution_stack_entry_t *stack_top_end_p,
-    _IN_  rtos_execution_stack_entry_t *stack_bottom_end_p);
-
+#if DEFINED_ARM_CLASSIC_ARCH()
 static void
 rtos_invalid_interrupt_return(void);
+#endif
 
 static void
 rtos_k_condvar_signal_internal(
     _INOUT_ struct rtos_condvar *rtos_condvar_p,
     _IN_ bool broadcast);
+
+static void
+check_circular_buffer_invariants(
+    _IN_ struct rtos_circular_buffer *circ_buf_p,
+    _IN_ uint32_t signature);
 
 #if defined(LPC2478_SOC)
 /**
@@ -80,8 +75,10 @@ const void *const g_rtos_system_call_dispatch_table[] =
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(CAPTURE_FAILURE_DATA, capture_failure_data),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(CONSOLE_PUTCHAR, console_putchar),             
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(CONSOLE_GETCHAR, console_getchar),
+#ifdef LCD_SUPPORTED
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(LCD_PUTCHAR, lcd_putchar),             
-    GEN_SYSTEM_CALL_DISPATCH_ENTRY(LCD_DRAW_TILE, lcd_draw_tile),             
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(LCD_DRAW_TILE, lcd_draw_tile), 
+#endif
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(APP, app_system_call),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(THREAD_SELF, thread_self),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(THREAD_NAME, thread_name),
@@ -242,7 +239,11 @@ rtos_k_thread_init(
     rtos_thread_p->thr_function_p = params_p->p_function_p;
     rtos_thread_p->thr_function_arg_p = params_p->p_function_arg_p;
     rtos_thread_p->thr_console_channel = params_p->p_console_channel;
+
+#   ifdef LCD_SUPPORTED
     rtos_thread_p->thr_lcd_channel = params_p->p_lcd_channel;
+#   endif
+
     rtos_thread_p->thr_abort_status = 0;
     rtos_thread_p->thr_base_priority = thread_prio;
     rtos_thread_p->thr_current_priority = thread_prio;
@@ -270,13 +271,6 @@ rtos_k_thread_init(
     {
         rtos_cpu_mode = RTOS_PRIVILEGED_THREAD_MODE;
 
-        /*
-         * Initial value for CPU status register:
-         * - System mode
-         * - CPU interrupts fully enabled: I_BIT = 0, F_BIT = 0
-         */
-        cpu_status_register = ARM_MODE_SYS;
-
         SET_BIT_FIELD(
             prefilled_trace_entry, 
             FDC_CST_CONTEXT_TYPE_MASK,
@@ -286,13 +280,6 @@ rtos_k_thread_init(
     else
     {
         rtos_cpu_mode = RTOS_UNPRIVILEGED_THREAD_MODE;
-
-        /*
-         * Initial value for CPU status register:
-         * - User mode
-         * - CPU interrupts fully enabled: I_BIT = 0, F_BIT = 0
-         */
-        cpu_status_register = ARM_MODE_USER;
 
         SET_BIT_FIELD(
             prefilled_trace_entry, 
@@ -331,7 +318,6 @@ rtos_k_thread_init(
         RTOS_THREAD_CONTEXT,
         prefilled_trace_entry,
         rtos_cpu_mode,
-        cpu_status_register,
         (cpu_register_t)params_p->p_function_p,
         (cpu_register_t)params_p->p_function_arg_p,
         &thread_stack_p->tes_stack[0],
@@ -545,6 +531,7 @@ rtos_k_thread_abort(fdc_error_t fdc_error)
 }
 
 
+#if DEFINED_ARM_CLASSIC_ARCH()
 static void
 rtos_invalid_interrupt_return(void)
 {
@@ -553,6 +540,7 @@ rtos_invalid_interrupt_return(void)
      */
     FDC_ASSERT(false, 0, 0);
 }
+#endif
 
 
 /**
@@ -647,6 +635,18 @@ rtos_k_thread_self(void)
         RTOS_EXECUTION_CONTEXT_GET_THREAD(current_execution_context_p);
 
     return current_thread_p;
+}
+
+
+bool
+rtos_k_caller_is_thread(void)
+{
+    FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(false);
+
+    struct rtos_execution_context *current_execution_context_p =
+        RTOS_GET_CURRENT_EXECUTION_CONTEXT();
+
+    return (current_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT);
 }
 
 
@@ -1260,9 +1260,17 @@ rtos_k_condvar_wait_interrupt(
         rtos_condvar_p->cv_cpu_id, cpu_id);
 
     cpu_status_register_t cpu_status_register;
+    bool interrupts_enabled;
     bool restore_interrupts = false;
-    
-    CAPTURE_ARM_CPSR_REGISTER(cpu_status_register);
+
+#   if DEFINED_ARM_CLASSIC_ARCH()
+        CAPTURE_ARM_CPSR_REGISTER(cpu_status_register);
+        interrupts_enabled =
+            CPU_INTERRUPTS_ARE_ENABLED(cpu_status_register);
+#   elif DEFINED_ARM_CORTEX_M_ARCH()
+        interrupts_enabled =
+            CPU_INTERRUPTS_ARE_ENABLED(__get_PRIMASK());
+#   endif
 
     /*
      * Disable interrupts in the ARM core:
@@ -1270,7 +1278,7 @@ rtos_k_condvar_wait_interrupt(
      * NOTE: Here we don't call rtos_k_disable_cpu_interrupts() if interrupts are
      * already disabled, as this code path calls rtos_k_restore_execution_context()
      */
-    if (CPU_INTERRUPTS_ARE_ENABLED(cpu_status_register))
+    if (interrupts_enabled)
     {
         cpu_status_register = rtos_k_disable_cpu_interrupts();
         restore_interrupts = true;
@@ -1641,6 +1649,7 @@ rtos_k_register_interrupt(
     interrupt_p->int_channel = channel;
     interrupt_p->int_priority = interrupt_prio;
 
+#if DEFINED_ARM_CLASSIC_ARCH()
     /*
      * Initialize the interrupt's stack:
      */
@@ -1658,6 +1667,7 @@ rtos_k_register_interrupt(
     {
         interrupt_p->int_stack[i] = RTOS_STACK_UNUSED_SIGNATURE;
     }
+#   endif
 
     /*
      * Initialize the interrupt's execution context:
@@ -1683,6 +1693,21 @@ rtos_k_register_interrupt(
         FDC_CST_CONTEXT_PRIORITY_SHIFT,
         interrupt_prio);
 
+    rtos_execution_stack_entry_t *stack_top_end_p;
+    rtos_execution_stack_entry_t *stack_bottom_end_p;
+
+#   if DEFINED_ARM_CLASSIC_ARCH()
+    stack_top_end_p = &interrupt_p->int_stack[0];
+    stack_bottom_end_p = 
+        &interrupt_p->int_stack[RTOS_INTERRUPT_STACK_NUM_ENTRIES];
+#   elif DEFINED_ARM_CORTEX_M_ARCH()
+    stack_top_end_p = &g_cortex_m_exception_stack.es_stack[0];
+    stack_bottom_end_p = 
+        &g_cortex_m_exception_stack.es_stack[RTOS_INTERRUPT_STACK_NUM_ENTRIES];
+#   else
+#       error "CPU architrecture not supported"
+#   endif
+
     rtos_execution_context_init(
         &interrupt_p->int_execution_context,
         params_p->irp_name_p,
@@ -1690,11 +1715,10 @@ rtos_k_register_interrupt(
         RTOS_INTERRUPT_CONTEXT,
         prefilled_trace_entry,
         RTOS_INTERRUPT_MODE,
-        ARM_MODE_SYS,
         (cpu_register_t)isr_function_p,
         0,
-        &interrupt_p->int_stack[0],
-        &interrupt_p->int_stack[RTOS_INTERRUPT_STACK_NUM_ENTRIES]);
+        stack_top_end_p,
+        stack_bottom_end_p);
 
     /*
      * Disable interrupts in the ARM core
@@ -1744,6 +1768,10 @@ rtos_k_enter_interrupt(
         rtos_interrupt_p->int_signature == RTOS_INTERRUPT_SIGNATURE,
         rtos_interrupt_p->int_signature, rtos_interrupt_p);
 
+#   ifdef DEBUG
+    check_rtos_interrupt_entry_preconditions(rtos_interrupt_p);
+#   endif
+
     struct rtos_execution_context *interrupt_context_p =
         &rtos_interrupt_p->int_execution_context;
 
@@ -1752,42 +1780,6 @@ rtos_k_enter_interrupt(
 
     struct rtos_execution_context *current_context_p =
         cpu_controller_p->cpc_current_execution_context_p;
-
-    FDC_ASSERT(
-        current_context_p->ctx_signature == RTOS_EXECUTION_CONTEXT_SIGNATURE,
-        current_context_p->ctx_signature, current_context_p);
-
-    /*
-     * Check saved CPU registers for the interrupted context:
-     */
-    FDC_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(current_context_p);
-
-    /*
-     * The current context must have been running in either user mode or system
-     * mode, otherwise it could not have been interrupted, as we only allow
-     * interrupts to be enabled in user mode or system mode.
-     */
-
-    cpu_status_register_t current_context_cpsr =
-        current_context_p->ctx_cpu_registers[CPU_REG_CPSR];
-
-    FDC_ASSERT(
-        CPU_MODE_IS_UNPRIVILEGED(current_context_cpsr) ||
-        CPU_MODE_IS_PRIVILEGED(current_context_cpsr),
-        current_context_cpsr, current_context_p);
-
-    /*
-     * Current execution context must be different from the calling
-     * interrupt context:
-     */
-    DBG_ASSERT(
-        interrupt_context_p != current_context_p,
-        interrupt_context_p, current_context_p);
-
-    DBG_ASSERT(
-        (cpu_controller_p->cpc_active_interrupts & 
-            BIT(rtos_interrupt_p->int_channel)) == 0,
-        cpu_controller_p->cpc_active_interrupts, cpu_controller_p);
 
     /*
      * Track CPU usage for current execution context:
@@ -2011,6 +2003,11 @@ rtos_k_exit_interrupt(void)
          * thread gets to run:
          */
         rtos_thread_scheduler(); 
+
+        /*
+         * We should never come back here:
+         */
+        FDC_ASSERT(false, 0, 0);
     }
     else
     {
@@ -2031,12 +2028,14 @@ rtos_k_exit_interrupt(void)
          * Restore execution context of the previous interrupt
          */ 
         rtos_k_restore_execution_context(current_context_p);
-    }
 
-    /*
-     * We should never come back here:
-     */
-    FDC_ASSERT(false, 0, 0);
+#if DEFINED_ARM_CLASSIC_ARCH()
+        /*
+         * We should never come back here:
+         */
+        FDC_ASSERT(false, 0, 0);
+#endif
+    }
 }
 
 
@@ -2145,9 +2144,6 @@ rtos_k_app_system_call(
  *
  * @param rtos_cpu_mode         McRTOS-level CPU privilege mode
  *
- * @param cpu_status_register   Initial value for the CPU status register. Only
- *                              meaningful for thread contexts.
- *
  * @param cpu_pc_register       Initial value for the PC register. Only meaningful for
  *                              thread contexts. It is address of the thread function.
  *
@@ -2162,7 +2158,7 @@ rtos_k_app_system_call(
  *                              It points to one entry after the highest entry of
  *                              the stack.
  */
-static void
+void
 rtos_execution_context_init(
     _OUT_ struct rtos_execution_context *execution_context_p,
     _IN_  const char *context_name_p,
@@ -2170,7 +2166,6 @@ rtos_execution_context_init(
     _IN_  rtos_execution_context_type_t context_type,
     _IN_  fdc_context_switch_trace_entry_t prefilled_trace_entry,
     _IN_  rtos_cpu_mode_t rtos_cpu_mode,
-    _IN_  cpu_status_register_t cpu_status_register,
     _IN_  cpu_register_t cpu_pc_register,
     _IN_  cpu_register_t cpu_r0_register,
     _IN_  rtos_execution_stack_entry_t *stack_top_end_p,
@@ -2181,34 +2176,25 @@ rtos_execution_context_init(
 
     if (context_type == RTOS_THREAD_CONTEXT)
     {
-        uint32_t arm_cpu_mode = (cpu_status_register & ARM_MODE_MASK);
-
         FDC_ASSERT(
             rtos_cpu_mode == RTOS_UNPRIVILEGED_THREAD_MODE ||
             rtos_cpu_mode == RTOS_PRIVILEGED_THREAD_MODE,
             rtos_cpu_mode, execution_context_p);
-
-#if DEFINED_ARM_CLASSIC_ARCH()
-        FDC_ASSERT(
-           arm_cpu_mode == ARM_MODE_SYS ||
-           arm_cpu_mode == ARM_MODE_USER,
-           cpu_status_register, execution_context_p);
-
-        FDC_ASSERT(
-            (cpu_status_register & ARM_INTERRUPTS_DISABLED_MASK) == 0,
-            cpu_status_register, execution_context_p);
-#else
-#error "TODO: Add code here for ARMv7-M"
-#endif
     }
+    else if (context_type == RTOS_INTERRUPT_CONTEXT)
+    {
+        FDC_ASSERT(
+            rtos_cpu_mode == RTOS_INTERRUPT_MODE,
+            rtos_cpu_mode, execution_context_p);
+    } 
     else
     {
         FDC_ASSERT(
-            context_type == RTOS_INTERRUPT_CONTEXT,
+            context_type == RTOS_RESET_CONTEXT,
             context_type, execution_context_p);
 
         FDC_ASSERT(
-            rtos_cpu_mode == RTOS_INTERRUPT_MODE,
+            rtos_cpu_mode == RTOS_RESET_MODE,
             rtos_cpu_mode, execution_context_p);
     }
 
@@ -2240,6 +2226,8 @@ rtos_execution_context_init(
         &execution_context_p->ctx_list_node);
 
 #if DEFINED_ARM_CLASSIC_ARCH()
+    cpu_status_register_t cpu_status_register = 0;
+
     if (context_type == RTOS_THREAD_CONTEXT)
     {
         /*
@@ -2253,29 +2241,193 @@ rtos_execution_context_init(
             execution_context_p->ctx_cpu_registers[i] = 0xFACE0000 + i;
         }
 
+        /*
+         * Initial value of the CPU status register for a thread has
+         * CPU interrupts fully enabled: I_BIT = 0, F_BIT = 0
+         */
+        cpu_status_register &= ~(I_BIT | F_BIT);
+
         if (rtos_cpu_mode == RTOS_UNPRIVILEGED_THREAD_MODE)
         {
             execution_context_p->ctx_cpu_registers[CPU_REG_LR] =
                 (cpu_register_t)rtos_thread_abort;
+
+            /*
+             * Initial value of the CPU status register for an unprivileged thread
+             * uses User mode:
+             */
+            cpu_status_register |= ARM_MODE_USER;
         }
         else
         {
             execution_context_p->ctx_cpu_registers[CPU_REG_LR] =
                 (cpu_register_t)rtos_k_thread_abort;
+        
+            /*
+             * Initial value of the CPU status register for a privileged thread
+             * uses System mode:
+             */
+            cpu_status_register |= ARM_MODE_SYS;
         }
     }
     else
     {
         execution_context_p->ctx_cpu_registers[CPU_REG_LR] =
                 (cpu_register_t)rtos_invalid_interrupt_return;
+
+        /*
+         * NOTE: For interrupts, the initial value of the status register is not
+         * used.
+         */
     }
 
     execution_context_p->ctx_cpu_registers[CPU_REG_CPSR] = cpu_status_register;
-    execution_context_p->ctx_cpu_registers[CPU_REG_PC] = cpu_pc_register;
     execution_context_p->ctx_cpu_registers[CPU_REG_SP] =
         (cpu_register_t)execution_context_p->ctx_execution_stack_bottom_end_p;
+
+    execution_context_p->ctx_cpu_registers[CPU_REG_PC] = cpu_pc_register;
+
+#elif DEFINED_ARM_CORTEX_M_ARCH()
+
+    cpu_register_t cpu_primask_register = 0;
+    cpu_register_t cpu_control_register = 0;
+
+    if (context_type == RTOS_THREAD_CONTEXT)
+    {
+        cpu_status_register_t cpu_status_register = 0;
+        cpu_register_t cpu_lr_register = 0;
+
+        /*
+         * Initialize explicitly saved CPU registers, for the first time that
+         * the thread is switched in:
+         */
+        for (uint8_t i = CPU_REG_R4; i <= CPU_REG_R11; i ++)
+        {
+            execution_context_p->ctx_cpu_saved_registers[i] = 0xFACE0004 + i;
+        }
+
+        /*
+         * Initial value of the CPU status register for a thread
+         * - Exception number field is 0 (thread mode)
+         * - Thumb mode bit set
+         */
+        cpu_status_register &= ~CPU_REG_IPSR_EXCEPTION_NUMBER_MASK;
+        cpu_status_register |= CPU_REG_EPSR_THUMB_STATE_MASK;
+
+        /*
+         * The PM bit of the PRIMASK register also needs to be set to 0
+         * (interrupts enabled)
+         */ 
+        cpu_primask_register &= ~CPU_REG_PRIMASK_PM_MASK;
+
+        /*
+         *  The SPSEL bit of the CONTROL register also needs to be set to 1
+         *   (use PSP stack pointer)
+         */   
+        cpu_control_register |= CPU_REG_CONTROL_SPSEL_MASK;
+
+        if (rtos_cpu_mode == RTOS_UNPRIVILEGED_THREAD_MODE)
+        {
+            cpu_lr_register = (cpu_register_t)rtos_thread_abort;
+
+#           if 0   // TODO enable this when SVC handler is implemented
+            /*
+             * The nPRIV bit of the CONTROL register also needs to be set to 1 
+             * (unprivileged)
+             */
+            cpu_control_register |= CPU_REG_CONTROL_nPRIV_MASK;
+#           else
+            cpu_control_register &= ~CPU_REG_CONTROL_nPRIV_MASK;
+#           endif
+        }
+        else
+        {
+            cpu_lr_register = (cpu_register_t)rtos_k_thread_abort;
+       
+            /*
+             * The nPRIV bit of the CONTROL register also needs to be set to 0 
+             * (privileged)
+             */
+            cpu_control_register &= ~CPU_REG_CONTROL_nPRIV_MASK;
+        }
+
+        /*
+         * For code compiled for thumb mode, addresses of functions must
+         * have bit 0 set.
+         */
+        DBG_ASSERT(cpu_lr_register & 0x1, cpu_lr_register, 0);
+        DBG_ASSERT(cpu_pc_register & 0x1, cpu_pc_register, 0);
+
+        /*
+         * Initialize pre-saved registers in the thread's stack:
+         *
+         * NOTE: Since the initial context switch is implemented by returning from an 
+         * exception, we need to populate the thread's stack with the registers that
+         * are pre-saved by the CPU, on the stack, upon exception entry:
+         */
+        uint32_t *stack_pointer = 
+            execution_context_p->ctx_execution_stack_bottom_end_p -
+            CPU_NUM_PRE_SAVED_REGISTERS;
+
+        stack_pointer[CPU_REG_R0] = cpu_r0_register;
+        stack_pointer[CPU_REG_R1] = 0xFACE0001;
+        stack_pointer[CPU_REG_R2] = 0xFACE0002;
+        stack_pointer[CPU_REG_R3] = 0xFACE0003;
+        stack_pointer[CPU_REG_R12] = 0xFACE000C;
+        stack_pointer[CPU_REG_LR] = cpu_lr_register;
+        stack_pointer[CPU_REG_PC] = cpu_pc_register;
+        stack_pointer[CPU_REG_PSR] = cpu_status_register;
+
+        execution_context_p->ctx_cpu_saved_registers[CPU_REG_PSP] =
+            (cpu_register_t)stack_pointer;
+
+        execution_context_p->ctx_cpu_saved_registers[CPU_REG_PRIMASK] = cpu_primask_register;
+        execution_context_p->ctx_cpu_saved_registers[CPU_REG_CONTROL] = cpu_control_register;
+    }
+    else if (context_type == RTOS_INTERRUPT_CONTEXT)
+    {
+        /*
+         * NOTE: For interrupt contexts, the following registers do not need to
+         * be initialized as they are pre-saved on the stack upon exception entry:
+         * LR, PC, PSR.
+         */
+
+        /*
+         * "Handler mode" always uses the MSP stack pointer
+         */ 
+        cpu_control_register &= ~CPU_REG_CONTROL_SPSEL_MASK;
+
+        /*
+         * "Handler mode" is always privileged
+         */ 
+        cpu_control_register &= ~CPU_REG_CONTROL_nPRIV_MASK;
+
+        /*
+         * "Handler mode" is always entered with interrupts disabled
+         */ 
+        cpu_primask_register |= CPU_REG_PRIMASK_PM_MASK;
+        
+        /*
+         * NOTE: For an interrupt handler, pre-saved registers are saved on
+         * the stack on the interrupted context, so there is not need to
+         * pre-saved them in the interrupt handler's stack:
+         */
+
+        execution_context_p->ctx_cpu_saved_registers[CPU_REG_MSP] =
+            (cpu_register_t)execution_context_p->ctx_execution_stack_bottom_end_p;
+
+        execution_context_p->ctx_cpu_saved_registers[CPU_REG_PRIMASK] = cpu_primask_register;
+        execution_context_p->ctx_cpu_saved_registers[CPU_REG_CONTROL] = cpu_control_register;
+    }
+
+    /*
+     * NOTE: if context_type == RTOS_RESET_CONTEXT, we don't need not initialize
+     * any CPU registers, since in that case we are being called from the reset
+     * handler itself.
+     */
+
 #else
-#error "TODO: Add code here for ARMv7-M"
+#   error "CPU architrecture not supported"
 #endif
 }
 
@@ -2317,14 +2469,25 @@ rtos_k_console_putchar(
 }
 
 
+void
+rtos_k_console_putchar_with_polling(
+    _UNUSED_ void *unused_arg_p,
+    _IN_ uint8_t c)
+{
+    uart_putchar_with_polling(g_console_serial_port_p, c);
+}
+
+
 uint8_t
-rtos_k_console_getchar(_IN_ bool wait)
+rtos_k_console_getchar(void)
 {
     FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
 
-    return uart_getchar(g_console_serial_port_p, wait);
+    return uart_getchar(g_console_serial_port_p);
 }
 
+
+#ifdef LCD_SUPPORTED
 
 void
 rtos_k_lcd_putchar(
@@ -2438,3 +2601,417 @@ rtos_k_lcd_draw_tile(
         return LCD_COLOR_BLACK;
     }
 }
+#endif  /*  LCD_SUPPORTED */
+
+
+/**
+ * Generate the function that initialize a generic circular buffer of entries of
+ * a given type
+ */
+#define GEN_FUNCTION_CIRCULAR_BUFFER_INIT(                                  \
+            _circular_buffer_init_func, _entry_type, _signature)            \
+        void                                                                \
+        _circular_buffer_init_func(                                         \
+            _IN_  const char *name_p,                                       \
+            _IN_ uint16_t num_entries,                                      \
+            _IN_ _entry_type *storage_array_p,                              \
+            _IN_ struct rtos_mutex *mutex_p,                                \
+            _IN_ cpu_id_t cpu_id,                                           \
+            _OUT_ struct rtos_circular_buffer *circ_buf_p)                  \
+        {                                                                   \
+            FDC_ASSERT_VALID_RAM_OR_ROM_POINTER(name_p, sizeof(char));      \
+            FDC_ASSERT_VALID_RAM_POINTER(                                   \
+                storage_array_p, sizeof(_entry_type));                      \
+            FDC_ASSERT_VALID_RAM_POINTER(circ_buf_p, sizeof(uint32_t));     \
+            FDC_ASSERT(num_entries != 0, 0, 0);                             \
+            if (mutex_p != NULL) {                                          \
+                FDC_ASSERT_VALID_RAM_POINTER(mutex_p, sizeof(uint32_t));    \
+                FDC_ASSERT(                                                 \
+                    mutex_p->mtx_signature == RTOS_MUTEX_SIGNATURE,         \
+                    mutex_p->mtx_signature, mutex_p);                       \
+            }                                                               \
+                                                                            \
+            FDC_ASSERT(cpu_id < SOC_NUM_CPU_CORES, cpu_id,                  \
+                SOC_NUM_CPU_CORES);                                         \
+                                                                            \
+            *((uint32_t *)&circ_buf_p->cb_signature) = _signature;          \
+            *((const char **)&circ_buf_p->cb_name_p) = name_p;              \
+            *((uint16_t *)&circ_buf_p->cb_num_entries) = num_entries;       \
+            *((void **)&circ_buf_p->cb_storage_array_p) = storage_array_p;  \
+            *((struct rtos_mutex **)&circ_buf_p->cb_mutex_p) = mutex_p;     \
+            circ_buf_p->cb_entries_filled = 0;                              \
+            circ_buf_p->cb_read_cursor = 0;                                 \
+            circ_buf_p->cb_write_cursor = 0;                                \
+            circ_buf_p->cb_write_cursor = 0;                                \
+                                                                            \
+            rtos_k_condvar_init(                                            \
+                name_p, cpu_id, &circ_buf_p->cb_not_empty_condvar);         \
+            rtos_k_condvar_init(                                            \
+                name_p, cpu_id, &circ_buf_p->cb_not_full_condvar);          \
+                                                                            \
+            check_circular_buffer_invariants(circ_buf_p, _signature);       \
+        }
+        
+
+/**
+ * Generates the function that writes an entry to a circular buffer of entries
+ * of a given type, if the buffer is not full.
+ * If the buffer is full there are two cases:
+ * - if the wait_if_full flag is true, the caller gets blocked on a
+ *   condvar until the buffer becomes not full.
+ * - If wait_if_full is false, the function returns false
+ *
+ * NOTE: if the caller is an interrupt handler, it is illegal to pass true for
+ * the wait_if_full flag.
+ */
+#define GEN_FUNCTION_CIRCULAR_BUFFER_WRITE(                                 \
+            _circular_buffer_write_func, _entry_type, _signature)           \
+        bool                                                                \
+        _circular_buffer_write_func(                                        \
+            _INOUT_ struct rtos_circular_buffer *circ_buf_p,                \
+            _IN_ _entry_type entry_value,                                   \
+            _IN_ bool wait_if_full)                                         \
+        {                                                                   \
+            cpu_status_register_t saved_cpu_intr_mask;                      \
+            bool entry_written;                                             \
+                                                                            \
+            if (circ_buf_p->cb_mutex_p == NULL) {                           \
+                saved_cpu_intr_mask = rtos_k_disable_cpu_interrupts();      \
+                if (circ_buf_p->cb_entries_filled ==                        \
+                    circ_buf_p->cb_num_entries) {                           \
+                    if (wait_if_full) {                                     \
+                        do {                                                \
+                            rtos_k_condvar_wait_interrupt(                  \
+                                &circ_buf_p->cb_not_full_condvar);          \
+                        } while (circ_buf_p->cb_entries_filled ==           \
+                                 circ_buf_p->cb_num_entries);               \
+                    } else {                                                \
+                        entry_written = false;                              \
+                        goto exit;                                          \
+                    }                                                       \
+                }                                                           \
+            } else {                                                        \
+                rtos_k_mutex_acquire(circ_buf_p->cb_mutex_p);               \
+                if (circ_buf_p->cb_entries_filled ==                        \
+                    circ_buf_p->cb_num_entries) {                           \
+                    if (wait_if_full) {                                     \
+                        do {                                                \
+                            rtos_k_condvar_wait(                            \
+                                &circ_buf_p->cb_not_full_condvar,           \
+                                circ_buf_p->cb_mutex_p);                    \
+                        } while (circ_buf_p->cb_entries_filled ==           \
+                                 circ_buf_p->cb_num_entries);               \
+                    } else {                                                \
+                        entry_written = false;                              \
+                        goto exit;                                          \
+                    }                                                       \
+                }                                                           \
+            }                                                               \
+                                                                            \
+            check_circular_buffer_invariants(circ_buf_p, _signature);       \
+            FDC_ASSERT(                                                     \
+                circ_buf_p->cb_entries_filled < circ_buf_p->cb_num_entries, \
+                circ_buf_p->cb_entries_filled, circ_buf_p);                 \
+                                                                            \
+            ((_entry_type *)circ_buf_p->cb_storage_array_p)[                \
+                circ_buf_p->cb_write_cursor] = entry_value;                 \
+                                                                            \
+            circ_buf_p->cb_write_cursor ++;                                 \
+            if (circ_buf_p->cb_write_cursor ==                              \
+                circ_buf_p->cb_num_entries) {                               \
+                circ_buf_p->cb_write_cursor = 0;                            \
+            }                                                               \
+                                                                            \
+            entry_written = true;                                           \
+        exit:                                                               \
+            if (circ_buf_p->cb_mutex_p == NULL) {                           \
+                rtos_k_restore_cpu_interrupts(saved_cpu_intr_mask);         \
+            } else {                                                        \
+                rtos_k_mutex_release(circ_buf_p->cb_mutex_p);               \
+            }                                                               \
+                                                                            \
+            if (entry_written) {                                            \
+                rtos_k_condvar_signal(&circ_buf_p->cb_not_empty_condvar);   \
+            }                                                               \
+                                                                            \
+            return entry_written;                                           \
+        }
+
+
+/**
+ * Generates the function that reads an entry from a circular buffer of entries
+ * of a given type, if the buffer is not empty.
+ * If the buffer is empty there are two cases:
+ * - if the wait_if_empty flag is true, the caller gets blocked on a
+ *   condvar until the buffer becomes not empty.
+ * - If wait_if_empty is false, the function returns false
+ *
+ * NOTE: if the caller is an interrupt handler, it is illegal to pass 'true' for
+ * the wait_if_empty flag.
+ */
+#define GEN_FUNCTION_CIRCULAR_BUFFER_READ(                                  \
+            _circular_buffer_read_func, _entry_type, _signature)            \
+        bool                                                                \
+        _circular_buffer_read_func(                                         \
+            _INOUT_ struct rtos_circular_buffer *circ_buf_p,                \
+            _OUT_ _entry_type *entry_value_p,                               \
+            _IN_ bool wait_if_empty)                                        \
+        {                                                                   \
+            cpu_status_register_t saved_cpu_intr_mask;                      \
+            bool entry_read;                                                \
+                                                                            \
+            if (circ_buf_p->cb_mutex_p == NULL) {                           \
+                saved_cpu_intr_mask = rtos_k_disable_cpu_interrupts();      \
+                if (circ_buf_p->cb_entries_filled == 0) {                   \
+                    if (wait_if_empty) {                                    \
+                        do {                                                \
+                            rtos_k_condvar_wait_interrupt(                  \
+                                &circ_buf_p->cb_not_empty_condvar);         \
+                        } while (circ_buf_p->cb_entries_filled == 0);       \
+                    } else {                                                \
+                        entry_read = false;                                 \
+                        goto exit;                                          \
+                    }                                                       \
+                }                                                           \
+            } else {                                                        \
+                rtos_k_mutex_acquire(circ_buf_p->cb_mutex_p);               \
+                if (circ_buf_p->cb_entries_filled == 0) {                   \
+                    if (wait_if_empty) {                                    \
+                        do {                                                \
+                            rtos_k_condvar_wait(                            \
+                                &circ_buf_p->cb_not_empty_condvar,          \
+                                circ_buf_p->cb_mutex_p);                    \
+                        } while (circ_buf_p->cb_entries_filled == 0);       \
+                    } else {                                                \
+                        entry_read = false;                                 \
+                        goto exit;                                          \
+                    }                                                       \
+                }                                                           \
+            }                                                               \
+                                                                            \
+            check_circular_buffer_invariants(circ_buf_p, _signature);       \
+            FDC_ASSERT(                                                     \
+                circ_buf_p->cb_entries_filled > 0,                          \
+                circ_buf_p->cb_entries_filled, circ_buf_p);                 \
+                                                                            \
+            *entry_value_p =                                                \
+                ((_entry_type *)circ_buf_p->cb_storage_array_p)[            \
+                circ_buf_p->cb_read_cursor];                                \
+                                                                            \
+            circ_buf_p->cb_read_cursor ++;                                  \
+            if (circ_buf_p->cb_read_cursor == circ_buf_p->cb_num_entries) { \
+                circ_buf_p->cb_read_cursor = 0;                             \
+            }                                                               \
+                                                                            \
+            entry_read = true;                                              \
+        exit:                                                               \
+            if (circ_buf_p->cb_mutex_p == NULL) {                           \
+                rtos_k_restore_cpu_interrupts(saved_cpu_intr_mask);         \
+            } else {                                                        \
+                rtos_k_mutex_release(circ_buf_p->cb_mutex_p);               \
+            }                                                               \
+                                                                            \
+            if (entry_read) {                                               \
+                rtos_k_condvar_signal(&circ_buf_p->cb_not_full_condvar);    \
+            }                                                               \
+                                                                            \
+            return entry_read;                                              \
+        }
+
+
+GEN_FUNCTION_CIRCULAR_BUFFER_INIT(
+    rtos_k_pointer_circular_buffer_init, void *, RTOS_POINTER_CIRCULAR_BUFFER_SIGNATURE)
+
+GEN_FUNCTION_CIRCULAR_BUFFER_WRITE(
+    rtos_k_pointer_circular_buffer_write, void *, RTOS_POINTER_CIRCULAR_BUFFER_SIGNATURE)
+
+GEN_FUNCTION_CIRCULAR_BUFFER_READ(
+    rtos_k_pointer_circular_buffer_read, void *, RTOS_POINTER_CIRCULAR_BUFFER_SIGNATURE)
+
+GEN_FUNCTION_CIRCULAR_BUFFER_INIT(
+    rtos_k_byte_circular_buffer_init, uint8_t, RTOS_BYTE_CIRCULAR_BUFFER_SIGNATURE)
+
+GEN_FUNCTION_CIRCULAR_BUFFER_WRITE(
+    rtos_k_byte_circular_buffer_write, uint8_t, RTOS_BYTE_CIRCULAR_BUFFER_SIGNATURE)
+
+GEN_FUNCTION_CIRCULAR_BUFFER_READ(
+    rtos_k_byte_circular_buffer_read, uint8_t, RTOS_BYTE_CIRCULAR_BUFFER_SIGNATURE)
+
+/**
+ * Check invariants of a circular buffer
+ */
+static void
+check_circular_buffer_invariants(
+    _IN_ struct rtos_circular_buffer *circ_buf_p,
+    _IN_ uint32_t signature)
+{
+    FDC_ASSERT(
+        circ_buf_p->cb_signature == signature,
+        circ_buf_p->cb_signature, circ_buf_p);
+
+    FDC_ASSERT(
+        circ_buf_p->cb_entries_filled <= circ_buf_p->cb_num_entries,
+        circ_buf_p->cb_entries_filled, circ_buf_p);
+
+    FDC_ASSERT(
+        circ_buf_p->cb_write_cursor < circ_buf_p->cb_num_entries,
+        circ_buf_p->cb_write_cursor, circ_buf_p);
+
+    FDC_ASSERT(
+        circ_buf_p->cb_read_cursor < circ_buf_p->cb_num_entries,
+        circ_buf_p->cb_read_cursor, circ_buf_p);
+}
+
+
+#if DEFINED_ARM_CORTEX_M_ARCH()
+
+/**
+ * Function that disables interrupts and returns the previous interrupt mask
+ *
+ * @return  Original value of the CPU PRIMASK register
+ */
+cpu_status_register_t
+rtos_k_disable_cpu_interrupts(void)
+{
+    cpu_status_register_t old_primask = __get_PRIMASK();
+
+    __disable_irq();
+    rtos_start_interrupts_disabled_time_measure(old_primask);
+    return old_primask;
+}
+
+
+/**
+ * Function that restores (and possibly enables) interrupts
+ *
+ * @param   cpu_status_register: Value of the CPU status register to be
+ *          restored
+ */
+ void
+ rtos_k_restore_cpu_interrupts(cpu_register_t old_primask)
+{
+    rtos_stop_interrupts_disabled_time_measure(old_primask);
+   if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
+        __enable_irq();
+   }
+}
+
+
+/**
+ * Increments atomically the value stored in *counter_p, and returns the
+ * original value.
+ *
+ * @param   counter_p: Pointer to the counter to be incremented.
+ *
+ * @param   value: Increment value.
+ *
+ * @return  value of the counter prior to the increment.
+ */
+uint32_t
+rtos_k_atomic_fetch_add_uint32(volatile uint32_t *counter_p, uint32_t value)
+{
+    cpu_status_register_t old_primask = __get_PRIMASK();
+
+    __disable_irq();
+
+    uint32_t old_value = *counter_p;
+
+    *counter_p += value;
+
+    if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
+        __enable_irq();
+    }
+
+    return old_value;
+}
+
+
+/**
+ * Decrements atomically the value stored in *counter_p, and returns the
+ * original value.
+ *
+ * @param   counter_p: Pointer to the counter to be decremented.
+ *
+ * @param   value: Decrement value.
+ *
+ * @return  value of the counter prior to the decrement.
+ */
+uint32_t
+rtos_k_atomic_fetch_sub_uint32(volatile uint32_t *counter_p, uint32_t value)
+{
+    cpu_status_register_t old_primask = __get_PRIMASK();
+
+    __disable_irq();
+
+    uint32_t old_value = *counter_p;
+
+    *counter_p -= value;
+
+    if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
+        __enable_irq();
+    }
+
+    return old_value;
+}
+
+
+/**
+ * Find the highest thread priority bit set in the passed in thread priority
+ * bitmap.
+ *
+ * @param   rtos_thread_prio_bitmap: Thread priority bitmap
+ *
+ * @pre     rtos_thread_prio_bitmap is 32-bits long.
+ *
+ * @return  Highest thread priority whose bit is set in rtos_thread_prio_bitmap,
+ *          if at least one bit is set in rtos_thread_prio_bitmap.
+ *          If bit 31 in rtos_thread_prio_bitmap is set, this function 
+ *          returns 0.
+ *          If bit 0 in rtos_thread_prio_bitmap is set, this function
+ *          returns 31.
+ *
+ * @return  ARM_CPU_WORD_SIZE_IN_BITS, if no bit is set in
+ *          rtos_thread_prio_bitmap.
+ *
+ * Since Cortex-M0+ARM does not have the CLZ instruction, we have to manually
+ * emulate the behavior of CLZ. The algorithm used here was taken from section
+ * 7.2.2 of the ARM System Developer's Guide book.
+ */
+rtos_thread_prio_t
+rtos_k_find_highest_thread_priority(
+    rtos_thread_prio_bitmap_t rtos_thread_prio_bitmap)
+{    
+    uint32_t leading_zeros_count = 0;
+
+    if (rtos_thread_prio_bitmap < BIT(16)) {
+        rtos_thread_prio_bitmap <<= 16;
+        leading_zeros_count += 16;
+    }
+
+    if (rtos_thread_prio_bitmap < BIT(24)) {
+         rtos_thread_prio_bitmap <<= 8;
+         leading_zeros_count += 8;
+    }
+
+    if (rtos_thread_prio_bitmap < BIT(28)) {
+        rtos_thread_prio_bitmap <<= 4;
+        leading_zeros_count += 4;
+    }
+
+    if (rtos_thread_prio_bitmap < BIT(30)) {
+        rtos_thread_prio_bitmap <<= 2;
+        leading_zeros_count += 2;
+    }
+
+    if (rtos_thread_prio_bitmap < BIT(31)) {
+        leading_zeros_count += 1;
+        rtos_thread_prio_bitmap <<= 1; 
+        if (rtos_thread_prio_bitmap == 0) {
+            leading_zeros_count = ARM_CPU_WORD_SIZE_IN_BITS;
+        }
+    }
+
+    return leading_zeros_count;
+}
+
+#endif /* DEFINED_ARM_CORTEX_M_ARCH() */

@@ -62,17 +62,36 @@
 		(uintptr_t)(_enclosed_struct_p) - 				    \
 		offsetof(_enclosing_struct_type, _enclosing_struct_field)))
 
-/**
- * ASCII codes of common control characters
- */ 
-#define CTRL_C  UINT8_C(0x03)
+#define STRINGIFY_LITERAL(_x)   #_x
+
+#ifdef DEBUG
+#   define DEBUG_PRINTF(_fmt, ...) \
+            debug_printf(                                                   \
+                "DBG: " __FILE__ ":" STRINGIFY_LITERAL(__LINE__) " " _fmt,  \
+                ##__VA_ARGS__)
+
+#   define DEBUG_BREAK_POINT(_fmt, ...) \
+            debug_break_point(                                              \
+                "DBG BKPT: " __FILE__ ":" STRINGIFY_LITERAL(__LINE__) " "   \
+                _fmt, ##__VA_ARGS__)
+
+#else
+#   define DEBUG_PRINTF(_fmt, ...)
+#   define DEBUG_BREAK_POINT(_fmt, ...)
+
+#endif
 
 #define TODO_IMPLEMENT_THIS() \
         do {                                                            \
             TODO("Implement this");                                     \
-            console_printf("%s not implemented yet\n", __func__);       \
+            DEBUG_PRINTF("%s not implemented yet\n", __func__);         \
         } while (0);
 
+
+/**
+ * ASCII codes of common control characters
+ */ 
+#define CTRL_C  UINT8_C(0x03)
 
 void copy_memory_block(
     _OUT_ void *dest,
@@ -92,14 +111,20 @@ void console_printf_init(void);
 
 void console_clear(void);
 
+void debug_printf(const char *fmt, ...);
+
+void debug_break_point(const char *fmt, ...);
+
 void console_printf(const char *fmt, ...);
 
+#ifdef LCD_SUPPORTED
 void lcd_printf_init(void);
 
 void lcd_printf(
     lcd_x_t x, lcd_y_t y,
     const struct lcd_char_attributes *lcd_char_attributes_p,
     const char *fmt, ...);
+#endif
 
 #ifdef CPPUTEST_COMPILATION  // from CppUTest
 
@@ -112,5 +137,7 @@ typedef void putchar_func_t(void *putchar_arg_p, uint8_t c);
 void
 embedded_printf(
     putchar_func_t *putchar_func_p, void *putchar_arg_p, const char *fmt, ...);
+
+extern const char g_clear_console_control_string[];
 
 #endif /* __UTILS_H */

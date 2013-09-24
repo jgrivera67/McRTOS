@@ -3,6 +3,8 @@
  *
  * McRTOS compile-time configuration parameters
  *
+ * Copyright (C) 2013 German Rivera
+ *
  * @author German Rivera 
  */ 
 #ifndef _McRTOS_CONFIG_PARAMS_H
@@ -43,7 +45,7 @@
 /**
  * Execution stack size for threads (in number of stack entries)
  */
-#define RTOS_THREAD_STACK_NUM_ENTRIES   UINT32_C(256)
+#define RTOS_THREAD_STACK_NUM_ENTRIES   UINT32_C(128)
 
 /**
  * Thread stack size in bytes
@@ -56,19 +58,29 @@
  * interrupt stacks
  */
 #define RTOS_THREAD_STACK_OVERFLOW_BUFFER_SIZE_IN_ENTRIES \
-        (RTOS_THREAD_STACK_NUM_ENTRIES / 10)
+        (RTOS_THREAD_STACK_NUM_ENTRIES / 16)
 
 /**
  * Execution stack size for interrupts (in number of stack entries) 
  */
-#define RTOS_INTERRUPT_STACK_NUM_ENTRIES    UINT32_C(128)
+#if DEFINED_ARM_CLASSIC_ARCH()
+#   define RTOS_INTERRUPT_STACK_NUM_ENTRIES    UINT32_C(128)
+
+#elif DEFINED_ARM_CORTEX_M_ARCH()
+    /*
+     * For Cortex-M there is only one interrupt stack shared among all
+     * nested exceptions
+     */ 
+#   define RTOS_INTERRUPT_STACK_NUM_ENTRIES \
+            (UINT32_C(64) * SOC_NUM_INTERRUPT_PRIORITIES)
+#endif
 
 /**
  * Stack overflow buffer size (in number of stack entries) for 
  * interrupt stacks
  */
 #define RTOS_INTERRUPT_STACK_OVERFLOW_BUFFER_SIZE_IN_ENTRIES \
-        (RTOS_INTERRUPT_STACK_NUM_ENTRIES / 10)
+        (RTOS_INTERRUPT_STACK_NUM_ENTRIES / 16)
 
 /**
  * Number of thread priorities supported
@@ -85,22 +97,22 @@
 /**
  * Maximum size of the fdc_info struct in bytes
  */
-#define RTOS_MAX_FDC_INFO_SIZE  UINT32_C(4*1024)
+#define RTOS_MAX_FDC_INFO_SIZE  UINT32_C(1*1024)
 
 /**
  * Maximum number of failure records that can be captured
  */
-#define RTOS_MAX_NUM_FAILURE_RECORDS    UINT32_C(16)
+#define RTOS_MAX_NUM_FAILURE_RECORDS    UINT32_C(8)
 
 /**
  * Maximum number of unexpected exception records that can be captured
  */
-#define RTOS_MAX_NUM_UNEXPECTED_EXCEPTION_RECORDS   UINT32_C(16)
+#define RTOS_MAX_NUM_UNEXPECTED_EXCEPTION_RECORDS   UINT32_C(8)
 
 /**
  * Size of the context switch trace buffer in number of entries
  */
-#define RTOS_NUM_CONTEXT_SWITCH_TRACE_BUFFER_ENTRIES    UINT16_C(128)
+#define RTOS_NUM_CONTEXT_SWITCH_TRACE_BUFFER_ENTRIES    UINT16_C(16)
 
 /**
  * Number of console channels
@@ -119,7 +131,7 @@
 /**
  * Maximum number of application threads that can exist in the system
  */
-#define RTOS_MAX_NUM_APP_THREADS UINT8_C(16)
+#define RTOS_MAX_NUM_APP_THREADS UINT8_C(4)
 
 /*
  * If the total size of application thread stacks is larger than 25% of
@@ -143,26 +155,26 @@
 /**
  * Maximum number of software timers that can exist in the system
  */
-#define RTOS_MAX_NUM_APP_TIMERS             UINT8_C(8)
+#define RTOS_MAX_NUM_APP_TIMERS             UINT8_C(4)
 
 /**
  * Maximum number of mutexes that can exist in the system
  */
-#define RTOS_MAX_NUM_APP_MUTEXES            UINT8_C(8)
+#define RTOS_MAX_NUM_APP_MUTEXES            UINT8_C(4)
 
 /**
  * Maximum number of condition variables that can exist in the system
  */
-#define RTOS_MAX_NUM_APP_CONDVARS           UINT8_C(8)
+#define RTOS_MAX_NUM_APP_CONDVARS           UINT8_C(4)
 
 /**
  * Maximum number of message channels that can exist in the system
  */
-#define RTOS_MAX_NUM_APP_MSG_CHANNELS       UINT8_C(8)
+#define RTOS_MAX_NUM_APP_MSG_CHANNELS       UINT8_C(0)
 
 /**
- * Maximum number of message channels that can exist in the system
+ * Maximum number of object pools that can exist in the system
  */
-#define RTOS_MAX_NUM_APP_OBJECT_POOLS       UINT8_C(8)
+#define RTOS_MAX_NUM_APP_OBJECT_POOLS       UINT8_C(0)
 
 #endif /* _McRTOS_CONFIG_PARAMS_H */

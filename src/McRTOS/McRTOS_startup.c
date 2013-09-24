@@ -3,6 +3,8 @@
  *
  * McRTOS startup module.
  *
+ * Copyright (C) 2013 German Rivera
+ *
  * @author German Rivera 
  */ 
 
@@ -16,15 +18,12 @@ TODO("Remove these pragmas")
 #pragma GCC diagnostic ignored "-Wunused-function"
 
 /**
- * Application thread priorities
+ * System thread priorities
  */
 enum system_thread_priorities
 {
     RTOS_ROOT_THREAD_PRIORITY = 0,
     RTOS_COMMAND_LINE_THREAD_PRIORITY = 1,
-    TOUCH_SCREEN_READER_THREAD_PRIORITY = RTOS_LOWEST_THREAD_PRIORITY - 1,
-    BUTTONS_READER_THREAD_PRIORITY = RTOS_LOWEST_THREAD_PRIORITY - 1,
-    TRIMPOT_READER_THREAD_PRIORITY = RTOS_LOWEST_THREAD_PRIORITY - 1,
     RTOS_IDLE_THREAD_PRIORITY = RTOS_LOWEST_THREAD_PRIORITY,
 };
 
@@ -61,11 +60,12 @@ enum system_thread_priorities
         }
 
 
+static void rtos_init_reset_execution_context(
+                struct rtos_cpu_controller *cpu_controller_p);
+
 static fdc_error_t rtos_root_thread_f(void *arg);
 static fdc_error_t rtos_idle_thread_f(void *arg);
 static fdc_error_t rtos_touch_screen_reader_thread_f(void *arg);
-static fdc_error_t rtos_buttons_reader_thread_f(void *arg);
-static fdc_error_t rtos_trimpot_reader_thread_f(void *arg);
 static fdc_error_t rtos_command_line_thread_f(void *arg);
 static void McRTOS_display_help(void);
 static void McRTOS_display_stats(void);
@@ -86,7 +86,9 @@ static const struct rtos_thread_creation_params g_rtos_system_threads[] =
         .p_function_arg_p = NULL,
         .p_priority = RTOS_ROOT_THREAD_PRIORITY,
         .p_console_channel = RTOS_CONSOLE_CHANNEL_NONE,
+#       ifdef LCD_SUPPORTED
         .p_lcd_channel = RTOS_LCD_CHANNEL_NONE,
+#       endif
         .p_thread_pp = NULL,
     },
 
@@ -97,7 +99,9 @@ static const struct rtos_thread_creation_params g_rtos_system_threads[] =
         .p_function_arg_p = NULL,
         .p_priority = RTOS_IDLE_THREAD_PRIORITY,
         .p_console_channel = RTOS_CONSOLE_CHANNEL_NONE,
+#       ifdef LCD_SUPPORTED
         .p_lcd_channel = RTOS_LCD_CHANNEL_NONE,
+#       endif
         .p_thread_pp = NULL,
     },
 
@@ -108,40 +112,9 @@ static const struct rtos_thread_creation_params g_rtos_system_threads[] =
         .p_function_arg_p = NULL,
         .p_priority = RTOS_COMMAND_LINE_THREAD_PRIORITY,
         .p_console_channel = RTOS_COMMAND_LINE_CONSOLE_CHANNEL,
+#       ifdef LCD_SUPPORTED
         .p_lcd_channel = RTOS_COMMAND_LINE_LCD_CHANNEL,
-        .p_thread_pp = NULL,
-    },
-
-    [RTOS_BUTTONS_SYSTEM_THREAD] =
-    {
-        .p_name_p = "McRTOS buttons reader thread",
-        .p_function_p = rtos_buttons_reader_thread_f,
-        .p_function_arg_p = NULL,
-        .p_priority = BUTTONS_READER_THREAD_PRIORITY,
-        .p_console_channel = RTOS_CONSOLE_CHANNEL_NONE,
-        .p_lcd_channel = RTOS_LCD_CHANNEL_NONE,
-        .p_thread_pp = NULL,
-    },
-
-    [RTOS_TOUCH_SCREEN_SYSTEM_THREAD] =
-    {
-        .p_name_p = "McRTOS touch screen reader thread",
-        .p_function_p = rtos_touch_screen_reader_thread_f,
-        .p_function_arg_p = NULL,
-        .p_priority = TOUCH_SCREEN_READER_THREAD_PRIORITY,
-        .p_console_channel = RTOS_COMMAND_LINE_CONSOLE_CHANNEL,
-        .p_lcd_channel =  RTOS_TILES_LCD_CHANNEL,
-        .p_thread_pp = NULL,
-    },
-
-    [RTOS_TRIMPOT_SYSTEM_THREAD] =
-    {
-        .p_name_p = "McRTOS trimpot reader thread",
-        .p_function_p = rtos_trimpot_reader_thread_f,
-        .p_function_arg_p = NULL,
-        .p_priority = TRIMPOT_READER_THREAD_PRIORITY,
-        .p_console_channel = RTOS_COMMAND_LINE_CONSOLE_CHANNEL,
-        .p_lcd_channel = RTOS_LCD_CHANNEL_NONE,
+#       endif
         .p_thread_pp = NULL,
     },
 };
@@ -163,13 +136,23 @@ static struct McRTOS g_McRTOS =
 
     .rts_next_free_app_condvar_p = &g_McRTOS.rts_app_condvars[0],
 
+#if RTOS_MAX_NUM_APP_MSG_CHANNELS > 0
     .rts_next_free_app_32bit_msg_channel_p = &g_McRTOS.rts_app_32bit_msg_channels[0],
+#else
+    .rts_next_free_app_32bit_msg_channel_p = NULL,
+#endif
 
+#if RTOS_MAX_NUM_APP_OBJECT_POOLS > 0
     .rts_next_free_app_object_pool_p = &g_McRTOS.rts_app_object_pools[0],
+#else
+    .rts_next_free_app_object_pool_p = NULL,
+#endif
 
     .rts_current_console_channel = RTOS_COMMAND_LINE_CONSOLE_CHANNEL,
 
+#ifdef LCD_SUPPORTED
     .rts_current_lcd_channel = RTOS_COMMAND_LINE_LCD_CHANNEL,
+#endif
 
 #ifdef DEBUG
     .rts_stop_idle_cpu = false,
@@ -218,6 +201,7 @@ check_mcrtos_common_compile_time_initializations(void)
 #endif /* DEBUG */
 
 
+#ifdef LCD_SUPPORTED
 static void
 lcd_display_greetings(void)
 {
@@ -248,6 +232,7 @@ lcd_display_greetings(void)
         g_McRTOS_build_timestamp);
 }
 
+#endif
 
 /**
  * Main entry point of McRTOS. This function is to be invoked from the
@@ -276,6 +261,12 @@ rtos_startup(
     struct rtos_cpu_controller *cpu_controller_p =
                                     &g_McRTOS_p->rts_cpu_controllers[cpu_id];
 
+#   if DEFINED_ARM_CORTEX_M_ARCH()
+    __disable_irq();
+#   endif
+
+    rtos_init_reset_execution_context(cpu_controller_p);
+
     cpu_controller_p->cpc_app_config_p = rtos_app_config_p;
 
     /*
@@ -283,17 +274,19 @@ rtos_startup(
      */
     if (cpu_id == 0)
     {
-#ifdef DEBUG
+#       ifdef DEBUG
         /*
          * Check the compile-time initializations common to all CPU cores:
          */
         check_mcrtos_common_compile_time_initializations();
-#endif
+        #endif
 
         board_init();
         console_printf_init();
-        lcd_printf_init();
 
+#       ifdef LCD_SUPPORTED
+        lcd_printf_init();
+#       endif
         /*
          * Calculate  approximate overhead for taking a measurement of time in
          * CPU clock cycles:
@@ -340,7 +333,8 @@ rtos_startup(
      */
 
     FDC_ASSERT(
-        cpu_controller_p->cpc_current_execution_context_p == NULL,
+        cpu_controller_p->cpc_current_execution_context_p == 
+        &cpu_controller_p->cpc_reset_execution_context,
         cpu_controller_p->cpc_current_execution_context_p, 
         cpu_controller_p);
 
@@ -352,7 +346,7 @@ rtos_startup(
     cpu_controller_p->cpc_startup_completed = true;
 
     /*
-     * Invoke the thread scheduler to "switch out" to the root thread:
+     * Invoke the thread scheduler to "switch in" the root thread:
      *
      * NOTE: Although we have been running with interrupts disabled all
      * along since reset, we only start measuring the disable time here,
@@ -362,12 +356,87 @@ rtos_startup(
      */
 
     RTOS_START_INTERRUPTS_DISABLED_TIME_MEASURE();
+
+#if DEFINED_ARM_CORTEX_M_ARCH()
+    /* 
+     * Set psp to 0x0, to indicate that this is the first context switch
+     */
+    __set_PSP(0x0);
+    rtos_k_synchronous_context_switch(
+        cpu_controller_p->cpc_current_execution_context_p);
+#else
     rtos_thread_scheduler();
+#endif
 
     /*
      * We should never come here
      */
     FDC_ASSERT(false, 0, 0);
+}
+
+
+/**
+ * Initialize reset handler's execution context for a given CPU
+ */
+static void
+rtos_init_reset_execution_context(
+    struct rtos_cpu_controller *cpu_controller_p)
+{
+    fdc_context_switch_trace_entry_t prefilled_trace_entry = 0;
+
+    SET_BIT_FIELD(
+        prefilled_trace_entry, 
+        FDC_CST_CONTEXT_ID_MASK,
+        FDC_CST_CONTEXT_ID_SHIFT,
+        0);
+
+    SET_BIT_FIELD(
+        prefilled_trace_entry, 
+        FDC_CST_CONTEXT_TYPE_MASK,
+        FDC_CST_CONTEXT_TYPE_SHIFT,
+        FDC_CST_RESET);
+
+    SET_BIT_FIELD(
+        prefilled_trace_entry, 
+        FDC_CST_CONTEXT_PRIORITY_MASK,
+        FDC_CST_CONTEXT_PRIORITY_SHIFT,
+        0);
+
+    rtos_execution_stack_entry_t *stack_top_end_p;
+    rtos_execution_stack_entry_t *stack_bottom_end_p;
+    cpu_register_t entry_point_pc;
+
+#if DEFINED_ARM_CLASSIC_ARCH()
+    extern void *__stack_svc_start;
+    extern void *__stack_svc_end;
+    extern void *ResetHandler;
+
+    stack_top_end_p = __stack_svc_start;
+    stack_bottom_end_p = __stack_svc_end;
+    entry_point_pc = (uintptr_t)ResetHandler;
+#elif DEFINED_ARM_CORTEX_M_ARCH()
+    entry_point_pc = (uintptr_t)cortex_m_reset_handler;
+    stack_top_end_p = &g_cortex_m_exception_stack.es_stack[0];
+    stack_bottom_end_p = 
+        &g_cortex_m_exception_stack.es_stack[RTOS_INTERRUPT_STACK_NUM_ENTRIES];
+#else
+    #error "unsupported CPU architecture"
+#endif
+
+    rtos_execution_context_init(
+        &cpu_controller_p->cpc_reset_execution_context,
+        "reset handler",
+        cpu_controller_p->cpc_cpu_id,
+        RTOS_RESET_CONTEXT,
+        prefilled_trace_entry,
+        RTOS_RESET_MODE,
+        entry_point_pc,
+        0,
+        stack_top_end_p,
+        stack_bottom_end_p);
+
+    cpu_controller_p->cpc_current_execution_context_p =
+        &cpu_controller_p->cpc_reset_execution_context;
 }
 
 
@@ -400,7 +469,11 @@ rtos_root_thread_f(void *arg)
         /*
          * Display McRTOS console greeting:
          */
-        console_clear();
+        if (!software_reset_happened()) 
+        {
+            console_clear();
+        }
+
         console_printf("%s\n%s\n", g_McRTOS_version, g_McRTOS_build_timestamp);
     }
 
@@ -525,12 +598,10 @@ rtos_root_thread_f(void *arg)
 
     if (cpu_id == 0)
     {
-        lcd_display_greetings();
-#if 0
-        rtos_thread_delay(2000);
-        lcd_clear(LCD_COLOR_BLACK);
-        g_McRTOS_p->rts_current_lcd_channel = RTOS_APP_LCD_CHANNEL;
-#endif
+#       ifdef LCD_SUPPORTED
+            lcd_display_greetings();
+#       endif
+
         g_McRTOS_p->rts_current_console_channel = RTOS_APP_CONSOLE_CHANNEL;
     }
 
@@ -613,217 +684,6 @@ rtos_idle_thread_f(void *arg)
 }
 
 
-/**
- * Touchscreen reader thread
- */
-static fdc_error_t
-rtos_touch_screen_reader_thread_f(void *arg)
-{
-    lcd_color_t old_color;
-    uint_fast8_t tile_row;
-    uint_fast8_t tile_column;
-    uint_fast16_t x;
-    uint_fast16_t y;
-    fdc_error_t fdc_error;
-    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
-
-    FDC_ASSERT(arg == NULL, arg, cpu_id);
-
-    console_printf("Initializing McRTOS touch screen sensing thread ...\n");
-
-    init_touch_screen();
-
-    for ( ; ; )
-    {
-        if (sense_touch_screen(TILE_WIDTH, &tile_row, &tile_column))
-        {
-            x = tile_column * TILE_WIDTH;
-            y = tile_row * TILE_WIDTH;
-            //rtos_mutex_acquire(g_lcd_output_mutex_p);
-            old_color = rtos_lcd_draw_tile(x, y, LCD_COLOR_BRIGHT(LCD_COLOR_WHITE));
-            rtos_thread_delay(200);
-            (void)rtos_lcd_draw_tile(x, y, old_color);
-            //rtos_mutex_release(g_lcd_output_mutex_p);
-        } 
-        else
-        {
-            rtos_thread_delay(20);
-        }
-    }   
-
-    fdc_error = CAPTURE_FDC_ERROR(
-        "McRTOS touch screen thread should not have terminated",
-        cpu_id, rtos_thread_self());
-
-    return fdc_error;
-}
-
-
-TODO("Remove these variables")
-volatile uint32_t tile_cursor_index = 0;
-volatile uint32_t same_tile_count = 0;
-
-/**
- * Buttons reader thread
- */
-static fdc_error_t
-rtos_buttons_reader_thread_f(void *arg)
-{
-    lcd_color_t old_color;
-    uint32_t buttons_pressed;
-    fdc_error_t fdc_error;
-    bool change_lcd_channel = false;
-    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
-
-    FDC_ASSERT(arg == NULL, arg, cpu_id);
-
-    console_printf("Initializing McRTOS buttons reader thread ...\n");
-
-    init_buttons(g_buttons_device_p);
-
-    for ( ; ; )
-    {
-        buttons_pressed = read_buttons(g_buttons_device_p);
-
-        buttons_pressed &= (BUTTON1_PRESSED_MASK | BUTTON2_PRESSED_MASK);
-        
-        if (buttons_pressed == BUTTON1_PRESSED_MASK)
-        {
-            old_color = rtos_lcd_draw_tile(0, 1*TILE_WIDTH, LCD_COLOR_BRIGHT(LCD_COLOR_CYAN));
-            rtos_thread_delay(200);
-            (void)rtos_lcd_draw_tile(0, 1*TILE_WIDTH, old_color);
-
-            ATOMIC_POST_INCREMENT_UINT32(&tile_cursor_index);
-            same_tile_count = 0;
-
-            g_McRTOS_p->rts_current_lcd_channel ++;
-            if (g_McRTOS_p->rts_current_lcd_channel == RTOS_NUM_LCD_CHANNELS)
-            {
-                g_McRTOS_p->rts_current_lcd_channel = 0;
-            }
-
-            change_lcd_channel = true;
-        }
-        else if (buttons_pressed == BUTTON2_PRESSED_MASK)
-        {
-            old_color = rtos_lcd_draw_tile(0, 0*TILE_WIDTH, LCD_COLOR_BRIGHT(LCD_COLOR_MAGENTA));
-            rtos_thread_delay(200);
-            (void)rtos_lcd_draw_tile(0, 0*TILE_WIDTH, old_color);
-
-            if (tile_cursor_index > 0)
-            {
-                ATOMIC_POST_DECREMENT_UINT32(&tile_cursor_index);
-                same_tile_count = 0;
-            }
-
-            if (g_McRTOS_p->rts_current_lcd_channel == 0)
-            {
-                g_McRTOS_p->rts_current_lcd_channel = RTOS_NUM_LCD_CHANNELS - 1;
-            }
-            else
-            {
-                g_McRTOS_p->rts_current_lcd_channel --;
-            }
-
-            change_lcd_channel = true;
-        }
-        else if (buttons_pressed != 0)
-        {
-            /*
-             * Both buttons are pressed at the same time
-             */
-            DBG_ASSERT(
-                buttons_pressed == (BUTTON1_PRESSED_MASK | BUTTON2_PRESSED_MASK),
-                buttons_pressed, 0);
-
-            lcd_color_t old_color1 =
-                rtos_lcd_draw_tile(0, 1*TILE_WIDTH, LCD_COLOR_BRIGHT(LCD_COLOR_CYAN));
-
-            lcd_color_t old_color2 =
-                rtos_lcd_draw_tile(0, 0*TILE_WIDTH, LCD_COLOR_BRIGHT(LCD_COLOR_MAGENTA));
-
-            rtos_thread_delay(200);
-
-            (void)rtos_lcd_draw_tile(0, 1*TILE_WIDTH, old_color1);
-            (void)rtos_lcd_draw_tile(0, 0*TILE_WIDTH, old_color2);
-
-            TODO("Do something useful");
-        }
-
-        if (change_lcd_channel)
-        {
-            switch (g_McRTOS_p->rts_current_lcd_channel)
-            {
-                case RTOS_COMMAND_LINE_LCD_CHANNEL:
-                    lcd_display_greetings();
-                    break;
-
-                case RTOS_APP_LCD_CHANNEL:
-                    lcd_clear(LCD_COLOR_BLACK);
-                    break;
-
-                case RTOS_TILES_LCD_CHANNEL:
-                    lcd_draw_tile_grid();
-                    break;
-            }
-
-            change_lcd_channel = false;
-        }
-
-#ifndef USE_GPIO_INTERRUPTS
-        rtos_thread_delay(200);
-#endif
-    } 
-
-    fdc_error = CAPTURE_FDC_ERROR(
-        "McRTOS buttons reader thread should not have terminated",
-        cpu_id, rtos_thread_self());
-
-    return fdc_error;
-}
-
-volatile uint32_t g_last_trimpot_reading = 0; // XXX
-
-/**
- * Trimpot reader thread
- */
-static fdc_error_t
-rtos_trimpot_reader_thread_f(void *arg)
-{
-    uint32_t trimpot_reading;
-    uint32_t old_trimpot_reading;
-    fdc_error_t fdc_error;
-    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
-
-    FDC_ASSERT(arg == NULL, arg, cpu_id);
-
-    console_printf("Initializing McRTOS trimpot sensing thread ...\n");
-
-    init_trimpot();
-
-    old_trimpot_reading = 0;
-    for ( ; ; )
-    {
-        trimpot_reading = read_trimpot() & ~0xf;
-        if (trimpot_reading != old_trimpot_reading)
-        {
-            console_printf("Trimpot changed: 0x%x\n", trimpot_reading);
-
-            g_last_trimpot_reading = trimpot_reading;
-            old_trimpot_reading = trimpot_reading;
-        }
-        
-        rtos_thread_delay(250);
-    }   
-
-    fdc_error = CAPTURE_FDC_ERROR(
-        "McRTOS trimpot sensing thread should not have terminated",
-        cpu_id, rtos_thread_self());
-
-    return fdc_error;
-}
-
-
 static fdc_error_t
 rtos_command_line_thread_f(void *arg)
 {
@@ -834,7 +694,7 @@ rtos_command_line_thread_f(void *arg)
 
     for ( ; ; )
     {
-        uint8_t c = rtos_console_getchar(true);
+        uint8_t c = rtos_console_getchar();
 
         if (c != CTRL_C)
         {
@@ -853,7 +713,7 @@ rtos_command_line_thread_f(void *arg)
 
         do {
             console_printf("McRTOS> ");
-            c = rtos_console_getchar(true);
+            c = rtos_console_getchar();
             console_printf("%c\n", c);
             switch (c)
             {
@@ -905,85 +765,59 @@ McRTOS_display_stats(void)
     struct rtos_cpu_controller *cpu_controller_p =
         &g_McRTOS_p->rts_cpu_controllers[cpu_id];
 
-#if 0
-    uint8_t c;
+    console_clear();
+    console_printf("McRTOS stats for CPU core %u\n\n", cpu_id);
+    
+    uint32_t seconds = (cpu_controller_p->cpc_ticks_since_boot_count / 1000) * RTOS_MILLISECONDS_PER_TICK;
+    uint32_t minutes = seconds / 60;
+    uint32_t hours = minutes / 60;
 
-    /*
-     * Flush console input:
-     */
-    do {
-        c = rtos_console_getchar(false);
-    } while (c != '\0');
-#endif
+    minutes %= 60;
+    seconds %= 60;
+    
+    console_printf("Up time: %u ticks (%u hours, %u minutes, %u seconds)\n",
+        cpu_controller_p->cpc_ticks_since_boot_count, hours, minutes, seconds);
 
-    for ( ; ; )
+    console_printf("Longest interrupts disabled time: %u us\n",
+         CPU_CLOCK_CYCLES_TO_MICROSECONDS(cpu_controller_p->cpc_longest_time_interrupts_disabled));
+
+    console_printf("Latest interrupts disabled time: %u us\n",
+         CPU_CLOCK_CYCLES_TO_MICROSECONDS(cpu_controller_p->cpc_latest_measurement_time_interrupts_disabled));
+
+    console_printf("Stop CPU in idle thread: %s\n\n",
+        g_McRTOS_p->rts_stop_idle_cpu ? "On" : "Off");
+
+
+    struct glist_node *context_node_p;
+
+    console_printf(
+        "Context    Name                           Priority Switched-out Preempted  CPU        Tstamp last  Switched-out\n"
+        "address                                            count        count      usage (ms) switched-out history\n"
+        "========== ============================== ======== ============ ========== ========== ============ ============\n");
+
+    GLIST_FOR_EACH_NODE(
+        context_node_p,
+        &cpu_controller_p->cpc_execution_contexts_list_anchor)
     {
-        console_clear();
-        console_printf("McRTOS stats for CPU core %u\n\n", cpu_id);
-        
-        uint32_t seconds = (cpu_controller_p->cpc_ticks_since_boot_count / 1000) * RTOS_MILLISECONDS_PER_TICK;
-        uint32_t minutes = seconds / 60;
-        uint32_t hours = minutes / 60;
-
-        minutes %= 60;
-        seconds %= 60;
-        
-        console_printf("Up time: %u ticks (%u hours, %u minutes, %u seconds)\n",
-            cpu_controller_p->cpc_ticks_since_boot_count, hours, minutes, seconds);
-
-        console_printf("Longest interrupts disabled time: %u us\n",
-             CPU_CLOCK_CYCLES_TO_MICROSECONDS(cpu_controller_p->cpc_longest_time_interrupts_disabled));
-
-        console_printf("Latest interrupts disabled time: %u us\n",
-             CPU_CLOCK_CYCLES_TO_MICROSECONDS(cpu_controller_p->cpc_latest_measurement_time_interrupts_disabled));
-
-        console_printf("Stop CPU in idle thread: %s\n\n",
-            g_McRTOS_p->rts_stop_idle_cpu ? "On" : "Off");
-
-
-        struct glist_node *context_node_p;
+        struct rtos_execution_context *context_p = 
+            GLIST_NODE_ENTRY(
+                context_node_p, struct rtos_execution_context, ctx_list_node);
 
         console_printf(
-            "Context    Name                           Priority Switched-out Preempted  CPU        Tstamp last  Switched-out\n"
-            "address                                            count        count      usage (ms) switched-out history\n"
-            "========== ============================== ======== ============ ========== ========== ============ ============\n");
-
-        GLIST_FOR_EACH_NODE(
-            context_node_p,
-            &cpu_controller_p->cpc_execution_contexts_list_anchor)
-        {
-            struct rtos_execution_context *context_p = 
-                GLIST_NODE_ENTRY(
-                    context_node_p, struct rtos_execution_context, ctx_list_node);
-
-            console_printf(
-                "0x%8x %30s %c%7u %12u %10u %10u %12u 0x%x%x\n",
-                context_p,
-                context_p->ctx_name_p,
-                (context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT) ?
-                    'I' :
-                    'T',
-                (context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT) ?
-                    RTOS_EXECUTION_CONTEXT_GET_INTERRUPT(context_p)->int_priority :
-                    RTOS_EXECUTION_CONTEXT_GET_THREAD(context_p)->thr_current_priority,
-                context_p->ctx_switched_out_counter,
-                context_p->ctx_preempted_counter,
-                CPU_CLOCK_CYCLES_TO_MILLISECONDS(context_p->ctx_accumulated_cpu_usage),
-                context_p->ctx_last_switched_out_time_stamp_in_ticks,
-                context_p->ctx_switched_out_reason_history,
-                context_p->ctx_last_switched_out_reason);
-        }
-  
-#if 0
-        rtos_thread_delay(2000);
-        uint8_t c = rtos_console_getchar(false);
-        if (c == CTRL_C)
-        {
-            console_clear();
-            break;
-        }
-#else
-        break;
-#endif
+            "0x%8x %30s %c%7u %12u %10u %10u %12u 0x%x%x\n",
+            context_p,
+            context_p->ctx_name_p,
+            (context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT) ?
+                'I' :
+                'T',
+            (context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT) ?
+                RTOS_EXECUTION_CONTEXT_GET_INTERRUPT(context_p)->int_priority :
+                RTOS_EXECUTION_CONTEXT_GET_THREAD(context_p)->thr_current_priority,
+            context_p->ctx_switched_out_counter,
+            context_p->ctx_preempted_counter,
+            CPU_CLOCK_CYCLES_TO_MILLISECONDS(context_p->ctx_accumulated_cpu_usage),
+            context_p->ctx_last_switched_out_time_stamp_in_ticks,
+            context_p->ctx_switched_out_reason_history,
+            context_p->ctx_last_switched_out_reason);
     }
 }

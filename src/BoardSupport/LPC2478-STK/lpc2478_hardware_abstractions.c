@@ -1726,10 +1726,10 @@ init_uart_internal(
 
 
 /**
- * Clear last interrupt for the given UART
+ * UART interrupt pre-handler
  */ 
 void
-clear_uart_interrupt_source(
+uart_interrupt_pre_handler(
     _IN_ const struct uart_device *uart_device_p)
 {
     DBG_ASSERT_CPU_INTERRUPTS_DISABLED();
@@ -1826,10 +1826,10 @@ clear_uart_interrupt_source(
 
 
 /**
- * UART interrupt handler
+ * UART interrupt post-handler
  */
 void
-uart_interrupt_handler(
+uart_interrupt_post_handler(
     _IN_ const struct uart_device *uart_device_p)
 {
     DBG_ASSERT(
@@ -2789,8 +2789,7 @@ uart_putchar_with_polling(
  */
 uint8_t
 uart_getchar(
-    _IN_ const struct uart_device *uart_device_p,
-    _IN_ bool wait) 
+    _IN_ const struct uart_device *uart_device_p)
 {
     struct uart_device_var *const uart_var_p = uart_device_p->urt_var_p;
     lpc2478_uart_t *const uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
@@ -2813,33 +2812,23 @@ uart_getchar(
          */
         cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
 
-        if (wait)
-        {
-            /*
-             * Enable or re-enable generation of UART RDA interrupts:
-             */
-            uint32_t reg_value = read_32bit_mmio_register(&uart_mmio_registers_p->reg_IER);
-            reg_value |= UART_IER_RDA_INTERRUPT_ENABLE_MASK;
-            write_32bit_mmio_register(&uart_mmio_registers_p->reg_IER, reg_value);
+        /*
+         * Enable or re-enable generation of UART RDA interrupts:
+         */
+        uint32_t reg_value = read_32bit_mmio_register(&uart_mmio_registers_p->reg_IER);
+        reg_value |= UART_IER_RDA_INTERRUPT_ENABLE_MASK;
+        write_32bit_mmio_register(&uart_mmio_registers_p->reg_IER, reg_value);
 
-            /*
-             * Wait to be signaled from UART interrupt:
-             */
-            rtos_k_condvar_wait_interrupt(&uart_var_p->urt_rdr_condvar);
+        /*
+         * Wait to be signaled from UART interrupt:
+         */
+        rtos_k_condvar_wait_interrupt(&uart_var_p->urt_rdr_condvar);
 
-            FDC_ASSERT(uart_var_p->urt_byte_received_pending,
-                uart_var_p, 0);
-        }
+        FDC_ASSERT(uart_var_p->urt_byte_received_pending,
+            uart_var_p, 0);
 
-        if (uart_var_p->urt_byte_received_pending)
-        {
-            char_received = uart_var_p->urt_first_byte_received;
-            uart_var_p->urt_byte_received_pending = false;
-        }
-        else
-        {
-            char_received = '\0';
-        }
+        char_received = uart_var_p->urt_first_byte_received;
+        uart_var_p->urt_byte_received_pending = false;
 
         /*
          * Restore previous interrupt masking in the ARM core

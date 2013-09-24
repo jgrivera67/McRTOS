@@ -3,6 +3,8 @@
  *
  * Compile-time and static-analysis checking macros
  *
+ * Copyright (C) 2013 German Rivera
+ *
  * @author German Rivera 
  */ 
 #ifndef _COMPILE_TIME_CHECKS_H

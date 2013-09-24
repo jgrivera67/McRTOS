@@ -3,6 +3,8 @@
  *
  * General utilities
  *
+ * Copyright (C) 2013 German Rivera
+ *
  * @author German Rivera 
  */ 
 #include "utils.h"
@@ -10,6 +12,7 @@
 #include "hardware_abstractions.h"
 #include "McRTOS.h"
 #include "McRTOS_kernel_services.h"
+#include "McRTOS_internals.h"
 #include <inttypes.h>
 #include <stdarg.h>
 
@@ -35,14 +38,21 @@ print_string(
 C_ASSERT(sizeof(uintptr_t) == sizeof(uint32_t));
 
 /**
+ * Clear screen control sequence for VT100 terminals
+ */
+const char g_clear_console_control_string[] = "\x1b[2J\x1b[H";
+
+/**
  * Mutex to serialize printf output to the console
  */
 static struct rtos_mutex g_console_printf_mutex;
 
+#ifdef LCD_SUPPORTED
 /**
  * Mutex to serialize printf output to the LCD
  */
 static struct rtos_mutex g_lcd_printf_mutex;
+#endif
 
 /**
  * Copies a word-aligned memory block
@@ -166,6 +176,7 @@ copy_memory_block(
 }
 
 
+#ifdef DRAM_SUPPORTED
 /**
  * Checks that all the bits of a word-aligned DRAM memory block can be written
  * as 0's and as 1's.
@@ -286,7 +297,7 @@ check_dram_memory_block(
 Exit:
     return fdc_error;
 }
-
+#endif /* DRAM_SUPPORTED */
 
 void
 delay_loop(uint32_t times)
@@ -297,6 +308,93 @@ delay_loop(uint32_t times)
      */
     for (volatile uint32_t i = 0; i < times; i ++)
         ;
+}
+
+
+/**
+ * Simplified printf that sends debug messages to the console. It only supports the
+ * format specifiers supported by embedded_vprintf(). It disables interrupts while
+ * transmitting and does polling on the serial port until all characters are
+ * transmitted.
+ *
+ * @param fmt               format string
+ *
+ * @param ...               variable arguments
+ *
+ * @return None
+ */
+void
+debug_printf(const char *fmt, ...)
+{
+    va_list va;
+
+    cpu_status_register_t old_primask = __get_PRIMASK();
+
+    __disable_irq();
+
+    va_start(va, fmt);
+
+    embedded_vprintf(
+        (putchar_func_t *)uart_putchar_with_polling,
+        (void *)g_console_serial_port_p, fmt, va);
+
+    va_end(va);
+
+    if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
+        __enable_irq();
+    }
+
+}
+
+
+void
+debug_break_point(const char *fmt, ...)
+{
+    va_list va;
+    cpu_status_register_t old_primask = __get_PRIMASK();
+    
+    __disable_irq();
+
+    va_start(va, fmt);
+
+    embedded_vprintf(
+        (putchar_func_t *)uart_putchar_with_polling,
+        (void *)g_console_serial_port_p, fmt, va);
+
+    va_end(va);
+
+    struct rtos_cpu_controller *cpu_controller_p =
+        &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
+    struct fdc_info *fdc_info_p = &cpu_controller_p->cpc_failures_info;
+
+    if (!fdc_info_p->fdc_breakpoints_on)
+    {
+        goto Exit;
+    }
+
+#   if defined(__ARM_ARCH_4T__)
+    /*
+     * Hold the processor in a tight loop, until the
+     * fdc_breakpoints_on flag is turned off with the debugger.
+     * Keep interrupts disabled to block execution of all
+     * threads and interrupt handlers.
+     */
+    do {
+    } while (fdc_info_p->fdc_breakpoints_on);
+
+    /*
+     * Re-enable flag for next break point:
+     */ 
+    fdc_info_p->fdc_breakpoints_on = true;
+
+#   else
+    __BKPT(0x1);
+#endif
+
+Exit:
+    if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
+        __enable_irq();
+    }
 }
 
 
@@ -314,12 +412,29 @@ void
 console_printf(const char *fmt, ...)
 {
     va_list va;
+    putchar_func_t *putchar_func_p;
+    cpu_status_register_t cpu_status_register;
 
     va_start(va, fmt);
 
-    rtos_mutex_acquire(&g_console_printf_mutex);
-    embedded_vprintf(rtos_console_putchar, NULL, fmt, va);
-    rtos_mutex_release(&g_console_printf_mutex);
+    bool caller_is_thread = rtos_k_caller_is_thread();
+
+    if (caller_is_thread) {
+        putchar_func_p = rtos_console_putchar;
+        rtos_mutex_acquire(&g_console_printf_mutex);
+    } else {
+        putchar_func_p = rtos_k_console_putchar_with_polling;
+        cpu_status_register = rtos_k_disable_cpu_interrupts();
+    }
+
+    embedded_vprintf(putchar_func_p, NULL, fmt, va);
+
+
+    if (caller_is_thread) {
+        rtos_mutex_release(&g_console_printf_mutex);
+    } else {
+        rtos_k_restore_cpu_interrupts(cpu_status_register);
+    }
 
     va_end(va);
 }
@@ -344,9 +459,11 @@ console_printf_init(void)
 void
 console_clear(void)
 {
-    console_printf("\x1b[2J\x1b[H");
+    console_printf(g_clear_console_control_string);
 }
 
+
+#ifdef LCD_SUPPORTED
 
 /**
  * Initializes LCD printf mutex
@@ -393,6 +510,8 @@ lcd_printf(
 
     va_end(va);
 }
+
+#endif /* LCD_SUPPORTED */
 
 
 #ifdef CPPUTEST_COMPILATION  // from CppUTest

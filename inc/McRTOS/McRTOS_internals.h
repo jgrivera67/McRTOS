@@ -3,6 +3,8 @@
  *
  * McRTOS internal data structures and function prototypes
  *
+ * Copyright (C) 2013 German Rivera
+ *
  * @author German Rivera 
  */ 
 #ifndef _McRTOS_INTERNALS_H
@@ -10,6 +12,11 @@
 
 #include "McRTOS_config_parameters.h"
 #include "McRTOS_kernel_services.h"
+
+#if DEFINED_ARM_CORTEX_M_ARCH()
+#   include "McRTOS_arm_cortex_m.h"
+#endif
+
 #include "generic_list.h"
 #include "utils.h"
 #include "compile_time_checks.h"
@@ -17,12 +24,13 @@
 /**
  * Number of system threads per CPU
  */
-#define RTOS_NUM_SYSTEM_THREADS_PER_CPU UINT8_C(6)
+#define RTOS_NUM_SYSTEM_THREADS_PER_CPU UINT8_C(4)
 
 /**
  * Number of spokes of the per-cpu timer wheel. It must be a power of 2.
  */
-#define RTOS_TIMER_WHEEL_NUM_SPOKES UINT16_C(256)
+//#define RTOS_TIMER_WHEEL_NUM_SPOKES UINT16_C(256)
+#define RTOS_TIMER_WHEEL_NUM_SPOKES UINT16_C(8)
 
 /**
  * Timer wheel spoke index range type
@@ -163,6 +171,7 @@ struct rtos_interrupt
      */
     cpu_id_t int_cpu_id;
 
+#if DEFINED_ARM_CLASSIC_ARCH()
     /**
      * Execution stack
      */
@@ -187,6 +196,7 @@ struct rtos_interrupt
      * Stack underflow sentinel, to be initialized to RTOS_STACK_UNDERFLOW_MARKER
      */
     rtos_execution_stack_entry_t int_stack_underflow_marker; 
+#endif
 
 } __attribute__ ((aligned(SOC_CACHE_LINE_SIZE_IN_BYTES)));
 
@@ -322,6 +332,11 @@ struct rtos_cpu_controller
     struct glist_node cpc_preemption_chain_anchor;
 
     /**
+     * McRTOS executon context for the reset handler
+     */
+    struct rtos_execution_context cpc_reset_execution_context;
+
+    /**
      * Array of system thread objects for this CPU core
      */
     struct rtos_thread cpc_system_threads[RTOS_NUM_SYSTEM_THREADS_PER_CPU];
@@ -362,9 +377,6 @@ enum rtos_system_thread_indexes
     RTOS_ROOT_SYSTEM_THREAD = 0,
     RTOS_IDLE_SYSTEM_THREAD,
     RTOS_COMMAND_LINE_SYSTEM_THREAD,
-    RTOS_BUTTONS_SYSTEM_THREAD,
-    RTOS_TOUCH_SCREEN_SYSTEM_THREAD,
-    RTOS_TRIMPOT_SYSTEM_THREAD,
 
     /*
      * New enum entries must be added above this entry
@@ -372,7 +384,7 @@ enum rtos_system_thread_indexes
     RTOS_NUM_SYSTEM_THREAD_INDEXES
 };
 
-C_ASSERT(RTOS_NUM_SYSTEM_THREAD_INDEXES == RTOS_NUM_SYSTEM_THREADS_PER_CPU);
+C_ASSERT(RTOS_NUM_SYSTEM_THREAD_INDEXES <= RTOS_NUM_SYSTEM_THREADS_PER_CPU);
 
 /**
  * McRTOS global state variables
@@ -381,6 +393,11 @@ struct McRTOS
 {
 #   define      MCRTOS_SIGNATURE  GEN_SIGNATURE('R', 'T', 'O', 'S')
     uint32_t    rts_signature;
+
+    /**
+     * Per-CPU execution controllers, one for each CPU core
+     */
+    struct rtos_cpu_controller rts_cpu_controllers[SOC_NUM_CPU_CORES];
 
     /**
      * Pointer to the next free application thread object
@@ -452,6 +469,7 @@ struct McRTOS
      */
     rtos_console_channels_t   rts_current_console_channel;
 
+#   ifdef LCD_SUPPORTED
     /**
      * Currently active LCD channel used by rtos_lcd_putchar().
      *
@@ -476,17 +494,13 @@ struct McRTOS
      * input device, for example up/down buttons in the target embedded board.
      */
     rtos_lcd_channels_t   rts_current_lcd_channel;
+#   endif
 
     /**
      * Flag indicating that the idle thread is to stop the CPU in the idle thread
      * and wait for interrupts, instead of busy-waiting.
      */
     volatile bool rts_stop_idle_cpu;
-
-    /**
-     * Per-CPU execution controllers, one for each CPU core
-     */
-    struct rtos_cpu_controller rts_cpu_controllers[SOC_NUM_CPU_CORES];
 
     /**
      * Array of application thread objects (thread control blocks) that can
@@ -517,16 +531,23 @@ struct McRTOS
      */
     struct rtos_condvar rts_app_condvars[RTOS_MAX_NUM_APP_CONDVARS];
 
+#if RTOS_MAX_NUM_APP_MSG_CHANNELS > 0
     /**
      * Array of McRTOS 32-bit message channels that can exist in the system
      */
     struct rtos_32bit_msg_channel rts_app_32bit_msg_channels[RTOS_MAX_NUM_APP_MSG_CHANNELS];
+#endif
 
+#if RTOS_MAX_NUM_APP_OBJECT_POOLS > 0
     /**
      * Array of McRTOS object pools that can exist in the system
      */
     struct rtos_object_pool rts_app_object_pools[RTOS_MAX_NUM_APP_OBJECT_POOLS];
+#endif
 };
+
+C_ASSERT(
+    offsetof(struct McRTOS, rts_cpu_controllers) == RTOS_RTS_CPU_CONTROLLERS_OFFSET);
 
 extern struct McRTOS *const g_McRTOS_p;
 
@@ -548,13 +569,8 @@ extern struct McRTOS *const g_McRTOS_p;
                 _execution_context_p, struct rtos_interrupt,            \
                 int_execution_context)
 
-#if DEFINED_ARM_CLASSIC_ARCH()
-#   define RTOS_EXECUTION_CONTEXT_GET_STACK_POINTER(_execution_context_p)  \
+#define RTOS_EXECUTION_CONTEXT_GET_STACK_POINTER(_execution_context_p)  \
             ((_execution_context_p)->ctx_cpu_registers[CPU_REG_SP])
-#else
-#   define RTOS_EXECUTION_CONTEXT_GET_STACK_POINTER(_execution_context_p)  \
-            ((_execution_context_p)->ctx_stack_pointer_register)
-#endif
 
 #define RTOS_THREAD_QUEUE_NODE_GET_THREAD(_glist_node_p) \
         GLIST_NODE_ENTRY(_glist_node_p, struct rtos_thread, thr_list_node)
@@ -769,10 +785,25 @@ void rtos_thread_scheduler(void);
 extern rtos_timer_function_t rtos_delay_timer_callback;
 
 cpu_status_register_t rtos_start_interrupts_disabled_time_measure(
-                        cpu_status_register_t saved_cpsr);
+    _IN_ cpu_status_register_t saved_cpsr);
 
 cpu_status_register_t rtos_stop_interrupts_disabled_time_measure(
-                        cpu_status_register_t saved_cpsr);
+    _IN_ cpu_status_register_t saved_cpsr);
+
+void rtos_execution_context_init(
+    _OUT_ struct rtos_execution_context *execution_context_p,
+    _IN_  const char *context_name_p,
+    _IN_  cpu_id_t cpu_id,
+    _IN_  rtos_execution_context_type_t context_type,
+    _IN_  fdc_context_switch_trace_entry_t prefilled_trace_entry,
+    _IN_  rtos_cpu_mode_t rtos_cpu_mode,
+    _IN_  cpu_register_t cpu_pc_register,
+    _IN_  cpu_register_t cpu_r0_register,
+    _IN_  rtos_execution_stack_entry_t *stack_top_end_p,
+    _IN_  rtos_execution_stack_entry_t *stack_bottom_end_p);
+
+void rtos_enter_debugger(
+        _IN_ const struct rtos_execution_context *current_execution_context_p);
 
 
 /**

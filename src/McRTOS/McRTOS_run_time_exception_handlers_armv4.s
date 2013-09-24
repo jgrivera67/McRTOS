@@ -1,3 +1,13 @@
+/**
+ * @file run_time_exception_handlers_armv4.s
+ *
+ * Exception handlers for ARMv4 processors
+ *
+ * Copyright (C) 2013 German Rivera
+ *
+ * @author German Rivera 
+ */ 
+
 #include "arm_defs.h"
 
 .extern capture_unexpected_undefined_instruction
