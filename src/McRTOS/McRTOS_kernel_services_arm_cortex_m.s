@@ -91,6 +91,7 @@ rtos_k_restore_execution_context:
      * r0 == execution_context_p->ctx_cpu_registers[CPU_REG_PRIMASK]
      */
 
+#if 0 // ???
 #ifdef _CPU_CYCLES_MEASURE_
     /*
      * r4 == &execution_context_p->ctx_cpu_registers[0]
@@ -115,6 +116,7 @@ rtos_k_restore_execution_context:
     bl      rtos_stop_interrupts_disabled_time_measure
 1:
 #endif /* _CPU_CYCLES_MEASURE_ */
+#endif // #if 0
 
     /*
      * Restore explicitly-saved registers, except primask and control:

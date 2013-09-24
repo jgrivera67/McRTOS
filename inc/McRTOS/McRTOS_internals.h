@@ -196,7 +196,7 @@ struct rtos_interrupt
      * Stack underflow sentinel, to be initialized to RTOS_STACK_UNDERFLOW_MARKER
      */
     rtos_execution_stack_entry_t int_stack_underflow_marker; 
-#endif
+#   endif
 
 } __attribute__ ((aligned(SOC_CACHE_LINE_SIZE_IN_BYTES)));
 
@@ -347,11 +347,6 @@ struct rtos_cpu_controller
     struct glist_node cpc_runnable_thread_queues_anchors[RTOS_NUM_THREAD_PRIORITIES];
 
     /**
-     * Array of interrupt objects, one for each possible interrupt channel.
-     */
-    struct rtos_interrupt cpc_interrupts[SOC_NUM_INTERRUPT_CHANNELS];
-
-    /**
      * Anchor nodes of the hash chains of timers for the timer wheel hash table
      */
     struct glist_node cpc_timer_wheel_hash_chains_anchors[RTOS_TIMER_WHEEL_NUM_SPOKES];
@@ -363,6 +358,8 @@ struct rtos_cpu_controller
                                             [RTOS_NUM_SYSTEM_THREADS_PER_CPU];
 
 } __attribute__ ((aligned(SOC_CACHE_LINE_SIZE_IN_BYTES)));
+
+C_ASSERT(sizeof(struct rtos_cpu_controller) <= RTOS_MAX_McRTOS_CPU_CONTROLLER_SIZE);
 
 C_ASSERT(sizeof(struct rtos_cpu_controller) % SOC_CACHE_LINE_SIZE_IN_BYTES == 0);
 C_ASSERT(
@@ -398,6 +395,11 @@ struct McRTOS
      * Per-CPU execution controllers, one for each CPU core
      */
     struct rtos_cpu_controller rts_cpu_controllers[SOC_NUM_CPU_CORES];
+
+    /**
+     * Pointer to the next free interrupt object
+     */
+    struct rtos_interrupt *rts_next_free_interrupt_p;
 
     /**
      * Pointer to the next free application thread object
@@ -503,6 +505,11 @@ struct McRTOS
     volatile bool rts_stop_idle_cpu;
 
     /**
+     * Array of interrupt objects, one for each interrupt registered with McRTOS.
+     */
+    struct rtos_interrupt rts_interrupts[RTOS_MAX_NUM_INTERRUPTS];
+
+    /**
      * Array of application thread objects (thread control blocks) that can
      * exist in the system
      */
@@ -545,6 +552,10 @@ struct McRTOS
     struct rtos_object_pool rts_app_object_pools[RTOS_MAX_NUM_APP_OBJECT_POOLS];
 #endif
 };
+
+C_ASSERT(
+    sizeof(struct McRTOS) - offsetof(struct McRTOS, rts_app_threads) <=
+    RTOS_MAX_McRTOS_DATA_SIZE);
 
 C_ASSERT(
     offsetof(struct McRTOS, rts_cpu_controllers) == RTOS_RTS_CPU_CONTROLLERS_OFFSET);

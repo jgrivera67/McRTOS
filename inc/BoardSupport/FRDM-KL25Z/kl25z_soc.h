@@ -106,6 +106,8 @@ enum led_color_masks {
 };
 
 void toggle_rgb_led(enum led_color_masks led_color_mask);
+void turn_on_rgb_led(enum led_color_masks led_color_mask);
+void turn_off_rgb_led(enum led_color_masks led_color_mask);
 
 struct rtos_interrupt; /* opaque type */
 

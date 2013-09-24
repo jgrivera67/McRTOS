@@ -1618,6 +1618,8 @@ rtos_k_register_interrupt(
     _IN_  const struct rtos_interrupt_registration_params *params_p,
     _OUT_ struct rtos_interrupt **rtos_interrupt_p)
 {
+    fdc_error_t fdc_error = 0;
+    bool fatal_error = false;
     interrupt_channel_t channel = params_p->irp_channel;
     interrupt_prio_t interrupt_prio = params_p->irp_priority;
     cpu_id_t cpu_id = params_p->irp_cpu_id;
@@ -1639,8 +1641,25 @@ rtos_k_register_interrupt(
     struct rtos_cpu_controller *cpu_controller_p =
         &g_McRTOS_p->rts_cpu_controllers[cpu_id];
 
+    /*
+     * Allocate an interrupt object:
+     */
     struct rtos_interrupt *interrupt_p =
-        &cpu_controller_p->cpc_interrupts[channel];
+        ATOMIC_POST_INCREMENT_POINTER(g_McRTOS_p->rts_next_free_interrupt_p);
+
+    if (interrupt_p >= &g_McRTOS_p->rts_interrupts[RTOS_MAX_NUM_INTERRUPTS])
+    {
+        fdc_error = CAPTURE_FDC_ERROR(
+                        "No more interrupts can be registered",
+                        interrupt_p,
+                        g_McRTOS_p->rts_next_free_interrupt_p);
+
+        /*
+         * This is considered a fatal error
+         */
+        fatal_error = true;
+        goto Exit;
+    }
 
     interrupt_p->int_signature = RTOS_INTERRUPT_SIGNATURE;
     interrupt_p->int_cpu_controller_p = cpu_controller_p;
@@ -1648,6 +1667,7 @@ rtos_k_register_interrupt(
     interrupt_p->int_arg_p = params_p->irp_arg_p;
     interrupt_p->int_channel = channel;
     interrupt_p->int_priority = interrupt_prio;
+    interrupt_p->int_cpu_id = cpu_id;
 
 #if DEFINED_ARM_CLASSIC_ARCH()
     /*
@@ -1740,6 +1760,12 @@ rtos_k_register_interrupt(
      * Restore previous interrupt masking in the ARM core
      */
     rtos_k_restore_cpu_interrupts(cpu_status_register);
+
+Exit:
+    if (fatal_error)
+    {
+        fatal_error_handler(fdc_error);
+    }
 }
 
 
@@ -2876,7 +2902,9 @@ rtos_k_disable_cpu_interrupts(void)
     cpu_status_register_t old_primask = __get_PRIMASK();
 
     __disable_irq();
+#if 0 // ???
     rtos_start_interrupts_disabled_time_measure(old_primask);
+#endif
     return old_primask;
 }
 
@@ -2890,7 +2918,9 @@ rtos_k_disable_cpu_interrupts(void)
  void
  rtos_k_restore_cpu_interrupts(cpu_register_t old_primask)
 {
+#if 0 // ???
     rtos_stop_interrupts_disabled_time_measure(old_primask);
+#endif
    if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
         __enable_irq();
    }
@@ -2983,6 +3013,7 @@ rtos_k_find_highest_thread_priority(
 {    
     uint32_t leading_zeros_count = 0;
 
+#   if RTOS_NUM_THREAD_PRIORITIES == 32
     if (rtos_thread_prio_bitmap < BIT(16)) {
         rtos_thread_prio_bitmap <<= 16;
         leading_zeros_count += 16;
@@ -3007,9 +3038,56 @@ rtos_k_find_highest_thread_priority(
         leading_zeros_count += 1;
         rtos_thread_prio_bitmap <<= 1; 
         if (rtos_thread_prio_bitmap == 0) {
-            leading_zeros_count = ARM_CPU_WORD_SIZE_IN_BITS;
+            leading_zeros_count = 32;
         }
     }
+
+#   elif RTOS_NUM_THREAD_PRIORITIES == 16
+    if (rtos_thread_prio_bitmap < BIT(8)) {
+        rtos_thread_prio_bitmap <<= 8;
+        leading_zeros_count += 8;
+    }
+
+    if (rtos_thread_prio_bitmap < BIT(12)) {
+        rtos_thread_prio_bitmap <<= 4;
+        leading_zeros_count += 4;
+    }
+
+    if (rtos_thread_prio_bitmap < BIT(14)) {
+        rtos_thread_prio_bitmap <<= 2;
+        leading_zeros_count += 2;
+    }
+
+    if (rtos_thread_prio_bitmap < BIT(15)) {
+        leading_zeros_count += 1;
+        rtos_thread_prio_bitmap <<= 1; 
+        if (rtos_thread_prio_bitmap == 0) {
+            leading_zeros_count = 16;
+        }
+    }
+
+#   elif RTOS_NUM_THREAD_PRIORITIES == 8
+
+    if (rtos_thread_prio_bitmap < BIT(4)) {
+        rtos_thread_prio_bitmap <<= 4;
+        leading_zeros_count += 4;
+    }
+
+    if (rtos_thread_prio_bitmap < BIT(6)) {
+        rtos_thread_prio_bitmap <<= 2;
+        leading_zeros_count += 2;
+    }
+
+    if (rtos_thread_prio_bitmap < BIT(7)) {
+        leading_zeros_count += 1;
+        rtos_thread_prio_bitmap <<= 1; 
+        if (rtos_thread_prio_bitmap == 0) {
+            leading_zeros_count = 8;
+        }
+    }
+#   else 
+#       error "Invalid RTOS_NUM_THREAD_PRIORITIES"
+#   endif
 
     return leading_zeros_count;
 }

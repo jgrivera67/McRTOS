@@ -85,7 +85,15 @@
 /**
  * Number of thread priorities supported
  */
-#define RTOS_NUM_THREAD_PRIORITIES  ARM_CPU_WORD_SIZE_IN_BITS
+//#define RTOS_NUM_THREAD_PRIORITIES  ARM_CPU_WORD_SIZE_IN_BITS
+#define RTOS_NUM_THREAD_PRIORITIES  8 
+
+/*
+ * Maximum number of McRTOS interrupt objects in the system
+ */
+#define RTOS_MAX_NUM_INTERRUPTS 8 
+
+C_ASSERT(RTOS_MAX_NUM_INTERRUPTS < SOC_NUM_INTERRUPT_CHANNELS);
 
 /**
  * Time slice in number of timer ticks for each thread of the priority.
@@ -93,6 +101,17 @@
  * giving each thread the CPU for this number of ticks.
  */
 #define RTOS_THREAD_TIME_SLICE_IN_TICKS UINT8_C(8)
+
+/**
+ * Maximum size of the McRTOS struct in bytes
+ */
+#define RTOS_MAX_McRTOS_DATA_SIZE   (SOC_SRAM_SIZE / 2)
+
+/**
+ * Maximum size of the rtos_cpu_controller struct in bytes
+ */
+#define RTOS_MAX_McRTOS_CPU_CONTROLLER_SIZE \
+        ((SOC_SRAM_SIZE / 2) / SOC_NUM_CPU_CORES)
 
 /**
  * Maximum size of the fdc_info struct in bytes
@@ -119,10 +138,12 @@
  */
 #define RTOS_NUM_CONSOLE_CHANNELS UINT8_C(2)
 
-/**
- * Number of LCD channels
- */
-#define RTOS_NUM_LCD_CHANNELS UINT8_C(3)
+#ifdef LCD_SUPPORTED
+    /**
+     * Number of LCD channels
+     */
+#   define RTOS_NUM_LCD_CHANNELS UINT8_C(3)
+#endif
 
 /*
  * Application-dependent parameters
@@ -131,7 +152,7 @@
 /**
  * Maximum number of application threads that can exist in the system
  */
-#define RTOS_MAX_NUM_APP_THREADS UINT8_C(4)
+#define RTOS_MAX_NUM_APP_THREADS UINT8_C(8)
 
 /*
  * If the total size of application thread stacks is larger than 25% of

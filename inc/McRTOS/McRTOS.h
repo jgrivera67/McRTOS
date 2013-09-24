@@ -114,7 +114,7 @@ typedef _RANGE_(0, RTOS_MAX_NUM_APP_OBJECT_POOLS)
  * The least significant bit (bit 0) corresponds to the lowest priority
  * (priority RTOS_NUM_THREAD_PRIORITIES - 1).
  */
-typedef uint32_t rtos_thread_prio_bitmap_t;
+typedef uint8_t rtos_thread_prio_bitmap_t;
 
 C_ASSERT(
     sizeof(rtos_thread_prio_bitmap_t) * 8 == RTOS_NUM_THREAD_PRIORITIES);

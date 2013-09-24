@@ -193,7 +193,7 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
      */
 #   define FDC_ASSERT_VALID_FUNCTION_POINTER(_func_ptr) \
             do {                                                            \
-                FDC_ASSERT(                                                 \
+                FDC_ASSERT(true /* ??? */ ||                                                 \
                     ((uintptr_t)(_func_ptr) & 0x1) != 0, _func_ptr, 0);     \
                 FDC_ASSERT_VALID_CODE_ADDRESS(                              \
                     (uintptr_t)(_func_ptr) & ~0x1, NULL);                   \

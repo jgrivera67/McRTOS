@@ -41,22 +41,28 @@ struct cortex_m_exception_stack
 void
 cortex_m_reset_handler(void)
 {
-        copy_data_section_initializers_to_ram();
-        zero_fill_bss();
+    /*
+     * Disable the Watchdog because it will cause reset unless we have
+     * refresh logic in place for the watchdog
+     */
+    write_32bit_mmio_register(&SIM_COPC, 0x0);
 
-        /*
-         * NOTE: the reset stack markers cannot be initialized at
-         * compile-time as it is not in the .data section
-         */
-        g_cortex_m_exception_stack.es_stack_overflow_marker = 0xDEADBEEF;
-        g_cortex_m_exception_stack.es_stack_underflow_marker = 0xDEADBEEF;
+    copy_data_section_initializers_to_ram();
+    zero_fill_bss();
 
-        main();
+    /*
+     * NOTE: the reset stack markers cannot be initialized at
+     * compile-time as it is not in the .data section
+     */
+    g_cortex_m_exception_stack.es_stack_overflow_marker = 0xDEADBEEF;
+    g_cortex_m_exception_stack.es_stack_underflow_marker = 0xDEADBEEF;
 
-        /*
-         * should never get here
-         */ 
-        __BKPT(0);
+    main();
+
+    /*
+     * should never get here
+     */ 
+    __BKPT(0);
 }
 
 

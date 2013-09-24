@@ -128,6 +128,8 @@ static struct McRTOS g_McRTOS =
 {
     .rts_signature = MCRTOS_SIGNATURE,
 
+    .rts_next_free_interrupt_p = &g_McRTOS.rts_interrupts[0],
+
     .rts_next_free_app_thread_p = &g_McRTOS.rts_app_threads[0],
 
     .rts_next_free_app_timer_p = &g_McRTOS.rts_app_timers[0],

@@ -37,6 +37,8 @@ rtos_enter_debugger(
 {
     rtos_execution_stack_entry_t *stack_p;
 
+    turn_on_rgb_led(LED_RED_MASK);
+
     /*
      * Determine what stack pointer was in use before the exception
      */

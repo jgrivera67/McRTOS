@@ -133,6 +133,8 @@ struct adc_channel {
 
 static void pll_init(void);
 
+static void tfc_gpio_init(void);
+
 static void rgb_led_init(void);
 
 static void
@@ -461,39 +463,39 @@ board_init(void)
      */
     __disable_irq();
 
-    /*
-     * Disable the Watchdog because it will cause reset unless we have
-     * refresh logic in place for the watchdog
-     */
-    write_32bit_mmio_register(&SIM_COPC, 0x0);
+    pll_init();
 
     rgb_led_init();
 
+#ifdef DEBUG
     if (software_reset_happened()) {
-        toggle_rgb_led(LED_GREEN_MASK);
+        DEBUG_FLASH_LED(LED_BLUE_MASK);
     } else {
-        toggle_rgb_led(LED_RED_MASK);
+        DEBUG_FLASH_LED(LED_GREEN_MASK);
     }
-
-    pll_init();
-
-#if 0 // ???
-    initGPIO();
-#endif
+#   else
+    if (software_reset_happened()) {
+        turn_on_rgb_led(LED_BLUE_MASK);
+    } else {
+        turn_on_rgb_led(LED_GREEN_MASK);
+    }
+#   endif
 
     cortex_m_nvic_init();
-
+#if 0 // ???
     uart_init(
         g_console_serial_port_p,
         CONSOLE_SERIAL_PORT_BAUD_RATE,
         CONSOLE_SERIAL_PORT_MODE);
+#endif
 
     DEBUG_PRINTF("UART0 initialized\n");
 
-    toggle_rgb_led(LED_BLUE_MASK);
+    DEBUG_FLASH_LED(LED_BLUE_MASK);
 
     init_adc(g_adc0_device_p);
 
+    tfc_gpio_init();
 }
 
 
@@ -638,6 +640,51 @@ pll_init(void)
 }
 
 
+//set I/O for H-BRIDGE enables, switches and LEDs
+static void
+tfc_gpio_init(void)
+{
+#   define TFC_HBRIDGE_EN_LOC   BIT(21)
+#   define TFC_BAT_LED0_LOC     BIT(8)
+#   define TFC_BAT_LED1_LOC     BIT(9) 
+#   define TFC_BAT_LED2_LOC     BIT(10) 
+#   define TFC_BAT_LED3_LOC     BIT(11) 
+
+	//enable Clocks to all ports
+	
+	SIM_SCGC5 |= SIM_SCGC5_PORTA_MASK | SIM_SCGC5_PORTB_MASK | SIM_SCGC5_PORTC_MASK | SIM_SCGC5_PORTD_MASK | SIM_SCGC5_PORTE_MASK;
+
+	//Setup Pins as GPIO
+	PORTE_PCR21 = PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK;   
+	PORTE_PCR20 = PORT_PCR_MUX(1);    
+	
+	//Port for Pushbuttons
+	PORTC_PCR13 = PORT_PCR_MUX(1);   
+	PORTC_PCR17 = PORT_PCR_MUX(1);   
+	
+	
+	//Ports for DIP Switches
+	PORTE_PCR2 = PORT_PCR_MUX(1); 
+	PORTE_PCR3 = PORT_PCR_MUX(1);
+	PORTE_PCR4 = PORT_PCR_MUX(1); 
+	PORTE_PCR5 = PORT_PCR_MUX(1);
+	
+	//Ports for LEDs
+	PORTB_PCR8 = PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK;   
+	PORTB_PCR9 = PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK;   
+	PORTB_PCR10 = PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK;   
+	PORTB_PCR11 = PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK;   
+	
+	
+	//Setup the output pins
+    GPIOE_PDDR =  TFC_HBRIDGE_EN_LOC;  
+    GPIOB_PDDR =  TFC_BAT_LED0_LOC	| TFC_BAT_LED1_LOC | TFC_BAT_LED2_LOC | TFC_BAT_LED3_LOC;
+
+    //TFC_HBRIDGE_DISABLE:
+    GPIOE_PCOR = TFC_HBRIDGE_EN_LOC;
+}
+
+
 static void 
 rgb_led_init(void)
 {
@@ -676,7 +723,7 @@ rgb_led_init(void)
 void
 toggle_heartbeat_led(void)
 {
-    toggle_rgb_led(LED_BLUE_MASK);
+    //???toggle_rgb_led(LED_BLUE_MASK);
 }
 
 
@@ -696,6 +743,39 @@ void toggle_rgb_led(enum led_color_masks led_color_mask)
     GPIO_PTOR_REG(gpio_port_p) = led_color_mask;
 }
 
+
+void turn_on_rgb_led(enum led_color_masks led_color_mask)
+{
+    GPIO_MemMapPtr gpio_port_p;          
+
+    if (led_color_mask == LED_BLUE_MASK) {
+        gpio_port_p = PTD_BASE_PTR;
+    } else {
+        gpio_port_p = PTB_BASE_PTR;
+    }
+
+    /*
+     * Toggle LED
+     */
+    GPIO_PCOR_REG(gpio_port_p) = led_color_mask;
+}
+
+
+void turn_off_rgb_led(enum led_color_masks led_color_mask)
+{
+    GPIO_MemMapPtr gpio_port_p;          
+
+    if (led_color_mask == LED_BLUE_MASK) {
+        gpio_port_p = PTD_BASE_PTR;
+    } else {
+        gpio_port_p = PTB_BASE_PTR;
+    }
+
+    /*
+     * Toggle LED
+     */
+    GPIO_PSOR_REG(gpio_port_p) = led_color_mask;
+}
 
 void
 uart_init(
@@ -736,7 +816,8 @@ uart_init(
         baud_diff = baud_rate - calculated_baud;
     
     uint32_t osr_val = i;
-        
+       
+    DEBUG_FLASH_LED(LED_RED_MASK); // ??? 
     // Select the best OSR value
     for (i = 5; i <= 32; i++)
     {
@@ -757,6 +838,8 @@ uart_init(
         }
     }
     
+    DEBUG_FLASH_LED(LED_RED_MASK); // ??? 
+
     FDC_ASSERT(baud_diff < (baud_rate / 100) * 3, baud_diff, baud_rate);
     
     // If the OSR is between 4x and 8x then both

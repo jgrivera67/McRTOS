@@ -75,9 +75,17 @@
                 "DBG BKPT: " __FILE__ ":" STRINGIFY_LITERAL(__LINE__) " "   \
                 _fmt, ##__VA_ARGS__)
 
+#   define DEBUG_FLASH_LED(_led_mask) \
+            do {                                                            \
+                toggle_rgb_led(_led_mask);                                  \
+                delay_loop(500000);                                         \
+                toggle_rgb_led(_led_mask);                                  \
+            } while (0)
+
 #else
 #   define DEBUG_PRINTF(_fmt, ...)
 #   define DEBUG_BREAK_POINT(_fmt, ...)
+#   define DEBUG_FLASH_LED(_led_mask)
 
 #endif
 
