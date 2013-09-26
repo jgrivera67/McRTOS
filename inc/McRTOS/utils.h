@@ -67,15 +67,15 @@
 #ifdef DEBUG
 #   define DEBUG_PRINTF(_fmt, ...) \
             debug_printf(                                                   \
-                "DBG: " __FILE__ ":" STRINGIFY_LITERAL(__LINE__) " " _fmt,  \
+                "DBG: " __FILE__ ":%u " _fmt, __LINE__,                     \
                 ##__VA_ARGS__)
 
 #   define DEBUG_BREAK_POINT(_fmt, ...) \
             debug_break_point(                                              \
-                "DBG BKPT: " __FILE__ ":" STRINGIFY_LITERAL(__LINE__) " "   \
-                _fmt, ##__VA_ARGS__)
+                "DBG BKPT: " __FILE__ ":%u " _fmt, __LINE__,                \
+                ##__VA_ARGS__)
 
-#   define DEBUG_FLASH_LED(_led_mask) \
+#   define DEBUG_BLINK_LED(_led_mask) \
             do {                                                            \
                 toggle_rgb_led(_led_mask);                                  \
                 delay_loop(500000);                                         \
@@ -85,7 +85,7 @@
 #else
 #   define DEBUG_PRINTF(_fmt, ...)
 #   define DEBUG_BREAK_POINT(_fmt, ...)
-#   define DEBUG_FLASH_LED(_led_mask)
+#   define DEBUG_BLINK_LED(_led_mask)
 
 #endif
 

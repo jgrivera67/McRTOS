@@ -951,8 +951,4 @@ bool rtos_k_byte_circular_buffer_read(
 
 C_ASSERT(sizeof(void *) == sizeof(uint32_t));
 
-void rtos_k_debugger(
-        _IN_ const struct rtos_execution_context *current_execution_context_p,
-        _IN_ const uint32_t *stack_p);
-
 #endif /* _McRTOS_KERNEL_SERVICES_H */

@@ -397,6 +397,11 @@ struct McRTOS
     struct rtos_cpu_controller rts_cpu_controllers[SOC_NUM_CPU_CORES];
 
     /**
+     * Cause of last SoC reset
+     */
+    cpu_reset_cause_t rts_soc_reset_cause;
+
+    /**
      * Pointer to the next free interrupt object
      */
     struct rtos_interrupt *rts_next_free_interrupt_p;
@@ -816,6 +821,9 @@ void rtos_execution_context_init(
 void rtos_enter_debugger(
         _IN_ const struct rtos_execution_context *current_execution_context_p);
 
+void rtos_run_debugger(
+        _IN_ const struct rtos_execution_context *current_execution_context_p,
+        _IN_ const uint32_t *stack_p);
 
 /**
  * Add an execution context at the top of the preemption chain

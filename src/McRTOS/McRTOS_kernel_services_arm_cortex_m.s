@@ -12,6 +12,7 @@
 
 .global rtos_k_restore_execution_context
 .global rtos_k_synchronous_context_switch
+.global rtos_k_enter_debugger_saving_current_context
 
 .extern fdc_trace_rtos_context_switch
 .extern rtos_start_interrupts_disabled_time_measure
@@ -129,12 +130,12 @@ rtos_k_restore_execution_context:
     mov     r0, r4
     mov     r1, #(CPU_REG_R8 * ARM_CPU_WORD_SIZE_IN_BYTES)
     add     r1, r0, r1
-    ldm     r1, {r4-r7} /* Cortex-M0 only supports ldm for r0-r7 */
+    ldmia   r1, {r4-r7} /* Cortex-M0 only supports ldm for r0-r7 */
     mov     r8, r4
     mov     r9, r5
     mov     r10, r6
     mov     r11, r7
-    ldm     r0, {r4-r7} /* Cortex-M0 only supports ldm for r0-r7 */
+    ldmia   r0, {r4-r7} /* Cortex-M0 only supports ldm for r0-r7 */
 
     /*
      * Get execution_context_p->ctx_cpu_mode:
@@ -233,19 +234,12 @@ L_rtos_k_restore_execution_context_assert_cond_str:
 .func rtos_k_synchronous_context_switch
 
 rtos_k_synchronous_context_switch:
-    /*
-     * Set r0 to &current_execution_context_p->ctx_cpu_registers[0]:
-     *
-     * r0 == current_execution_context_p
-     *
-     * NOTE: Since this is a synchronous context switch, we don't need to
-     * preserve r0-r3, as they are caller-saved registers.
-     */
-    add     r0, r0, #RTOS_CTX_CPU_REGISTERS_OFFSET
-
 #ifdef DEBUG
     /*
-     * Save r0 and lr on the stack
+     * Call check_synchronous_context_switch_preconditions(r0),
+     * preserving r0 and lr
+     *
+     * r0 == current_execution_context_p
      */
     push    {r0, lr}
 
@@ -257,6 +251,16 @@ rtos_k_synchronous_context_switch:
     pop     {r0, r1}    /* Cortex-M0 does not support lr for pop */
     mov     lr, r1
 #endif /* DEBUG */
+
+    /*
+     * Set r0 to &current_execution_context_p->ctx_cpu_registers[0]:
+     *
+     * r0 == current_execution_context_p
+     *
+     * NOTE: Since this is a synchronous context switch, we don't need to
+     * preserve r0-r3, as they are caller-saved registers.
+     */
+    add     r0, r0, #RTOS_CTX_CPU_REGISTERS_OFFSET
 
     /*
      * We are running in thread mode, so we need to trigger a PendSV exception

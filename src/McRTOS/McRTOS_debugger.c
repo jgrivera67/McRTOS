@@ -12,15 +12,12 @@
 #include "arm_defs.h"
 #include <stdint.h>
 
-static void rtos_run_debugger(
-    _IN_ const struct rtos_execution_context *current_execution_context_p,
-    _IN_ const uint32_t *stack_p);
-
 static void rtos_dbg_display_help(void);
 
 static void rtos_dbg_display_cpu_registers(
     _IN_ const struct rtos_execution_context *current_execution_context_p,
     _IN_ const uint32_t *stack_p);
+
 
 /**
  * Enters McRTOS debugger from an exception handler.
@@ -36,8 +33,6 @@ rtos_enter_debugger(
         _IN_ const struct rtos_execution_context *current_execution_context_p)
 {
     rtos_execution_stack_entry_t *stack_p;
-
-    turn_on_rgb_led(LED_RED_MASK);
 
     /*
      * Determine what stack pointer was in use before the exception
@@ -66,7 +61,6 @@ rtos_enter_debugger(
     if ((*instruction_p & THUMB_INSTR_OP_CODE_MASK) != BKPT_OP_CODE_MASK) {
         NVIC_SystemReset();
     }
-
 }
 
 
@@ -79,11 +73,14 @@ rtos_enter_debugger(
  *
  * @pre     interrupts are disabled
  */
-static void
+void
 rtos_run_debugger(
     _IN_ const struct rtos_execution_context *current_execution_context_p,
     _IN_ const uint32_t *stack_p)
 {
+    DEBUG_BLINK_LED(LED_RED_MASK); // ???
+    turn_on_rgb_led(LED_RED_MASK);
+
     for ( ; ; )
     {
         debug_printf("\nMcRTOS debugger> ");
@@ -103,13 +100,16 @@ rtos_run_debugger(
                 break;
 
             case 'q':
-                return;
+                goto Exit;
 
             default:
-                debug_printf("Invalid command: \'%c\' (type h for help)\n");
+                debug_printf("Invalid command: \'%c\' (type h for help)\n", c);
                 break;
         }
     }
+
+Exit:
+    turn_off_rgb_led(LED_RED_MASK);
 }
 
 
@@ -131,15 +131,23 @@ rtos_dbg_display_cpu_registers(
 
 #if DEFINED_ARM_CLASSIC_ARCH()
     debug_printf(
-        "r0:   %x\tr1:   %x\n"
-        "r2:   %x\tr3:   %x\n"
-        "r4:   %x\tr5:   %x\n"
-        "r6:   %x\tr7:   %x\n"
-        "r8:   %x\tr9:   %x\n"
-        "r10:  %x\tr11:  %x\n"
-        "r12:  %x\tsp:   %x\n"
-        "lr:   %x\tpc:   %x\n"
-        "cpsr: %x\n",
+        "r0:   0x%x\n"
+        "r1:   0x%x\n"
+        "r2:   0x%x\n"
+        "r3:   0x%x\n"
+        "r4:   0x%x\n"
+        "r5:   0x%x\n"
+        "r6:   0x%x\n"
+        "r7:   0x%x\n"
+        "r8:   0x%x\n"
+        "r9:   0x%x\n"
+        "r10:  0x%x\n"
+        "r11:  0x%x\n"
+        "r12:  0x%x\n"
+        "sp:   0x%x\n"
+        "lr:   0x%x\n"
+        "pc:   0x%x\n"
+        "cpsr: 0x%x\n",
         current_execution_context_p->ctx_cpu_saved_registers[CPU_REG_R0],
         current_execution_context_p->ctx_cpu_saved_registers[CPU_REG_R1],
         current_execution_context_p->ctx_cpu_saved_registers[CPU_REG_R2],
@@ -159,17 +167,28 @@ rtos_dbg_display_cpu_registers(
 
 #elif DEFINED_ARM_CORTEX_M_ARCH()
     debug_printf(
-        "r0:   %x\tr1:   %x\n"
-        "r2:   %x\tr3:   %x\n"
-        "r4:   %x\tr5:   %x\n"
-        "r6:   %x\tr7:   %x\n"
-        "r8:   %x\tr9:   %x\n"
-        "r10:  %x\tr11:  %x\n"
-        "r12:  %x\tsp:   %x\n"
-        "lr:   %x\tpc:   %x\n"
-        "psr:  %x\tlre:  %x\n"
-        "msp:  %x\tpsp:  %x\n"
-        "prim: %x\tctrl: %x\n",
+        "r0:        0x%x\n"
+        "r1:        0x%x\n"
+        "r2:        0x%x\n"
+        "r3:        0x%x\n"
+        "r4:        0x%x\n"
+        "r5:        0x%x\n"
+        "r6:        0x%x\n"
+        "r7:        0x%x\n"
+        "r8:        0x%x\n"
+        "r9:        0x%x\n"
+        "r10:       0x%x\n"
+        "r11:       0x%x\n"
+        "r12:       0x%x\n"
+        "sp:        0x%x\n"
+        "lr:        0x%x\n"
+        "pc:        0x%x\n"
+        "psr:       0x%x\n"
+        "lre:       0x%x\n"
+        "msp:       0x%x\n"
+        "psp:       0x%x\n"
+        "primask:   0x%x\n"
+        "control:   0x%x\n",
         stack_p[CPU_REG_R0],
         stack_p[CPU_REG_R1],
         stack_p[CPU_REG_R2],

@@ -160,10 +160,9 @@ rtos_k_capture_failure_data(
             failure_being_printed = true;
 
             FAILURE_PRINTF(
-                "Failure captured: %s (code location: %x, "
+                "Failure captured: %s (code location: 0x%x, "
                 "arg1: 0x%x, arg2: 0x%x)\n",
-                failure_str, failure_location,
-                arg1, arg2);
+                failure_str, failure_location, arg1, arg2);
 
             failure_being_printed = false;
         }
@@ -369,13 +368,8 @@ check_rtos_execution_context_invariants(
             &thread_execution_stack_p->tes_stack[RTOS_THREAD_STACK_NUM_ENTRIES]);
 #endif
     }
-    else
+    else if (rtos_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT)
     {
-        FDC_ASSERT(
-            rtos_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
-            rtos_execution_context_p->ctx_context_type,
-            rtos_execution_context_p);
-    
         struct rtos_interrupt *rtos_interrupt_p = 
             RTOS_EXECUTION_CONTEXT_GET_INTERRUPT(rtos_execution_context_p);
 
@@ -412,6 +406,30 @@ check_rtos_execution_context_invariants(
 
 #       else
 #           error "CPU architecture not supported"
+#       endif
+    }
+    else
+    {
+        FDC_ASSERT(
+            rtos_execution_context_p->ctx_context_type == RTOS_RESET_CONTEXT,
+            rtos_execution_context_p->ctx_context_type,
+            rtos_execution_context_p);
+
+        FDC_ASSERT(
+            rtos_execution_context_p->ctx_cpu_mode == RTOS_INTERRUPT_MODE,
+            rtos_execution_context_p->ctx_cpu_mode, rtos_execution_context_p);
+
+#       if DEFINED_ARM_CORTEX_M_ARCH()
+        DBG_ASSERT(
+            stack_top_end_p == g_cortex_m_exception_stack.es_stack,
+            stack_top_end_p, g_cortex_m_exception_stack.es_stack);
+
+        DBG_ASSERT(
+            stack_bottom_end_p ==
+                &g_cortex_m_exception_stack.es_stack[RTOS_INTERRUPT_STACK_NUM_ENTRIES],
+            stack_bottom_end_p, 
+            &g_cortex_m_exception_stack.es_stack[RTOS_INTERRUPT_STACK_NUM_ENTRIES]);
+
 #       endif
     }
 
@@ -1290,28 +1308,57 @@ check_rtos_interrupt_e_handler_preconditions(
  *   pointer
  */
 void
-check_synchronous_context_switch_preconditions(void)
+check_synchronous_context_switch_preconditions(
+    _IN_ const struct rtos_execution_context *current_execution_context_p)
 {
-    uint32_t reg_value = __get_PRIMASK();
+    uint32_t reg_value;
 
+    check_rtos_execution_context_invariants(current_execution_context_p);
     FDC_ASSERT(
-        (reg_value & CPU_REG_PRIMASK_PM_MASK) != 0, reg_value, 0); 
+        current_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT ||
+        current_execution_context_p->ctx_context_type == RTOS_RESET_CONTEXT,
+        current_execution_context_p->ctx_context_type,
+        current_execution_context_p);
 
+    /*
+     * Interrupts are disabled at the CPU:
+     */
+    reg_value = __get_PRIMASK();
+    FDC_ASSERT(
+        (reg_value & CPU_REG_PRIMASK_PM_MASK) != 0,
+        reg_value, current_execution_context_p); 
+
+    /*
+     * The caller is running in thread mode:
+     */
     reg_value = __get_IPSR();
     FDC_ASSERT(
-        (reg_value & CPU_REG_IPSR_EXCEPTION_NUMBER_MASK) == 0, reg_value, 0); 
+        (reg_value & CPU_REG_IPSR_EXCEPTION_NUMBER_MASK) == 0,
+        reg_value, current_execution_context_p); 
+
+    /*
+     * The caller is running in privileged mode:
+     */
+    reg_value = __get_CONTROL();
+    FDC_ASSERT(
+        (reg_value & CPU_REG_CONTROL_nPRIV_MASK) == 0,
+        reg_value, current_execution_context_p);
 
     if (__get_PSP() == 0x0) {
-        reg_value = __get_CONTROL();
-   
+        /*
+         *  This is the first context switch, done from the resrt handler.
+         *  Thus, the SP in use must be MSP.
+         */
         FDC_ASSERT(
-            (reg_value & (CPU_REG_CONTROL_nPRIV_MASK | CPU_REG_CONTROL_SPSEL_MASK)) ==
-            CPU_REG_CONTROL_SPSEL_MASK,
-            reg_value, 0);
+            (reg_value & CPU_REG_CONTROL_SPSEL_MASK) == 0,
+            reg_value, current_execution_context_p);
     } else {
+        /*
+         *  The SP in use must be PSP.
+         */
         FDC_ASSERT(
-            (reg_value & CPU_REG_CONTROL_nPRIV_MASK) == 0,
-            reg_value, 0);
+            (reg_value & CPU_REG_CONTROL_SPSEL_MASK) != 0,
+            reg_value, current_execution_context_p);
     }
 }
 #endif

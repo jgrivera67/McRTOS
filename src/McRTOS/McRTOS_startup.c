@@ -283,7 +283,8 @@ rtos_startup(
         check_mcrtos_common_compile_time_initializations();
         #endif
 
-        board_init();
+        g_McRTOS_p->rts_soc_reset_cause = board_init();
+
         console_printf_init();
 
 #       ifdef LCD_SUPPORTED
@@ -364,6 +365,7 @@ rtos_startup(
      * Set psp to 0x0, to indicate that this is the first context switch
      */
     __set_PSP(0x0);
+    DEBUG_BREAK_POINT("got here\n"); //???
     rtos_k_synchronous_context_switch(
         cpu_controller_p->cpc_current_execution_context_p);
 #else

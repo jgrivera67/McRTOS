@@ -112,6 +112,40 @@
 typedef _RANGE_(0, SOC_NUM_CPU_CORES - 1)
         uint8_t cpu_id_t;
 
+/*
+ * Generic (Machine-independent) reset cause codes
+ */
+enum cpu_reset_causes {
+    GRC_INVALID_RESET_CAUSE =            0x0,
+    GRC_POWER_ON_RESET =                 0x1,
+    GRC_EXTERNAL_PIN_RESET =             0x2,
+    GRC_WATCHDOG_RESET =                 0x3,
+    GRC_SOFTWARE_RESET =                 0x4,
+    GRC_LOCKUP_EVENT_RESET =             0x5,
+    GRC_EXTERNAL_DEBUGGER_RESET =        0x6,
+    GRC_OTHER_HW_REASON_RESET =          0x7,
+    GRC_STOP_ACK_ERROR_RESET  =          0x8
+};
+
+/**
+ * CPU reset cause type
+ *
+ * 32-bit word with the following fields:
+ * - bits[3:0] encode the generic reset cause using enum cpu_reset_causes
+ * - bits[7:0] reserved (0)
+ * - bits[15:8] first machine-dependent reset cause value
+ * - bits[23:16] second first machine-dependent reset cause value
+ * - bits[31:24] reserved (0)
+ */
+typedef uint32_t cpu_reset_cause_t;
+
+#define CPU_RESET_GENERIC_CAUSE_MASK       MULTI_BIT_MASK(3, 0)
+#define CPU_RESET_GENERIC_CAUSE_SHIFT      0
+#define CPU_RESET_MACHDEP_CAUSE1_MASK      MULTI_BIT_MASK(15, 8)
+#define CPU_RESET_MACHDEP_CAUSE1_SHIFT     8
+#define CPU_RESET_MACHDEP_CAUSE2_MASK      MULTI_BIT_MASK(23, 16)
+#define CPU_RESET_MACHDEP_CAUSE2_SHIFT     16
+
 /** 
  * Interrupt channel type
  */
@@ -181,7 +215,9 @@ struct adc_device;
  * Exported functions
  */
 
-void board_init(void);
+cpu_reset_cause_t board_init(void);
+
+cpu_reset_cause_t find_reset_cause(void);
 
 bool software_reset_happened(void);
 

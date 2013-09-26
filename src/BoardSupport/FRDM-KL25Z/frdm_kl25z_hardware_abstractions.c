@@ -30,6 +30,9 @@
 
 #define PLL_FREQUENCY           ((CRYSTAL_FREQUENCY_HZ / PLL_DIVIDER) * PLL_MULTIPLIER)
 
+C_ASSERT(CRYSTAL_FREQUENCY_HZ > 5000000 &&
+         CRYSTAL_FREQUENCY_HZ <= 10000000);
+
 C_ASSERT(CRYSTAL_FREQUENCY_HZ < CPU_CLOCK_FREQ_IN_HZ);
 C_ASSERT(PLL_DIVIDER >= 1 && PLL_DIVIDER <= 25);
 C_ASSERT(PLL_MULTIPLIER >= 24 && PLL_MULTIPLIER <= 50);
@@ -73,6 +76,11 @@ struct uart_device {
         UART0_MemMapPtr urt_mmio_uart0_p;
         UART_MemMapPtr urt_mmio_uart_p;
     };
+
+    volatile uint32_t *urt_mmio_tx_port_pcr_p;
+    volatile uint32_t *urt_mmio_rx_port_pcr_p;
+    uint32_t urt_mmio_pin_mux_selector_mask;
+    uint32_t urt_mmio_clock_gate_mask;
 
     struct rtos_interrupt_registration_params urt_rtos_interrupt_params;
     struct rtos_interrupt **urt_rtos_interrupt_pp;
@@ -131,6 +139,8 @@ struct adc_channel {
 };
 #endif // ???
 
+static void system_clocks_init(void);
+
 static void pll_init(void);
 
 static void tfc_gpio_init(void);
@@ -178,7 +188,7 @@ extern isr_function_t cortex_m_systick_isr;
 extern isr_function_t kl25_uart0_isr;
 extern isr_function_t kl25_adc0_isr;
 
-static uint32_t g_pll_frequency = 0;
+static uint32_t g_pll_frequency_in_hz = 0;
 
 /**
  * Interrupt Vector Table
@@ -366,6 +376,10 @@ static const struct uart_device g_uart_devices[] =
         .urt_signature = UART_DEVICE_SIGNATURE,
         .urt_var_p = &g_uart_devices_var[0],
         .urt_mmio_uart0_p = UART0_BASE_PTR,
+        .urt_mmio_tx_port_pcr_p = &PORTA_PCR1,
+        .urt_mmio_rx_port_pcr_p = &PORTA_PCR2,
+        .urt_mmio_pin_mux_selector_mask = PORT_PCR_MUX(0x2),
+        .urt_mmio_clock_gate_mask = SIM_SCGC4_UART0_MASK,
         .urt_rtos_interrupt_params = {
             .irp_name_p = "UART0 Interrupt",
             .irp_isr_function_p = kl25_uart0_isr,
@@ -386,12 +400,20 @@ static const struct uart_device g_uart_devices[] =
         .urt_signature = UART_DEVICE_SIGNATURE,
         .urt_var_p = &g_uart_devices_var[1],
         .urt_mmio_uart_p = UART1_BASE_PTR,
+        .urt_mmio_tx_port_pcr_p = &PORTC_PCR4,
+        .urt_mmio_rx_port_pcr_p = &PORTC_PCR3,
+        .urt_mmio_pin_mux_selector_mask = PORT_PCR_MUX(0x3),
+        .urt_mmio_clock_gate_mask = SIM_SCGC4_UART1_MASK,
     },
 
     [2] = {
         .urt_signature = UART_DEVICE_SIGNATURE,
         .urt_var_p = &g_uart_devices_var[2],
         .urt_mmio_uart_p = UART2_BASE_PTR,
+        .urt_mmio_tx_port_pcr_p = &PORTD_PCR3,
+        .urt_mmio_rx_port_pcr_p = &PORTD_PCR2,
+        .urt_mmio_pin_mux_selector_mask = PORT_PCR_MUX(0x3),
+        .urt_mmio_clock_gate_mask = SIM_SCGC4_UART2_MASK,
     },
 };
 
@@ -454,7 +476,7 @@ const struct adc_device *const g_adc0_device_p = NULL; // TODO
 /**
  *  Initializes board hardware
  */
-void
+cpu_reset_cause_t
 board_init(void)
 {
     /*
@@ -463,15 +485,18 @@ board_init(void)
      */
     __disable_irq();
 
-    pll_init();
+    cpu_reset_cause_t reset_cause = find_reset_cause();
+
+    //RCM_RPFC = RCM_RPFC_RSTFLTSS_MASK | RCM_RPFC_RSTFLTSRW(0x2); 
+    system_clocks_init();
 
     rgb_led_init();
 
 #ifdef DEBUG
     if (software_reset_happened()) {
-        DEBUG_FLASH_LED(LED_BLUE_MASK);
+        DEBUG_BLINK_LED(LED_BLUE_MASK);
     } else {
-        DEBUG_FLASH_LED(LED_GREEN_MASK);
+        DEBUG_BLINK_LED(LED_GREEN_MASK);
     }
 #   else
     if (software_reset_happened()) {
@@ -482,20 +507,66 @@ board_init(void)
 #   endif
 
     cortex_m_nvic_init();
-#if 0 // ???
+
     uart_init(
         g_console_serial_port_p,
         CONSOLE_SERIAL_PORT_BAUD_RATE,
         CONSOLE_SERIAL_PORT_MODE);
-#endif
 
     DEBUG_PRINTF("UART0 initialized\n");
-
-    DEBUG_FLASH_LED(LED_BLUE_MASK);
+    DEBUG_PRINTF("Last reset cause: 0x%x\n", reset_cause);
 
     init_adc(g_adc0_device_p);
 
     tfc_gpio_init();
+
+    return reset_cause;
+}
+
+
+cpu_reset_cause_t
+find_reset_cause(void) 
+{
+    uint8_t generic_cause = GRC_INVALID_RESET_CAUSE;
+
+     uint8_t reg_rcm_srs0 = read_8bit_mmio_register(&RCM_SRS0);
+    if (reg_rcm_srs0 & RCM_SRS0_POR_MASK) {
+        generic_cause = GRC_POWER_ON_RESET; 
+    } else if (reg_rcm_srs0 & RCM_SRS0_PIN_MASK) {
+        generic_cause = GRC_EXTERNAL_PIN_RESET;
+    } else if (reg_rcm_srs0 & RCM_SRS0_WDOG_MASK) {
+        generic_cause = GRC_WATCHDOG_RESET;
+    } if (reg_rcm_srs0 != 0) {
+        generic_cause = GRC_OTHER_HW_REASON_RESET;
+    }
+
+    uint8_t reg_rcm_srs1 = read_8bit_mmio_register(&RCM_SRS1);
+    if (generic_cause == GRC_INVALID_RESET_CAUSE) {
+        if (reg_rcm_srs1 & RCM_SRS1_SW_MASK) {
+            generic_cause = GRC_SOFTWARE_RESET;
+        } else if (reg_rcm_srs1 & RCM_SRS1_MDM_AP_MASK) {
+            generic_cause = GRC_EXTERNAL_DEBUGGER_RESET;
+        } else if (reg_rcm_srs1 & RCM_SRS1_LOCKUP_MASK) {
+            generic_cause = GRC_LOCKUP_EVENT_RESET;
+        } else if (reg_rcm_srs1 & RCM_SRS1_SACKERR_MASK) {
+            generic_cause = GRC_STOP_ACK_ERROR_RESET;
+        }
+    }
+
+    cpu_reset_cause_t reset_cause = 0x0;
+    SET_BIT_FIELD(
+        reset_cause, CPU_RESET_GENERIC_CAUSE_MASK,
+        CPU_RESET_GENERIC_CAUSE_SHIFT, generic_cause);
+
+    SET_BIT_FIELD(
+        reset_cause, CPU_RESET_MACHDEP_CAUSE1_MASK,
+        CPU_RESET_MACHDEP_CAUSE1_SHIFT, reg_rcm_srs0); 
+
+    SET_BIT_FIELD(
+        reset_cause, CPU_RESET_MACHDEP_CAUSE2_MASK,
+        CPU_RESET_MACHDEP_CAUSE2_SHIFT, reg_rcm_srs1); 
+
+    return reset_cause; 
 }
 
 
@@ -503,6 +574,51 @@ bool
 software_reset_happened(void)
 {
     return ((RCM_SRS1 & RCM_SRS1_SW_MASK) != 0);
+}
+
+
+static void
+system_clocks_init(void)
+{
+    uint32_t reg_value;
+
+    /*
+     * Enable all of the port clocks. These have to be enabled to configure
+     * pin muxing options, so most code will need all of these on anyway.
+     */
+    reg_value = read_32bit_mmio_register(&SIM_SCGC5);
+    reg_value |= (SIM_SCGC5_PORTA_MASK
+                    | SIM_SCGC5_PORTB_MASK
+                    | SIM_SCGC5_PORTC_MASK
+                    | SIM_SCGC5_PORTD_MASK
+                    | SIM_SCGC5_PORTE_MASK);
+    write_32bit_mmio_register(&SIM_SCGC5, reg_value);
+    
+    /*
+     * Set the system dividers:
+     *
+     * NOTE: This is not relaly needed, as these are the settings at reset time.
+     */  
+    write_32bit_mmio_register(
+        &SIM_CLKDIV1,
+        SIM_CLKDIV1_OUTDIV1(0) | SIM_CLKDIV1_OUTDIV4(1));
+
+    /*
+     * Initialize PLL:
+     * 
+     * NOTE: PLL will be the source for MCG CLKOUT so the core, system, and flash
+     * clocks are derived from it
+     */
+    pll_init();
+
+    /*
+     * Set PLLFLLSEL to select the PLL, as the clock source for
+     * peripherals:
+     * (MCGPLLCLK clock with fixed divide by two)
+     */
+    reg_value = read_32bit_mmio_register(&SIM_SOPT2);
+    reg_value |= SIM_SOPT2_PLLFLLSEL_MASK;
+    write_32bit_mmio_register(&SIM_SOPT2, reg_value);
 }
 
 
@@ -535,13 +651,7 @@ pll_init(void)
   MCG_C2 = temp_reg;
   
   // determine FRDIV based on reference clock frequency
-  // since the external frequency has already been checked only the maximum frequency for each FRDIV value needs to be compared here.
-  if (CRYSTAL_FREQUENCY_HZ <= 1250000) {frdiv_val = 0;}
-  else if (CRYSTAL_FREQUENCY_HZ <= 2500000) {frdiv_val = 1;}
-  else if (CRYSTAL_FREQUENCY_HZ <= 5000000) {frdiv_val = 2;}
-  else if (CRYSTAL_FREQUENCY_HZ <= 10000000) {frdiv_val = 3;}
-  else if (CRYSTAL_FREQUENCY_HZ <= 20000000) {frdiv_val = 4;}
-  else {frdiv_val = 5;}
+  frdiv_val = 3;
 
   // Select external oscillator and Reference Divider and clear IREFS to start ext osc
   // If IRCLK is required it must be enabled outside of this driver, existing state will be maintained
@@ -636,7 +746,7 @@ pll_init(void)
 
   // Now in PEE
 
-  g_pll_frequency = (CRYSTAL_FREQUENCY_HZ / prdiv) * vdiv; //MCGOUT equals PLL output frequency
+  g_pll_frequency_in_hz = (CRYSTAL_FREQUENCY_HZ / prdiv) * vdiv; //MCGOUT equals PLL output frequency
 }
 
 
@@ -723,7 +833,7 @@ rgb_led_init(void)
 void
 toggle_heartbeat_led(void)
 {
-    //???toggle_rgb_led(LED_BLUE_MASK);
+    toggle_rgb_led(LED_BLUE_MASK);
 }
 
 
@@ -777,37 +887,107 @@ void turn_off_rgb_led(enum led_color_masks led_color_mask)
     GPIO_PSOR_REG(gpio_port_p) = led_color_mask;
 }
 
+C_ASSERT(
+    offsetof(struct UART0_MemMap, BDH) == offsetof(struct UART_MemMap, BDH));
+
+C_ASSERT(
+    offsetof(struct UART0_MemMap, BDL) == offsetof(struct UART_MemMap, BDL));
+
+C_ASSERT(
+    offsetof(struct UART0_MemMap, C1) == offsetof(struct UART_MemMap, C1));
+
+C_ASSERT(
+    offsetof(struct UART0_MemMap, C2) == offsetof(struct UART_MemMap, C2));
+
+C_ASSERT(
+    offsetof(struct UART0_MemMap, S1) == offsetof(struct UART_MemMap, S1));
+
+C_ASSERT(
+    offsetof(struct UART0_MemMap, S2) == offsetof(struct UART_MemMap, S2));
+
+C_ASSERT(
+    offsetof(struct UART0_MemMap, C3) == offsetof(struct UART_MemMap, C3));
+
+C_ASSERT(
+    offsetof(struct UART0_MemMap, D) == offsetof(struct UART_MemMap, D));
+
 void
 uart_init(
     const struct uart_device *uart_device_p,
     uint32_t baud_rate,
     uint8_t mode)
 {
+    uint32_t reg_value;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
     struct uart_device_var *uart_var_p = uart_device_p->urt_var_p;
+    UART_MemMapPtr uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
 
     FDC_ASSERT(!uart_var_p->urt_initialized, 0, 0);
     FDC_ASSERT(mode == 0, mode, uart_device_p);
+    FDC_ASSERT_CPU_INTERRUPTS_DISABLED();
+
+    //SIM_SCGC5 |= SIM_SCGC5_PORTA_MASK; // done in system_clocks_init
+ 
+    /*
+     * Enable clock for the UART:
+     */
+    reg_value = read_32bit_mmio_register(&SIM_SCGC4);
+    reg_value |= uart_device_p->urt_mmio_clock_gate_mask;
+    write_32bit_mmio_register(&SIM_SCGC4, reg_value);
+    
+    /*
+     * Disable UART's transmitter and receiver, while UART is being
+     * configured:
+     */
+    reg_value = read_8bit_mmio_register(&UART0_C2);
+    reg_value &= ~(UART0_C2_TE_MASK | UART0_C2_RE_MASK);
+    write_8bit_mmio_register(&UART0_C2, reg_value);
 
     /*
-     * NOTE: For now this code only supports UART0
+     * Configure the uart for 8-bit mode, no parity (mode is 0):
      */
-    TODO("Make this code generic to support the other UARTs in the SoC")
+    write_8bit_mmio_register(
+        &UART_C1_REG(uart_mmio_registers_p), mode);
 
-    SIM_SCGC5 |= SIM_SCGC5_PORTA_MASK;
-    PORTA_PCR1 = PORT_PCR_MUX(2) | PORT_PCR_DSE_MASK;   
-    PORTA_PCR2 = PORT_PCR_MUX(2) | PORT_PCR_DSE_MASK;  
-	
-    //Select PLL/2 Clock
-    SIM_SOPT2 &= ~(3<<26); // clear the 2 bits (same as anding with~SIM_SOPT2_UART0SRC_MASK)
-    SIM_SOPT2 |= SIM_SOPT2_UART0SRC(1); 
-    SIM_SOPT2 |= SIM_SOPT2_PLLFLLSEL_MASK;
+    /* 
+     * Enable Tx pin:
+     */
+    write_32bit_mmio_register(
+        uart_device_p->urt_mmio_tx_port_pcr_p,
+        uart_device_p->urt_mmio_pin_mux_selector_mask | PORT_PCR_DSE_MASK);
+
+    /* 
+     * Enable Rx pin:
+     */
+    write_32bit_mmio_register(
+        uart_device_p->urt_mmio_rx_port_pcr_p,
+        uart_device_p->urt_mmio_pin_mux_selector_mask | PORT_PCR_DSE_MASK);
+
+    /*
+     * Select the clock source for the UART0 transmit and receive clock:
+     * 01 =  MCGFLLCLK clock or MCGPLLCLK/2 clock
+     */
+#if 0
+    reg_value = SIM_SOPT2
+    reg_value &= ~SIM_SOPT2_UART0SRC_MASK;
+    reg_value |= SIM_SOPT2_UART0SRC(1); 
+    SIM_SOPT2 = reg_value;
+#else
+    reg_value = read_32bit_mmio_register(&SIM_SOPT2);
+    SET_BIT_FIELD(
+        reg_value, SIM_SOPT2_UART0SRC_MASK, SIM_SOPT2_UART0SRC_SHIFT,
+        0x1);
+    write_32bit_mmio_register(&SIM_SOPT2, reg_value);
+#endif
+
+    //SIM_SOPT2 |= SIM_SOPT2_PLLFLLSEL_MASK; // done in system_clocks_init
 
     // Calculate the first baud rate using the lowest OSR value possible.  
-    uint32_t uart0clk = CPU_CLOCK_FREQ_IN_HZ / 2;
+    //uint32_t uart0clk = CPU_CLOCK_FREQ_IN_HZ / 2;
+    uint32_t uart0clk = g_pll_frequency_in_hz / 2;
     uint32_t i = 4;
-    uint32_t sbr_val = (uint32_t)(uart0clk/(baud_rate * i));
-    uint32_t calculated_baud = (uart0clk / (i * sbr_val));
+    uint32_t sbr_val = uart0clk / (baud_rate * i);
+    uint32_t calculated_baud = uart0clk / (i * sbr_val);
     uint32_t baud_diff;
         
     if (calculated_baud > baud_rate)
@@ -817,55 +997,81 @@ uart_init(
     
     uint32_t osr_val = i;
        
-    DEBUG_FLASH_LED(LED_RED_MASK); // ??? 
-    // Select the best OSR value
-    for (i = 5; i <= 32; i++)
+    if (uart_device_p == &g_uart_devices[0]) 
     {
-        uint32_t temp;
+        UART0_MemMapPtr uart0_mmio_registers_p = uart_device_p->urt_mmio_uart0_p;
 
-        sbr_val = uart0clk / (baud_rate * i);
-        calculated_baud = uart0clk / (i * sbr_val);
-        
-        if (calculated_baud > baud_rate)
-            temp = calculated_baud - baud_rate;
-        else
-            temp = baud_rate - calculated_baud;
-        
-        if (temp <= baud_diff)
+        // Select the best OSR value
+        for (i = 5; i <= 32; i++)
         {
-            baud_diff = temp;
-            osr_val = i; 
+            uint32_t temp;
+
+            sbr_val = uart0clk / (baud_rate * i);
+            calculated_baud = uart0clk / (i * sbr_val);
+            
+            if (calculated_baud > baud_rate)
+                temp = calculated_baud - baud_rate;
+            else
+                temp = baud_rate - calculated_baud;
+            
+            if (temp <= baud_diff)
+            {
+                baud_diff = temp;
+                osr_val = i; 
+            }
         }
+        
+        FDC_ASSERT(baud_diff < (baud_rate / 100) * 3, baud_diff, baud_rate);
+    
+        // If the OSR is between 4x and 8x then both
+        // edge sampling MUST be turned on.  
+        if (osr_val > 3 && osr_val < 9)
+        {
+            reg_value = read_8bit_mmio_register(&UART0_C5_REG(uart0_mmio_registers_p));
+            reg_value |= UART0_C5_BOTHEDGE_MASK;
+            write_8bit_mmio_register(&UART0_C5_REG(uart0_mmio_registers_p), reg_value);
+        }
+        
+        // Setup OSR value 
+        reg_value = read_8bit_mmio_register(&UART0_C4_REG(uart0_mmio_registers_p));
+        SET_BIT_FIELD(reg_value, UART0_C4_OSR_MASK, UART0_C4_OSR_SHIFT, osr_val - 1);
+        write_8bit_mmio_register(&UART0_C4_REG(uart0_mmio_registers_p), reg_value); 
+    
+        DBG_ASSERT(
+            (reg_value & UART0_C4_OSR_MASK) + 1 == osr_val,
+            reg_value, osr_val);
+
+        sbr_val = uart0clk / (baud_rate * osr_val);
     }
-    
-    DEBUG_FLASH_LED(LED_RED_MASK); // ??? 
+    else
+    {
+        /* Calculate baud settings */
+        sbr_val = uart0clk / (baud_rate * 16);
+    }
 
-    FDC_ASSERT(baud_diff < (baud_rate / 100) * 3, baud_diff, baud_rate);
-    
-    // If the OSR is between 4x and 8x then both
-    // edge sampling MUST be turned on.  
-    if (osr_val > 3 && osr_val < 9)
-        UART0_C5 |= UART0_C5_BOTHEDGE_MASK;
-    
-    // Setup OSR value 
-    uint32_t reg_temp = UART0_C4;
-    reg_temp &= ~UART0_C4_OSR_MASK;
-    reg_temp |= UART0_C4_OSR(osr_val - 1);
+     /*
+      * Set SBR high-part field in the UART's BDH register:
+      */
+    reg_value = read_8bit_mmio_register(&UART_BDH_REG(uart_mmio_registers_p));
+    SET_BIT_FIELD(
+        reg_value, UART_BDH_SBR_MASK, UART_BDH_SBR_SHIFT,
+        (sbr_val & 0x1F00) >> 8);
+    write_8bit_mmio_register(
+        &UART_BDH_REG(uart_mmio_registers_p), reg_value);
 
-    // Write reg_temp to C4 register
-    UART0_C4 = reg_temp;
+     /*
+      * Set SBR low byte in the UART's BDL register:
+      */
+    write_8bit_mmio_register(
+        &UART_BDL_REG(uart_mmio_registers_p),
+        sbr_val & UART_BDL_SBR_MASK);
     
-    reg_temp = (reg_temp & UART0_C4_OSR_MASK) + 1;
-    sbr_val = (uint32_t)((uart0clk)/(baud_rate * (reg_temp)));
-    
-     /* Save off the current value of the uartx_BDH except for the SBR field */
-    reg_temp = UART0_BDH & ~(UART0_BDH_SBR(0x1F));
-
-    UART0_BDH = reg_temp |  UART0_BDH_SBR(((sbr_val & 0x1F00) >> 8));
-    UART0_BDL = (uint8_t)(sbr_val & UART0_BDL_SBR_MASK);
-    
-    /* Enable receiver and transmitter */
-    UART0_C2 |= (UART0_C2_TE_MASK | UART0_C2_RE_MASK);
+    /*
+     * Enable UART's transmitter and receiver:
+     */
+    reg_value = read_8bit_mmio_register(&UART0_C2);
+    reg_value |= (UART0_C2_TE_MASK | UART0_C2_RE_MASK);
+    write_8bit_mmio_register(&UART0_C2, reg_value);
 
     /*
      * Initialize transmit queue:
@@ -892,7 +1098,7 @@ uart_init(
      /*
       * Enable generation of receive interrupts:
       */
-    uint32_t reg_value = read_8bit_mmio_register(&UART0_C2);
+    reg_value = read_8bit_mmio_register(&UART0_C2);
     reg_value |= UART_C2_RIE_MASK;
     write_8bit_mmio_register(&UART0_C2, reg_value);
 

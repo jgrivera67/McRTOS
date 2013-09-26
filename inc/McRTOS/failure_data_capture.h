@@ -822,7 +822,8 @@ check_rtos_interrupt_e_handler_preconditions(
     _IN_ const struct rtos_interrupt *rtos_interrupt_p);
 
 void
-check_synchronous_context_switch_preconditions(void);
+check_synchronous_context_switch_preconditions(
+    _IN_ const struct rtos_execution_context *current_execution_context_p);
 
 #endif /* _FAILURE_DATA_CAPTURE_H */
 

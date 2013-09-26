@@ -31,6 +31,11 @@ print_uint32_decimal(
     uint8_t padding_count);
 
 static void
+print_int32_decimal(
+    putchar_func_t *putchar_func_p, void *putchar_arg_p, int32_t value,
+    uint8_t padding_count);
+
+static void
 print_string(
     putchar_func_t *putchar_func_p, void *putchar_arg_p, const char *str,
     uint8_t padding_count);
@@ -372,7 +377,7 @@ debug_break_point(const char *fmt, ...)
         goto Exit;
     }
 
-#   if defined(__ARM_ARCH_4T__)
+#   if defined(__ARM_ARCH_4T__) 
     /*
      * Hold the processor in a tight loop, until the
      * fdc_breakpoints_on flag is turned off with the debugger.
@@ -388,7 +393,30 @@ debug_break_point(const char *fmt, ...)
     fdc_info_p->fdc_breakpoints_on = true;
 
 #   else
-    __BKPT(0x1);
+    /*
+     * Ideally, we should be able to use break instruction (e.g., __BKPT()).
+     * However, for the Cortex-M0+, the processor goes to lockup state if
+     * a debugger is not attached, rather than generating a hard fault
+     * exception. So, we need to force an "artificial hard fault" here,
+     * by doing an unaligned memory access:
+     */
+#   if 0 // ???
+    volatile uint32_t *p = NULL;
+    *p = 1;
+#   endif
+
+    uint32_t *stack_p;
+
+    if (CPU_USING_MSP_STACK_POINTER(__get_CONTROL())) {
+        stack_p = (uint32_t *)__get_MSP();
+    } else { 
+        stack_p = (uint32_t *)__get_PSP();
+    }
+
+    rtos_run_debugger(
+        cpu_controller_p->cpc_current_execution_context_p,
+        stack_p);
+
 #endif
 
 Exit:
@@ -602,8 +630,12 @@ embedded_vprintf(
                 break;
 
             case 'u':
-            case 'U':
                 print_uint32_decimal(putchar_func_p, putchar_arg_p, va_arg(va, uint32_t),
+                    padding_count);
+                break;
+
+            case 'd':
+                print_int32_decimal(putchar_func_p, putchar_arg_p, va_arg(va, int32_t),
                     padding_count);
                 break;
 
@@ -701,7 +733,8 @@ print_uint32_hexadecimal(putchar_func_t *putchar_func_p, void *putchar_arg_p, ui
 
 
 static void
-print_uint32_decimal(putchar_func_t *putchar_func_p, void *putchar_arg_p, uint32_t value,
+print_uint32_decimal(
+    putchar_func_t *putchar_func_p, void *putchar_arg_p, uint32_t value,
     uint8_t padding_count)
 {
     char      buffer[16];
@@ -710,12 +743,57 @@ print_uint32_decimal(putchar_func_t *putchar_func_p, void *putchar_arg_p, uint32
     *p = '\0';
     do {
         p--;
-        FDC_ASSERT(p >= buffer, p, buffer);
+        if (p < buffer) {
+            p++;
+            *p = 'T'; /* for truncated */
+            break;
+        }
+
+        // FDC_ASSERT(p >= buffer, p, buffer);
 
         *p = (value % 10) + '0';
         value /= 10;
     } while (value > 0);
 
+    print_string(putchar_func_p, putchar_arg_p, p, padding_count);
+}
+
+
+static void
+print_int32_decimal(
+    putchar_func_t *putchar_func_p, void *putchar_arg_p, int32_t value,
+    uint8_t padding_count)
+{
+    char      buffer[16];
+    char      *p = &buffer[sizeof(buffer) - 1];
+    uint32_t  abs_value;
+
+    if (value < 0) {
+        abs_value = (uint32_t)(-value);
+    } else {
+        abs_value = (uint32_t)value;
+    }
+
+    *p = '\0';
+    do {
+        p--;
+        if (p < buffer) {
+            p++;
+            *p = 'T'; /* for truncated */
+            goto Exit;
+        }
+
+        // FDC_ASSERT(p >= buffer, p, buffer);
+
+        *p = (abs_value % 10) + '0';
+        abs_value /= 10;
+    } while (abs_value > 0);
+
+    if (value < 0) {
+        *(p - 1) = '-';
+    }
+
+Exit:
     print_string(putchar_func_p, putchar_arg_p, p, padding_count);
 }
 

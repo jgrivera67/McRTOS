@@ -14,7 +14,7 @@
  * Imported symbols
  */
 .extern g_McRTOS_p
-.extern rtos_enter_debugger
+.extern rtos_enter_debugger_from_exception
 
 /*
  * Exported functions
