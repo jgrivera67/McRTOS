@@ -90,6 +90,30 @@ struct uart_device {
     uint8_t *urt_receive_queue_storage_p;
 };
 
+C_ASSERT(
+    offsetof(struct UART0_MemMap, BDH) == offsetof(struct UART_MemMap, BDH));
+
+C_ASSERT(
+    offsetof(struct UART0_MemMap, BDL) == offsetof(struct UART_MemMap, BDL));
+
+C_ASSERT(
+    offsetof(struct UART0_MemMap, C1) == offsetof(struct UART_MemMap, C1));
+
+C_ASSERT(
+    offsetof(struct UART0_MemMap, C2) == offsetof(struct UART_MemMap, C2));
+
+C_ASSERT(
+    offsetof(struct UART0_MemMap, S1) == offsetof(struct UART_MemMap, S1));
+
+C_ASSERT(
+    offsetof(struct UART0_MemMap, S2) == offsetof(struct UART_MemMap, S2));
+
+C_ASSERT(
+    offsetof(struct UART0_MemMap, C3) == offsetof(struct UART_MemMap, C3));
+
+C_ASSERT(
+    offsetof(struct UART0_MemMap, D) == offsetof(struct UART_MemMap, D));
+
 /**
  * Non-const fields of a UART device (to be placed in SRAM)
  */
@@ -139,13 +163,20 @@ struct adc_channel {
 };
 #endif // ???
 
+static cpu_reset_cause_t find_reset_cause(void);
+
 static void system_clocks_init(void);
 
 static void pll_init(void);
 
+#if 0 // ???
 static void tfc_gpio_init(void);
+#endif
 
 static void rgb_led_init(void);
+
+static void uart_stop(
+    const struct uart_device *uart_device_p);
 
 static void
 init_adc(const struct adc_device *adc_device_p);
@@ -488,6 +519,7 @@ board_init(void)
     cpu_reset_cause_t reset_cause = find_reset_cause();
 
     //RCM_RPFC = RCM_RPFC_RSTFLTSS_MASK | RCM_RPFC_RSTFLTSRW(0x2); 
+    //RCM_RPFC = RCM_RPFC_RSTFLTSRW(0x1); 
     system_clocks_init();
 
     rgb_led_init();
@@ -513,18 +545,44 @@ board_init(void)
         CONSOLE_SERIAL_PORT_BAUD_RATE,
         CONSOLE_SERIAL_PORT_MODE);
 
+   
+#   ifdef DEBUG
+    uart_putchar_with_polling(g_console_serial_port_p, '\r');
+    uart_putchar_with_polling(g_console_serial_port_p, '\n');
+    //uart_putchar(g_console_serial_port_p, '\r');
+    //uart_putchar(g_console_serial_port_p, '\n');
     DEBUG_PRINTF("UART0 initialized\n");
-    DEBUG_PRINTF("Last reset cause: 0x%x\n", reset_cause);
+    DEBUG_PRINTF("Last reset cause: %#x\n", reset_cause);
+#   else
+    uart_putchar(g_console_serial_port_p, '\r');
+    uart_putchar(g_console_serial_port_p, '\n');
+#   endif
 
     init_adc(g_adc0_device_p);
 
-    tfc_gpio_init();
+    //??? tfc_gpio_init();
 
     return reset_cause;
 }
 
+void
+board_reset(void)
+{
+    __disable_irq();
 
-cpu_reset_cause_t
+    /*
+     * Stop all peripherals:
+     */
+    uart_stop(g_console_serial_port_p);
+
+    /*
+     * Trigger software reset in the SoC:
+     */
+    NVIC_SystemReset();
+}
+
+
+static cpu_reset_cause_t
 find_reset_cause(void) 
 {
     uint8_t generic_cause = GRC_INVALID_RESET_CAUSE;
@@ -749,7 +807,7 @@ pll_init(void)
   g_pll_frequency_in_hz = (CRYSTAL_FREQUENCY_HZ / prdiv) * vdiv; //MCGOUT equals PLL output frequency
 }
 
-
+#if 0 // ???
 //set I/O for H-BRIDGE enables, switches and LEDs
 static void
 tfc_gpio_init(void)
@@ -793,7 +851,7 @@ tfc_gpio_init(void)
     //TFC_HBRIDGE_DISABLE:
     GPIOE_PCOR = TFC_HBRIDGE_EN_LOC;
 }
-
+#endif // # if 0
 
 static void 
 rgb_led_init(void)
@@ -887,29 +945,6 @@ void turn_off_rgb_led(enum led_color_masks led_color_mask)
     GPIO_PSOR_REG(gpio_port_p) = led_color_mask;
 }
 
-C_ASSERT(
-    offsetof(struct UART0_MemMap, BDH) == offsetof(struct UART_MemMap, BDH));
-
-C_ASSERT(
-    offsetof(struct UART0_MemMap, BDL) == offsetof(struct UART_MemMap, BDL));
-
-C_ASSERT(
-    offsetof(struct UART0_MemMap, C1) == offsetof(struct UART_MemMap, C1));
-
-C_ASSERT(
-    offsetof(struct UART0_MemMap, C2) == offsetof(struct UART_MemMap, C2));
-
-C_ASSERT(
-    offsetof(struct UART0_MemMap, S1) == offsetof(struct UART_MemMap, S1));
-
-C_ASSERT(
-    offsetof(struct UART0_MemMap, S2) == offsetof(struct UART_MemMap, S2));
-
-C_ASSERT(
-    offsetof(struct UART0_MemMap, C3) == offsetof(struct UART_MemMap, C3));
-
-C_ASSERT(
-    offsetof(struct UART0_MemMap, D) == offsetof(struct UART_MemMap, D));
 
 void
 uart_init(
@@ -926,22 +961,20 @@ uart_init(
     FDC_ASSERT(mode == 0, mode, uart_device_p);
     FDC_ASSERT_CPU_INTERRUPTS_DISABLED();
 
-    //SIM_SCGC5 |= SIM_SCGC5_PORTA_MASK; // done in system_clocks_init
- 
     /*
      * Enable clock for the UART:
      */
     reg_value = read_32bit_mmio_register(&SIM_SCGC4);
     reg_value |= uart_device_p->urt_mmio_clock_gate_mask;
     write_32bit_mmio_register(&SIM_SCGC4, reg_value);
-    
+
     /*
      * Disable UART's transmitter and receiver, while UART is being
      * configured:
      */
-    reg_value = read_8bit_mmio_register(&UART0_C2);
-    reg_value &= ~(UART0_C2_TE_MASK | UART0_C2_RE_MASK);
-    write_8bit_mmio_register(&UART0_C2, reg_value);
+    reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
+    reg_value &= ~(UART_C2_TE_MASK | UART_C2_RE_MASK);
+    write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
 
     /*
      * Configure the uart for 8-bit mode, no parity (mode is 0):
@@ -963,25 +996,6 @@ uart_init(
         uart_device_p->urt_mmio_rx_port_pcr_p,
         uart_device_p->urt_mmio_pin_mux_selector_mask | PORT_PCR_DSE_MASK);
 
-    /*
-     * Select the clock source for the UART0 transmit and receive clock:
-     * 01 =  MCGFLLCLK clock or MCGPLLCLK/2 clock
-     */
-#if 0
-    reg_value = SIM_SOPT2
-    reg_value &= ~SIM_SOPT2_UART0SRC_MASK;
-    reg_value |= SIM_SOPT2_UART0SRC(1); 
-    SIM_SOPT2 = reg_value;
-#else
-    reg_value = read_32bit_mmio_register(&SIM_SOPT2);
-    SET_BIT_FIELD(
-        reg_value, SIM_SOPT2_UART0SRC_MASK, SIM_SOPT2_UART0SRC_SHIFT,
-        0x1);
-    write_32bit_mmio_register(&SIM_SOPT2, reg_value);
-#endif
-
-    //SIM_SOPT2 |= SIM_SOPT2_PLLFLLSEL_MASK; // done in system_clocks_init
-
     // Calculate the first baud rate using the lowest OSR value possible.  
     //uint32_t uart0clk = CPU_CLOCK_FREQ_IN_HZ / 2;
     uint32_t uart0clk = g_pll_frequency_in_hz / 2;
@@ -999,6 +1013,16 @@ uart_init(
        
     if (uart_device_p == &g_uart_devices[0]) 
     {
+        /*
+         * Select the clock source for the UART0 transmit and receive clock:
+         * 01 =  MCGFLLCLK clock or MCGPLLCLK/2 clock
+         */
+        reg_value = read_32bit_mmio_register(&SIM_SOPT2);
+        SET_BIT_FIELD(
+            reg_value, SIM_SOPT2_UART0SRC_MASK, SIM_SOPT2_UART0SRC_SHIFT,
+            0x1);
+        write_32bit_mmio_register(&SIM_SOPT2, reg_value);
+
         UART0_MemMapPtr uart0_mmio_registers_p = uart_device_p->urt_mmio_uart0_p;
 
         // Select the best OSR value
@@ -1069,9 +1093,9 @@ uart_init(
     /*
      * Enable UART's transmitter and receiver:
      */
-    reg_value = read_8bit_mmio_register(&UART0_C2);
-    reg_value |= (UART0_C2_TE_MASK | UART0_C2_RE_MASK);
-    write_8bit_mmio_register(&UART0_C2, reg_value);
+    reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
+    reg_value |= (UART_C2_TE_MASK | UART_C2_RE_MASK);
+    write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
 
     /*
      * Initialize transmit queue:
@@ -1095,13 +1119,6 @@ uart_init(
         cpu_id,
         &uart_var_p->urt_receive_queue);
 
-     /*
-      * Enable generation of receive interrupts:
-      */
-    reg_value = read_8bit_mmio_register(&UART0_C2);
-    reg_value |= UART_C2_RIE_MASK;
-    write_8bit_mmio_register(&UART0_C2, reg_value);
-
     /* 
      * Register McRTOS interrupt handler
      */
@@ -1114,6 +1131,32 @@ uart_init(
         uart_device_p->urt_rtos_interrupt_pp, uart_device_p);
 
     uart_var_p->urt_initialized = true;
+}
+
+
+static void
+uart_stop(
+    const struct uart_device *uart_device_p)
+{
+    uint32_t reg_value;
+    struct uart_device_var *uart_var_p = uart_device_p->urt_var_p;
+    UART_MemMapPtr uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
+   
+    /*
+     * Disable UART's transmitter and receiver:
+     */
+    reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
+    reg_value &= ~(UART_C2_TE_MASK | UART_C2_RE_MASK);
+    write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
+
+    /*
+     * Disable clock for the UART:
+     */
+    reg_value = read_32bit_mmio_register(&SIM_SCGC4);
+    reg_value &= ~uart_device_p->urt_mmio_clock_gate_mask;
+    write_32bit_mmio_register(&SIM_SCGC4, reg_value);
+
+    uart_var_p->urt_initialized = false;
 }
 
 
@@ -1205,77 +1248,6 @@ kl25_uart_interrupt_e_handler(
 }
 
 
-static inline void
-uart_putchar_internal(
-    _IN_ const struct uart_device *uart_device_p, 
-    _IN_ uint8_t c,
-    _IN_ bool do_polling)
-{
-    struct uart_device_var *const uart_var_p = uart_device_p->urt_var_p;
-    UART_MemMapPtr uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
-
-    if (!uart_var_p->urt_initialized)
-    {
-        /*
-         * Any call to this function from a "printf()" placed before the
-         * serial port gets initialized has to be ignored.
-         *
-         * We can't call FDC_ASSERT or CAPTURE_APP_ERROR() here as that can
-         * cause an infinite recursion, because they call this function
-         * from FAILURE_PRINTF().
-         */
-        goto exit;
-    }
-
-    if (do_polling) {
-        for ( ; ; ) {
-            uint8_t reg_value = read_8bit_mmio_register(&UART_S1_REG(uart_mmio_registers_p));
-            if ((reg_value & UART_S1_TDRE_MASK) != 0) {
-                break;
-            }
-        }
-
-        write_8bit_mmio_register(&UART_D_REG(uart_mmio_registers_p), c);
-    } else {
-        if (rtos_k_caller_is_thread()) {
-            bool entry_written =
-                rtos_k_byte_circular_buffer_write(
-                    &uart_var_p->urt_transmit_queue, c, true);
-
-            FDC_ASSERT(entry_written, uart_device_p, 0);
-        } else {
-            bool entry_written =
-                rtos_k_byte_circular_buffer_write(
-                    &uart_var_p->urt_transmit_queue, c, false);
-
-            if (!entry_written) {
-                ATOMIC_POST_INCREMENT_UINT32(&uart_var_p->urt_transmit_bytes_dropped);
-                goto exit;
-            }
-        }
-
-        /*
-         * Enable generation of "transmit data register empty" interrupts if
-         * necessary:
-         *
-         * NOTE: if the "transmit data register" is empty there will be a
-         * pending "transmit data register empty" interrupt empty, regardless
-         * of this interrupt being enabled or not in the UART. Thus, as soon
-         * as we enable the generation of this interrupt, the interrupt will
-         * fire, if the "transmit data register" was empty.
-         */
-        uint32_t reg_value = read_8bit_mmio_register(&UART0_C2);
-        if ((reg_value & UART_C2_TIE_MASK) == 0) {
-            reg_value |= UART_C2_TIE_MASK;
-            write_8bit_mmio_register(&UART0_C2, reg_value);
-        }
-    }
-
-exit:
-    return;
-}
-
-
 /**
  * Send a character over a UART serial port, blocking the caller on a condvar
  * if the UART Tx fifo is full.
@@ -1347,13 +1319,24 @@ uart_putchar_with_polling(
 {
     struct uart_device_var *const uart_var_p = uart_device_p->urt_var_p;
     UART_MemMapPtr uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
+    uint32_t reg_value;
 
     if (!uart_var_p->urt_initialized) {
         return;
     }
 
+    /*
+     * Disable "transmit data register empty" interrupt:
+     */
+    reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
+    reg_value &= ~UART_C2_TIE_MASK;
+            write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
+
+    /*
+     * Do polling until the UART's transmit buffer is empty:
+     */
     for ( ; ; ) {
-        uint8_t reg_value = read_8bit_mmio_register(&UART_S1_REG(uart_mmio_registers_p));
+        reg_value = read_8bit_mmio_register(&UART_S1_REG(uart_mmio_registers_p));
         if ((reg_value & UART_S1_TDRE_MASK) != 0) {
             break;
         }
@@ -1372,10 +1355,19 @@ uart_getchar(
     _IN_ const struct uart_device *uart_device_p)
 {
     struct uart_device_var *const uart_var_p = uart_device_p->urt_var_p;
+    UART_MemMapPtr uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
+    uint32_t reg_value;
     uint8_t char_received;
 
     FDC_ASSERT(
         uart_var_p->urt_initialized, uart_var_p, uart_device_p);
+
+    /*
+     * Enable generation of receive interrupts:
+     */
+    reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
+    reg_value |= UART_C2_RIE_MASK;
+    write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
 
     bool entry_read = rtos_k_byte_circular_buffer_read(
         &uart_var_p->urt_receive_queue,
@@ -1402,6 +1394,16 @@ uart_getchar_with_polling(
     FDC_ASSERT(
         uart_var_p->urt_initialized, uart_var_p, uart_device_p);
 
+    /*
+     * Disable generation of receive interrupts:
+     */
+    reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
+    reg_value &= ~UART_C2_RIE_MASK;
+    write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
+
+    /*
+     * Do polling until the UART's receive buffer is not empty:
+     */
     for ( ; ; ) {
         reg_value = read_8bit_mmio_register(&UART_S1_REG(uart_mmio_registers_p));
         if ((reg_value & UART_S1_RDRF_MASK) != 0) {

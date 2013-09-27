@@ -102,6 +102,11 @@ C_ASSERT(RTOS_MAX_NUM_INTERRUPTS < SOC_NUM_INTERRUPT_CHANNELS);
  */
 #define RTOS_THREAD_TIME_SLICE_IN_TICKS UINT8_C(8)
 
+/*
+ * Command line size in bytes including null terminator
+ */
+#define RTOS_COMMAND_LINE_BUFFER_SIZE    UINT32_C(128)
+
 /**
  * Maximum size of the McRTOS struct in bytes
  */

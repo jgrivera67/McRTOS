@@ -365,7 +365,11 @@ rtos_startup(
      * Set psp to 0x0, to indicate that this is the first context switch
      */
     __set_PSP(0x0);
-    DEBUG_BREAK_POINT("got here\n"); //???
+    //???
+    DEBUG_PRINTF(
+        "cpu_controller_p->cpc_current_execution_context_p = %#x\n",
+        cpu_controller_p->cpc_current_execution_context_p);
+    //???
     rtos_k_synchronous_context_switch(
         cpu_controller_p->cpc_current_execution_context_p);
 #else

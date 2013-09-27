@@ -25,7 +25,6 @@
 //.syntax unified
 
 /*???
-    .thumb_func
     .align 1
     .global    Reset_Handler
     .type    Reset_Handler, %function
@@ -50,6 +49,7 @@
  *          
  *          These assumptions are checked in fdc_trace_rtos_context_switch().
  */
+.thumb_func
 .func rtos_k_restore_execution_context
 
 rtos_k_restore_execution_context:
@@ -194,10 +194,11 @@ rtos_k_restore_execution_context:
     /*
      * Target context is an interrupt context, so return from nested exception:
      *
-     * NOTE: We need to return to rtos_k_exit_interrupt(), which will return
-     * to the exception handler, so that the exception stack drains by itself.
-     * We re-enable interrupts in RTOS_EXIT_ISR(), before returning from the
-     * exception.
+     * NOTE: We need to return to the caller which is either 
+     * cortex_m_hard_fault_exception_handler() or rtos_k_exit_interrupt().
+     * rtos_k_exit_interrupt() will return to the corresponding ISR, so that the
+     * exception stack drains by itself. In that case, we re-enable interrupts in
+     * RTOS_EXIT_ISR(), before returning from the exception.
      */
 L_target_context_is_interrupt:
     pop     {pc}
@@ -231,6 +232,7 @@ L_rtos_k_restore_execution_context_assert_cond_str:
  *
  * @return  none
  */
+.thumb_func
 .func rtos_k_synchronous_context_switch
 
 rtos_k_synchronous_context_switch:

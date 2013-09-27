@@ -16,6 +16,10 @@
 #include <inttypes.h>
 #include <stdarg.h>
 
+TODO("Remove these pragmas")
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wunused-function"
+
 static void
 embedded_vprintf(
     putchar_func_t *putchar_func_p, void *putchar_arg_p, const char *fmt, va_list va);
@@ -352,80 +356,6 @@ debug_printf(const char *fmt, ...)
 }
 
 
-void
-debug_break_point(const char *fmt, ...)
-{
-    va_list va;
-    cpu_status_register_t old_primask = __get_PRIMASK();
-    
-    __disable_irq();
-
-    va_start(va, fmt);
-
-    embedded_vprintf(
-        (putchar_func_t *)uart_putchar_with_polling,
-        (void *)g_console_serial_port_p, fmt, va);
-
-    va_end(va);
-
-    struct rtos_cpu_controller *cpu_controller_p =
-        &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
-    struct fdc_info *fdc_info_p = &cpu_controller_p->cpc_failures_info;
-
-    if (!fdc_info_p->fdc_breakpoints_on)
-    {
-        goto Exit;
-    }
-
-#   if defined(__ARM_ARCH_4T__) 
-    /*
-     * Hold the processor in a tight loop, until the
-     * fdc_breakpoints_on flag is turned off with the debugger.
-     * Keep interrupts disabled to block execution of all
-     * threads and interrupt handlers.
-     */
-    do {
-    } while (fdc_info_p->fdc_breakpoints_on);
-
-    /*
-     * Re-enable flag for next break point:
-     */ 
-    fdc_info_p->fdc_breakpoints_on = true;
-
-#   else
-    /*
-     * Ideally, we should be able to use break instruction (e.g., __BKPT()).
-     * However, for the Cortex-M0+, the processor goes to lockup state if
-     * a debugger is not attached, rather than generating a hard fault
-     * exception. So, we need to force an "artificial hard fault" here,
-     * by doing an unaligned memory access:
-     */
-#   if 0 // ???
-    volatile uint32_t *p = NULL;
-    *p = 1;
-#   endif
-
-    uint32_t *stack_p;
-
-    if (CPU_USING_MSP_STACK_POINTER(__get_CONTROL())) {
-        stack_p = (uint32_t *)__get_MSP();
-    } else { 
-        stack_p = (uint32_t *)__get_PSP();
-    }
-
-    rtos_run_debugger(
-        cpu_controller_p->cpc_current_execution_context_p,
-        stack_p);
-
-#endif
-
-Exit:
-    if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
-        __enable_irq();
-    }
-}
-
-
 /**
  * Simplified printf that send output to the console. It only supports the
  * format specifiers supported by embedded_vprintf()
@@ -609,6 +539,7 @@ embedded_vprintf(
 {
     const char *cursor_p = fmt;
     bool parsing_format_specifier = false;
+    bool print_numeric_base_prefix = false;
     uint8_t padding_count;
 
     FDC_ASSERT_VALID_FUNCTION_POINTER(putchar_func_p);
@@ -625,6 +556,16 @@ embedded_vprintf(
             case 'x':
             case 'X':
             case 'p':
+                if (print_numeric_base_prefix)
+                {
+                    print_string(putchar_func_p, putchar_arg_p, "0x", 0);
+                    print_numeric_base_prefix = false;
+                    if (padding_count >= 2)
+                    {
+                        padding_count -= 2;
+                    }
+                }
+
                 print_uint32_hexadecimal(putchar_func_p, putchar_arg_p, va_arg(va, uint32_t), 
                     padding_count);
                 break;
@@ -647,6 +588,10 @@ embedded_vprintf(
                 print_string(putchar_func_p, putchar_arg_p, va_arg(va, char *),
                     padding_count);
                 break;
+
+            case '#':
+                print_numeric_base_prefix = true;
+                continue;
 
             default:
                 if (c >= '0' && c <= '9')
@@ -827,3 +772,59 @@ print_string(putchar_func_t *putchar_func_p, void *putchar_arg_p, const char *st
 }
 
 
+void
+read_command_line(
+    _IN_  putchar_func_t *putchar_func_p,
+    _IN_  getchar_func_t *getchar_func_p,
+    _IN_  void *char_io_arg_p,
+    _OUT_ char *cmd_line_buffer,
+    _IN_  size_t buffer_size)
+{
+    char *cmd_line_cursor = cmd_line_buffer;
+    char *cmd_line_end = cmd_line_buffer + buffer_size - 1;
+
+    for  ( ; ; ) {
+        uint8_t c = getchar_func_p(char_io_arg_p);
+        
+        switch (c) {
+        case '\r':
+            putchar_func_p(char_io_arg_p, '\r');
+            putchar_func_p(char_io_arg_p, '\n');
+            *cmd_line_cursor = '\0';
+            return;
+
+        case '\b':
+            if (cmd_line_cursor > cmd_line_buffer)
+            {
+                putchar_func_p(char_io_arg_p, '\b');
+                putchar_func_p(char_io_arg_p, ' ');
+                putchar_func_p(char_io_arg_p, '\b');
+                cmd_line_cursor --;
+            }
+            break;
+
+        default:
+            if (cmd_line_cursor < cmd_line_end && IS_PRINT(c))
+            {
+                putchar_func_p(char_io_arg_p, c);
+                *cmd_line_cursor++ = c;
+            }
+        }
+    }
+}
+
+
+uint32_t 
+convert_string_to_hexadecimal(
+    _IN_ const char *str)
+{
+    return 0;
+}
+
+
+uint32_t 
+convert_string_to_decimal(
+    _IN_ const char *str)
+{
+    return 0;
+}

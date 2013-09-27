@@ -14,7 +14,7 @@
  * Imported symbols
  */
 .extern g_McRTOS_p
-.extern rtos_enter_debugger_from_exception
+.extern rtos_hard_fault_exception_handler
 
 /*
  * Exported functions
@@ -46,6 +46,7 @@
  *
  * @return  none
  */
+.thumb_func
 .func cortex_m_pendsv_exception_handler
 
 cortex_m_pendsv_exception_handler:
@@ -117,6 +118,7 @@ L_save_other_registers:
  *
  * @return  none
  */
+.thumb_func
 .func cortex_m_hard_fault_exception_handler
 
 cortex_m_hard_fault_exception_handler:
@@ -139,9 +141,9 @@ cortex_m_hard_fault_exception_handler:
      * Set r3 to
      * g_McRTOS_p->rts_cpu_controllers[0].cpc_current_execution_context_p
      */
-    ldr     r3, =g_McRTOS_p
-    ldr     r3, [r3, #RTOS_RTS_CPU_CONTROLLERS_OFFSET]
-    ldr     r3, [r3, #RTOS_CPC_CURRENT_EXECUTION_CONTEXT_P_OFFSET]
+    ldr     r3, =g_McRTOS_p /* r3 = &g_McRTOS_p */
+    ldr     r3, [r3]        /* r3 = g_McRTOS_p */
+    add     r3, r3, #(RTOS_RTS_CPU_CONTROLLERS_OFFSET + RTOS_CPC_CURRENT_EXECUTION_CONTEXT_P_OFFSET)
 
     /* 
      * Call cortex_m_save_other_registers(
@@ -162,26 +164,34 @@ cortex_m_hard_fault_exception_handler:
      */
 
     /*
-     * call rtos_enter_debugger(current_execution_context_p)
+     * call rtos_hard_fault_exception_handler(current_execution_context_p)
      *
      * r1 == lr on exception entry
      * r3 == current_execution_context_p
      */
     mov     r0, r3
     mov     r4, r1  /* saved r1 to r4 */
-    bl      rtos_enter_debugger
+    mov     r5, r3  /* saved r3 to r5 */
+    bl      rtos_hard_fault_exception_handler
   
     /*
      * Return from the exception:
      *
-     * NOTE: rtos_enter_debugger() only returns here if this exception was caused
-     * by a bkpt instruction
+     * NOTE: rtos_hard_fault_exception_handler() only returns here if this exception
+     * was caused by a bkpt instruction
      *
      * r4 == lr on exception entry
+     * r5 == current_execution_context_p
      */
-    mov     lr, r4
+    push    {r4}
+    mov     r0, r5
+    bl      rtos_k_restore_execution_context
+
+    /*
+     * We only come here if the exception happened while executing another exception handler:
+     */
     cpsie   i
-    bx      lr
+    pop     {pc}
 .endfunc
 
 
@@ -205,6 +215,7 @@ cortex_m_hard_fault_exception_handler:
  * CLOBBERED REGISTERS:
  * r0, r4-r7 (r4-r7, after saving them)
  */
+.thumb_func
 .func cortex_m_save_other_registers
 
 cortex_m_save_other_registers:

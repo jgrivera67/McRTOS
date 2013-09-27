@@ -160,8 +160,8 @@ rtos_k_capture_failure_data(
             failure_being_printed = true;
 
             FAILURE_PRINTF(
-                "Failure captured: %s (code location: 0x%x, "
-                "arg1: 0x%x, arg2: 0x%x)\n",
+                "Failure captured: %s (code location: %#x, "
+                "arg1: %#x, arg2: %#x)\n",
                 failure_str, failure_location, arg1, arg2);
 
             failure_being_printed = false;
@@ -210,7 +210,7 @@ capture_assert_failure(
 
     if (fdc_info_p->fdc_asserts_failures_breakpoint_on)
     {
-        debug_break_point("*** FDC ASSERT FAILURE BREAK POINT ***\n");
+        ARTIFICIAL_BREAK_POINT();
     } 
 }
 
@@ -246,7 +246,7 @@ capture_fdc_error(
 
     if (fdc_info_p->fdc_error_breakpoint_on)
     {
-        debug_break_point("*** FDC ERROR BREAK POINT ***\n");
+        ARTIFICIAL_BREAK_POINT();
     }
 
     return (fdc_error_t)error_address;
@@ -947,7 +947,7 @@ capture_unexpected_exception_failure(
 
     FAILURE_PRINTF(
         "Unexpected exception: %s "
-        "(code location: %x, arg: %x, status register: %x)\n",
+        "(code location: %#x, arg: %#x, status register: %#x)\n",
         exception_type_strings[exception_type], location, arg,
         cpu_status_register);
 }

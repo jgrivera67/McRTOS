@@ -556,6 +556,11 @@ struct McRTOS
      */
     struct rtos_object_pool rts_app_object_pools[RTOS_MAX_NUM_APP_OBJECT_POOLS];
 #endif
+
+    /**
+     * Command line buffer used by the McRTOS console and the McRTOS debugger
+     */
+    char rts_command_line_buffer[RTOS_COMMAND_LINE_BUFFER_SIZE];
 };
 
 C_ASSERT(
@@ -818,7 +823,7 @@ void rtos_execution_context_init(
     _IN_  rtos_execution_stack_entry_t *stack_top_end_p,
     _IN_  rtos_execution_stack_entry_t *stack_bottom_end_p);
 
-void rtos_enter_debugger(
+void rtos_hard_fault_exception_handler(
         _IN_ const struct rtos_execution_context *current_execution_context_p);
 
 void rtos_run_debugger(

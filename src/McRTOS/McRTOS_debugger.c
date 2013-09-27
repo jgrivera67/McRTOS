@@ -12,15 +12,37 @@
 #include "arm_defs.h"
 #include <stdint.h>
 
+TODO("Remove these pragmas")
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wunused-function"
+
+static bool rtos_dbg_parse_command(
+    const char *cmd_line,
+    _IN_ const struct rtos_execution_context *current_execution_context_p,
+    _IN_ const uint32_t *stack_p);
+
 static void rtos_dbg_display_help(void);
 
 static void rtos_dbg_display_cpu_registers(
     _IN_ const struct rtos_execution_context *current_execution_context_p,
     _IN_ const uint32_t *stack_p);
 
+static void 
+rtos_dbg_dump_execution_context(
+    _IN_ const struct rtos_execution_context *current_execution_context_p);
+
+static void 
+rtos_dbg_dump_memory(
+    _IN_ const void *addr,
+    _IN_ size_t size);
+
+static void
+rtos_dbg_signature_to_string(
+    _IN_ uint32_t signature,
+    _OUT_ char *str_buffer);
 
 /**
- * Enters McRTOS debugger from an exception handler.
+ * Enters McRTOS debugger from the hard fault exception handler.
  *
  * @param   current_execution_context_p: Pointer to current execution context
  *
@@ -29,7 +51,7 @@ static void rtos_dbg_display_cpu_registers(
  *          latest non-pre-saved CPU registers of the current context
  */
 void
-rtos_enter_debugger(
+rtos_hard_fault_exception_handler(
         _IN_ const struct rtos_execution_context *current_execution_context_p)
 {
     rtos_execution_stack_entry_t *stack_p;
@@ -52,7 +74,8 @@ rtos_enter_debugger(
 
     rtos_run_debugger(current_execution_context_p, stack_p);
 
-    uint32_t *instruction_p = (uint32_t *)(stack_p[CPU_REG_PC]);
+#   if 0
+    cpu_instruction_t *instruction_p = (cpu_instruction_t *)(stack_p[CPU_REG_PC]);
 
     /*
      * If the instruction that caused the exception is not breakpoint,
@@ -61,6 +84,13 @@ rtos_enter_debugger(
     if ((*instruction_p & THUMB_INSTR_OP_CODE_MASK) != BKPT_OP_CODE_MASK) {
         NVIC_SystemReset();
     }
+#   endif
+
+    /*
+     * Change the saved PC to point to the instruction after the faulting
+     * instruction, otherwise we will fall into an infinite loop:
+     */
+    stack_p[CPU_REG_PC] += sizeof(cpu_instruction_t); 
 }
 
 
@@ -78,38 +108,70 @@ rtos_run_debugger(
     _IN_ const struct rtos_execution_context *current_execution_context_p,
     _IN_ const uint32_t *stack_p)
 {
+    bool quit;
+
     DEBUG_BLINK_LED(LED_RED_MASK); // ???
     turn_on_rgb_led(LED_RED_MASK);
-
-    for ( ; ; )
-    {
+   
+    do {
         debug_printf("\nMcRTOS debugger> ");
+        read_command_line(
+            (putchar_func_t *)uart_putchar_with_polling,
+            (getchar_func_t *)uart_getchar_with_polling,
+            (void *)g_console_serial_port_p,
+            g_McRTOS_p->rts_command_line_buffer,
+            RTOS_COMMAND_LINE_BUFFER_SIZE);
 
-        uint8_t c = uart_getchar_with_polling(g_console_serial_port_p);
+        quit = rtos_dbg_parse_command(
+                    g_McRTOS_p->rts_command_line_buffer,
+                    current_execution_context_p,
+                    stack_p);
 
-        debug_printf("%c\n", c);
-        switch (c)
-        {
-            case 'h':
-                rtos_dbg_display_help();
-                break;
+    } while (!quit);
 
-            case 'r':
-                rtos_dbg_display_cpu_registers(
-                    current_execution_context_p, stack_p);
-                break;
+    turn_off_rgb_led(LED_RED_MASK);
+}
 
-            case 'q':
-                goto Exit;
+static bool
+rtos_dbg_parse_command(
+    const char *cmd_line,
+    _IN_ const struct rtos_execution_context *current_execution_context_p,
+    _IN_ const uint32_t *stack_p)
+{
+    uint8_t c = cmd_line[0]; // ???
+    bool quit = false;
 
-            default:
-                debug_printf("Invalid command: \'%c\' (type h for help)\n", c);
-                break;
-        }
+    switch (c)
+    {
+        case 'h':
+            rtos_dbg_display_help();
+            break;
+
+        case 'r':
+            rtos_dbg_display_cpu_registers(
+                current_execution_context_p, stack_p);
+            break;
+
+        case 'c':
+            rtos_dbg_dump_execution_context(
+                current_execution_context_p);
+            break;
+
+        case 'q':
+            quit = true;
+            break;
+
+        case 'k':
+            board_reset();
+            /*UNREACHABLE*/
+            break;
+
+        default:
+            debug_printf("Invalid command: \'%s\' (type h for help)\n", cmd_line);
+            break;
     }
 
-Exit:
-    turn_off_rgb_led(LED_RED_MASK);
+    return quit;
 }
 
 
@@ -118,7 +180,9 @@ rtos_dbg_display_help(void)
 {
     debug_printf("\nMcRTOS debugger commands\n");
     debug_printf("\tr - display CPU registers\n");
+    debug_printf("\tc - dump current execution context\n");
     debug_printf("\tq - quit McRTOS command mode\n");
+    debug_printf("\tk - reset CPU\n");
 }
 
 
@@ -131,23 +195,23 @@ rtos_dbg_display_cpu_registers(
 
 #if DEFINED_ARM_CLASSIC_ARCH()
     debug_printf(
-        "r0:   0x%x\n"
-        "r1:   0x%x\n"
-        "r2:   0x%x\n"
-        "r3:   0x%x\n"
-        "r4:   0x%x\n"
-        "r5:   0x%x\n"
-        "r6:   0x%x\n"
-        "r7:   0x%x\n"
-        "r8:   0x%x\n"
-        "r9:   0x%x\n"
-        "r10:  0x%x\n"
-        "r11:  0x%x\n"
-        "r12:  0x%x\n"
-        "sp:   0x%x\n"
-        "lr:   0x%x\n"
-        "pc:   0x%x\n"
-        "cpsr: 0x%x\n",
+        "r0:   %#x\n"
+        "r1:   %#x\n"
+        "r2:   %#x\n"
+        "r3:   %#x\n"
+        "r4:   %#x\n"
+        "r5:   %#x\n"
+        "r6:   %#x\n"
+        "r7:   %#x\n"
+        "r8:   %#x\n"
+        "r9:   %#x\n"
+        "r10:  %#x\n"
+        "r11:  %#x\n"
+        "r12:  %#x\n"
+        "sp:   %#x\n"
+        "lr:   %#x\n"
+        "pc:   %#x\n"
+        "cpsr: %#x\n",
         current_execution_context_p->ctx_cpu_saved_registers[CPU_REG_R0],
         current_execution_context_p->ctx_cpu_saved_registers[CPU_REG_R1],
         current_execution_context_p->ctx_cpu_saved_registers[CPU_REG_R2],
@@ -167,28 +231,28 @@ rtos_dbg_display_cpu_registers(
 
 #elif DEFINED_ARM_CORTEX_M_ARCH()
     debug_printf(
-        "r0:        0x%x\n"
-        "r1:        0x%x\n"
-        "r2:        0x%x\n"
-        "r3:        0x%x\n"
-        "r4:        0x%x\n"
-        "r5:        0x%x\n"
-        "r6:        0x%x\n"
-        "r7:        0x%x\n"
-        "r8:        0x%x\n"
-        "r9:        0x%x\n"
-        "r10:       0x%x\n"
-        "r11:       0x%x\n"
-        "r12:       0x%x\n"
-        "sp:        0x%x\n"
-        "lr:        0x%x\n"
-        "pc:        0x%x\n"
-        "psr:       0x%x\n"
-        "lre:       0x%x\n"
-        "msp:       0x%x\n"
-        "psp:       0x%x\n"
-        "primask:   0x%x\n"
-        "control:   0x%x\n",
+        "r0:        %#x\n"
+        "r1:        %#x\n"
+        "r2:        %#x\n"
+        "r3:        %#x\n"
+        "r4:        %#x\n"
+        "r5:        %#x\n"
+        "r6:        %#x\n"
+        "r7:        %#x\n"
+        "r8:        %#x\n"
+        "r9:        %#x\n"
+        "r10:       %#x\n"
+        "r11:       %#x\n"
+        "r12:       %#x\n"
+        "sp:        %#x\n"
+        "lr:        %#x\n"
+        "pc:        %#x\n"
+        "psr:       %#x\n"
+        "lre:       %#x\n"
+        "msp:       %#x\n"
+        "psp:       %#x\n"
+        "primask:   %#x\n"
+        "control:   %#x\n",
         stack_p[CPU_REG_R0],
         stack_p[CPU_REG_R1],
         stack_p[CPU_REG_R2],
@@ -217,3 +281,52 @@ rtos_dbg_display_cpu_registers(
 #endif
 }
 
+
+static void 
+rtos_dbg_dump_execution_context(
+    _IN_ const struct rtos_execution_context *execution_context_p)
+{
+    debug_printf("\nCurrent Execution Context:\n");
+    if (execution_context_p->ctx_signature != RTOS_EXECUTION_CONTEXT_SIGNATURE) {
+        char signature_str[sizeof(uint32_t) + 1];
+
+        rtos_dbg_signature_to_string(
+            execution_context_p->ctx_signature,
+            signature_str);
+
+        debug_printf("*** Error: Invalid signature for context %#p: %#x (%s)\n",
+            execution_context_p, 
+            execution_context_p->ctx_signature,
+            signature_str);
+    }
+
+    debug_printf("Name: %s\n", execution_context_p->ctx_name_p);
+}
+
+
+static void 
+rtos_dbg_dump_memory(
+    _IN_ const void *addr,
+    _IN_ size_t size)
+{
+}
+
+
+static void
+rtos_dbg_signature_to_string(
+    _IN_ uint32_t signature,
+    _OUT_ char *str_buffer)
+{
+    char *signature_as_chars = (char *)&signature;
+    uint32_t i;
+
+    for (i = 0; i < sizeof(uint32_t); i++) {
+        if (IS_PRINT(signature_as_chars[i])) { 
+            str_buffer[i] = signature_as_chars[i];
+        } else {
+            str_buffer[i] = '.';
+        }
+    }
+
+    str_buffer[i] = '\0';
+}

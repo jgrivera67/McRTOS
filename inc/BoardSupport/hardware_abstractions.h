@@ -146,18 +146,29 @@ typedef uint32_t cpu_reset_cause_t;
 #define CPU_RESET_MACHDEP_CAUSE2_MASK      MULTI_BIT_MASK(23, 16)
 #define CPU_RESET_MACHDEP_CAUSE2_SHIFT     16
 
-/** 
- * Interrupt channel type
- */
 #if DEFINED_ARM_CORTEX_M_ARCH()
-    /*
-     * IRQ number of systick interrupt is -1
+    /** 
+     * Interrupt channel type
+     * (IRQ number of systick interrupt is -1)
      */
     typedef _RANGE_(-1, SOC_NUM_INTERRUPT_CHANNELS - 1)
             int8_t interrupt_channel_t;
+
+    /**
+     * CPU Instruction type
+     */
+    typedef uint16_t cpu_instruction_t;
 #else
+    /** 
+     * Interrupt channel type
+     */
     typedef _RANGE_(0, SOC_NUM_INTERRUPT_CHANNELS - 1)
             uint8_t interrupt_channel_t;
+
+    /**
+     * CPU Instruction type
+     */
+    typedef uint32_t cpu_instruction_t;
 #endif
 
 /** 
@@ -217,9 +228,9 @@ struct adc_device;
 
 cpu_reset_cause_t board_init(void);
 
-cpu_reset_cause_t find_reset_cause(void);
-
 bool software_reset_happened(void);
+
+void board_reset(void);
 
 void install_isr(
     interrupt_channel_t channel,

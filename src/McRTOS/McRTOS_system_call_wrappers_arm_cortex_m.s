@@ -42,6 +42,7 @@
  */
 .global rtos_\_rtos_function_suffix_
 
+.thumb_func
 .func rtos_\_rtos_function_suffix_
 
 rtos_\_rtos_function_suffix_:

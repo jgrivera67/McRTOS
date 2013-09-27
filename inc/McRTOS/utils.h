@@ -64,16 +64,13 @@
 
 #define STRINGIFY_LITERAL(_x)   #_x
 
+#define IS_PRINT(_c)    ((_c) >= ' ' && (_c) <= '~')
+
 #ifdef DEBUG
 #   define DEBUG_PRINTF(_fmt, ...) \
-            debug_printf(                                                   \
-                "DBG: " __FILE__ ":%u " _fmt, __LINE__,                     \
-                ##__VA_ARGS__)
+            debug_printf("DBG: " _fmt, ##__VA_ARGS__)
 
-#   define DEBUG_BREAK_POINT(_fmt, ...) \
-            debug_break_point(                                              \
-                "DBG BKPT: " __FILE__ ":%u " _fmt, __LINE__,                \
-                ##__VA_ARGS__)
+#   define DEBUG_BREAK_POINT()  ARTIFICIAL_BREAK_POINT()
 
 #   define DEBUG_BLINK_LED(_led_mask) \
             do {                                                            \
@@ -84,7 +81,7 @@
 
 #else
 #   define DEBUG_PRINTF(_fmt, ...)
-#   define DEBUG_BREAK_POINT(_fmt, ...)
+#   define DEBUG_BREAK_POINT()
 #   define DEBUG_BLINK_LED(_led_mask)
 
 #endif
@@ -95,6 +92,26 @@
             DEBUG_PRINTF("%s not implemented yet\n", __func__);         \
         } while (0);
 
+
+/**
+ * Unaligned access to force a data abort on classic ARM and a
+ * hard fault exception on Cortex-M.
+ *
+ * NOTE:
+ * Ideally, we should be able to use break instruction (e.g., __BKPT()).
+ * However, for the Cortex-M0+, the processor goes to lockup state if
+ * a debugger is not attached, rather than generating a hard fault
+ * exception. So, we need to force an "artificial fault" here,
+ * by doing an unaligned memory access.
+ */
+#define ARTIFICIAL_BREAK_POINT() \
+    do {                                                                \
+        asm volatile (                                                  \
+            "mov    r0, #0x1\n\t"                                       \
+            "ldr    r0, [r0]"                                           \
+            : : : "r0"                                                  \
+        );                                                              \
+    } while (0)
 
 /**
  * ASCII codes of common control characters
@@ -121,8 +138,6 @@ void console_clear(void);
 
 void debug_printf(const char *fmt, ...);
 
-void debug_break_point(const char *fmt, ...);
-
 void console_printf(const char *fmt, ...);
 
 #ifdef LCD_SUPPORTED
@@ -142,9 +157,24 @@ void cpputest_printf(const char *fmt, ...);
 
 typedef void putchar_func_t(void *putchar_arg_p, uint8_t c);
 
-void
-embedded_printf(
-    putchar_func_t *putchar_func_p, void *putchar_arg_p, const char *fmt, ...);
+typedef uint8_t getchar_func_t(void *getchar_arg_p);
+
+void embedded_printf(
+        putchar_func_t *putchar_func_p, void *putchar_arg_p,
+        const char *fmt, ...);
+
+void read_command_line(
+        _IN_  putchar_func_t *putchar_func_p,
+        _IN_  getchar_func_t *getchar_func_p,
+        _IN_  void *char_io_arg_p,
+        _OUT_ char *cmd_line_buffer,
+        _IN_  size_t buffer_size);
+
+uint32_t convert_string_to_hexadecimal(
+        _IN_ const char *str);
+
+uint32_t convert_string_to_decimal(
+        _IN_ const char *str);
 
 extern const char g_clear_console_control_string[];
 

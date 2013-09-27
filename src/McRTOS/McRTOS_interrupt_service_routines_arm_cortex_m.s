@@ -269,6 +269,7 @@
  */
 .global \_rtos_isr_func_
 
+.thumb_func
 .func \_rtos_isr_func_
 
 \_rtos_isr_func_:
@@ -329,6 +330,7 @@
  */
 .global \_rtos_isr_func_
 
+.thumb_func
 .func \_rtos_isr_func_
 
 \_rtos_isr_func_:

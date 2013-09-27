@@ -85,7 +85,7 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
             "bleq   capture_assert_failure"                             \
             :                                                           \
             : [cond] "r" (_cond),                                       \
-              [cond_str] "r" (#_cond),                                  \
+              [cond_str] "r" ("Assert: " #_cond),                       \
               [arg1] "r" (_arg1),                                       \
               [arg2] "r" (_arg2)                                        \
             : "cc", "r0", "r1", "r2"                                    \
@@ -98,7 +98,7 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
     do {					                \
         if (_INFREQUENTLY_TRUE_(!(_cond))) {                    \
             capture_assert_failure(                             \
-                #_cond,                                         \
+                "Assert: " #_cond,                              \
                 (uintptr_t)(_arg1),                             \
                 (uintptr_t)(_arg2));                            \
         }						        \
@@ -678,10 +678,9 @@ struct fdc_info
     /**
      * Debug flags
      */
-    volatile uint32_t fdc_breakpoints_on : 1;
     volatile uint32_t fdc_asserts_failures_breakpoint_on : 1;
     volatile uint32_t fdc_error_breakpoint_on : 1;
-    volatile uint32_t fdc_reserved_flags : 28;
+    volatile uint32_t fdc_reserved_flags : 30;
 
     /**
      * Number of failures captured since last reset. Failure data is captured only
@@ -751,7 +750,6 @@ C_ASSERT(RTOS_NUM_CONTEXT_SWITCH_TRACE_BUFFER_ENTRIES <= UINT16_MAX);
 #define FDC_INFO_INITIALIZER(_fdc_info) \
     _fdc_info = {                                                       \
         .fdc_signature1 = FDC_INFO_SIGNATURE,                           \
-        .fdc_breakpoints_on = true,                                     \
         .fdc_asserts_failures_breakpoint_on  = true,                    \
         .fdc_error_breakpoint_on = true,                                \
         .fdc_failures_count = 0,                                        \
