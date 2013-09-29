@@ -205,9 +205,6 @@ C_ASSERT(sizeof(struct rtos_interrupt) % SOC_CACHE_LINE_SIZE_IN_BYTES == 0);
 C_ASSERT(
     offsetof(struct rtos_interrupt, int_cpu_controller_p) == RTOS_INT_CPU_CONTROLLER_P_OFFSET);
 
-C_ASSERT(
-    offsetof(struct rtos_interrupt, int_arg_p) == RTOS_INT_ARG_P_OFFSET);
-
 /**
  * McRTOS Per-CPU Execution Controller 
  */
@@ -270,9 +267,14 @@ struct rtos_cpu_controller
     rtos_thread_prio_bitmap_t cpc_runnable_thread_priorities;
 
     /**
-     * Active interrupts bit map
+     * Active internal interrupts bit map
      */
-    rtos_per_cpu_interrupts_bitmap_t cpc_active_interrupts;
+    rtos_per_cpu_interrupts_bitmap_t cpc_active_internal_interrupts;
+
+    /**
+     * Active external interrupts bit map
+     */
+    rtos_per_cpu_interrupts_bitmap_t cpc_active_external_interrupts;
 
     /**
      * Current number of nested interrupts
@@ -768,6 +770,7 @@ rtos_remove_runnable_thread(
             rtos_k_restore_cpu_interrupts(saved_cpu_status_register_);      \
         } while (0)
 
+#if 0 // ???
 /**
  * Macro to be invoked at the beginning of a disabled interrupts measurement,
  * when interrupts have already been disabled without a prior call to
@@ -783,6 +786,10 @@ rtos_remove_runnable_thread(
  */
 #define RTOS_STOP_INTERRUPTS_DISABLED_TIME_MEASURE() \
         (void)rtos_stop_interrupts_disabled_time_measure(0)
+#else
+#define RTOS_START_INTERRUPTS_DISABLED_TIME_MEASURE()
+#define RTOS_STOP_INTERRUPTS_DISABLED_TIME_MEASURE() 
+#endif // ???
 
 #else
 

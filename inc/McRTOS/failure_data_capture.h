@@ -183,8 +183,7 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
      */
 #   define FDC_ASSERT_VALID_CODE_ADDRESS(_code_addr, _context_p) \
             FDC_ASSERT(                                                 \
-                BOARD_VALID_FLASH_ADDRESS(_code_addr) &&                \
-                (uintptr_t)(_code_addr) % sizeof(uint16_t) == 0,        \
+                BOARD_VALID_FLASH_ADDRESS(_code_addr),                  \
                 _code_addr, _context_p)
 
     /**
@@ -192,11 +191,10 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
      * thumb mode) and points to flash memory
      */
 #   define FDC_ASSERT_VALID_FUNCTION_POINTER(_func_ptr) \
-            do {                                                            \
-                FDC_ASSERT(true /* ??? */ ||                                                 \
-                    ((uintptr_t)(_func_ptr) & 0x1) != 0, _func_ptr, 0);     \
-                FDC_ASSERT_VALID_CODE_ADDRESS(                              \
-                    (uintptr_t)(_func_ptr) & ~0x1, NULL);                   \
+            do {                                                        \
+                FDC_ASSERT(                                             \
+                    ((uintptr_t)(_func_ptr) & 0x1) != 0, _func_ptr, 0); \
+                FDC_ASSERT_VALID_CODE_ADDRESS(_func_ptr, NULL);         \
             } while (0)
 
 #else
@@ -663,8 +661,13 @@ struct unexpected_exception_record {
 
     /**
      * CPU status register
-     */ 
+     */
     uint32_t    uer_cpu_status_register;
+
+    /**
+     * Current execution context when the failure happened
+     */ 
+    struct rtos_execution_context    *uer_execution_context_p;
 };
 
 /**

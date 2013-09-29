@@ -44,7 +44,7 @@ static void capture_unexpected_exception_failure(
     enum unexpected_exception_types exception_type,
     void *location,
     uintptr_t arg,
-    cpu_status_register_t cpu_sr);
+    cpu_status_register_t cpu_status_register);
 
 /**
  * Check if the CPU is running in little-endian mode
@@ -136,7 +136,8 @@ rtos_k_capture_failure_data(
     failure->fr_failure_args[1] = arg2;
 
     failure->fr_cpu_status_register = cpu_sr;
-    failure->fr_execution_context_p = RTOS_GET_CURRENT_EXECUTION_CONTEXT();
+    failure->fr_execution_context_p =
+        cpu_controller_p->cpc_current_execution_context_p;
 
     fdc_info_p->fdc_failure_cursor ++;
     if (fdc_info_p->fdc_failure_cursor == RTOS_MAX_NUM_FAILURE_RECORDS)
@@ -161,8 +162,9 @@ rtos_k_capture_failure_data(
 
             FAILURE_PRINTF(
                 "Failure captured: %s (code location: %#x, "
-                "arg1: %#x, arg2: %#x)\n",
-                failure_str, failure_location, arg1, arg2);
+                "arg1: %#x, arg2: %#x, execution context: %#p)\n",
+                failure_str, failure_location, arg1, arg2,
+                cpu_controller_p->cpc_current_execution_context_p);
 
             failure_being_printed = false;
         }
@@ -337,14 +339,6 @@ check_rtos_execution_context_invariants(
             struct rtos_cpu_controller *cpu_controller_p =
                 &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
 
-            FDC_ASSERT(
-                RTOS_EXECUTION_CONTEXT_GET_THREAD(
-                    cpu_controller_p->cpc_current_execution_context_p) ==
-                cpu_controller_p->cpc_current_thread_p,
-                RTOS_EXECUTION_CONTEXT_GET_THREAD(
-                    cpu_controller_p->cpc_current_execution_context_p),
-                cpu_controller_p->cpc_current_thread_p);
-
             DBG_ASSERT(
                 rtos_thread_p == cpu_controller_p->cpc_current_thread_p,
                 rtos_thread_p, cpu_controller_p->cpc_current_thread_p);
@@ -416,7 +410,7 @@ check_rtos_execution_context_invariants(
             rtos_execution_context_p);
 
         FDC_ASSERT(
-            rtos_execution_context_p->ctx_cpu_mode == RTOS_INTERRUPT_MODE,
+            rtos_execution_context_p->ctx_cpu_mode == RTOS_RESET_MODE,
             rtos_execution_context_p->ctx_cpu_mode, rtos_execution_context_p);
 
 #       if DEFINED_ARM_CORTEX_M_ARCH()
@@ -546,46 +540,23 @@ check_rtos_execution_context_cpu_registers(
     if (rtos_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT)
     {
         cpu_sp_register =
-            rtos_execution_context_p->ctx_cpu_saved_registers[CPU_REG_PSP];
+            rtos_execution_context_p->ctx_cpu_saved_registers.cpu_reg_psp;
     }
     else
     {
         cpu_sp_register =
-            rtos_execution_context_p->ctx_cpu_saved_registers[CPU_REG_MSP];
+            rtos_execution_context_p->ctx_cpu_saved_registers.cpu_reg_msp;
     }
 
     uint32_t *stack_p = (uint32_t *)cpu_sp_register;
     cpu_status_register_t cpu_status_register = stack_p[CPU_REG_PSR];
     cpu_register_t cpu_pc_register = stack_p[CPU_REG_PC];
 
-    cpu_register_t cpu_control_register =
-        rtos_execution_context_p->ctx_cpu_saved_registers[CPU_REG_CONTROL];
-
-    cpu_register_t cpu_primask_register =
-        rtos_execution_context_p->ctx_cpu_saved_registers[CPU_REG_PRIMASK];
-
     if (rtos_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT)
     {
         FDC_ASSERT(
             (cpu_status_register & CPU_REG_IPSR_EXCEPTION_NUMBER_MASK) == 0,
             cpu_status_register, rtos_execution_context_p);
-       
-        /*
-         * A thread running in unprivileged mode cannot have interrupts
-         * disabled.
-         */
-        if ((cpu_control_register & CPU_REG_CONTROL_nPRIV_MASK) != 0)
-        {
-            FDC_ASSERT(
-                CPU_INTERRUPTS_ARE_ENABLED(cpu_primask_register),
-                cpu_primask_register, rtos_execution_context_p);
-        }
-    }
-    else
-    {
-        FDC_ASSERT(
-            (cpu_control_register & CPU_REG_CONTROL_nPRIV_MASK) == 0,
-            cpu_control_register, rtos_execution_context_p);
     }
 
     FDC_ASSERT(
@@ -621,47 +592,45 @@ check_rtos_execution_context_cpu_registers(
  */ 
 void
 fdc_trace_rtos_context_switch(
-    _IN_ const struct rtos_execution_context *rtos_execution_context_p)
+    _IN_ const struct rtos_execution_context *target_execution_context_p)
 {
-#ifdef DEBUG
-    struct rtos_execution_context *current_execution_context_p =
-        RTOS_GET_CURRENT_EXECUTION_CONTEXT();
+    struct rtos_cpu_controller *cpu_controller_p =
+        &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
 
-    DBG_ASSERT(
-       rtos_execution_context_p == current_execution_context_p,
-       rtos_execution_context_p, current_execution_context_p);
-    
-    DBG_ASSERT_RTOS_EXECUTION_CONTEXT_INVARIANTS(rtos_execution_context_p);
-#endif /* DEBUG */
+    struct rtos_execution_context *current_execution_context_p =
+        cpu_controller_p->cpc_current_execution_context_p;
+
+    DBG_ASSERT_RTOS_EXECUTION_CONTEXT_INVARIANTS(current_execution_context_p);
+    DBG_ASSERT_RTOS_EXECUTION_CONTEXT_INVARIANTS(target_execution_context_p);
 
 #   if DEFINED_ARM_CLASSIC_ARCH()
     /*
      * Validate Context switch assumptions:
      */
-    cpu_status_register_t current_cpsr;                                       
-    CAPTURE_ARM_CPSR_REGISTER(current_cpsr);
+    cpu_status_register_t actual_cpsr;                                       
+    CAPTURE_ARM_CPSR_REGISTER(actual_cpsr);
 
-    uint32_t current_arm_mode = (current_cpsr & ARM_MODE_MASK);
+    uint32_t actual_arm_mode = (actual_cpsr & ARM_MODE_MASK);
+
+    DBG_ASSERT(
+        CPU_INTERRUPTS_ARE_DISABLED(actual_cpsr),
+        actual_cpsr, target_execution_context_p);
+
+    DBG_ASSERT(
+        actual_arm_mode == ARM_MODE_SVC ||
+        actual_arm_mode == ARM_MODE_IRQ ||
+        actual_arm_mode == ARM_MODE_SYS,
+        actual_arm_mode, target_execution_context_p);
 
     cpu_status_register_t target_cpsr =
-        rtos_execution_context_p->ctx_cpu_registers[CPU_REG_CPSR];
+        target_execution_context_p->ctx_cpu_registers[CPU_REG_CPSR];
 
     uint32_t target_arm_mode = (target_cpsr & ARM_MODE_MASK);
 
-    FDC_ASSERT(
-        CPU_INTERRUPTS_ARE_DISABLED(current_cpsr),
-        current_cpsr, rtos_execution_context_p);
-
-    FDC_ASSERT(
+    DBG_ASSERT(
         target_arm_mode == ARM_MODE_USER ||
         target_arm_mode == ARM_MODE_SYS,
-        target_arm_mode, rtos_execution_context_p);
-
-    FDC_ASSERT(
-        current_arm_mode == ARM_MODE_SVC ||
-        current_arm_mode == ARM_MODE_IRQ ||
-        current_arm_mode == ARM_MODE_SYS,
-        current_arm_mode, rtos_execution_context_p);
+        target_arm_mode, target_execution_context_p);
 
     /*
      * If the target cpu mode is user mode, interrupts are enabled in the
@@ -672,42 +641,47 @@ fdc_trace_rtos_context_switch(
      */
     if (target_arm_mode == ARM_MODE_USER)
     {
-        FDC_ASSERT(
+        DBG_ASSERT(
             CPU_INTERRUPTS_ARE_ENABLED(target_cpsr),
-            target_cpsr, rtos_execution_context_p);
+            target_cpsr, target_execution_context_p);
     }
 
 #   elif DEFINED_ARM_CORTEX_M_ARCH()
 
-    cpu_status_register_t current_primask = __get_PRIMASK();
+    cpu_status_register_t actual_primask = __get_PRIMASK();
     
-    cpu_status_register_t current_ipsr = __get_IPSR();
+    cpu_status_register_t actual_ipsr = __get_IPSR();
 
-    cpu_status_register_t current_control_reg = __get_CONTROL();
+    cpu_status_register_t actual_control_reg = __get_CONTROL();
 
-    cpu_status_register_t target_psr =
-        rtos_execution_context_p->ctx_cpu_saved_registers[CPU_REG_PSR];
+    DBG_ASSERT(
+        CPU_INTERRUPTS_ARE_DISABLED(actual_primask),
+        actual_primask, target_execution_context_p);
 
-    cpu_status_register_t target_primask =
-        rtos_execution_context_p->ctx_cpu_saved_registers[CPU_REG_PRIMASK];
+    DBG_ASSERT(
+        (CPU_MODE_IS_INTERRUPT(actual_ipsr) ||
+         CPU_MODE_IS_PENDSV_EXCEPTION(actual_ipsr) ||
+         CPU_MODE_IS_HARD_FAULT_EXCEPTION(actual_ipsr)) &&
+         CPU_MODE_IS_PRIVILEGED(actual_control_reg) &&
+         CPU_USING_MSP_STACK_POINTER(actual_control_reg),
+        actual_ipsr, actual_control_reg);
 
-    cpu_status_register_t target_control_reg =
-        rtos_execution_context_p->ctx_cpu_saved_registers[CPU_REG_CONTROL];
+    uint32_t *target_stack_p;
 
-    FDC_ASSERT(
-        CPU_INTERRUPTS_ARE_DISABLED(current_primask),
-        current_primask, rtos_execution_context_p);
-
-    FDC_ASSERT(
-        CPU_MODE_IS_THREAD(target_psr),
-        target_psr, rtos_execution_context_p);
-
-    FDC_ASSERT(
-        CPU_MODE_IS_SUPERVISOR(current_ipsr) ||
-        CPU_MODE_IS_INTERRUPT(current_ipsr) ||
-        (CPU_MODE_IS_THREAD(current_ipsr) &&
-         CPU_MODE_IS_PRIVILEGED(current_control_reg)),
-        current_ipsr, current_control_reg);
+    if (target_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT) {
+        target_stack_p =
+            (uint32_t *)target_execution_context_p->ctx_cpu_saved_registers.cpu_reg_psp;
+    } else {
+        target_stack_p =
+            (uint32_t *)target_execution_context_p->ctx_cpu_saved_registers.cpu_reg_msp;
+    }
+        
+    cpu_status_register_t target_psr = target_stack_p[CPU_REG_PSR];
+    
+    DBG_ASSERT(
+        CPU_MODE_IS_THREAD(target_psr) ||
+        CPU_MODE_IS_INTERRUPT(target_psr),
+        target_psr, target_execution_context_p);
 
     /*
      * If the target cpu mode is unprivileged thread mode, interrupts are
@@ -716,12 +690,6 @@ fdc_trace_rtos_context_switch(
      * disabled in case of synchronous context switches (i.e. threads getting
      * blocked on a mutex or condvar).
      */
-    if (CPU_MODE_IS_THREAD(target_psr) &&
-        !CPU_MODE_IS_PRIVILEGED(target_control_reg)) {
-        FDC_ASSERT(
-            CPU_INTERRUPTS_ARE_ENABLED(target_primask),
-            target_primask, rtos_execution_context_p);
-    }
 
 #   else
 #       error "CPU architecture not supported"
@@ -730,50 +698,51 @@ fdc_trace_rtos_context_switch(
     /*
      * Capture context switch trace:
      */
-    struct rtos_cpu_controller *cpu_controller_p =
-        &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
 
     struct fdc_info *fdc_info_p = &cpu_controller_p->cpc_failures_info;
 
     fdc_context_switch_trace_entry_t trace_entry =
-        rtos_execution_context_p->ctx_prefilled_trace_entry;
+        target_execution_context_p->ctx_prefilled_trace_entry;
 
     SET_BIT_FIELD(
         trace_entry, 
         FDC_CST_LAST_SWITCHED_OUT_REASON_MASK,
         FDC_CST_LAST_SWITCHED_OUT_REASON_SHIFT,
-        rtos_execution_context_p->ctx_last_switched_out_reason);
+        target_execution_context_p->ctx_last_switched_out_reason);
 
-    if (rtos_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT)
+    if (target_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT)
     {
-        struct rtos_thread *current_thread_p =
-            RTOS_EXECUTION_CONTEXT_GET_THREAD(rtos_execution_context_p);
+        struct rtos_thread *target_thread_p =
+            RTOS_EXECUTION_CONTEXT_GET_THREAD(target_execution_context_p);
 
         DBG_ASSERT(
-            current_thread_p->thr_state == RTOS_THREAD_RUNNING,
-            current_thread_p->thr_state, current_thread_p);
+            target_thread_p->thr_state == RTOS_THREAD_RUNNING,
+            target_thread_p->thr_state, target_thread_p);
 
         SET_BIT_FIELD(
             trace_entry, 
             FDC_CST_CONTEXT_PRIORITY_MASK,
             FDC_CST_CONTEXT_PRIORITY_SHIFT,
-            current_thread_p->thr_current_priority);
+            target_thread_p->thr_current_priority);
     }
     else
     {
         DBG_ASSERT(
-            rtos_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
-            rtos_execution_context_p->ctx_context_type, rtos_execution_context_p);
+            target_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
+            target_execution_context_p->ctx_context_type, target_execution_context_p);
           
-        struct rtos_interrupt *current_interrupt_p =
-            RTOS_EXECUTION_CONTEXT_GET_INTERRUPT(rtos_execution_context_p);
+        struct rtos_interrupt *target_interrupt_p =
+            RTOS_EXECUTION_CONTEXT_GET_INTERRUPT(target_execution_context_p);
 
-        interrupt_channel_t interrupt_channel = current_interrupt_p->int_channel;
+        interrupt_channel_t interrupt_channel = target_interrupt_p->int_channel;
 
         fdc_info_p->fdc_interrupt_channel_counters[interrupt_channel] ++;
     }
 
 #   if DEFINED_ARM_CLASSIC_ARCH()
+    cpu_status_register_t current_cpsr =
+        current_execution_context_p->ctx_cpu_registers[CPU_REG_CPSR];
+
     SET_BIT_FIELD(
         trace_entry, 
         FDC_CST_CURRENT_CPU_MODE_MASK,
@@ -788,22 +757,22 @@ fdc_trace_rtos_context_switch(
 
 #   elif DEFINED_ARM_CORTEX_M_ARCH()
 
-    if (CPU_MODE_IS_THREAD(current_ipsr)) {      
+    uint32_t *current_stack_p;
+
+    if (current_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT) {
+        current_stack_p =
+            (uint32_t *)current_execution_context_p->ctx_cpu_saved_registers.cpu_reg_psp;
+    } else {
+        current_stack_p =
+            (uint32_t *)current_execution_context_p->ctx_cpu_saved_registers.cpu_reg_msp;
+    }
+        
+    cpu_status_register_t current_psr = current_stack_p[CPU_REG_PSR];
+
+    if (CPU_MODE_IS_THREAD(current_psr)) {      
         trace_entry &= ~FDC_CST_CURRENT_CPU_MODE_MASK;
     } else {
         trace_entry |= FDC_CST_CURRENT_CPU_MODE_MASK;
-    }
-
-    if (CPU_MODE_IS_PRIVILEGED(current_control_reg)) {      
-        trace_entry &= ~FDC_CST_CURRENT_CONTROL_PRIVILEGE_MODE_MASK;
-    } else {
-        trace_entry |= FDC_CST_CURRENT_CONTROL_PRIVILEGE_MODE_MASK;
-    }
-
-    if (CPU_USING_MSP_STACK_POINTER(current_control_reg)) {      
-        trace_entry &= ~FDC_CST_CURRENT_CONTROL_SP_MODE_MASK;
-    } else {
-        trace_entry |= FDC_CST_CURRENT_CONTROL_SP_MODE_MASK;
     }
 
     trace_entry &= ~FDC_CST_CURRENT_LR_EXC_SP_MODE_MASK;
@@ -814,20 +783,8 @@ fdc_trace_rtos_context_switch(
         trace_entry |= FDC_CST_TARGET_CPU_MODE_MASK;
     }
 
-    if (CPU_MODE_IS_PRIVILEGED(target_control_reg)) {      
-        trace_entry &= ~FDC_CST_TARGET_CONTROL_PRIVILEGE_MODE_MASK;
-    } else {
-        trace_entry |= FDC_CST_TARGET_CONTROL_PRIVILEGE_MODE_MASK;
-    }
-
-    if (CPU_USING_MSP_STACK_POINTER(target_control_reg)) {      
-        trace_entry &= ~FDC_CST_TARGET_CONTROL_SP_MODE_MASK;
-    } else {
-        trace_entry |= FDC_CST_TARGET_CONTROL_SP_MODE_MASK;
-    }
-
-    if (rtos_execution_context_p->
-            ctx_cpu_saved_registers[CPU_REG_LR_ON_EXC_ENTRY] !=
+    if (target_execution_context_p->
+            ctx_cpu_saved_registers.cpu_reg_lr_on_exc_entry !=
         CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP) {
         trace_entry &= ~FDC_CST_TARGET_LR_EXC_SP_MODE_MASK;
     } else {
@@ -899,12 +856,12 @@ capture_unexpected_exception_failure(
     static const char *exception_type_strings[] =
     {
 #   if DEFINED_ARM_CLASSIC_ARCH()
-      [UET_UNDEFINED_INSTRUCTION] =  "Undefined Instruction",
-      [UET_DATA_ABORT] = "Data Abort",
-      [UET_PREFETCH_ABORT] =  "Prefetch Abort"
+      [UET_UNDEFINED_INSTRUCTION] = "Undefined Instruction",
+      [UET_DATA_ABORT] =            "Data Abort",
+      [UET_PREFETCH_ABORT] =        "Prefetch Abort"
 
 #   elif DEFINED_ARM_CORTEX_M_ARCH()
-      [UET_HARD_FAULT] =  "Hard Fault"
+      [UET_HARD_FAULT] = "Hard Fault"
 
 #else
 #   error "CPU architecture not supported"
@@ -931,6 +888,8 @@ capture_unexpected_exception_failure(
     exception_failure->uer_location = location;
     exception_failure->uer_arg = arg;
     exception_failure->uer_cpu_status_register = cpu_status_register;
+    exception_failure->uer_execution_context_p = 
+        cpu_controller_p->cpc_current_execution_context_p;
 
     exception_failure->uer_seq_number =
         fdc_info_p->fdc_unexpected_exceptions_count;
@@ -947,9 +906,11 @@ capture_unexpected_exception_failure(
 
     FAILURE_PRINTF(
         "Unexpected exception: %s "
-        "(code location: %#x, arg: %#x, status register: %#x)\n",
-        exception_type_strings[exception_type], location, arg,
-        cpu_status_register);
+        "(code location: %#x, arg: %#x, cpu status register: %#x, "
+        "execution context: %#p)\n",
+        exception_type_strings[exception_type],
+        location, arg, cpu_status_register,
+        cpu_controller_p->cpc_current_execution_context_p);
 }
 
 
@@ -1066,9 +1027,11 @@ check_rtos_public_kernel_service_preconditions(bool thread_callers_only)
          */
         if (current_context_p->ctx_context_type == RTOS_THREAD_CONTEXT)
         {
+#           if 0 // TODO: Enable this check when SVC logic is implemented
             FDC_ASSERT(
                 current_context_p->ctx_cpu_mode == RTOS_PRIVILEGED_THREAD_MODE,
                 current_context_p->ctx_cpu_mode, cpu_lr_register);
+#           endif
 
             FDC_ASSERT(
                 CPU_MODE_IS_PRIVILEGED(cpu_control_register),
@@ -1153,27 +1116,7 @@ check_rtos_interrupt_entry_preconditions(
         CPU_MODE_IS_UNPRIVILEGED(current_context_cpsr) ||
         CPU_MODE_IS_PRIVILEGED(current_context_cpsr),
         current_context_cpsr, current_context_p);
-#   elif DEFINED_ARM_CORTEX_M_ARCH()
-    cpu_register_t control_reg =
-        current_context_p->ctx_cpu_saved_registers[CPU_REG_CONTROL];
-
-    FDC_ASSERT(
-        (control_reg & CPU_REG_CONTROL_SPSEL_MASK) != 0,
-        control_reg, current_context_p);
-
-    rtos_execution_stack_entry_t *stack_p =
-        (rtos_execution_stack_entry_t *)
-            current_context_p->ctx_cpu_saved_registers[CPU_REG_PSP];
-         
-    cpu_status_register_t current_context_psr =
-        stack_p[CPU_REG_PSR];
-
-    FDC_ASSERT(
-        CPU_MODE_IS_THREAD(current_context_psr),
-        current_context_psr, current_context_p);
-#else
-#   error "CPU architrecture not supported"
-#endif
+#   endif
 
     /*
      * Current execution context must be different from the calling
@@ -1183,10 +1126,19 @@ check_rtos_interrupt_entry_preconditions(
         interrupt_context_p != current_context_p,
         interrupt_context_p, current_context_p);
 
-    FDC_ASSERT(
-        (cpu_controller_p->cpc_active_interrupts & 
-            BIT(rtos_interrupt_p->int_channel)) == 0,
-        cpu_controller_p->cpc_active_interrupts, cpu_controller_p);
+#   if DEBUG   
+    if (rtos_interrupt_p->int_channel < 0) {
+        FDC_ASSERT(
+            (cpu_controller_p->cpc_active_internal_interrupts & 
+                BIT(-rtos_interrupt_p->int_channel)) == 0,
+            cpu_controller_p->cpc_active_internal_interrupts, cpu_controller_p);
+    } else {
+        FDC_ASSERT(
+            (cpu_controller_p->cpc_active_external_interrupts & 
+                BIT(rtos_interrupt_p->int_channel)) == 0,
+            cpu_controller_p->cpc_active_external_interrupts, cpu_controller_p);
+    }
+#   endif
 }
 
 
@@ -1207,7 +1159,7 @@ check_rtos_interrupt_e_handler_preconditions(
     uint32_t reg_ipsr = __get_IPSR();
 
     FDC_ASSERT(
-        CPU_MODE_IS_HANDLER(reg_ipsr), reg_ipsr, rtos_interrupt_p);
+        CPU_MODE_IS_INTERRUPT(reg_ipsr), reg_ipsr, rtos_interrupt_p);
 #endif
 
     FDC_ASSERT(

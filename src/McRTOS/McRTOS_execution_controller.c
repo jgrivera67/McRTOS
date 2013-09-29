@@ -54,14 +54,16 @@ void rtos_thread_scheduler(void)
         chosen_thread_queue_anchor_p, chosen_thread_prio);
 
     /*
-     * Current execution context is a thread and is not in preemption chain:
+     * Current execution context is a thread or the reset handler
+     * and is not in preemption chain:
      */
 
     struct rtos_execution_context *current_context_p =
         cpu_controller_p->cpc_current_execution_context_p;
 
     FDC_ASSERT(
-        current_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
+        current_context_p->ctx_context_type == RTOS_THREAD_CONTEXT ||
+        current_context_p->ctx_context_type == RTOS_RESET_CONTEXT,
         current_context_p->ctx_context_type, current_context_p);
 
     FDC_ASSERT(
@@ -69,29 +71,33 @@ void rtos_thread_scheduler(void)
         &current_context_p->ctx_preemption_chain_node,
         current_context_p);
 
+    struct rtos_thread *current_thread_p = NULL;
+
+    if (current_context_p->ctx_context_type == RTOS_THREAD_CONTEXT) 
+    {
+        /*
+         * Current thread is not in running state anymore and it is in
+         * a thread queue (a runnable thread queue or a waiting thread queue
+         * depending on its state)
+         */
+        current_thread_p =
+            RTOS_EXECUTION_CONTEXT_GET_THREAD(current_context_p);
+
+        DBG_ASSERT(
+            current_thread_p == cpu_controller_p->cpc_current_thread_p,
+            current_thread_p, cpu_controller_p->cpc_current_thread_p);
+
+        FDC_ASSERT(
+            current_thread_p->thr_state != RTOS_THREAD_RUNNING,
+            current_thread_p->thr_state, current_thread_p);
+
+        FDC_ASSERT(
+            GLIST_NODE_IS_LINKED(&current_thread_p->thr_list_node),
+            &current_thread_p->thr_list_node, current_thread_p);
+    }
+
     /*
-     * Current thread is not in running state anymore and it is in
-     * a thread queue (a runnable thread queue or a waiting thread queue
-     * depending on its state)
-     */
-
-    struct rtos_thread *current_thread_p =
-        RTOS_EXECUTION_CONTEXT_GET_THREAD(current_context_p);
-
-    DBG_ASSERT(
-        current_thread_p == cpu_controller_p->cpc_current_thread_p,
-        current_thread_p, cpu_controller_p->cpc_current_thread_p);
-
-    FDC_ASSERT(
-        current_thread_p->thr_state != RTOS_THREAD_RUNNING,
-        current_thread_p->thr_state, current_thread_p);
-
-    FDC_ASSERT(
-        GLIST_NODE_IS_LINKED(&current_thread_p->thr_list_node),
-        &current_thread_p->thr_list_node, current_thread_p);
-
-    /*
-     * Check last saved CPU registers for the current thread:
+     * Check last saved CPU registers for the current context:
      */
     FDC_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(current_context_p);
 
@@ -230,7 +236,11 @@ void rtos_thread_scheduler(void)
         current_thread_p = chosen_thread_p;
         current_context_p = &chosen_thread_p->thr_execution_context;
         cpu_controller_p->cpc_current_thread_p = current_thread_p;
-        cpu_controller_p->cpc_current_execution_context_p = current_context_p;
+
+        /*  
+         * NOTE: cpu_controller_p->cpc_current_execution_context_p
+         * is updated by rtos_k_restore_execution_context
+         */
     }
 
     /*

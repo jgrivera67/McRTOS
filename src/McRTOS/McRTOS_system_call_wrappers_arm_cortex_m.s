@@ -10,8 +10,6 @@
 
 #include "arm_defs.h"
 
-.syntax unified
-.arch armv6-m
 .text
 .thumb
 

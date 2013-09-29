@@ -193,13 +193,27 @@ struct rtos_execution_context
      * NOTE: The RTOS_ENTER_ISR() assembly language macro uses this field.
      */
     cpu_register_t ctx_cpu_registers[CPU_NUM_REGISTERS];
+
 #elif DEFINED_ARM_CORTEX_M_ARCH()
     /**
      * For Cortex-M, registers R0-R3, R12, LR, PC and PSR are automatically saved
      * on the stack by the CPU, upon entering an exception. So, only the remaining
      * registers need to be saved here.
      */
-    cpu_register_t ctx_cpu_saved_registers[CPU_NUM_SAVED_REGISTERS];
+    struct cpu_saved_registers {
+        cpu_register_t cpu_reg_r4;
+        cpu_register_t cpu_reg_r5;
+        cpu_register_t cpu_reg_r6;
+        cpu_register_t cpu_reg_r7;
+        cpu_register_t cpu_reg_r8;
+        cpu_register_t cpu_reg_r9;
+        cpu_register_t cpu_reg_r10;
+        cpu_register_t cpu_reg_r11;
+        cpu_register_t cpu_reg_msp;
+        cpu_register_t cpu_reg_psp;
+        cpu_register_t cpu_reg_lr_on_exc_entry;
+    } ctx_cpu_saved_registers;
+
 #else
 #   error "CPU architrecture not supported"
 #endif
@@ -290,12 +304,60 @@ C_ASSERT(
 
 #elif DEFINED_ARM_CORTEX_M_ARCH()
 C_ASSERT(
+    sizeof(struct cpu_saved_registers) == 
+    CPU_NUM_SAVED_REGISTERS * sizeof(cpu_register_t));
+
+C_ASSERT(
     offsetof(struct rtos_execution_context, ctx_cpu_saved_registers) ==
     RTOS_CTX_CPU_REGISTERS_OFFSET);
 
+C_ASSERT(
+    offsetof(struct rtos_execution_context, ctx_cpu_saved_registers.cpu_reg_r4) ==
+    RTOS_CTX_CPU_REGISTERS_OFFSET + CPU_REG_R4*ARM_CPU_WORD_SIZE_IN_BYTES);
+
+C_ASSERT(
+    offsetof(struct rtos_execution_context, ctx_cpu_saved_registers.cpu_reg_r5) ==
+    RTOS_CTX_CPU_REGISTERS_OFFSET + CPU_REG_R5*ARM_CPU_WORD_SIZE_IN_BYTES);
+
+C_ASSERT(
+    offsetof(struct rtos_execution_context, ctx_cpu_saved_registers.cpu_reg_r6) ==
+    RTOS_CTX_CPU_REGISTERS_OFFSET + CPU_REG_R6*ARM_CPU_WORD_SIZE_IN_BYTES);
+
+C_ASSERT(
+    offsetof(struct rtos_execution_context, ctx_cpu_saved_registers.cpu_reg_r7) ==
+    RTOS_CTX_CPU_REGISTERS_OFFSET + CPU_REG_R7*ARM_CPU_WORD_SIZE_IN_BYTES);
+
+C_ASSERT(
+    offsetof(struct rtos_execution_context, ctx_cpu_saved_registers.cpu_reg_r8) ==
+    RTOS_CTX_CPU_REGISTERS_OFFSET + CPU_REG_R8*ARM_CPU_WORD_SIZE_IN_BYTES);
+
+C_ASSERT(
+    offsetof(struct rtos_execution_context, ctx_cpu_saved_registers.cpu_reg_r9) ==
+    RTOS_CTX_CPU_REGISTERS_OFFSET + CPU_REG_R9*ARM_CPU_WORD_SIZE_IN_BYTES);
+
+C_ASSERT(
+    offsetof(struct rtos_execution_context, ctx_cpu_saved_registers.cpu_reg_r10) ==
+    RTOS_CTX_CPU_REGISTERS_OFFSET + CPU_REG_R10*ARM_CPU_WORD_SIZE_IN_BYTES);
+
+C_ASSERT(
+    offsetof(struct rtos_execution_context, ctx_cpu_saved_registers.cpu_reg_r11) ==
+    RTOS_CTX_CPU_REGISTERS_OFFSET + CPU_REG_R11*ARM_CPU_WORD_SIZE_IN_BYTES);
+
+C_ASSERT(
+    offsetof(struct rtos_execution_context, ctx_cpu_saved_registers.cpu_reg_msp) ==
+    RTOS_CTX_CPU_REGISTERS_OFFSET + CPU_REG_MSP*ARM_CPU_WORD_SIZE_IN_BYTES);
+
+C_ASSERT(
+    offsetof(struct rtos_execution_context, ctx_cpu_saved_registers.cpu_reg_psp) ==
+    RTOS_CTX_CPU_REGISTERS_OFFSET + CPU_REG_PSP*ARM_CPU_WORD_SIZE_IN_BYTES);
+
+C_ASSERT(
+    offsetof(struct rtos_execution_context, ctx_cpu_saved_registers.cpu_reg_lr_on_exc_entry) ==
+    RTOS_CTX_CPU_REGISTERS_OFFSET + CPU_REG_LR_ON_EXC_ENTRY*ARM_CPU_WORD_SIZE_IN_BYTES);
 #endif
+
 /**
- * McRTOS timerobject
+ * McRTOS timer object
  */
 struct rtos_timer
 {

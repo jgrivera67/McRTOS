@@ -1699,7 +1699,7 @@ rtos_k_register_interrupt(
         prefilled_trace_entry, 
         FDC_CST_CONTEXT_ID_MASK,
         FDC_CST_CONTEXT_ID_SHIFT,
-        channel);
+        interrupt_p - g_McRTOS_p->rts_interrupts);
 
     SET_BIT_FIELD(
         prefilled_trace_entry, 
@@ -1798,40 +1798,49 @@ rtos_k_enter_interrupt(
     check_rtos_interrupt_entry_preconditions(rtos_interrupt_p);
 #   endif
 
-    struct rtos_execution_context *interrupt_context_p =
+    struct rtos_execution_context *new_interrupt_context_p =
         &rtos_interrupt_p->int_execution_context;
 
     struct rtos_cpu_controller *cpu_controller_p =
         &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
 
-    struct rtos_execution_context *current_context_p =
+    struct rtos_execution_context *interrupted_context_p =
         cpu_controller_p->cpc_current_execution_context_p;
 
     /*
-     * Track CPU usage for current execution context:
+     * Track CPU usage for interrupted execution context:
      */
     cpu_clock_cycles_t used_cpu_cycles =
         CPU_CLOCK_CYCLES_DELTA(
-            current_context_p->ctx_last_switched_in_time_stamp,
+            interrupted_context_p->ctx_last_switched_in_time_stamp,
             get_cpu_clock_cycles()) -
         g_McRTOS_p->rts_cpu_cycles_measure_overhead;
 
-    current_context_p->ctx_accumulated_cpu_usage += used_cpu_cycles;
+    interrupted_context_p->ctx_accumulated_cpu_usage += used_cpu_cycles;
+
+    new_interrupt_context_p->ctx_last_switched_in_time_stamp = get_cpu_clock_cycles();
+    
+    FDC_TRACE_RTOS_CONTEXT_SWITCH(new_interrupt_context_p);
 
     /*
-     * Neither the calling interrupt context nor the current execution context are
+     * Set current execution context to the calling interrupt context:
+     */
+    cpu_controller_p->cpc_current_execution_context_p = new_interrupt_context_p;
+
+    /*
+     * Neither the calling interrupt context nor the interrupted execution context are
      * in the preemption chain:
      */
 
     DBG_ASSERT(
-        GLIST_NODE_IS_UNLINKED(&interrupt_context_p->ctx_preemption_chain_node),
-        &interrupt_context_p->ctx_preemption_chain_node,
-        interrupt_context_p);
+        GLIST_NODE_IS_UNLINKED(&new_interrupt_context_p->ctx_preemption_chain_node),
+        &new_interrupt_context_p->ctx_preemption_chain_node,
+        new_interrupt_context_p);
 
     DBG_ASSERT(
-        GLIST_NODE_IS_UNLINKED(&current_context_p->ctx_preemption_chain_node),
-        &current_context_p->ctx_preemption_chain_node,
-        current_context_p);
+        GLIST_NODE_IS_UNLINKED(&interrupted_context_p->ctx_preemption_chain_node),
+        &interrupted_context_p->ctx_preemption_chain_node,
+        interrupted_context_p);
 
     rtos_nested_interrupts_count_t nested_interrupts_count =
         cpu_controller_p->cpc_nested_interrupts_count;
@@ -1843,18 +1852,18 @@ rtos_k_enter_interrupt(
     if (nested_interrupts_count == 0)
     {
         /*
-         * The current context is a thread:
+         * The interrupted context is a thread:
          */
         FDC_ASSERT(
-            current_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
-            current_context_p->ctx_context_type, current_context_p);
+            interrupted_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
+            interrupted_context_p->ctx_context_type, interrupted_context_p);
 
         /*
          * Current thread is in running state and it is not in any thread queue
          */
 
         struct rtos_thread *current_thread_p =
-            RTOS_EXECUTION_CONTEXT_GET_THREAD(current_context_p);
+            RTOS_EXECUTION_CONTEXT_GET_THREAD(interrupted_context_p);
 
         DBG_ASSERT(
             current_thread_p == cpu_controller_p->cpc_current_thread_p,
@@ -1872,13 +1881,13 @@ rtos_k_enter_interrupt(
     else
     {
         /*
-         * The current context is another interrupt:
+         * The interrupted context is another interrupt:
          */
-        DBG_ASSERT_RTOS_EXECUTION_CONTEXT_INVARIANTS(current_context_p);
+        DBG_ASSERT_RTOS_EXECUTION_CONTEXT_INVARIANTS(interrupted_context_p);
 
         FDC_ASSERT(
-            current_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
-            current_context_p->ctx_context_type, current_context_p);
+            interrupted_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
+            interrupted_context_p->ctx_context_type, interrupted_context_p);
     }
 
     /*
@@ -1887,34 +1896,46 @@ rtos_k_enter_interrupt(
     cpu_controller_p->cpc_nested_interrupts_count ++;
 
     RTOS_EXECUTION_CONTEXT_SET_SWITCHED_OUT_REASON(
-        current_context_p,
+        interrupted_context_p,
         CTX_SWITCHED_OUT_PREEMPTED_BY_INTERRUPT,
         cpu_controller_p);
 
-    current_context_p->ctx_last_preempted_by_p = interrupt_context_p;
-    current_context_p->ctx_preempted_counter ++;
+    interrupted_context_p->ctx_last_preempted_by_p = new_interrupt_context_p;
+    interrupted_context_p->ctx_preempted_counter ++;
 
     /*
-     * Add current execution context at the top of the preemption chain:
+     * Add interrupted execution context at the top of the preemption chain:
      */
-    rtos_preemption_chain_push_context(cpu_controller_p, current_context_p);
+    rtos_preemption_chain_push_context(cpu_controller_p, interrupted_context_p);
 
-    /*
-     * Set current execution context to the calling interrupt context:
-     */
-    cpu_controller_p->cpc_current_execution_context_p = interrupt_context_p;
-    interrupt_context_p->ctx_last_switched_in_time_stamp = get_cpu_clock_cycles();
-    FDC_TRACE_RTOS_CONTEXT_SWITCH(interrupt_context_p);
-
-    cpu_controller_p->cpc_active_interrupts |= BIT(rtos_interrupt_p->int_channel);
+    if (rtos_interrupt_p->int_channel < 0) {
+        cpu_controller_p->cpc_active_internal_interrupts |=
+            BIT(-rtos_interrupt_p->int_channel);
+    } else {
+        cpu_controller_p->cpc_active_external_interrupts |=
+            BIT(rtos_interrupt_p->int_channel);
+    }
 
     RTOS_STOP_INTERRUPTS_DISABLED_TIME_MEASURE();
 
+#   if DEFINED_ARM_CLASSIC_ARCH()
     /*
      * The stack pointer for an interrupt context always starts at the bottom
      * of the interrupt context's stack:
      */
-    return (cpu_register_t)interrupt_context_p->ctx_execution_stack_bottom_end_p;
+    return (cpu_register_t)new_interrupt_context_p->ctx_execution_stack_bottom_end_p;
+#   elif DEFINED_ARM_CORTEX_M_ARCH()
+    /*
+     * The value returned by this function is ignored by the caller.
+     * For Cortex-M, a shared stack is used for all interrupts and exceptions. This
+     * stack corresponds to the MSP stack pointer, which already the active stack
+     * pointer at this point. So, we do no need to change the stack pointer for
+     * the interrupt.
+     */
+    return 0x0;
+#   else
+#       error "CPU architecture not supported"
+#   endif
 }
 
 
@@ -1950,9 +1971,17 @@ rtos_k_exit_interrupt(void)
     struct rtos_interrupt *current_interrupt_p =
         RTOS_EXECUTION_CONTEXT_GET_INTERRUPT(current_context_p);
 
-    DBG_ASSERT(
-        cpu_controller_p->cpc_active_interrupts & BIT(current_interrupt_p->int_channel),
-        cpu_controller_p->cpc_active_interrupts, cpu_controller_p);
+#   ifdef DEBUG
+    if (current_interrupt_p->int_channel < 0) {
+        FDC_ASSERT(
+            cpu_controller_p->cpc_active_internal_interrupts & BIT(-current_interrupt_p->int_channel),
+            cpu_controller_p->cpc_active_internal_interrupts, cpu_controller_p);
+    } else {
+        FDC_ASSERT(
+            cpu_controller_p->cpc_active_external_interrupts & BIT(current_interrupt_p->int_channel),
+            cpu_controller_p->cpc_active_external_interrupts, cpu_controller_p);
+    }
+#   endif
 
     /* 
      * Notify the interrupt controller that processing for the last interrupt
@@ -1988,13 +2017,6 @@ rtos_k_exit_interrupt(void)
         preempted_context_p, current_context_p);
 
     /*
-     * Set current execution context to the context removed from the
-     * preemption chain:
-     */
-    cpu_controller_p->cpc_current_execution_context_p = preempted_context_p;
-    current_context_p = preempted_context_p;
-
-    /*
      * Decrement interrupt nesting level:
      */
 
@@ -2008,15 +2030,24 @@ rtos_k_exit_interrupt(void)
 
     nested_interrupts_count --;
     cpu_controller_p->cpc_nested_interrupts_count = nested_interrupts_count;
-    cpu_controller_p->cpc_active_interrupts &= ~BIT(current_interrupt_p->int_channel);
+    if (current_interrupt_p->int_channel < 0) {
+        cpu_controller_p->cpc_active_internal_interrupts &= ~BIT(-current_interrupt_p->int_channel);
+    } else {
+        cpu_controller_p->cpc_active_external_interrupts &= ~BIT(current_interrupt_p->int_channel);
+    }
 
     if (nested_interrupts_count == 0)
     {
         /*
-         * The new current context is a thread:
+         * The new current context is a thread and the last preempted context
+         * was also a thread:
          */
+        DBG_ASSERT(
+            preempted_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
+            preempted_context_p->ctx_context_type, preempted_context_p);
+
         struct rtos_thread *current_thread_p =
-            RTOS_EXECUTION_CONTEXT_GET_THREAD(current_context_p);
+            RTOS_EXECUTION_CONTEXT_GET_THREAD(preempted_context_p);
 
         DBG_ASSERT(
             current_thread_p == cpu_controller_p->cpc_current_thread_p,
@@ -2025,8 +2056,19 @@ rtos_k_exit_interrupt(void)
         DBG_ASSERT_RTOS_THREAD_INVARIANTS(current_thread_p);
 
         /*
+         * Set current execution context to the context removed from the
+         * preemption chain, as rtos_thread_scheduler() expects the current context
+         * to be a thread context:
+         */
+        cpu_controller_p->cpc_current_execution_context_p = preempted_context_p;
+
+        /*
          * Call thread scheduler to ensure that the highest-priority runnable
          * thread gets to run:
+         *
+         * NOTE: cpu_controller_p->cpc_current_execution_context_p may be updated
+         * again, as rtos_thread_scheduler() may call rtos_k_restore_execution_context()
+         * with the context of a different thread.
          */
         rtos_thread_scheduler(); 
 
@@ -2042,18 +2084,21 @@ rtos_k_exit_interrupt(void)
          * by this interrupt:
          */
         DBG_ASSERT(
-            current_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
-            current_context_p->ctx_context_type, current_context_p);
+            preempted_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
+            preempted_context_p->ctx_context_type, preempted_context_p);
 
         /*
          * Check saved CPU registers for the interrupt context to be restored:
          */
-        FDC_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(current_context_p);
+        FDC_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(preempted_context_p);
 
         /*
          * Restore execution context of the previous interrupt
+         *
+         * NOTE: cpu_controller_p->cpc_current_execution_context_p will be updated
+         * by rtos_k_restore_execution_context()
          */ 
-        rtos_k_restore_execution_context(current_context_p);
+        rtos_k_restore_execution_context(preempted_context_p);
 
 #if DEFINED_ARM_CLASSIC_ARCH()
         /*
@@ -2085,8 +2130,6 @@ rtos_k_enter_system_call(
     DBG_ASSERT(
         current_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
         current_context_p->ctx_context_type, current_context_p);
-
-    //XXX DBG_ASSERT_PRIVILEGED_THREAD_CPU_MODE_AND_INTERRUPTS_ENABLED();
 
     if (system_call_number >= RTOS_NUM_SYSTEM_CALLS)
     {
@@ -2315,9 +2358,6 @@ rtos_execution_context_init(
 
 #elif DEFINED_ARM_CORTEX_M_ARCH()
 
-    cpu_register_t cpu_primask_register = 0;
-    cpu_register_t cpu_control_register = 0;
-
     if (context_type == RTOS_THREAD_CONTEXT)
     {
         cpu_status_register_t cpu_status_register = 0;
@@ -2327,10 +2367,20 @@ rtos_execution_context_init(
          * Initialize explicitly saved CPU registers, for the first time that
          * the thread is switched in:
          */
-        for (uint8_t i = CPU_REG_R4; i <= CPU_REG_R11; i ++)
+        cpu_register_t *saved_registers_p = 
+            &execution_context_p->ctx_cpu_saved_registers.cpu_reg_r4;
+
+        uint8_t i;
+        for (i = CPU_REG_R4; i <= CPU_REG_R11; i ++)
         {
-            execution_context_p->ctx_cpu_saved_registers[i] = 0xFACE0004 + i;
+            saved_registers_p[i] = 0xFACE0004 + i;
         }
+
+        DBG_ASSERT(
+            &saved_registers_p[i] ==
+            &execution_context_p->ctx_cpu_saved_registers.cpu_reg_r11 + 1,
+            &saved_registers_p[i],
+            &execution_context_p->ctx_cpu_saved_registers.cpu_reg_r11 + 1);
 
         /*
          * Initial value of the CPU status register for a thread
@@ -2339,18 +2389,6 @@ rtos_execution_context_init(
          */
         cpu_status_register &= ~CPU_REG_IPSR_EXCEPTION_NUMBER_MASK;
         cpu_status_register |= CPU_REG_EPSR_THUMB_STATE_MASK;
-
-        /*
-         * The PM bit of the PRIMASK register also needs to be set to 0
-         * (interrupts enabled)
-         */ 
-        cpu_primask_register &= ~CPU_REG_PRIMASK_PM_MASK;
-
-        /*
-         *  The SPSEL bit of the CONTROL register also needs to be set to 1
-         *   (use PSP stack pointer)
-         */   
-        cpu_control_register |= CPU_REG_CONTROL_SPSEL_MASK;
 
         if (rtos_cpu_mode == RTOS_UNPRIVILEGED_THREAD_MODE)
         {
@@ -2362,19 +2400,11 @@ rtos_execution_context_init(
              * (unprivileged)
              */
             cpu_control_register |= CPU_REG_CONTROL_nPRIV_MASK;
-#           else
-            cpu_control_register &= ~CPU_REG_CONTROL_nPRIV_MASK;
 #           endif
         }
         else
         {
             cpu_lr_register = (cpu_register_t)rtos_k_thread_abort;
-       
-            /*
-             * The nPRIV bit of the CONTROL register also needs to be set to 0 
-             * (privileged)
-             */
-            cpu_control_register &= ~CPU_REG_CONTROL_nPRIV_MASK;
         }
 
         /*
@@ -2383,6 +2413,12 @@ rtos_execution_context_init(
          */
         DBG_ASSERT(cpu_lr_register & 0x1, cpu_lr_register, 0);
         DBG_ASSERT(cpu_pc_register & 0x1, cpu_pc_register, 0);
+
+        //???
+        DEBUG_PRINTF(
+            "Created execution context \'%s\' (%#p)\n", 
+            execution_context_p->ctx_name_p,
+            execution_context_p);
 
         /*
          * Initialize pre-saved registers in the thread's stack:
@@ -2404,52 +2440,13 @@ rtos_execution_context_init(
         stack_pointer[CPU_REG_PC] = cpu_pc_register;
         stack_pointer[CPU_REG_PSR] = cpu_status_register;
 
-        execution_context_p->ctx_cpu_saved_registers[CPU_REG_PSP] =
+        execution_context_p->ctx_cpu_saved_registers.cpu_reg_psp =
             (cpu_register_t)stack_pointer;
-
-        execution_context_p->ctx_cpu_saved_registers[CPU_REG_PRIMASK] = cpu_primask_register;
-        execution_context_p->ctx_cpu_saved_registers[CPU_REG_CONTROL] = cpu_control_register;
-    }
-    else if (context_type == RTOS_INTERRUPT_CONTEXT)
-    {
-        /*
-         * NOTE: For interrupt contexts, the following registers do not need to
-         * be initialized as they are pre-saved on the stack upon exception entry:
-         * LR, PC, PSR.
-         */
-
-        /*
-         * "Handler mode" always uses the MSP stack pointer
-         */ 
-        cpu_control_register &= ~CPU_REG_CONTROL_SPSEL_MASK;
-
-        /*
-         * "Handler mode" is always privileged
-         */ 
-        cpu_control_register &= ~CPU_REG_CONTROL_nPRIV_MASK;
-
-        /*
-         * "Handler mode" is always entered with interrupts disabled
-         */ 
-        cpu_primask_register |= CPU_REG_PRIMASK_PM_MASK;
-        
-        /*
-         * NOTE: For an interrupt handler, pre-saved registers are saved on
-         * the stack on the interrupted context, so there is not need to
-         * pre-saved them in the interrupt handler's stack:
-         */
-
-        execution_context_p->ctx_cpu_saved_registers[CPU_REG_MSP] =
-            (cpu_register_t)execution_context_p->ctx_execution_stack_bottom_end_p;
-
-        execution_context_p->ctx_cpu_saved_registers[CPU_REG_PRIMASK] = cpu_primask_register;
-        execution_context_p->ctx_cpu_saved_registers[CPU_REG_CONTROL] = cpu_control_register;
     }
 
     /*
-     * NOTE: if context_type == RTOS_RESET_CONTEXT, we don't need not initialize
-     * any CPU registers, since in that case we are being called from the reset
-     * handler itself.
+     * NOTE: if context_type is RTOS_RESET_CONTEXT or RTOS_INTERRUPT_CONTEXT,
+     * we don't need not initialize any CPU registers.
      */
 
 #else

@@ -9,11 +9,11 @@
  */ 
 
 #include "arm_defs.h"
+#include "arm_cortex_m_macros.s"
 
 /*
  * Imported symbols
  */
-.extern g_McRTOS_p
 .extern rtos_hard_fault_exception_handler
 
 /*
@@ -68,7 +68,7 @@ cortex_m_pendsv_exception_handler:
     /*
      * Get stack pointer in use:
      *
-     * NOTE: If PSP == NULL, this is the first context switch done from the
+     * NOTE: If PSP == 0x0, this is the first context switch done from the
      * reset handler, so the stack pointer in use is MSP. Otherwise, the stack
      * pointer in use is PSP.
      */
@@ -141,9 +141,7 @@ cortex_m_hard_fault_exception_handler:
      * Set r3 to
      * g_McRTOS_p->rts_cpu_controllers[0].cpc_current_execution_context_p
      */
-    ldr     r3, =g_McRTOS_p /* r3 = &g_McRTOS_p */
-    ldr     r3, [r3]        /* r3 = g_McRTOS_p */
-    add     r3, r3, #(RTOS_RTS_CPU_CONTROLLERS_OFFSET + RTOS_CPC_CURRENT_EXECUTION_CONTEXT_P_OFFSET)
+    GET_MCRTOS_CURRENT_EXECUTION_CONTEXT r3 
 
     /* 
      * Call cortex_m_save_other_registers(
@@ -227,22 +225,18 @@ cortex_m_save_other_registers:
      * - r11
      * - msp
      * - psp
-     * - primask
-     * - control
      * - lr on exception entry
      */
-    stmia   r0!, {r4-r7} /* Cortex-M0 only supports stm for r0-r7 */
+    stmia   r0!, {r4-r7}    /* Cortex-M0 only supports stm for r0-r7 */
     mov     r4, r8
     mov     r5, r9
     mov     r6, r10
     mov     r7, r11
-    stmia   r0!, {r4-r7} /* saved r8-r11 */
+    stmia   r0!, {r4-r7}    /* saved r8-r11 */
     mrs     r4, msp
     mrs     r5, psp
-    mrs     r6, primask
-    mrs     r7, control
-    stmia   r0!, {r4-r7} /* saved msp, psp, primaks, control */
-    str     r1, [r0]
+    stmia   r0!, {r4-r5}    /* saved msp, psp */
+    str     r1, [r0]        /* saved lr_on_exception_entry */
 
     bx      lr
 .endfunc

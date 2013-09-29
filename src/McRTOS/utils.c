@@ -814,6 +814,27 @@ read_command_line(
 }
 
 
+char *
+signature_to_string(
+    _IN_ uint32_t signature)
+{
+    static char str_buffer[sizeof(uint32_t) + 1];
+    char *signature_as_chars = (char *)&signature;
+    uint32_t i;
+
+    for (i = 0; i < sizeof(uint32_t); i++) {
+        if (IS_PRINT(signature_as_chars[i])) { 
+            str_buffer[i] = signature_as_chars[i];
+        } else {
+            str_buffer[i] = '.';
+        }
+    }
+
+    str_buffer[i] = '\0';
+    return str_buffer;
+}
+
+
 uint32_t 
 convert_string_to_hexadecimal(
     _IN_ const char *str)
@@ -828,3 +849,16 @@ convert_string_to_decimal(
 {
     return 0;
 }
+
+
+void
+debug_dump_r0_to_r3(
+    uint32_t r0, 
+    uint32_t r1, 
+    uint32_t r2, 
+    uint32_t r3)
+{
+    debug_printf(
+        "REGISTERS: r0: %#x, r1: %#x, r2: %#x, r3: %#x\n",
+        r0, r1, r2, r3);
+} 

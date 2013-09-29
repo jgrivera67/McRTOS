@@ -47,7 +47,7 @@
  *      CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP)
  *
  * OUTPUT REGISTERS:
- * r4 = \_g_rtos_interrupt_p_->int_arg_p
+ * r4 = \_g_rtos_interrupt_p_
  *
  * CLOBBERED REGISTERS:
  * N/A
@@ -103,11 +103,8 @@
     bl      rtos_k_enter_interrupt
     
     /*
-     * Set r4 to \_g_rtos_interrupt_p_->int_arg_p
-     *
      * r4 == \_g_rtos_interrupt_p_
      */
-    ldr     r4, [r4, #RTOS_INT_ARG_P_OFFSET]
 .endm
 
 
@@ -129,7 +126,7 @@
  *      CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP)
  *
  * OUTPUT REGISTERS:
- * r4 = \_g_rtos_interrupt_p_->int_arg_p
+ * r4 = \_g_rtos_interrupt_p_
  *
  * CLOBBERED REGISTERS:
  * N/A
@@ -171,7 +168,7 @@
  *   ARM Reset handler (ResetHandler), as defined in McRTOS_crt_armv4.s.
  *
  * OUTPUT REGISTERS:
- * r4 = \_g_rtos_interrupt_p_->int_arg_p
+ * r4 = \_g_rtos_interrupt_p_
  *
  * CLOBBERED REGISTERS:
  * N/A
@@ -276,11 +273,11 @@
     RTOS_ENTER_ISR \_g_rtos_interrupt_p_
 
     /*
-     * r4 == \_g_rtos_interrupt_p_->int_arg_p
+     * r4 == \_g_rtos_interrupt_p_
      */
 
     /*
-     * Call \_interrupt_e_handler_function_(\_g_rtos_interrupt_p_->int_arg_p)
+     * Call \_interrupt_e_handler_function_(\_g_rtos_interrupt_p_)
      */
     mov     r0, r4
     bl      \_interrupt_e_handler_function_
@@ -337,11 +334,11 @@
     RTOS_ENTER_SPLIT_ISR \_g_rtos_interrupt_p_, \_interrupt_d_handler_function_
 
     /*
-     * r4 == \_g_rtos_interrupt_p_->int_arg_p
+     * r4 == \_g_rtos_interrupt_p_
      */
 
     /*
-     * Call \_interrupt_e_handler_function_(\_g_rtos_interrupt_p_->int_arg_p)
+     * Call \_interrupt_e_handler_function_(\_g_rtos_interrupt_p_)
      */
     mov     r0, r4
     bl      \_interrupt_e_handler_function_

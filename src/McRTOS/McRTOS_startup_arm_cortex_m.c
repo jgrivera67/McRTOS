@@ -54,8 +54,8 @@ cortex_m_reset_handler(void)
      * NOTE: the reset stack markers cannot be initialized at
      * compile-time as it is not in the .data section
      */
-    g_cortex_m_exception_stack.es_stack_overflow_marker = 0xDEADBEEF;
-    g_cortex_m_exception_stack.es_stack_underflow_marker = 0xDEADBEEF;
+    g_cortex_m_exception_stack.es_stack_overflow_marker = RTOS_STACK_OVERFLOW_MARKER;
+    g_cortex_m_exception_stack.es_stack_underflow_marker = RTOS_STACK_UNDERFLOW_MARKER;
 
     main();
 
@@ -302,7 +302,6 @@ void cortex_m_nmi_isr(void)
 void cortex_m_svc_handler(void)
 {
     TODO("Not implemented yet");
-
     __BKPT(0); 
 }
 

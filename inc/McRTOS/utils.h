@@ -68,7 +68,7 @@
 
 #ifdef DEBUG
 #   define DEBUG_PRINTF(_fmt, ...) \
-            debug_printf("DBG: " _fmt, ##__VA_ARGS__)
+            debug_printf("DBG: %s:%u " _fmt, __func__, __LINE__, ##__VA_ARGS__)
 
 #   define DEBUG_BREAK_POINT()  ARTIFICIAL_BREAK_POINT()
 
@@ -175,6 +175,16 @@ uint32_t convert_string_to_hexadecimal(
 
 uint32_t convert_string_to_decimal(
         _IN_ const char *str);
+
+char * signature_to_string(
+        _IN_ uint32_t signature);
+
+void
+debug_dump_r0_to_r3(
+    uint32_t r0, 
+    uint32_t r1, 
+    uint32_t r2, 
+    uint32_t r3);
 
 extern const char g_clear_console_control_string[];
 

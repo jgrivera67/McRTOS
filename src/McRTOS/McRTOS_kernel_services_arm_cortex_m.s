@@ -9,6 +9,7 @@
  */ 
 
 #include "arm_defs.h"
+#include "arm_cortex_m_macros.s"
 
 .global rtos_k_restore_execution_context
 .global rtos_k_synchronous_context_switch
@@ -22,7 +23,6 @@
 
 .text
 .thumb
-//.syntax unified
 
 /*???
     .align 1
@@ -32,7 +32,7 @@
 
 /**
  * Restores the given McRTOS execution context CPU registers on the calling
- * CPU core.
+ * CPU core and updates cpc_current_execution_context_p for the calling CPU.
  *
  * void
  * rtos_k_restore_execution_context(
@@ -83,16 +83,8 @@ rtos_k_restore_execution_context:
     mov r4, #RTOS_CTX_CPU_REGISTERS_OFFSET
     add r4, r0, r4
 
-    /*
-     * Retrieve target context's PRIMASK register
-     */
-    ldr    r0, [r4, #(CPU_REG_PRIMASK * ARM_CPU_WORD_SIZE_IN_BYTES)]
-
-    /*
-     * r0 == execution_context_p->ctx_cpu_registers[CPU_REG_PRIMASK]
-     */
-
-#if 0 // ???
+#if 0 // ??? this code is broken: Need a reliable to determine if target context was 
+      // ??? running with interrupts enabled or disabled (perhaps using LR on excpetion entry)
 #ifdef _CPU_CYCLES_MEASURE_
     /*
      * r4 == &execution_context_p->ctx_cpu_registers[0]
@@ -120,29 +112,49 @@ rtos_k_restore_execution_context:
 #endif // #if 0
 
     /*
-     * Restore explicitly-saved registers, except primask and control:
-     *
-     * NOTE: we don't need to (and should not) restore the primask and control
-     * registers. Indeed, they are saved only for debugging purposes.
+     * Restore explicitly-saved registers r4-r11:
      *
      * r4 == &execution_context_p->ctx_cpu_registers[0]
      */
     mov     r0, r4
     mov     r1, #(CPU_REG_R8 * ARM_CPU_WORD_SIZE_IN_BYTES)
     add     r1, r0, r1
-    ldmia   r1, {r4-r7} /* Cortex-M0 only supports ldm for r0-r7 */
+    ldmia   r1!, {r4-r7} /* Cortex-M0 only supports ldm for r0-r7 */
     mov     r8, r4
     mov     r9, r5
     mov     r10, r6
     mov     r11, r7
-    ldmia   r0, {r4-r7} /* Cortex-M0 only supports ldm for r0-r7 */
+    mov     r1, r0
+    ldmia   r1!, {r4-r7} /* Cortex-M0 only supports ldm for r0-r7 */
 
     /*
-     * Get execution_context_p->ctx_cpu_mode:
+     * NOTE: Above, we use "ldmia r1!" instead of "ldmia r1" because for
+     * Cortex-M r1 is incremented with or without the "!".
      */
-    mov     r1, #(RTOS_CTX_CPU_REGISTERS_OFFSET - RTOS_CTX_CPU_MODE_OFFSET)
-    sub     r1, r0, r1
-    ldrb    r1, [r1]
+    
+    /*
+     * Update cpc_current_execution_context_p for calling CPU:
+     *
+     * r0 == &execution_context_p->ctx_cpu_saved_registers
+     */
+    mov     r2, #RTOS_CTX_CPU_REGISTERS_OFFSET
+    sub     r2, r0, r2
+    SET_MCRTOS_CURRENT_EXECUTION_CONTEXT r2, r1 
+
+    /*
+     *
+     * Get execution_context_p->ctx_cpu_mode:
+     *
+     * r2 == execution_context_p
+     */
+    ldrb    r1, [r2, #RTOS_CTX_CPU_MODE_OFFSET]
+
+    /*
+     * Determine if the context to be restored is an interrupt or a
+     * thread:
+     *
+     * r1 == execution_context_p->ctx_cpu_mode
+     */
     cmp     r1, #RTOS_INTERRUPT_MODE
     beq     L_target_context_is_interrupt
 

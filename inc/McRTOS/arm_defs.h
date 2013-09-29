@@ -167,15 +167,13 @@
 #   define CPU_REG_R11              0x7
 #   define CPU_REG_MSP              0x8
 #   define CPU_REG_PSP              0x9
-#   define CPU_REG_PRIMASK          0xA
-#   define CPU_REG_CONTROL          0xB
-#   define CPU_REG_LR_ON_EXC_ENTRY  0xC
+#   define CPU_REG_LR_ON_EXC_ENTRY  0xA
 
     /**
      * Number of CPU registers that need to be explicitly saved in a context
      * switch, as they are not automatically saved in the stack by the CPU.
      */
-#   define CPU_NUM_SAVED_REGISTERS  (8 + 5)
+#   define CPU_NUM_SAVED_REGISTERS  (8 + 3)
 
     /**
      * Values that LR can be set to, to return from an exception:
@@ -283,6 +281,12 @@
 #   define CPU_MODE_IS_INTERRUPT(_reg_ipsr_value) \
         (((_reg_ipsr_value) & CPU_REG_IPSR_EXCEPTION_NUMBER_MASK) >= 15)
 
+#   define CPU_MODE_IS_PENDSV_EXCEPTION(_reg_ipsr_value) \
+        (((_reg_ipsr_value) & CPU_REG_IPSR_EXCEPTION_NUMBER_MASK) == INT_PendableSrvReq)
+
+#   define CPU_MODE_IS_HARD_FAULT_EXCEPTION(_reg_ipsr_value) \
+        (((_reg_ipsr_value) & CPU_REG_IPSR_EXCEPTION_NUMBER_MASK) == INT_Hard_Fault)
+
 #   define CPU_INTERRUPTS_ARE_ENABLED(_reg_primask_value) \
         (((_reg_primask_value) & CPU_REG_PRIMASK_PM_MASK) == 0)
 
@@ -373,7 +377,6 @@
  * assembly code
  */
 #define RTOS_INT_CPU_CONTROLLER_P_OFFSET    (ARM_CPU_WORD_SIZE_IN_BYTES * 1)
-#define RTOS_INT_ARG_P_OFFSET               (ARM_CPU_WORD_SIZE_IN_BYTES * 2)
 
 /*
  * Offsets of struct rtos_cpu_controller fields accessed from

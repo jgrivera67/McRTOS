@@ -35,7 +35,8 @@ enum system_thread_priorities
             .cpc_current_execution_context_p = NULL,                    \
             .cpc_current_thread_p = NULL,                               \
             .cpc_runnable_thread_priorities = 0,                        \
-            .cpc_active_interrupts = 0,                                 \
+            .cpc_active_internal_interrupts = 0,                        \
+            .cpc_active_external_interrupts = 0,                        \
             .cpc_nested_interrupts_count = 0,                           \
             .cpc_thread_scheduler_calls = 0,                            \
             .cpc_accumulated_thread_scheduler_overhead = 0,             \
@@ -331,49 +332,39 @@ rtos_startup(
         RTOS_ROOT_SYSTEM_THREAD,
         rtos_thread_p);
 
-    /*
-     * Set the current execution context to be the root system thread context:
-     */
-
     FDC_ASSERT(
         cpu_controller_p->cpc_current_execution_context_p == 
         &cpu_controller_p->cpc_reset_execution_context,
         cpu_controller_p->cpc_current_execution_context_p, 
         cpu_controller_p);
 
+#if 0 // ???
+    /*
+     * Set the current execution context to be the root system thread context:
+     */
+
     cpu_controller_p->cpc_current_execution_context_p =
         &(rtos_thread_p->thr_execution_context);
     
     cpu_controller_p->cpc_current_thread_p = rtos_thread_p;
+#endif
 
     cpu_controller_p->cpc_startup_completed = true;
 
     /*
-     * Invoke the thread scheduler to "switch in" the root thread:
-     *
-     * NOTE: Although we have been running with interrupts disabled all
-     * along since reset, we only start measuring the disable time here,
-     * as all the previous code only executes at boot time, and it does 
-     * not matter for how long we keep interrupts disabled before 
-     * we start executing threads.
+     * Do a synchronous context switch, to switch from running the reset 
+     * handler to running the root thread:
      */
-
-    RTOS_START_INTERRUPTS_DISABLED_TIME_MEASURE();
 
 #if DEFINED_ARM_CORTEX_M_ARCH()
     /* 
      * Set psp to 0x0, to indicate that this is the first context switch
      */
     __set_PSP(0x0);
-    //???
-    DEBUG_PRINTF(
-        "cpu_controller_p->cpc_current_execution_context_p = %#x\n",
-        cpu_controller_p->cpc_current_execution_context_p);
-    //???
     rtos_k_synchronous_context_switch(
         cpu_controller_p->cpc_current_execution_context_p);
 #else
-    rtos_thread_scheduler();
+    rtos_thread_scheduler(); // TODO: change this to synch ctxt switch too
 #endif
 
     /*
@@ -619,11 +610,12 @@ rtos_root_thread_f(void *arg)
          * Wait for critical work to do:
          *
          * NOTE: The root system thread is the highest priority thread
-         * in the system and is only awoken wen something really urgent
+         * in the system and is only awoken when something really urgent
          * needs to be done.
          */
         rtos_k_thread_condvar_wait_interrupt();
-    
+   
+        DEBUG_PRINTF("root thread woke up\n");
         /*
          * TODO
          */

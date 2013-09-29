@@ -131,12 +131,12 @@ C_ASSERT(RTOS_MAX_NUM_INTERRUPTS < SOC_NUM_INTERRUPT_CHANNELS);
 /**
  * Maximum number of unexpected exception records that can be captured
  */
-#define RTOS_MAX_NUM_UNEXPECTED_EXCEPTION_RECORDS   UINT32_C(8)
+#define RTOS_MAX_NUM_UNEXPECTED_EXCEPTION_RECORDS   UINT32_C(4)
 
 /**
  * Size of the context switch trace buffer in number of entries
  */
-#define RTOS_NUM_CONTEXT_SWITCH_TRACE_BUFFER_ENTRIES    UINT16_C(16)
+#define RTOS_NUM_CONTEXT_SWITCH_TRACE_BUFFER_ENTRIES    128 //UINT16_C(16)
 
 /**
  * Number of console channels
