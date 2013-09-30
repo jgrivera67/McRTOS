@@ -40,6 +40,8 @@ rtos_dbg_dump_memory(
 static void
 rtos_dbg_dump_context_switch_traces(void);
 
+static void
+rtos_dbg_dump_cpu_controller(void);
 
 /**
  * Enters McRTOS debugger from the hard fault exception handler.
@@ -163,6 +165,10 @@ rtos_dbg_parse_command(
             rtos_dbg_display_help();
             break;
 
+        case 'p':
+            rtos_dbg_dump_cpu_controller();
+            break;
+
         case 'q':
             quit = true;
             break;
@@ -187,12 +193,14 @@ rtos_dbg_parse_command(
 static void 
 rtos_dbg_display_help(void)
 {
-    debug_printf("McRTOS debugger commands\n");
-    debug_printf("\tc - dump current execution context\n");
-    debug_printf("\te - dump exception info\n");
-    debug_printf("\tq - quit McRTOS command mode\n");
-    debug_printf("\tr - reset CPU\n");
-    debug_printf("\tt - dump context switch traces\n");
+    debug_printf(
+        "McRTOS debugger commands\n"
+        "\tc - dump current execution context\n"
+        "\te - dump exception info\n"
+        "\tp - dump CPU controller of CPU core that took the exception\n"
+        "\tq - quit McRTOS command mode\n"
+        "\tr - reset CPU\n"
+        "\tt - dump context switch traces\n");
 }
 
 
@@ -248,6 +256,21 @@ rtos_dbg_dump_execution_context(
 
     debug_printf("\tName: %s\n", execution_context_p->ctx_name_p);
     debug_printf("\tType: %s\n", context_types[execution_context_p->ctx_context_type]);
+    if (execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT) {
+        struct rtos_thread *thread_p = 
+            RTOS_EXECUTION_CONTEXT_GET_THREAD(execution_context_p);
+
+        debug_printf("\tthread: %#p, state: %#x, state history: %#x\n",
+            thread_p, thread_p->thr_state, thread_p->thr_state_history);
+
+    } else if (execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT) {
+        struct rtos_interrupt *interrupt_p = 
+            RTOS_EXECUTION_CONTEXT_GET_INTERRUPT(execution_context_p);
+
+        debug_printf("\tinterrupt: %#p, IRQ channel: %d\n",
+            interrupt_p, interrupt_p->int_channel);
+    }
+
     debug_printf("\tSaved CPU registers:\n");
 
 #if DEFINED_ARM_CLASSIC_ARCH()
@@ -429,9 +452,49 @@ rtos_dbg_dump_context_switch_traces(void)
             i, execution_context_p->ctx_name_p, execution_context_p,
             last_switched_out_reason, priority
             );
+
+#       if 0 // ???
         if (thread_p != NULL) {
             debug_printf(
-                "\tstate history: %#x\n", thread_p->thr_state_history);
+                "\tthread: %#p, state: %#x, state history: %#x\n",
+                thread_p, thread_p->thr_state, thread_p->thr_state_history);
         }
+
+        if (interrupt_p != NULL) {
+            debug_printf(
+                "\tinterrupt: %#p\n", interrupt_p);
+
+        }
+#       endif
     }
+}
+
+
+static void
+rtos_dbg_dump_cpu_controller(void)
+{
+    struct rtos_cpu_controller *cpu_controller_p =
+        &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
+
+    debug_printf(
+        "CPU controller for core %u:\n"
+        "\tcpc_ticks_since_boot_count: %u\n"
+        "\tcpc_current_execution_context_p: %#p\n"
+        "\tcpc_current_thread_p: %#p\n"
+        "\tcpc_runnable_thread_priorities bitmap: %#x\n"
+        "\tcpc_active_internal_interrupts bitmap: %#x\n"
+        "\tcpc_active_external_interrupts bitmap: %#x\n"
+        "\tcpc_nested_interrupts_count: %u\n"
+        "\tcpc_thread_scheduler_calls: %u\n"
+        "\tcpc_longest_time_interrupts_disabled: %u\n",
+        SOC_GET_CURRENT_CPU_ID(),
+        cpu_controller_p->cpc_ticks_since_boot_count,
+        cpu_controller_p->cpc_current_execution_context_p,
+        cpu_controller_p->cpc_current_thread_p,
+        cpu_controller_p->cpc_runnable_thread_priorities,
+        cpu_controller_p->cpc_active_internal_interrupts,
+        cpu_controller_p->cpc_active_external_interrupts,
+        cpu_controller_p->cpc_nested_interrupts_count,
+        cpu_controller_p->cpc_thread_scheduler_calls,
+        cpu_controller_p->cpc_longest_time_interrupts_disabled);
 }

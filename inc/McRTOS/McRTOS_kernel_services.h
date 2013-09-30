@@ -83,11 +83,12 @@ typedef uint32_t rtos_ticks_t;
 enum rtos_thread_states
 {
     RTOS_INVALID_THREAD_STATE =             0x0,
-    RTOS_THREAD_RUNNABLE =                  0x1,
-    RTOS_THREAD_RUNNING =                   0x2,
-    RTOS_THREAD_BLOCKED_ON_MUTEX =          0x3,
-    RTOS_THREAD_BLOCKED_ON_CONDVAR =        0x4,
-    RTOS_THREAD_ABORTED =                   0x5,
+    RTOS_THREAD_CREATED =                   0x1,
+    RTOS_THREAD_RUNNABLE =                  0x2,
+    RTOS_THREAD_RUNNING =                   0x3,
+    RTOS_THREAD_BLOCKED_ON_MUTEX =          0x4,
+    RTOS_THREAD_BLOCKED_ON_CONDVAR =        0x5,
+    RTOS_THREAD_ABORTED =                   0x6,
 
     /*
      * Last dummy value. New state must be added above here:

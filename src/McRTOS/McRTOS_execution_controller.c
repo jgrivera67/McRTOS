@@ -54,8 +54,8 @@ void rtos_thread_scheduler(void)
         chosen_thread_queue_anchor_p, chosen_thread_prio);
 
     /*
-     * Current execution context is a thread or the reset handler
-     * and is not in preemption chain:
+     * Current execution context is a thread, an interrupt handler or the
+     * reset handler and is not in preemption chain:
      */
 
     struct rtos_execution_context *current_context_p =
@@ -63,6 +63,7 @@ void rtos_thread_scheduler(void)
 
     FDC_ASSERT(
         current_context_p->ctx_context_type == RTOS_THREAD_CONTEXT ||
+        current_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT ||
         current_context_p->ctx_context_type == RTOS_RESET_CONTEXT,
         current_context_p->ctx_context_type, current_context_p);
 
@@ -94,12 +95,12 @@ void rtos_thread_scheduler(void)
         FDC_ASSERT(
             GLIST_NODE_IS_LINKED(&current_thread_p->thr_list_node),
             &current_thread_p->thr_list_node, current_thread_p);
-    }
 
-    /*
-     * Check last saved CPU registers for the current context:
-     */
-    FDC_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(current_context_p);
+        /*
+         * Check last saved CPU registers for the current context:
+         */
+        FDC_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(current_context_p);
+    }
 
     /*
      * Remove first thread from the chosen thread queue:
@@ -183,7 +184,8 @@ void rtos_thread_scheduler(void)
      * preempted by another thread. So, remove it from the preemption chain:
      *
      * NOTE: If the chosen thread is in the preemption chain, it is not
-     * necessarily at the top of the chain, as its priority may been boosted.
+     * necessarily at the top of the chain, as its priority may have been
+     * boosted.
      */
     struct rtos_execution_context *chosen_context_p =
             &chosen_thread_p->thr_execution_context;
@@ -201,11 +203,12 @@ void rtos_thread_scheduler(void)
     }
 
     /*
-     * Set the new current execution context and thread:
+     * Set the new current thread:
      */
     if (chosen_thread_p != current_thread_p)
     {
-        if (current_thread_p->thr_time_slice_ticks_left <
+        if (current_thread_p != NULL &&
+            current_thread_p->thr_time_slice_ticks_left <
                 RTOS_THREAD_TIME_SLICE_IN_TICKS &&
             current_thread_p->thr_state == RTOS_THREAD_RUNNABLE)
         {
@@ -235,11 +238,15 @@ void rtos_thread_scheduler(void)
 
         current_thread_p = chosen_thread_p;
         current_context_p = &chosen_thread_p->thr_execution_context;
+
+        /*
+         * Update the current thread running on the calling CPU:
+         */
         cpu_controller_p->cpc_current_thread_p = current_thread_p;
 
         /*  
          * NOTE: cpu_controller_p->cpc_current_execution_context_p
-         * is updated by rtos_k_restore_execution_context
+         * is updated by rtos_k_restore_execution_context()
          */
     }
 

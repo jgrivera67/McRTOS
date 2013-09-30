@@ -416,7 +416,7 @@ static const struct uart_device g_uart_devices[] =
             .irp_isr_function_p = kl25_uart0_isr,
             .irp_arg_p =  (void *)&g_uart_devices[0],
             .irp_channel = VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART0),
-            .irp_priority = SOC_LOWEST_INTERRUPT_PRIORITY - 2,
+            .irp_priority = SOC_LOWEST_INTERRUPT_PRIORITY - 1,
             .irp_cpu_id = 0,
         },
 
@@ -505,16 +505,18 @@ const struct adc_device *const g_adc0_device_p = NULL; // TODO
 
 
 /**
- *  Initializes board hardware
+ *  Initializes board hardware. 
+ *
+ *  @pre This function must be called with interrupts disabled.
  */
 cpu_reset_cause_t
 board_init(void)
 {
-    /*
-     * The Cortex-M processor enters reset with interrupts enabled, 
-     * so we have to disable them here:
-     */
-    __disable_irq();
+    cpu_status_register_t reg_primask = __get_PRIMASK();
+   
+    FDC_ASSERT(
+        CPU_INTERRUPTS_ARE_DISABLED(reg_primask),
+        reg_primask, 0);
 
     cpu_reset_cause_t reset_cause = find_reset_cause();
 
@@ -1260,18 +1262,9 @@ uart_putchar(
     struct uart_device_var *const uart_var_p = uart_device_p->urt_var_p;
     UART_MemMapPtr uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
 
-    if (!uart_var_p->urt_initialized)
-    {
-        /*
-         * Any call to this function from a "printf()" placed before the
-         * serial port gets initialized has to be ignored.
-         *
-         * We can't call FDC_ASSERT or CAPTURE_APP_ERROR() here as that can
-         * cause an infinite recursion, because they call this function
-         * from FAILURE_PRINTF().
-         */
-        return;
-    }
+    DBG_ASSERT(uart_var_p->urt_initialized, uart_var_p, uart_device_p);
+
+    DBG_ASSERT_PRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED();
 
     if (rtos_k_caller_is_thread()) {
         bool entry_written =
@@ -1359,8 +1352,10 @@ uart_getchar(
     uint32_t reg_value;
     uint8_t char_received;
 
-    FDC_ASSERT(
+    DBG_ASSERT(
         uart_var_p->urt_initialized, uart_var_p, uart_device_p);
+
+    DBG_ASSERT_PRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED();
 
     /*
      * Enable generation of receive interrupts:
@@ -1374,7 +1369,7 @@ uart_getchar(
         &char_received,
         true);
 
-    FDC_ASSERT(entry_read, uart_device_p, 0);
+    DBG_ASSERT(entry_read, uart_device_p, 0);
 
     return char_received;
 }

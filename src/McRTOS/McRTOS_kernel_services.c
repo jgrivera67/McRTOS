@@ -247,7 +247,7 @@ rtos_k_thread_init(
     rtos_thread_p->thr_abort_status = 0;
     rtos_thread_p->thr_base_priority = thread_prio;
     rtos_thread_p->thr_current_priority = thread_prio;
-    rtos_thread_p->thr_state = RTOS_THREAD_RUNNABLE;
+    rtos_thread_p->thr_state = RTOS_THREAD_CREATED;
     rtos_thread_p->thr_time_slice_ticks_left = RTOS_THREAD_TIME_SLICE_IN_TICKS;
     rtos_thread_p->thr_state_history = 0x0;
     rtos_thread_p->thr_priority_history = thread_prio;
@@ -1364,8 +1364,12 @@ rtos_k_condvar_signal_internal(
      */
     cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
 
+    bool waiters_awaken = false;
+
     while (GLIST_IS_NOT_EMPTY(&rtos_condvar_p->cv_waiting_thread_queue_anchor))
     {
+        waiters_awaken = true;
+
         /*
          * If there are waiters on the condvar, remove the first waiter,
          * and add it at the end of the appropriate runnable thread queue:
@@ -1395,29 +1399,41 @@ rtos_k_condvar_signal_internal(
 
     if (current_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT)
     {
-        /*
-         * Add current thread at the beginning of the corresponding runnable
-         * queue and change its state from running to runnable
-         */
-        struct rtos_thread *current_thread_p =
-            RTOS_EXECUTION_CONTEXT_GET_THREAD(current_execution_context_p);
+        if (waiters_awaken) 
+        {
+            /*
+             * Add current thread at the beginning of the corresponding runnable
+             * queue and change its state from running to runnable
+             */
+            struct rtos_thread *current_thread_p =
+                RTOS_EXECUTION_CONTEXT_GET_THREAD(current_execution_context_p);
 
-        rtos_add_head_runnable_thread(
-            cpu_controller_p, current_thread_p);
+            rtos_add_head_runnable_thread(
+                cpu_controller_p, current_thread_p);
 
-        /*
-         * Perform a synchronous context switch:
-         *
-         * NOTE: When this thread is switched in again, it will start
-         * executing after this call
-         */
-        rtos_k_synchronous_context_switch(&current_thread_p->thr_execution_context);
+            /*
+             * Perform a synchronous context switch:
+             *
+             * NOTE: When this thread is switched in again, it will start
+             * executing after this call
+             */
+            rtos_k_synchronous_context_switch(&current_thread_p->thr_execution_context);
+        }
     }
     else
     {
         /*
          * The caller is an interrupt context:
+         *
+         * NOTE: Even if there were no waiters, we still need to set
+         * the cv_pending_interrupt_wakeup flag, in case of a race
+         * between a thread calling rtos_k_condvar_wait_interrupt() and
+         * an ISR calling this function.
          */
+        DBG_ASSERT(
+            current_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
+            current_execution_context_p->ctx_context_type, current_execution_context_p);
+
         rtos_condvar_p->cv_pending_interrupt_wakeup = true;
     }
 
@@ -1798,11 +1814,22 @@ rtos_k_enter_interrupt(
     check_rtos_interrupt_entry_preconditions(rtos_interrupt_p);
 #   endif
 
-    struct rtos_execution_context *new_interrupt_context_p =
-        &rtos_interrupt_p->int_execution_context;
-
     struct rtos_cpu_controller *cpu_controller_p =
         &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
+
+    /*
+     * Mark interrupt as active:
+     */
+    if (rtos_interrupt_p->int_channel < 0) {
+        cpu_controller_p->cpc_active_internal_interrupts |=
+            BIT(-rtos_interrupt_p->int_channel);
+    } else {
+        cpu_controller_p->cpc_active_external_interrupts |=
+            BIT(rtos_interrupt_p->int_channel);
+    }
+
+    struct rtos_execution_context *new_interrupt_context_p =
+        &rtos_interrupt_p->int_execution_context;
 
     struct rtos_execution_context *interrupted_context_p =
         cpu_controller_p->cpc_current_execution_context_p;
@@ -1820,11 +1847,19 @@ rtos_k_enter_interrupt(
 
     new_interrupt_context_p->ctx_last_switched_in_time_stamp = get_cpu_clock_cycles();
     
-    FDC_TRACE_RTOS_CONTEXT_SWITCH(new_interrupt_context_p);
+    /*
+     * Update counter of occurrences of this interrupt:
+     */
+    struct fdc_info *fdc_info_p = &cpu_controller_p->cpc_failures_info;
+    interrupt_channel_t interrupt_channel = rtos_interrupt_p->int_channel;
+
+    fdc_info_p->fdc_interrupt_channel_counters[interrupt_channel] ++;
 
     /*
      * Set current execution context to the calling interrupt context:
      */
+
+    FDC_TRACE_RTOS_CONTEXT_SWITCH(new_interrupt_context_p);
     cpu_controller_p->cpc_current_execution_context_p = new_interrupt_context_p;
 
     /*
@@ -1842,14 +1877,11 @@ rtos_k_enter_interrupt(
         &interrupted_context_p->ctx_preemption_chain_node,
         interrupted_context_p);
 
-    rtos_nested_interrupts_count_t nested_interrupts_count =
-        cpu_controller_p->cpc_nested_interrupts_count;
+    DBG_ASSERT(
+        cpu_controller_p->cpc_nested_interrupts_count < SOC_NUM_INTERRUPT_PRIORITIES,
+        cpu_controller_p->cpc_nested_interrupts_count, cpu_controller_p);
 
-    FDC_ASSERT(
-        nested_interrupts_count < SOC_NUM_INTERRUPT_PRIORITIES,
-        nested_interrupts_count, cpu_controller_p);
-
-    if (nested_interrupts_count == 0)
+    if (cpu_controller_p->cpc_nested_interrupts_count == 0)
     {
         /*
          * The interrupted context is a thread:
@@ -1907,14 +1939,6 @@ rtos_k_enter_interrupt(
      * Add interrupted execution context at the top of the preemption chain:
      */
     rtos_preemption_chain_push_context(cpu_controller_p, interrupted_context_p);
-
-    if (rtos_interrupt_p->int_channel < 0) {
-        cpu_controller_p->cpc_active_internal_interrupts |=
-            BIT(-rtos_interrupt_p->int_channel);
-    } else {
-        cpu_controller_p->cpc_active_external_interrupts |=
-            BIT(rtos_interrupt_p->int_channel);
-    }
 
     RTOS_STOP_INTERRUPTS_DISABLED_TIME_MEASURE();
 
@@ -2017,26 +2041,26 @@ rtos_k_exit_interrupt(void)
         preempted_context_p, current_context_p);
 
     /*
-     * Decrement interrupt nesting level:
+     * Mark interrupt as inactive:
      */
-
-    rtos_nested_interrupts_count_t nested_interrupts_count =
-        cpu_controller_p->cpc_nested_interrupts_count;
-
-    FDC_ASSERT(
-        nested_interrupts_count > 0 &&
-        nested_interrupts_count <= SOC_NUM_INTERRUPT_PRIORITIES,
-        nested_interrupts_count, cpu_controller_p);
-
-    nested_interrupts_count --;
-    cpu_controller_p->cpc_nested_interrupts_count = nested_interrupts_count;
     if (current_interrupt_p->int_channel < 0) {
         cpu_controller_p->cpc_active_internal_interrupts &= ~BIT(-current_interrupt_p->int_channel);
     } else {
         cpu_controller_p->cpc_active_external_interrupts &= ~BIT(current_interrupt_p->int_channel);
     }
 
-    if (nested_interrupts_count == 0)
+    /*
+     * Decrement interrupt nesting level:
+     */
+
+    FDC_ASSERT(
+        cpu_controller_p->cpc_nested_interrupts_count > 0 &&
+        cpu_controller_p->cpc_nested_interrupts_count <= SOC_NUM_INTERRUPT_PRIORITIES,
+        cpu_controller_p->cpc_nested_interrupts_count, cpu_controller_p);
+
+    cpu_controller_p->cpc_nested_interrupts_count --;
+
+    if (cpu_controller_p->cpc_nested_interrupts_count == 0)
     {
         /*
          * The new current context is a thread and the last preempted context
@@ -2054,13 +2078,6 @@ rtos_k_exit_interrupt(void)
             current_thread_p, cpu_controller_p->cpc_current_thread_p);
 
         DBG_ASSERT_RTOS_THREAD_INVARIANTS(current_thread_p);
-
-        /*
-         * Set current execution context to the context removed from the
-         * preemption chain, as rtos_thread_scheduler() expects the current context
-         * to be a thread context:
-         */
-        cpu_controller_p->cpc_current_execution_context_p = preempted_context_p;
 
         /*
          * Call thread scheduler to ensure that the highest-priority runnable
@@ -2482,7 +2499,8 @@ rtos_k_console_putchar(
     {
         if (RTOS_CURRENT_THREAD_IS_ROOT_SYSTEM_THREAD(cpu_controller_p))
         {
-            uart_putchar_with_polling(g_console_serial_port_p, c);
+            //???uart_putchar_with_polling(g_console_serial_port_p, c);
+            uart_putchar(g_console_serial_port_p, c);
         }
         else
         {
@@ -2899,9 +2917,9 @@ rtos_k_disable_cpu_interrupts(void)
     cpu_status_register_t old_primask = __get_PRIMASK();
 
     __disable_irq();
-#if 0 // ???
-    rtos_start_interrupts_disabled_time_measure(old_primask);
-#endif
+
+    RTOS_START_INTERRUPTS_DISABLED_TIME_MEASURE();
+
     return old_primask;
 }
 
@@ -2915,9 +2933,9 @@ rtos_k_disable_cpu_interrupts(void)
  void
  rtos_k_restore_cpu_interrupts(cpu_register_t old_primask)
 {
-#if 0 // ???
-    rtos_stop_interrupts_disabled_time_measure(old_primask);
-#endif
+
+    RTOS_STOP_INTERRUPTS_DISABLED_TIME_MEASURE();
+
    if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
         __enable_irq();
    }

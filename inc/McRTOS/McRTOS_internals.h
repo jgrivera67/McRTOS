@@ -607,7 +607,8 @@ extern struct McRTOS *const g_McRTOS_p;
 
 #define RTOS_THREAD_CHANGE_STATE(_thread_p, _new_state) \
         do {                                                                \
-            if ((_thread_p)->thr_state != (_new_state))                     \
+            /* if ((_thread_p)->thr_state != (_new_state)) */                    \
+            FDC_ASSERT((_thread_p)->thr_state != (_new_state), (_thread_p)->thr_state, _new_state);                     \
             {                                                               \
                 (_thread_p)->thr_state_history <<= 4;                       \
                 (_thread_p)->thr_state_history |= (_thread_p)->thr_state;   \
@@ -770,7 +771,7 @@ rtos_remove_runnable_thread(
             rtos_k_restore_cpu_interrupts(saved_cpu_status_register_);      \
         } while (0)
 
-#if 0 // ???
+#ifdef _MEASURE_INTERRUPTS_DISABLED_TIME_
 /**
  * Macro to be invoked at the beginning of a disabled interrupts measurement,
  * when interrupts have already been disabled without a prior call to
@@ -786,10 +787,12 @@ rtos_remove_runnable_thread(
  */
 #define RTOS_STOP_INTERRUPTS_DISABLED_TIME_MEASURE() \
         (void)rtos_stop_interrupts_disabled_time_measure(0)
+
 #else
 #define RTOS_START_INTERRUPTS_DISABLED_TIME_MEASURE()
 #define RTOS_STOP_INTERRUPTS_DISABLED_TIME_MEASURE() 
-#endif // ???
+
+#endif /* _MEASURE_INTERRUPTS_DISABLED_TIME_ */
 
 #else
 

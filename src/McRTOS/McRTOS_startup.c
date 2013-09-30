@@ -265,6 +265,10 @@ rtos_startup(
                                     &g_McRTOS_p->rts_cpu_controllers[cpu_id];
 
 #   if DEFINED_ARM_CORTEX_M_ARCH()
+    /*
+     * The Cortex-M processor enters reset with interrupts enabled, 
+     * so we have to disable them here:
+     */
     __disable_irq();
 #   endif
 
@@ -272,18 +276,18 @@ rtos_startup(
 
     cpu_controller_p->cpc_app_config_p = rtos_app_config_p;
 
+#   ifdef DEBUG
+    /*
+     * Check the compile-time initializations common to all CPU cores:
+     */
+    check_mcrtos_common_compile_time_initializations();
+#   endif
+
     /*
      * Initialize board hardware on CPU 0:
      */
     if (cpu_id == 0)
     {
-#       ifdef DEBUG
-        /*
-         * Check the compile-time initializations common to all CPU cores:
-         */
-        check_mcrtos_common_compile_time_initializations();
-        #endif
-
         g_McRTOS_p->rts_soc_reset_cause = board_init();
 
         console_printf_init();
@@ -338,34 +342,47 @@ rtos_startup(
         cpu_controller_p->cpc_current_execution_context_p, 
         cpu_controller_p);
 
-#if 0 // ???
-    /*
-     * Set the current execution context to be the root system thread context:
-     */
-
-    cpu_controller_p->cpc_current_execution_context_p =
-        &(rtos_thread_p->thr_execution_context);
-    
-    cpu_controller_p->cpc_current_thread_p = rtos_thread_p;
-#endif
-
     cpu_controller_p->cpc_startup_completed = true;
+
+    /*
+     * Reset the "longest time interrupts disabled" to 0, as this 
+     * is boot time, and should not be taken into account.
+     *
+     * NOTE: We need to reset this because, board_init() called device
+     * initialization functions which may call
+     * rtos_k_disable_cpu_interrupts()/rtos_k_restore_cpu_interrupts()
+     */
+    cpu_controller_p->cpc_longest_time_interrupts_disabled = 0;
+
+    DBG_ASSERT_CPU_INTERRUPTS_DISABLED();
+
+    /*
+     * Start measuring interrupts disabled time from here:
+     */
+    RTOS_START_INTERRUPTS_DISABLED_TIME_MEASURE();
 
     /*
      * Do a synchronous context switch, to switch from running the reset 
      * handler to running the root thread:
      */
 
-#if DEFINED_ARM_CORTEX_M_ARCH()
+#   if DEFINED_ARM_CORTEX_M_ARCH()
     /* 
      * Set psp to 0x0, to indicate that this is the first context switch
      */
     __set_PSP(0x0);
+
+    /*
+     * NOTE: rtos_k_synchronous_context_switch() calls rtos_thread_scheduler(),
+     * which will select the root thread to run, as it is the only existing
+     * thread at this point
+     */
     rtos_k_synchronous_context_switch(
         cpu_controller_p->cpc_current_execution_context_p);
-#else
+
+#   else
     rtos_thread_scheduler(); // TODO: change this to synch ctxt switch too
-#endif
+#   endif
 
     /*
      * We should never come here
@@ -457,11 +474,6 @@ rtos_root_thread_f(void *arg)
 
     FDC_ASSERT(arg == NULL, arg, cpu_id);
     FDC_ASSERT(rtos_app_config_p != NULL, 0, 0);
-
-    /*
-     * Disable interrupts in the ARM core
-     */
-    //XXX cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
 
     if (cpu_id == 0)
     {
@@ -584,17 +596,6 @@ rtos_root_thread_f(void *arg)
             rtos_app_config_p->stc_autostart_threads_p[i].p_name_p);
     }
     
-    /*
-     * Restore previous interrupt masking in the ARM core
-     */
-    //XXX rtos_k_restore_cpu_interrupts(cpu_status_register);
-
-    /*
-     * Reset the "longest time interrupts disabled" to 0, as this 
-     * is still boot time, and should not be taken into account.
-     */
-    cpu_controller_p->cpc_longest_time_interrupts_disabled = 0; // XXX
-
     if (cpu_id == 0)
     {
 #       ifdef LCD_SUPPORTED
@@ -694,7 +695,9 @@ rtos_command_line_thread_f(void *arg)
 
     for ( ; ; )
     {
+        DEBUG_PRINTF("before getchar\n"); // ???
         uint8_t c = rtos_console_getchar();
+        DEBUG_PRINTF("after getchar\n"); // ???
 
         if (c != CTRL_C)
         {

@@ -83,33 +83,19 @@ rtos_k_restore_execution_context:
     mov r4, #RTOS_CTX_CPU_REGISTERS_OFFSET
     add r4, r0, r4
 
-#if 0 // ??? this code is broken: Need a reliable to determine if target context was 
-      // ??? running with interrupts enabled or disabled (perhaps using LR on excpetion entry)
-#ifdef _CPU_CYCLES_MEASURE_
+#ifdef _MEASURE_INTERRUPTS_DISABLED_TIME_
     /*
-     * r4 == &execution_context_p->ctx_cpu_registers[0]
-     *
-     * If target context's PRIMASK register has interrupts enabled, call
-     * rtos_stop_interrupts_disabled_time_measure(), preserving r0:
-     *
-     * r0 = rtos_stop_interrupts_disabled_time_measure(r0);
+     * Call rtos_stop_interrupts_disabled_time_measure():
      *
      * NOTE:
+     * - For Cortex-M, we don't need to use the arg of
+     *   rtos_stop_interrupts_disabled_time_measure()
      * - It is assumed that earlier in the code path that lead us here, we made 
      *   a call to rtos_start_interrupts_disabled_time_measure() via the macro
      *   RTOS_START_INTERRUPTS_DISABLED_TIME_MEASURE().
      */
-    mov     r1, #CPU_REG_PRIMASK_PM_MASK 
-    tst     r0, r1
-    bne     1f
-
-    /*
-     * Interrupts are enabled in the target context
-     */
     bl      rtos_stop_interrupts_disabled_time_measure
-1:
-#endif /* _CPU_CYCLES_MEASURE_ */
-#endif // #if 0
+#endif /* _MEASURE_INTERRUPTS_DISABLED_TIME_ */
 
     /*
      * Restore explicitly-saved registers r4-r11:
@@ -193,7 +179,7 @@ rtos_k_restore_execution_context:
     /*
      * Current CPU mode is not thread mode (exception number field > 0)
      */
-#endif
+#endif /* DEBUG */
 
     /*
      * Return from exception to thread:
@@ -303,6 +289,21 @@ rtos_k_synchronous_context_switch:
      * is expected by the callers of this function:
      */
     cpsid   i
+
+#ifdef _MEASURE_INTERRUPTS_DISABLED_TIME_
+    /*
+     * Call rtos_stop_interrupts_disabled_time_measure():
+     *
+     * NOTE:
+     * - For Cortex-M, we don't need to use the arg of
+     *   rtos_start_interrupts_disabled_time_measure()
+     */
+    push    {lr}
+    bl      rtos_start_interrupts_disabled_time_measure
+    pop     {r0}
+    mov     lr, r0
+#endif /* _MEASURE_INTERRUPTS_DISABLED_TIME_ */
+
     bx      lr 
 
 .endfunc

@@ -735,7 +735,8 @@ print_int32_decimal(
     } while (abs_value > 0);
 
     if (value < 0) {
-        *(p - 1) = '-';
+        p --;
+        *p = '-';
     }
 
 Exit:
