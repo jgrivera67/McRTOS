@@ -9,6 +9,7 @@
  */ 
 
 #include "arm_defs.h"
+#include "arm_cortex_m_macros.s"
 
 /*
  * Imported symbols
@@ -67,6 +68,16 @@
      */
     ldr     r2, =\_g_rtos_interrupt_p_
     ldr     r2, [r2]
+
+
+    //???
+    .if \_g_rtos_interrupt_p_ == g_rtos_interrupt_systick_p
+        ldr     r0, [r2]
+        ldr     r1, [r2, #RTOS_INT_CPU_CONTROLLER_P_OFFSET]
+        ldr     r3, [r1, #RTOS_CPC_CURRENT_EXECUTION_CONTEXT_P_OFFSET]
+        DEBUG_CAPTURE_R0_TO_R3
+    .endif
+    //???
 
     /*
      * Set r0 to &(\_g_rtos_interrupt_p_->int_cpu_controller_p->

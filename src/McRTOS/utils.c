@@ -862,4 +862,75 @@ debug_dump_r0_to_r3(
     debug_printf(
         "REGISTERS: r0: %#x, r1: %#x, r2: %#x, r3: %#x\n",
         r0, r1, r2, r3);
-} 
+}
+
+
+struct debug_captured_registers_buffer {
+    uint32_t *cap_location_addr;
+    cpu_register_t cap_registers[CPU_NUM_PRE_SAVED_REGISTERS];
+};
+
+static struct debug_captured_registers_buffer g_debug_captured_registers_buffers[8];
+
+static uint32_t g_debug_captured_registers_buffer_cursor = 0;
+
+void
+debug_capture_registers(
+    uint32_t r0, 
+    uint32_t r1, 
+    uint32_t r2, 
+    uint32_t r3)
+{
+    /*
+     * Capture ARM LR register on entry
+     */ 
+    uint32_t *return_address;
+    CAPTURE_ARM_LR_REGISTER(return_address);
+
+    cpu_status_register_t old_primask = __get_PRIMASK();
+    __disable_irq();
+
+    struct debug_captured_registers_buffer *captured_registers_buffer_p =
+        &g_debug_captured_registers_buffers[g_debug_captured_registers_buffer_cursor];
+
+    captured_registers_buffer_p->cap_location_addr = return_address - 1;
+    captured_registers_buffer_p->cap_registers[0] = r0;
+    captured_registers_buffer_p->cap_registers[1] = r1;
+    captured_registers_buffer_p->cap_registers[2] = r2;
+    captured_registers_buffer_p->cap_registers[3] = r3;
+
+    g_debug_captured_registers_buffer_cursor ++;
+    if (g_debug_captured_registers_buffer_cursor ==
+        ARRAY_SIZE(g_debug_captured_registers_buffers)) {
+        g_debug_captured_registers_buffer_cursor = 0; 
+    }
+
+    if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
+        __enable_irq();
+    }
+}
+
+void
+debug_dump_captured_registers(void)
+{
+
+    debug_printf(
+        "Registers captured buffers (next to fill %u):\n",
+        g_debug_captured_registers_buffer_cursor);
+
+    for (uint32_t i = 0; i < ARRAY_SIZE(g_debug_captured_registers_buffers); i ++) {
+        struct debug_captured_registers_buffer *captured_registers_buffer_p =
+            &g_debug_captured_registers_buffers[i];
+
+        if (captured_registers_buffer_p->cap_location_addr != NULL) {
+            debug_printf(
+                "%u: Registers captured at %#p: r0: %#x, r1: %#x, r2: %#x, r3: %#x\n",
+                i,
+                captured_registers_buffer_p->cap_location_addr, 
+                captured_registers_buffer_p->cap_registers[0],
+                captured_registers_buffer_p->cap_registers[1],
+                captured_registers_buffer_p->cap_registers[2],
+                captured_registers_buffer_p->cap_registers[3]);
+        }
+    }
+}

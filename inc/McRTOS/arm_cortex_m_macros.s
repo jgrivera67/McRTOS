@@ -9,6 +9,8 @@
  */ 
 
 .extern g_McRTOS_p
+.extern debug_dump_r0_to_r3
+.extern debug_capture_registers
 
 /**
  * Macro that prints registers r0 to r3
@@ -34,6 +36,29 @@
 
 
 /**
+ * Macro that captures registers r0 to r3
+ *
+ *
+ * INPUT REGISTERS:
+ * r0 - r3
+ *
+ * OUTPUT REGISTERS:
+ * None
+ *
+ * CLOBBERED REGISTERS:
+ * None
+ */
+.macro DEBUG_CAPTURE_R0_TO_R3
+    push    {r0-r3}
+    push    {lr}
+    bl      debug_capture_registers
+    pop     {r0}
+    mov     lr, r0
+    pop     {r0-r3}
+.endm
+
+
+/**
  * Macro that retrieves in \_reg_ the value of
  * g_McRTOS_p->rts_cpu_controllers[0].cpc_current_execution_context_p
  *
@@ -49,7 +74,7 @@
  */
 .macro GET_MCRTOS_CURRENT_EXECUTION_CONTEXT _reg_
     ldr     \_reg_, =g_McRTOS_p /* \_reg_ = &g_McRTOS_p */
-    ldr     \_reg_, [\_reg_]        /* \_reg_ = g_McRTOS_p */
+    ldr     \_reg_, [\_reg_]    /* \_reg_ = g_McRTOS_p */
     ldr     \_reg_, [\_reg_, #(RTOS_RTS_CPU_CONTROLLERS_OFFSET + RTOS_CPC_CURRENT_EXECUTION_CONTEXT_P_OFFSET)]
 .endm
 

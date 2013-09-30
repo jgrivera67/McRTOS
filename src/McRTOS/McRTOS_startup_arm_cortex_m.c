@@ -124,13 +124,13 @@ void cortex_m_nvic_init(void)
     write_32bit_mmio_register(&NVIC_ICER, UINT32_MAX); 
 
     /*
-     * Set to the lowest priority the priority of the PendSV exception, which is
-     * used for context switches:
+     * Set to the highest priority the priority of the PendSV exception, which is
+     * used for synchronous context switches:
      */
     install_isr(
         VECTOR_NUMBER_TO_IRQ_NUMBER(INT_PendableSrvReq),
         cortex_m_pendsv_exception_handler,
-        SOC_LOWEST_INTERRUPT_PRIORITY,
+        SOC_HIGHEST_INTERRUPT_PRIORITY,
         SOC_GET_CURRENT_CPU_ID());
 
     /*

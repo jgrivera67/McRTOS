@@ -695,14 +695,14 @@ rtos_command_line_thread_f(void *arg)
 
     for ( ; ; )
     {
-        DEBUG_PRINTF("before getchar\n"); // ???
         uint8_t c = rtos_console_getchar();
-        DEBUG_PRINTF("after getchar\n"); // ???
 
+#if 0 // ???
         if (c != CTRL_C)
         {
             continue;
         }
+#endif
 
         rtos_console_channels_t old_console_channel = 
             g_McRTOS_p->rts_current_console_channel;
@@ -805,6 +805,11 @@ McRTOS_display_stats(void)
         struct rtos_execution_context *context_p = 
             GLIST_NODE_ENTRY(
                 context_node_p, struct rtos_execution_context, ctx_list_node);
+
+        if (context_p->ctx_context_type == RTOS_RESET_CONTEXT)
+        {
+            continue;
+        }
 
         console_printf(
             "0x%8x %30s %c%7u %12u %10u %10u %12u 0x%x%x\n",

@@ -74,9 +74,9 @@
 
 #   define DEBUG_BLINK_LED(_led_mask) \
             do {                                                            \
-                toggle_rgb_led(_led_mask);                                  \
+                uint32_t old_color = set_rgb_led_color(_led_mask);          \
                 delay_loop(500000);                                         \
-                toggle_rgb_led(_led_mask);                                  \
+                set_rgb_led_color(old_color);                               \
             } while (0)
 
 #else
@@ -185,6 +185,16 @@ debug_dump_r0_to_r3(
     uint32_t r1, 
     uint32_t r2, 
     uint32_t r3);
+
+void
+debug_capture_registers(
+    uint32_t r0, 
+    uint32_t r1, 
+    uint32_t r2, 
+    uint32_t r3);
+
+void
+debug_dump_captured_registers(void);
 
 extern const char g_clear_console_control_string[];
 

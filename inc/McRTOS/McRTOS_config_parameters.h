@@ -136,7 +136,7 @@ C_ASSERT(RTOS_MAX_NUM_INTERRUPTS < SOC_NUM_INTERRUPT_CHANNELS);
 /**
  * Size of the context switch trace buffer in number of entries
  */
-#define RTOS_NUM_CONTEXT_SWITCH_TRACE_BUFFER_ENTRIES    128 //UINT16_C(16)
+#define RTOS_NUM_CONTEXT_SWITCH_TRACE_BUFFER_ENTRIES    UINT16_C(16)
 
 /**
  * Number of console channels

@@ -24,7 +24,7 @@ static bool rtos_dbg_parse_command(
 static void rtos_dbg_display_help(void);
 
 static void 
-rtos_dbg_dump_registers_saved_on_exception(
+rtos_dbg_dump_exception_info(
     _IN_ const uint32_t *before_exception_stack_p);
 
 static void 
@@ -114,7 +114,7 @@ rtos_run_debugger(
 {
     bool quit;
 
-    turn_on_rgb_led(LED_RED_MASK);
+    uint32_t old_led_color = set_rgb_led_color(LED_COLOR_RED);
    
     do {
         debug_printf("\nMcRTOS debugger> ");
@@ -132,7 +132,7 @@ rtos_run_debugger(
 
     } while (!quit);
 
-    turn_off_rgb_led(LED_RED_MASK);
+    set_rgb_led_color(old_led_color);
 }
 
 static bool
@@ -155,7 +155,7 @@ rtos_dbg_parse_command(
             break;
 
         case 'e':
-            rtos_dbg_dump_registers_saved_on_exception(
+            rtos_dbg_dump_exception_info(
                 before_exception_stack_p);
             rtos_dbg_dump_memory(
                 before_exception_stack_p, 32, "Stack before exception");
@@ -205,7 +205,7 @@ rtos_dbg_display_help(void)
 
 
 static void 
-rtos_dbg_dump_registers_saved_on_exception(
+rtos_dbg_dump_exception_info(
     _IN_ const uint32_t *before_exception_stack_p)
 {
     debug_printf(
@@ -228,6 +228,8 @@ rtos_dbg_dump_registers_saved_on_exception(
         before_exception_stack_p[CPU_REG_LR],
         before_exception_stack_p[CPU_REG_PC],
         before_exception_stack_p[CPU_REG_PSR]);
+
+    debug_dump_captured_registers();
 }
 
 
@@ -453,7 +455,7 @@ rtos_dbg_dump_context_switch_traces(void)
             last_switched_out_reason, priority
             );
 
-#       if 0 // ???
+//#       if 0 // ???
         if (thread_p != NULL) {
             debug_printf(
                 "\tthread: %#p, state: %#x, state history: %#x\n",
@@ -465,7 +467,7 @@ rtos_dbg_dump_context_switch_traces(void)
                 "\tinterrupt: %#p\n", interrupt_p);
 
         }
-#       endif
+//#       endif
     }
 }
 
@@ -477,7 +479,7 @@ rtos_dbg_dump_cpu_controller(void)
         &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
 
     debug_printf(
-        "CPU controller for core %u:\n"
+        "CPU controller for core %u (%#p):\n"
         "\tcpc_ticks_since_boot_count: %u\n"
         "\tcpc_current_execution_context_p: %#p\n"
         "\tcpc_current_thread_p: %#p\n"
@@ -488,6 +490,7 @@ rtos_dbg_dump_cpu_controller(void)
         "\tcpc_thread_scheduler_calls: %u\n"
         "\tcpc_longest_time_interrupts_disabled: %u\n",
         SOC_GET_CURRENT_CPU_ID(),
+        cpu_controller_p,
         cpu_controller_p->cpc_ticks_since_boot_count,
         cpu_controller_p->cpc_current_execution_context_p,
         cpu_controller_p->cpc_current_thread_p,

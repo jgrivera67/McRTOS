@@ -1425,10 +1425,13 @@ rtos_k_condvar_signal_internal(
         /*
          * The caller is an interrupt context:
          *
-         * NOTE: Even if there were no waiters, we still need to set
-         * the cv_pending_interrupt_wakeup flag, in case of a race
-         * between a thread calling rtos_k_condvar_wait_interrupt() and
-         * an ISR calling this function.
+         * NOTE: If there were waiter awaken, they will get the chance to run
+         * when the calling interrupt handler calls rtos_k_exit_interrupt(),
+         * which calls rtos_thread_scheduler().
+         * Even if there were no waiters, we still need to set the
+         * cv_pending_interrupt_wakeup flag, in case of a race between a thread
+         * calling rtos_k_condvar_wait_interrupt() and an ISR calling this
+         * function.
          */
         DBG_ASSERT(
             current_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
@@ -2431,7 +2434,6 @@ rtos_execution_context_init(
         DBG_ASSERT(cpu_lr_register & 0x1, cpu_lr_register, 0);
         DBG_ASSERT(cpu_pc_register & 0x1, cpu_pc_register, 0);
 
-        //???
         DEBUG_PRINTF(
             "Created execution context \'%s\' (%#p)\n", 
             execution_context_p->ctx_name_p,
@@ -2757,6 +2759,7 @@ rtos_k_lcd_draw_tile(
             ((_entry_type *)circ_buf_p->cb_storage_array_p)[                \
                 circ_buf_p->cb_write_cursor] = entry_value;                 \
                                                                             \
+            circ_buf_p->cb_entries_filled ++;                               \
             circ_buf_p->cb_write_cursor ++;                                 \
             if (circ_buf_p->cb_write_cursor ==                              \
                 circ_buf_p->cb_num_entries) {                               \
@@ -2839,6 +2842,7 @@ rtos_k_lcd_draw_tile(
                 ((_entry_type *)circ_buf_p->cb_storage_array_p)[            \
                 circ_buf_p->cb_read_cursor];                                \
                                                                             \
+            circ_buf_p->cb_entries_filled --;                               \
             circ_buf_p->cb_read_cursor ++;                                  \
             if (circ_buf_p->cb_read_cursor == circ_buf_p->cb_num_entries) { \
                 circ_buf_p->cb_read_cursor = 0;                             \

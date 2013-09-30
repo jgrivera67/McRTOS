@@ -99,15 +99,23 @@ typedef _RANGE_(INT_SVCall_IRQn, SOC_NUM_INTERRUPT_CHANNELS - 1)
         ((uintptr_t)(_addr) >= SOC_SRAM_BASE &&                        \
          (uintptr_t)(_addr) < SOC_SRAM_BASE + SOC_SRAM_SIZE)
 
-enum led_color_masks {
-    LED_RED_MASK = 1 << 18,
-    LED_GREEN_MASK = 1 << 19,
-    LED_BLUE_MASK = 1 << 1,
-};
+#define LED_RED_PIN_MASK    BIT(18)
+#define LED_GREEN_PIN_MASK  BIT(19)
+#define LED_BLUE_PIN_MASK   BIT(1)
 
-void toggle_rgb_led(enum led_color_masks led_color_mask);
-void turn_on_rgb_led(enum led_color_masks led_color_mask);
-void turn_off_rgb_led(enum led_color_masks led_color_mask);
+#define LED_COLOR_BLACK     UINT32_C(0x0)
+#define LED_COLOR_RED       LED_RED_PIN_MASK
+#define LED_COLOR_GREEN     LED_GREEN_PIN_MASK
+#define LED_COLOR_YELLOW    (LED_RED_PIN_MASK | LED_GREEN_PIN_MASK)
+#define LED_COLOR_BLUE      LED_BLUE_PIN_MASK
+#define LED_COLOR_MAGENTA   (LED_RED_PIN_MASK | LED_BLUE_PIN_MASK)
+#define LED_COLOR_CYAN      (LED_GREEN_PIN_MASK | LED_GREEN_PIN_MASK)
+#define LED_COLOR_WHITE     (LED_RED_PIN_MASK | LED_GREEN_PIN_MASK | LED_GREEN_PIN_MASK)
+
+void toggle_rgb_led(uint32_t led_color_mask);
+void turn_on_rgb_led(uint32_t led_color_mask);
+void turn_off_rgb_led(uint32_t led_color_mask);
+uint32_t set_rgb_led_color(uint32_t led_color_mask);
 
 struct rtos_interrupt; /* opaque type */
 

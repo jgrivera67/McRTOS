@@ -416,7 +416,7 @@ static const struct uart_device g_uart_devices[] =
             .irp_isr_function_p = kl25_uart0_isr,
             .irp_arg_p =  (void *)&g_uart_devices[0],
             .irp_channel = VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART0),
-            .irp_priority = SOC_LOWEST_INTERRUPT_PRIORITY - 1,
+            .irp_priority = SOC_HIGHEST_INTERRUPT_PRIORITY + 1, //SOC_LOWEST_INTERRUPT_PRIORITY - 1,
             .irp_cpu_id = 0,
         },
 
@@ -528,15 +528,15 @@ board_init(void)
 
 #ifdef DEBUG
     if (software_reset_happened()) {
-        DEBUG_BLINK_LED(LED_BLUE_MASK);
+        DEBUG_BLINK_LED(LED_COLOR_YELLOW);
     } else {
-        DEBUG_BLINK_LED(LED_GREEN_MASK);
+        DEBUG_BLINK_LED(LED_COLOR_GREEN);
     }
 #   else
     if (software_reset_happened()) {
-        turn_on_rgb_led(LED_BLUE_MASK);
+        (void)set_rgb_led_color(LED_COLOR_CYAN);
     } else {
-        turn_on_rgb_led(LED_GREEN_MASK);
+        (void)set_rgb_led_color(LED_COLOR_GREEN);
     }
 #   endif
 
@@ -855,6 +855,8 @@ tfc_gpio_init(void)
 }
 #endif // # if 0
 
+static uint32_t g_rgb_led_current_mask = 0x0;
+
 static void 
 rgb_led_init(void)
 {
@@ -865,86 +867,115 @@ rgb_led_init(void)
 	PORTB_PCR18 = PORT_PCR_MUX(1);
 	
 	/* Set the initial output state to high */
-	GPIOB_PSOR |= LED_RED_MASK;
+	GPIOB_PSOR |= LED_RED_PIN_MASK;
 	
 	/* Set the pins direction to output */
-	GPIOB_PDDR |= LED_RED_MASK;
+	GPIOB_PDDR |= LED_RED_PIN_MASK;
 	
 	/* Set the PTB19 pin multiplexer to GPIO mode */
 	PORTB_PCR19 = PORT_PCR_MUX(1);
 	
 	/* Set the initial output state to high */
-	GPIOB_PSOR |= LED_GREEN_MASK;
+	GPIOB_PSOR |= LED_GREEN_PIN_MASK;
 	
 	/* Set the pins direction to output */
-	GPIOB_PDDR |= LED_GREEN_MASK;
+	GPIOB_PDDR |= LED_GREEN_PIN_MASK;
 	
 	/* Set the PTD1 pin multiplexer to GPIO mode */
 	PORTD_PCR1 = PORT_PCR_MUX(1);
 	
 	/* Set the initial output state to high */
-	GPIOD_PSOR = LED_BLUE_MASK;
+	GPIOD_PSOR = LED_BLUE_PIN_MASK;
 	
 	/* Set the pins direction to output */
-	GPIOD_PDDR |= LED_BLUE_MASK;
+	GPIOD_PDDR |= LED_BLUE_PIN_MASK;
 }
 
 
 void
 toggle_heartbeat_led(void)
 {
-    toggle_rgb_led(LED_BLUE_MASK);
+    toggle_rgb_led(LED_COLOR_BLUE);
 }
 
 
-void toggle_rgb_led(enum led_color_masks led_color_mask)
+void
+toggle_rgb_led(uint32_t led_color_mask)
 {
-    GPIO_MemMapPtr gpio_port_p;          
+    g_rgb_led_current_mask ^= led_color_mask;
 
-    if (led_color_mask == LED_BLUE_MASK) {
-        gpio_port_p = PTD_BASE_PTR;
-    } else {
-        gpio_port_p = PTB_BASE_PTR;
+    if (led_color_mask & LED_BLUE_PIN_MASK) {
+        GPIO_PTOR_REG(PTD_BASE_PTR) = LED_BLUE_PIN_MASK;
+        led_color_mask &= ~LED_BLUE_PIN_MASK;
     }
 
-    /*
-     * Toggle LED
-     */
-    GPIO_PTOR_REG(gpio_port_p) = led_color_mask;
+    if (led_color_mask != 0x0) {
+        GPIO_PTOR_REG(PTB_BASE_PTR) = led_color_mask;
+    }
 }
 
 
-void turn_on_rgb_led(enum led_color_masks led_color_mask)
+void
+turn_on_rgb_led(uint32_t led_color_mask)
 {
-    GPIO_MemMapPtr gpio_port_p;          
+    g_rgb_led_current_mask |= led_color_mask;
 
-    if (led_color_mask == LED_BLUE_MASK) {
-        gpio_port_p = PTD_BASE_PTR;
-    } else {
-        gpio_port_p = PTB_BASE_PTR;
+    if (led_color_mask & LED_BLUE_PIN_MASK) {
+        GPIO_PCOR_REG(PTD_BASE_PTR) = LED_BLUE_PIN_MASK;
+        led_color_mask &= ~LED_BLUE_PIN_MASK;
     }
 
-    /*
-     * Toggle LED
-     */
-    GPIO_PCOR_REG(gpio_port_p) = led_color_mask;
+    if (led_color_mask != 0x0) {
+        GPIO_PCOR_REG(PTB_BASE_PTR) = led_color_mask;
+    }
 }
 
 
-void turn_off_rgb_led(enum led_color_masks led_color_mask)
+void
+turn_off_rgb_led(uint32_t led_color_mask)
 {
-    GPIO_MemMapPtr gpio_port_p;          
+    g_rgb_led_current_mask &= ~led_color_mask;
 
-    if (led_color_mask == LED_BLUE_MASK) {
-        gpio_port_p = PTD_BASE_PTR;
+    if (led_color_mask & LED_BLUE_PIN_MASK) {
+        GPIO_PSOR_REG(PTD_BASE_PTR) = LED_BLUE_PIN_MASK;
+        led_color_mask &= ~LED_BLUE_PIN_MASK;
+    }
+    
+    if (led_color_mask != 0x0) {
+        GPIO_PSOR_REG(PTB_BASE_PTR) = led_color_mask;
+    }
+}
+
+
+/*
+ * Set the LED to the given color and returns the previous color
+ */
+uint32_t
+set_rgb_led_color(uint32_t led_color_mask)
+{
+    uint32_t old_rgb_led_mask = g_rgb_led_current_mask;
+
+    g_rgb_led_current_mask = led_color_mask;
+
+    if (led_color_mask & LED_BLUE_PIN_MASK) {
+        GPIO_PCOR_REG(PTD_BASE_PTR) = LED_BLUE_PIN_MASK;
     } else {
-        gpio_port_p = PTB_BASE_PTR;
+        GPIO_PSOR_REG(PTD_BASE_PTR) = LED_BLUE_PIN_MASK;
     }
 
-    /*
-     * Toggle LED
-     */
-    GPIO_PSOR_REG(gpio_port_p) = led_color_mask;
+    if (led_color_mask & LED_RED_PIN_MASK) {
+        GPIO_PCOR_REG(PTB_BASE_PTR) = LED_RED_PIN_MASK;
+    } else {
+        GPIO_PSOR_REG(PTB_BASE_PTR) = LED_RED_PIN_MASK;
+    }
+
+    if (led_color_mask & LED_GREEN_PIN_MASK) {
+        GPIO_PCOR_REG(PTB_BASE_PTR) = LED_GREEN_PIN_MASK;
+    } else {
+        GPIO_PSOR_REG(PTB_BASE_PTR) = LED_GREEN_PIN_MASK;
+    }
+
+    return old_rgb_led_mask;
 }
 
 

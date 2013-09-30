@@ -280,6 +280,11 @@ rtos_k_synchronous_context_switch:
 
     /*
      * Enable interrupts to take the PendSV exception:
+     *
+     * NOTE: There is no danger of a race with another interrupt handler
+     * that could get executed before the PendSV exception handler, since
+     * the PendSV exception has higher priority than all interrupts with
+     * configurable priority.
      */
     cpsie    i
 
