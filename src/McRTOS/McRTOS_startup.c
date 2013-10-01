@@ -68,6 +68,7 @@ static fdc_error_t rtos_root_thread_f(void *arg);
 static fdc_error_t rtos_idle_thread_f(void *arg);
 static fdc_error_t rtos_touch_screen_reader_thread_f(void *arg);
 static fdc_error_t rtos_command_line_thread_f(void *arg);
+static void rtos_parse_command_line(const char *cmd_line);
 static void McRTOS_display_help(void);
 static void McRTOS_display_stats(void);
 
@@ -157,7 +158,7 @@ static struct McRTOS g_McRTOS =
     .rts_current_lcd_channel = RTOS_COMMAND_LINE_LCD_CHANNEL,
 #endif
 
-#ifdef DEBUG
+#ifdef LPC2478_SOC
     .rts_stop_idle_cpu = false,
 #else
     .rts_stop_idle_cpu = true,
@@ -299,9 +300,20 @@ rtos_startup(
          * Calculate  approximate overhead for taking a measurement of time in
          * CPU clock cycles:
          */
+#       if 0
         cpu_clock_cycles_t begin_cycles = get_cpu_clock_cycles();
+        cpu_clock_cycles_t end_cycles = get_cpu_clock_cycles();
         g_McRTOS_p->rts_cpu_cycles_measure_overhead =
-            CPU_CLOCK_CYCLES_DELTA(begin_cycles, get_cpu_clock_cycles());
+            CPU_CLOCK_CYCLES_DELTA(begin_cycles, end_cycles);
+
+        DBG_ASSERT(
+            g_McRTOS_p->rts_cpu_cycles_measure_overhead <
+                SOC_CPU_CLOCK_FREQ_IN_MEGA_HZ /* 1 microsecond */,
+            g_McRTOS_p->rts_cpu_cycles_measure_overhead,
+            SOC_CPU_CLOCK_FREQ_IN_MEGA_HZ);
+#       else
+        g_McRTOS_p->rts_cpu_cycles_measure_overhead = 0; 
+#       endif
     }
 
     /*
@@ -693,53 +705,22 @@ rtos_command_line_thread_f(void *arg)
 
     FDC_ASSERT(arg == NULL, arg, cpu_id);
 
+    g_McRTOS_p->rts_current_console_channel = RTOS_COMMAND_LINE_CONSOLE_CHANNEL;
+    
+    //console_clear();
+
     for ( ; ; )
     {
-        uint8_t c = rtos_console_getchar();
+        console_printf("McRTOS> ");
+        read_command_line(
+            (putchar_func_t *)rtos_console_putchar,
+            (getchar_func_t *)rtos_console_getchar,
+            NULL,
+            g_McRTOS_p->rts_command_line_buffer,
+            RTOS_COMMAND_LINE_BUFFER_SIZE);
 
-#if 0 // ???
-        if (c != CTRL_C)
-        {
-            continue;
-        }
-#endif
-
-        rtos_console_channels_t old_console_channel = 
-            g_McRTOS_p->rts_current_console_channel;
-
-        g_McRTOS_p->rts_current_console_channel = RTOS_COMMAND_LINE_CONSOLE_CHANNEL;
-
-        console_clear();
-        McRTOS_display_help();
-
-        bool quit = false;
-
-        do {
-            console_printf("McRTOS> ");
-            c = rtos_console_getchar();
-            console_printf("%c\n", c);
-            switch (c)
-            {
-                case 's':
-                    McRTOS_display_stats();
-                    break;
-
-                case 'i':
-                    g_McRTOS_p->rts_stop_idle_cpu ^= true;
-                    break;
-
-                case 'q':
-                    quit = true;
-                    break;
-
-                default:
-                    McRTOS_display_help();
-                    break;
-            }
-        } while (!quit);
-
-        console_clear();
-        g_McRTOS_p->rts_current_console_channel = old_console_channel;
+        rtos_parse_command_line(
+            g_McRTOS_p->rts_command_line_buffer);
     }
 
     fdc_error = CAPTURE_FDC_ERROR(
@@ -751,13 +732,49 @@ rtos_command_line_thread_f(void *arg)
 
 
 static void
+rtos_parse_command_line(
+    const char *cmd_line)
+{
+    uint8_t c = cmd_line[0]; // ???
+
+    switch (c) {
+    case 'c':
+        console_clear();
+        break;
+
+    case 'h':
+        McRTOS_display_help();
+        break;
+
+    case 'i':
+        g_McRTOS_p->rts_stop_idle_cpu ^= true;
+        break;
+
+    case 'r':
+        board_reset();
+        /*UNREACHABLE*/
+        break;
+
+    case 's':
+        McRTOS_display_stats();
+        break;
+
+    default:
+        console_printf("Invalid command: \'%s\' (type h for help)\n", cmd_line);
+    }
+}
+
+
+static void
 McRTOS_display_help(void)
 {
-    console_printf("\nMcRTOS commands\n");
-    console_printf("\ts - display McRTOS stats (until any key is pressed)\n");
-    console_printf("\ti - toggle on/off stopping the CPU in the idle thread\n");
-    console_printf("\tq - quit McRTOS command mode\n");
-    console_printf("\n");
+    console_printf(
+        "\nMcRTOS commands\n"
+        "\tc - clear screen\n"
+        "\th - display this message\n"
+        "\ti - toggle on/off stopping the CPU in the idle thread\n"
+        "\tr - reset CPU\n"
+        "\ts - display McRTOS stats (until any key is pressed)\n\n");
 }
 
 
@@ -794,9 +811,9 @@ McRTOS_display_stats(void)
     struct glist_node *context_node_p;
 
     console_printf(
-        "Context    Name                           Priority Switched-out Preempted  CPU        Tstamp last  Switched-out\n"
-        "address                                            count        count      usage (ms) switched-out history\n"
-        "========== ============================== ======== ============ ========== ========== ============ ============\n");
+        "Context    Name                           Priority Switched-out Preempted  Tstamp last  Switched-out\n"
+        "address                                            count        count      switched-out history\n"
+        "========== ============================== ======== ============ ========== ============ ============\n");
 
     GLIST_FOR_EACH_NODE(
         context_node_p,
@@ -806,26 +823,51 @@ McRTOS_display_stats(void)
             GLIST_NODE_ENTRY(
                 context_node_p, struct rtos_execution_context, ctx_list_node);
 
-        if (context_p->ctx_context_type == RTOS_RESET_CONTEXT)
+        uint8_t context_type_symbol;
+        uint32_t priority;
+
+        switch (context_p->ctx_context_type)
         {
-            continue;
+        case RTOS_RESET_CONTEXT:
+            context_type_symbol = 'R';
+            priority = 0;
+            break;
+
+        case RTOS_THREAD_CONTEXT:
+            context_type_symbol = 'T';
+            priority =  RTOS_EXECUTION_CONTEXT_GET_THREAD(context_p)->thr_current_priority;
+            break;
+
+        case RTOS_INTERRUPT_CONTEXT:
+            context_type_symbol = 'I';
+            priority = RTOS_EXECUTION_CONTEXT_GET_INTERRUPT(context_p)->int_priority;
+            break;
+
+        default:
+            FDC_ASSERT(false, context_p->ctx_context_type, context_p);
         }
 
         console_printf(
-            "0x%8x %30s %c%7u %12u %10u %10u %12u 0x%x%x\n",
+            "%#8p %30s %c%7u %12u %10u %12u %#x%x\n",
+            //"%#p %s %c%u %u %u %u %#x%x\n",
             context_p,
             context_p->ctx_name_p,
-            (context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT) ?
-                'I' :
-                'T',
-            (context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT) ?
-                RTOS_EXECUTION_CONTEXT_GET_INTERRUPT(context_p)->int_priority :
-                RTOS_EXECUTION_CONTEXT_GET_THREAD(context_p)->thr_current_priority,
+            context_type_symbol,
+            priority,
             context_p->ctx_switched_out_counter,
             context_p->ctx_preempted_counter,
-            CPU_CLOCK_CYCLES_TO_MILLISECONDS(context_p->ctx_accumulated_cpu_usage),
             context_p->ctx_last_switched_out_time_stamp_in_ticks,
             context_p->ctx_switched_out_reason_history,
-            context_p->ctx_last_switched_out_reason);
+            context_p->ctx_last_switched_out_reason
+#if 0
+            GEN_SIGNATURE('3', '3', '3', '3'), //context_p,
+            GEN_SIGNATURE('4', '4', '4', '4'), //context_p,
+            GEN_SIGNATURE('5', '5', '5', '5'), //context_p,
+            GEN_SIGNATURE('6', '6', '6', '6'), //context_p,
+            GEN_SIGNATURE('7', '7', '7', '7'), //context_p,
+            GEN_SIGNATURE('8', '8', '8', '8'),
+            GEN_SIGNATURE('9', '9', '9', '9')
+#endif 
+        );
     }
 }

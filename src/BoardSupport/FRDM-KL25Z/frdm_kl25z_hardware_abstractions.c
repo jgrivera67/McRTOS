@@ -63,7 +63,7 @@ C_ASSERT(
 #define CONSOLE_SERIAL_PORT_MODE        0 /* default: 8-bits, no-parity, 1 stop bit */
 
 #define UART_TRANSMIT_QUEUE_SIZE_IN_BYTES   UINT16_C(128)
-#define UART_RECEIVE_QUEUE_SIZE_IN_BYTES    UINT16_C(128)
+#define UART_RECEIVE_QUEUE_SIZE_IN_BYTES    UINT16_C(16)
 
 /**
  * Const fields of a UART device (to be placed in flash)

@@ -521,10 +521,20 @@ check_rtos_execution_context_cpu_registers(
 
 #elif DEFINED_ARM_CORTEX_M_ARCH()
 
+uint32_t *g_check_rtos_execution_context_cpu_registers_last_caller = NULL;
+
 void
 check_rtos_execution_context_cpu_registers(
     _IN_ const struct rtos_execution_context *rtos_execution_context_p)
 {
+    /*
+     * Capture ARM LR register on entry
+     */ 
+    uint32_t *return_address;
+    CAPTURE_ARM_LR_REGISTER(return_address);
+
+    g_check_rtos_execution_context_cpu_registers_last_caller = return_address - 1;
+
     cpu_register_t cpu_sp_register;
 
     FDC_ASSERT(
@@ -563,9 +573,30 @@ check_rtos_execution_context_cpu_registers(
         cpu_sp_register % ARM_CPU_WORD_SIZE_IN_BYTES == 0,
         cpu_sp_register, rtos_execution_context_p);
 
+#if 0 // ???
     FDC_ASSERT(
         (rtos_execution_stack_entry_t *)cpu_sp_register >= stack_top_end_p,
         cpu_sp_register, stack_top_end_p);
+#else
+    if ((rtos_execution_stack_entry_t *)cpu_sp_register < stack_top_end_p) {
+        DEBUG_PRINTF("\nCaller: %#x\n"
+            "\tcontext: %#x\n"
+            "\tcpu_sp_register: %#x\n"
+            "\tstack_top_end_p: %#x\n"
+            "\tstack_bottom_end_p: %#x\n",
+            g_check_rtos_execution_context_cpu_registers_last_caller,
+            rtos_execution_context_p,
+            cpu_sp_register,
+            stack_top_end_p,
+            stack_bottom_end_p);
+
+        for (uint32_t *p = (uint32_t *)(cpu_sp_register - 8);
+             p <= stack_bottom_end_p; p ++) {
+            debug_printf("%3u (%#p): %#x\n",
+                stack_bottom_end_p - p, p, *p);
+        }
+    }
+#endif
 
     FDC_ASSERT(
         (rtos_execution_stack_entry_t *)cpu_sp_register <= stack_bottom_end_p,

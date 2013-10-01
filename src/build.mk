@@ -155,10 +155,8 @@ CFLAGS  = 	$(MCFLAGS) $(OPT) -gdwarf-2 -fomit-frame-pointer \
 		-Wmissing-prototypes \
 		-Wpointer-arith \
 		-Winline \
-		-Wstack-protector \
 		-fverbose-asm -Wa,-ahlms=$(<:.c=.lst) \
 		-Werror \
-		-mapcs-frame \
 		-Wstack-usage=256 \
 		-Wundef \
 		$(CPPFLAGS) \

@@ -373,9 +373,8 @@ console_printf(const char *fmt, ...)
     putchar_func_t *putchar_func_p;
     cpu_status_register_t cpu_status_register;
 
-    va_start(va, fmt);
-
-    bool caller_is_thread = rtos_k_caller_is_thread();
+    //???bool caller_is_thread = rtos_k_caller_is_thread();
+    bool caller_is_thread = false;
 
     if (caller_is_thread) {
         putchar_func_p = rtos_console_putchar;
@@ -385,8 +384,11 @@ console_printf(const char *fmt, ...)
         cpu_status_register = rtos_k_disable_cpu_interrupts();
     }
 
+    va_start(va, fmt);
+
     embedded_vprintf(putchar_func_p, NULL, fmt, va);
 
+    va_end(va);
 
     if (caller_is_thread) {
         rtos_mutex_release(&g_console_printf_mutex);
@@ -394,7 +396,6 @@ console_printf(const char *fmt, ...)
         rtos_k_restore_cpu_interrupts(cpu_status_register);
     }
 
-    va_end(va);
 }
 
 
@@ -458,15 +459,17 @@ lcd_printf(
         .lcd_char_attributes_p = lcd_char_attributes_p
     };
 
+    rtos_mutex_acquire(&g_lcd_printf_mutex);
+
     va_start(va, fmt);
 
-    rtos_mutex_acquire(&g_lcd_printf_mutex);
     embedded_vprintf(
         (putchar_func_t *)rtos_lcd_putchar, &lcd_putchar_attributes, fmt, va);
 
+    va_end(va);
+
     rtos_mutex_release(&g_lcd_printf_mutex);
 
-    va_end(va);
 }
 
 #endif /* LCD_SUPPORTED */
@@ -866,6 +869,7 @@ debug_dump_r0_to_r3(
 
 
 struct debug_captured_registers_buffer {
+    struct rtos_execution_context *cap_execution_context_p;
     uint32_t *cap_location_addr;
     cpu_register_t cap_registers[CPU_NUM_PRE_SAVED_REGISTERS];
 };
@@ -893,6 +897,9 @@ debug_capture_registers(
     struct debug_captured_registers_buffer *captured_registers_buffer_p =
         &g_debug_captured_registers_buffers[g_debug_captured_registers_buffer_cursor];
 
+    captured_registers_buffer_p->cap_execution_context_p = 
+        RTOS_GET_CURRENT_EXECUTION_CONTEXT();
+
     captured_registers_buffer_p->cap_location_addr = return_address - 1;
     captured_registers_buffer_p->cap_registers[0] = r0;
     captured_registers_buffer_p->cap_registers[1] = r1;
@@ -910,10 +917,10 @@ debug_capture_registers(
     }
 }
 
+
 void
 debug_dump_captured_registers(void)
 {
-
     debug_printf(
         "Registers captured buffers (next to fill %u):\n",
         g_debug_captured_registers_buffer_cursor);
@@ -924,9 +931,10 @@ debug_dump_captured_registers(void)
 
         if (captured_registers_buffer_p->cap_location_addr != NULL) {
             debug_printf(
-                "%u: Registers captured at %#p: r0: %#x, r1: %#x, r2: %#x, r3: %#x\n",
+                "%u: Registers captured at %#p (context: %#p): r0: %#x, r1: %#x, r2: %#x, r3: %#x\n",
                 i,
                 captured_registers_buffer_p->cap_location_addr, 
+                captured_registers_buffer_p->cap_execution_context_p,
                 captured_registers_buffer_p->cap_registers[0],
                 captured_registers_buffer_p->cap_registers[1],
                 captured_registers_buffer_p->cap_registers[2],

@@ -89,6 +89,7 @@ enum rtos_thread_states
     RTOS_THREAD_BLOCKED_ON_MUTEX =          0x4,
     RTOS_THREAD_BLOCKED_ON_CONDVAR =        0x5,
     RTOS_THREAD_ABORTED =                   0x6,
+    RTOS_THREAD_BEING_REQUEUED =            0x7,
 
     /*
      * Last dummy value. New state must be added above here:
@@ -272,9 +273,9 @@ struct rtos_execution_context
     rtos_ticks_t ctx_last_switched_out_time_stamp_in_ticks;
 
     /**
-     * Accumulated CPU usage for this context in CPU clock cycles
+     * Accumulated CPU usage for this context in milliseconds
      */
-    cpu_clock_cycles_t ctx_accumulated_cpu_usage;
+    uint32_t ctx_accumulated_cpu_usage_milliseconds;
 
     /**
      * Pre-filled trace entry for context switch tracing

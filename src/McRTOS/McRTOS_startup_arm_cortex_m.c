@@ -269,7 +269,16 @@ uint32_t
 get_cpu_clock_cycles(void)
 {
     uint32_t reg_value = read_32bit_mmio_register(&SYST_CVR);
-    uint32_t delta_cycles = SYSTICK_COUNTER_RELOAD_VALUE - reg_value;
+    
+    reg_value &= MULTI_BIT_MASK(23, 0);
+
+#if 0
+    uint32_t delta_cycles;
+    if (reg_value < SYSTICK_COUNTER_RELOAD_VALUE) {
+        delta_cycles = SYSTICK_COUNTER_RELOAD_VALUE - reg_value;
+    } else {
+        delta_cycles = 0;
+    }
 
     reg_value = read_32bit_mmio_register(&SYST_CSR);
     if (reg_value & SysTick_CSR_COUNTFLAG_MASK)
@@ -278,6 +287,8 @@ get_cpu_clock_cycles(void)
     }
 
     g_cpu_cycles_count += delta_cycles;
+#endif
+
     return g_cpu_cycles_count;
 }
 

@@ -242,7 +242,7 @@ struct rtos_cpu_controller
      * for the current thread. This flag is set by the rtos_tick_timer_handler()
      * and cleared by rtos_thread_scheduler() when invoked from rtos_k_exit_interrupt().
      */
-    bool cpc_pending_thread_time_slice_decrement;
+    volatile bool cpc_pending_thread_time_slice_decrement;
 
     /**
      * Index of the current timer wheel spoke (hash table bucket). This is the
@@ -595,6 +595,32 @@ extern struct McRTOS *const g_McRTOS_p;
 #define RTOS_EXECUTION_CONTEXT_GET_STACK_POINTER(_execution_context_p)  \
             ((_execution_context_p)->ctx_cpu_registers[CPU_REG_SP])
 
+#define RTOS_EXECUTION_CONTEXT_UPDATE_CPU_USAGE( \
+            _execution_context_p, _used_cpu_cycles)                         \
+        do {                                                                \
+            DBG_ASSERT(                                                     \
+                (int32_t)(_used_cpu_cycles) > 0,                            \
+                _used_cpu_cycles, _execution_context_p);                    \
+            (_execution_context_p)->                                        \
+                ctx_accumulated_cpu_usage_cycles += (_used_cpu_cycles);     \
+            if ((_execution_context_p)->                                    \
+                    ctx_accumulated_cpu_usage_cycles >=                     \
+                SOC_CPU_CLOCK_FREQ_IN_MEGA_HZ * 1000) {                     \
+                uint32_t whole_milliseconds =                               \
+                    CPU_CLOCK_CYCLES_TO_MILLISECONDS(                       \
+                        (_execution_context_p)->                            \
+                            ctx_accumulated_cpu_usage_cycles);              \
+                (_execution_context_p)->                                    \
+                    ctx_accumulated_cpu_usage_milliseconds +=               \
+                    whole_milliseconds;                                     \
+                (_execution_context_p)->                                    \
+                    ctx_accumulated_cpu_usage_cycles -=                     \
+                        whole_milliseconds *                                \
+                        (SOC_CPU_CLOCK_FREQ_IN_MEGA_HZ * 1000);             \
+            }                                                               \
+        } while (0)
+
+
 #define RTOS_THREAD_QUEUE_NODE_GET_THREAD(_glist_node_p) \
         GLIST_NODE_ENTRY(_glist_node_p, struct rtos_thread, thr_list_node)
 
@@ -711,11 +737,16 @@ rtos_add_head_runnable_thread(
 static inline void
 rtos_remove_runnable_thread(
     struct rtos_cpu_controller *cpu_controller_p,
-    struct rtos_thread *thread_p)
+    struct rtos_thread *thread_p,
+    rtos_thread_state_t new_thread_state)
 {
     struct glist_node *runnable_queue_anchor_p =           
         GLIST_NODE_GET_LIST(&thread_p->thr_list_node);    
                                                             
+    FDC_ASSERT(
+        thread_p->thr_state == RTOS_THREAD_RUNNABLE,
+        thread_p->thr_state, thread_p);
+
     rtos_thread_prio_t thread_prio =                          
         runnable_queue_anchor_p -                              
         cpu_controller_p->cpc_runnable_thread_queues_anchors;
@@ -731,6 +762,8 @@ rtos_remove_runnable_thread(
         cpu_controller_p->cpc_runnable_thread_priorities &= 
             ~RTOS_THREAD_PRIO_BIT_MASK(thread_prio);
     }
+
+    RTOS_THREAD_CHANGE_STATE(thread_p, new_thread_state); 
 }
 
 

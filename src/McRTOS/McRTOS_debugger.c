@@ -181,9 +181,9 @@ rtos_dbg_parse_command(
         case 't':
             rtos_dbg_dump_context_switch_traces();
             break;
+
         default:
             debug_printf("Invalid command: \'%s\' (type h for help)\n", cmd_line);
-            break;
     }
 
     return quit;
@@ -197,6 +197,7 @@ rtos_dbg_display_help(void)
         "McRTOS debugger commands\n"
         "\tc - dump current execution context\n"
         "\te - dump exception info\n"
+        "\th - display this message\n"
         "\tp - dump CPU controller of CPU core that took the exception\n"
         "\tq - quit McRTOS command mode\n"
         "\tr - reset CPU\n"
