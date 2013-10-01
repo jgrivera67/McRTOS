@@ -55,7 +55,10 @@ void rtos_thread_scheduler(void)
 
     /*
      * Current execution context is a thread, an interrupt handler or the
-     * reset handler and is not in preemption chain:
+     * reset handler and it is not in preemption chain:
+     *
+     * NOTE: current_context_p may not be the same as
+     * current_thread_p->thr_execution_context.
      */
 
     struct rtos_execution_context *current_context_p =
@@ -131,18 +134,6 @@ void rtos_thread_scheduler(void)
     rtos_remove_runnable_thread(
         cpu_controller_p, chosen_thread_p, RTOS_THREAD_RUNNING);
 
-#if 0 //???
-    if (current_thread_p != NULL) {
-        DEBUG_PRINTF("current thread context %s (%#p), chosen thread context %s (%#p)\n",
-                current_thread_p->thr_execution_context.ctx_name_p,
-                &current_thread_p->thr_execution_context,
-                chosen_thread_p->thr_execution_context.ctx_name_p,
-                &chosen_thread_p->thr_execution_context); // ???
-    } else {
-        DEBUG_PRINTF("current thread is NULL\n");
-    }
-#endif    //???
-    
     /*
      * If the chosen thread is the same as the current thread,
      * decrement its time slice ticks left. If its time slice
@@ -170,7 +161,7 @@ void rtos_thread_scheduler(void)
             if (time_slice_ticks_left == 0)
             {
                 RTOS_EXECUTION_CONTEXT_SET_SWITCHED_OUT_REASON(
-                    current_context_p,
+                    &current_thread_p->thr_execution_context,
                     CTX_SWITCHED_OUT_THREAD_TIME_SLICE_EXHAUSTED,
                     cpu_controller_p);
 
@@ -240,23 +231,23 @@ void rtos_thread_scheduler(void)
              * thread.
              */
             RTOS_EXECUTION_CONTEXT_SET_SWITCHED_OUT_REASON(
-                current_context_p,
+                &current_thread_p->thr_execution_context,
                 CTX_SWITCHED_OUT_THREAD_PREEMPTED_BY_THREAD,
                 cpu_controller_p);
 
-            current_context_p->ctx_last_preempted_by_p =
+            current_thread_p->thr_execution_context.ctx_last_preempted_by_p =
                 &chosen_thread_p->thr_execution_context;
     
-            current_context_p->ctx_preempted_counter ++;
+            current_thread_p->thr_execution_context.ctx_preempted_counter ++;
 
             current_thread_p->thr_preempted_by_other_thread_count ++;
 
             /*
-             * Add old current execution context at the top of the preemption
+             * Add current thread's execution context at the top of the preemption
              * chain:
              */
             rtos_preemption_chain_push_context(
-                cpu_controller_p, current_context_p);
+                cpu_controller_p, &current_thread_p->thr_execution_context);
         }
 
         /*

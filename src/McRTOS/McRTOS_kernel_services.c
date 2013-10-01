@@ -2511,15 +2511,7 @@ rtos_k_console_putchar(
 
     if (send_physical_output)
     {
-        if (RTOS_CURRENT_THREAD_IS_ROOT_SYSTEM_THREAD(cpu_controller_p))
-        {
-            //???uart_putchar_with_polling(g_console_serial_port_p, c);
-            uart_putchar(g_console_serial_port_p, c);
-        }
-        else
-        {
-            uart_putchar(g_console_serial_port_p, c);
-        }
+        uart_putchar(g_console_serial_port_p, c);
     }
 }
 

@@ -20,7 +20,9 @@
 #include "generic_list.h"
 #include "utils.h"
 #include "compile_time_checks.h"
-
+//???
+extern struct rtos_interrupt *g_rtos_interrupt_uart0_p;
+//???
 /**
  * Number of system threads per CPU
  */
@@ -937,6 +939,12 @@ rtos_preemption_chain_push_context(
     glist_add_head_elem(
         preemption_chain_anchor_p,
         &preempted_context_p->ctx_preemption_chain_node);
+
+    //???
+    if (preempted_context_p == &g_rtos_interrupt_uart0_p->int_execution_context) {
+        DEBUG_PRINTF("added to preemption chain: %#p\n", preempted_context_p); // ???
+    }
+    //???
 }
 
 
@@ -962,6 +970,11 @@ rtos_preemption_chain_pop_context(
     struct rtos_execution_context *last_preempted_context_p =
         RTOS_PREEMPTION_CHAIN_NODE_GET_EXECUTION_CONTEXT(top_preemption_node_p);
 
+    //???
+    if (last_preempted_context_p == &g_rtos_interrupt_uart0_p->int_execution_context) {
+        DEBUG_PRINTF("removed from preemption chain: %#p\n", last_preempted_context_p); // ???
+    }
+    //???
     return last_preempted_context_p;
 }
 
@@ -987,6 +1000,11 @@ rtos_preemption_chain_remove_context(
         context_p, preemption_chain_anchor_p);
 
     glist_remove_elem(&context_p->ctx_preemption_chain_node);
+    //???
+    if (context_p == &g_rtos_interrupt_uart0_p->int_execution_context) {
+        DEBUG_PRINTF("removed from preemption chain: %#p\n", context_p); // ???
+    }
+    //???
 }
 
 #endif /* _McRTOS_INTERNALS_H */
