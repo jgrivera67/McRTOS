@@ -45,7 +45,7 @@
 /**
  * Execution stack size for threads (in number of stack entries)
  */
-#define RTOS_THREAD_STACK_NUM_ENTRIES   UINT32_C(128)
+#define RTOS_THREAD_STACK_NUM_ENTRIES   UINT32_C(160)
 
 /**
  * Thread stack size in bytes
@@ -72,7 +72,7 @@
      * nested exceptions
      */ 
 #   define RTOS_INTERRUPT_STACK_NUM_ENTRIES \
-            (UINT32_C(64) * SOC_NUM_INTERRUPT_PRIORITIES)
+            (UINT32_C(96) * SOC_NUM_INTERRUPT_PRIORITIES)
 #endif
 
 /**
@@ -157,7 +157,7 @@ C_ASSERT(RTOS_MAX_NUM_INTERRUPTS < SOC_NUM_INTERRUPT_CHANNELS);
 /**
  * Maximum number of application threads that can exist in the system
  */
-#define RTOS_MAX_NUM_APP_THREADS UINT8_C(8)
+#define RTOS_MAX_NUM_APP_THREADS UINT8_C(6)
 
 /*
  * If the total size of application thread stacks is larger than 25% of

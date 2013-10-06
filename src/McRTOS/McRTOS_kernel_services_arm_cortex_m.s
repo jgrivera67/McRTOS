@@ -149,6 +149,8 @@ rtos_k_restore_execution_context:
 
     /*
      * Target context is a thread, so we need to restore the PSP stack pointer:
+     *
+     * r0 == &execution_context_p->ctx_cpu_saved_registers
      */
     ldr     r2, [r0, #(CPU_REG_PSP * ARM_CPU_WORD_SIZE_IN_BYTES)]
     msr     psp, r2

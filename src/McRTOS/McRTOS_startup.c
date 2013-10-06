@@ -788,7 +788,8 @@ McRTOS_display_stats(void)
     console_clear();
     console_printf("McRTOS stats for CPU core %u\n\n", cpu_id);
     
-    uint32_t seconds = (cpu_controller_p->cpc_ticks_since_boot_count / 1000) * RTOS_MILLISECONDS_PER_TICK;
+    uint32_t seconds =
+        (cpu_controller_p->cpc_ticks_since_boot_count / 1000) * RTOS_MILLISECONDS_PER_TICK;
     uint32_t minutes = seconds / 60;
     uint32_t hours = minutes / 60;
 
@@ -847,13 +848,8 @@ McRTOS_display_stats(void)
             FDC_ASSERT(false, context_p->ctx_context_type, context_p);
         }
 
-        //???
-        uint32_t sp = __get_PSP();
-        DEBUG_PRINTF("before SP %#p\n", sp);
-        //???
         console_printf(
             "%#8p %30s %c%7u %12u %10u %12u %#x%x\n",
-            //"%#p %s %c%u %u %u %u %#x%x\n",
             context_p,
             context_p->ctx_name_p,
             context_type_symbol,
@@ -863,19 +859,6 @@ McRTOS_display_stats(void)
             context_p->ctx_last_switched_out_time_stamp_in_ticks,
             context_p->ctx_switched_out_reason_history,
             context_p->ctx_last_switched_out_reason
-#if 0
-            GEN_SIGNATURE('3', '3', '3', '3'), //context_p,
-            GEN_SIGNATURE('4', '4', '4', '4'), //context_p,
-            GEN_SIGNATURE('5', '5', '5', '5'), //context_p,
-            GEN_SIGNATURE('6', '6', '6', '6'), //context_p,
-            GEN_SIGNATURE('7', '7', '7', '7'), //context_p,
-            GEN_SIGNATURE('8', '8', '8', '8'),
-            GEN_SIGNATURE('9', '9', '9', '9')
-#endif 
         );
-        //???
-        sp = __get_PSP();
-        DEBUG_PRINTF("After SP %#p\n", sp);
-        //???
     }
 }

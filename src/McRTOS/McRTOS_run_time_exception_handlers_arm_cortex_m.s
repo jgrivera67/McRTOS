@@ -250,6 +250,14 @@ cortex_m_save_other_registers:
     stmia   r0!, {r4-r5}    /* saved msp, psp */
     str     r1, [r0]        /* saved lr_on_exception_entry */
 
+    //???
+    mov     r0, r5
+    mov     r4, r2
+    mov     r2, lr
+    sub     r2, r2, #4
+    DEBUG_CAPTURE_R0_TO_R3
+    mov     r2, r4
+    //???
     bx      lr
 .endfunc
 

@@ -345,12 +345,14 @@ rtos_dbg_dump_execution_context(
 
 #elif DEFINED_ARM_CORTEX_M_ARCH()
 
-    const uint32_t *context_stack_p;
+    const rtos_execution_stack_entry_t *context_stack_p;
 
     if (execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT) {
-        context_stack_p = (uint32_t *)execution_context_p->ctx_cpu_saved_registers.cpu_reg_psp;
+        context_stack_p =
+            (rtos_execution_stack_entry_t *)execution_context_p->ctx_cpu_saved_registers.cpu_reg_psp;
     } else {
-        context_stack_p = (uint32_t *)execution_context_p->ctx_cpu_saved_registers.cpu_reg_msp;
+        context_stack_p =
+            (rtos_execution_stack_entry_t *)execution_context_p->ctx_cpu_saved_registers.cpu_reg_msp;
     }
 
     debug_printf(
@@ -398,6 +400,25 @@ rtos_dbg_dump_execution_context(
 #else
     #error "unsupported CPU architecture"
 #endif
+
+    if (execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT) {
+        if (context_stack_p < execution_context_p->ctx_execution_stack_top_end_p) {
+            debug_printf(
+                "*** Error: stack overflow (stack pointer: %#p, stack top limit: %#p)\n",
+                context_stack_p, execution_context_p->ctx_execution_stack_top_end_p);
+        }
+
+        if (context_stack_p > execution_context_p->ctx_execution_stack_bottom_end_p) {
+            debug_printf(
+                "*** Error: stack underflow (stack pointer: %#p, stack bottom limit: %#p)\n",
+                context_stack_p, execution_context_p->ctx_execution_stack_bottom_end_p);
+        }
+
+        rtos_dbg_dump_memory(
+            execution_context_p->ctx_execution_stack_top_end_p - 1,
+            RTOS_THREAD_STACK_NUM_ENTRIES + 2,
+            "Stack entries");
+    }
 }
 
 
