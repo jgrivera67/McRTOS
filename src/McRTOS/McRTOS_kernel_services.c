@@ -18,7 +18,6 @@
 
 TODO("Remove this pragma")
 #pragma GCC diagnostic ignored "-Wunused-parameter"
-#pragma GCC diagnostic ignored "-Wunused-variable"
 
 #if DEFINED_ARM_CLASSIC_ARCH()
 static void
@@ -239,7 +238,6 @@ rtos_k_thread_init(
     rtos_thread_p->thr_signature = RTOS_THREAD_SIGNATURE;
     rtos_thread_p->thr_function_p = params_p->p_function_p;
     rtos_thread_p->thr_function_arg_p = params_p->p_function_arg_p;
-    rtos_thread_p->thr_console_channel = params_p->p_console_channel;
 
 #   ifdef LCD_SUPPORTED
     rtos_thread_p->thr_lcd_channel = params_p->p_lcd_channel;
@@ -2133,14 +2131,10 @@ rtos_k_exit_interrupt(void)
             preempted_context_p,
             RTOS_CSW_EXITING_NESTED_INTERRUPT);
 
-        //???DEBUG_PRINTF("retuning to interrupted interrupt %#p (#%p)\n", RTOS_EXECUTION_CONTEXT_GET_INTERRUPT(preempted_context_p), preempted_context_p); //???
-
-#if DEFINED_ARM_CLASSIC_ARCH()
         /*
-         * We should never come back here:
+         * We should never come back here
          */
         FDC_ASSERT(false, 0, 0);
-#endif
     }
 }
 
@@ -2496,26 +2490,8 @@ rtos_k_console_putchar(
 {
     FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
     FDC_ASSERT(unused_arg_p == NULL, unused_arg_p, 0);
-    bool send_physical_output = true;
-    struct rtos_cpu_controller *cpu_controller_p =
-        &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
 
-    struct rtos_execution_context *current_execution_context_p =
-        cpu_controller_p->cpc_current_execution_context_p;
-
-    struct rtos_thread *current_thread_p =
-        RTOS_EXECUTION_CONTEXT_GET_THREAD(current_execution_context_p);
-
-    if (current_thread_p->thr_console_channel != RTOS_CONSOLE_CHANNEL_NONE &&
-        current_thread_p->thr_console_channel != g_McRTOS_p->rts_current_console_channel)
-    {
-        send_physical_output = false;
-    }
-
-    if (send_physical_output)
-    {
-        uart_putchar(g_console_serial_port_p, c);
-    }
+    uart_putchar(g_console_serial_port_p, c);
 }
 
 
@@ -2524,6 +2500,9 @@ rtos_k_console_putchar_with_polling(
     _UNUSED_ void *unused_arg_p,
     _IN_ uint8_t c)
 {
+    FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
+    FDC_ASSERT(unused_arg_p == NULL, unused_arg_p, 0);
+
     uart_putchar_with_polling(g_console_serial_port_p, c);
 }
 

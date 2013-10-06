@@ -67,7 +67,6 @@ static void rtos_init_reset_execution_context(
 static fdc_error_t rtos_root_thread_f(void *arg);
 static fdc_error_t rtos_idle_thread_f(void *arg);
 static fdc_error_t rtos_touch_screen_reader_thread_f(void *arg);
-static fdc_error_t rtos_command_line_thread_f(void *arg);
 static void rtos_parse_command_line(const char *cmd_line);
 static void McRTOS_display_help(void);
 static void McRTOS_display_stats(void);
@@ -87,7 +86,6 @@ static const struct rtos_thread_creation_params g_rtos_system_threads[] =
         .p_function_p = rtos_root_thread_f,
         .p_function_arg_p = NULL,
         .p_priority = RTOS_ROOT_THREAD_PRIORITY,
-        .p_console_channel = RTOS_CONSOLE_CHANNEL_NONE,
 #       ifdef LCD_SUPPORTED
         .p_lcd_channel = RTOS_LCD_CHANNEL_NONE,
 #       endif
@@ -100,22 +98,8 @@ static const struct rtos_thread_creation_params g_rtos_system_threads[] =
         .p_function_p = rtos_idle_thread_f,
         .p_function_arg_p = NULL,
         .p_priority = RTOS_IDLE_THREAD_PRIORITY,
-        .p_console_channel = RTOS_CONSOLE_CHANNEL_NONE,
 #       ifdef LCD_SUPPORTED
         .p_lcd_channel = RTOS_LCD_CHANNEL_NONE,
-#       endif
-        .p_thread_pp = NULL,
-    },
-
-    [RTOS_COMMAND_LINE_SYSTEM_THREAD] =
-    {
-        .p_name_p = "McRTOS command line thread",
-        .p_function_p = rtos_command_line_thread_f,
-        .p_function_arg_p = NULL,
-        .p_priority = RTOS_COMMAND_LINE_THREAD_PRIORITY,
-        .p_console_channel = RTOS_COMMAND_LINE_CONSOLE_CHANNEL,
-#       ifdef LCD_SUPPORTED
-        .p_lcd_channel = RTOS_COMMAND_LINE_LCD_CHANNEL,
 #       endif
         .p_thread_pp = NULL,
     },
@@ -151,8 +135,6 @@ static struct McRTOS g_McRTOS =
 #else
     .rts_next_free_app_object_pool_p = NULL,
 #endif
-
-    .rts_current_console_channel = RTOS_COMMAND_LINE_CONSOLE_CHANNEL,
 
 #ifdef LCD_SUPPORTED
     .rts_current_lcd_channel = RTOS_COMMAND_LINE_LCD_CHANNEL,
@@ -613,25 +595,20 @@ rtos_root_thread_f(void *arg)
 #       ifdef LCD_SUPPORTED
             lcd_display_greetings();
 #       endif
-
-        g_McRTOS_p->rts_current_console_channel = RTOS_APP_CONSOLE_CHANNEL;
     }
 
     for ( ; ; )
     {
-        /*
-         * Wait for critical work to do:
-         *
-         * NOTE: The root system thread is the highest priority thread
-         * in the system and is only awoken when something really urgent
-         * needs to be done.
-         */
-        rtos_k_thread_condvar_wait_interrupt();
-   
-        DEBUG_PRINTF("root thread woke up\n");
-        /*
-         * TODO
-         */
+        console_printf("McRTOS> ");
+        read_command_line(
+            (putchar_func_t *)rtos_console_putchar,
+            (getchar_func_t *)rtos_console_getchar,
+            NULL,
+            g_McRTOS_p->rts_command_line_buffer,
+            RTOS_COMMAND_LINE_BUFFER_SIZE);
+
+        rtos_parse_command_line(
+            g_McRTOS_p->rts_command_line_buffer);
     }
 
     fdc_error = CAPTURE_FDC_ERROR(
@@ -692,40 +669,6 @@ rtos_idle_thread_f(void *arg)
 
     fdc_error = CAPTURE_FDC_ERROR(
         "McRTOS idle thread should not have terminated", cpu_id, 0);
-
-    return fdc_error;
-}
-
-
-static fdc_error_t
-rtos_command_line_thread_f(void *arg)
-{
-    fdc_error_t fdc_error;
-    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
-
-    FDC_ASSERT(arg == NULL, arg, cpu_id);
-
-    g_McRTOS_p->rts_current_console_channel = RTOS_COMMAND_LINE_CONSOLE_CHANNEL;
-    
-    //console_clear();
-
-    for ( ; ; )
-    {
-        console_printf("McRTOS> ");
-        read_command_line(
-            (putchar_func_t *)rtos_console_putchar,
-            (getchar_func_t *)rtos_console_getchar,
-            NULL,
-            g_McRTOS_p->rts_command_line_buffer,
-            RTOS_COMMAND_LINE_BUFFER_SIZE);
-
-        rtos_parse_command_line(
-            g_McRTOS_p->rts_command_line_buffer);
-    }
-
-    fdc_error = CAPTURE_FDC_ERROR(
-        "McRTOS command line thread should not have terminated",
-        cpu_id, rtos_thread_self());
 
     return fdc_error;
 }

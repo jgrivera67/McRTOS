@@ -51,16 +51,8 @@ typedef _RANGE_(RTOS_UNPRIVILEGED_THREAD_MODE, RTOS_INTERRUPT_MODE)
         uint8_t rtos_cpu_mode_t;
 
 /**
- * Execution context types
+ * Execution context type
  */
-enum rtos_execution_context_types
-{
-    RTOS_INVALID_CONTEXT =      0x0,
-    RTOS_RESET_CONTEXT =        0x1,
-    RTOS_THREAD_CONTEXT =       0x2,
-    RTOS_INTERRUPT_CONTEXT =    0x8
-};
-        
 typedef _RANGE_(RTOS_RESET_CONTEXT, RTOS_INTERRUPT_CONTEXT)
         uint8_t rtos_execution_context_type_t;
 
@@ -298,6 +290,10 @@ struct rtos_execution_context
 C_ASSERT(
     offsetof(struct rtos_execution_context, ctx_cpu_mode) ==
     RTOS_CTX_CPU_MODE_OFFSET);
+
+C_ASSERT(
+    offsetof(struct rtos_execution_context, ctx_context_type) ==
+    RTOS_CTX_CONTEXT_TYPE_OFFSET);
 
 #if DEFINED_ARM_CLASSIC_ARCH()
 C_ASSERT(
@@ -671,11 +667,6 @@ struct rtos_thread
      * 0 means no deadline.
      */
     rtos_deadline_ms_t thr_deadline_to_run;
-
-    /**
-     * Console channel assigned to the thread
-     */
-    rtos_console_channels_t thr_console_channel;
 
 #   ifdef LCD_SUPPORTED
     /**

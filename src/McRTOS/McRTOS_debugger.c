@@ -318,14 +318,7 @@ rtos_dbg_dump_execution_context(
         "\t\tr6:   %#x\n"
         "\t\tr7:   %#x\n"
         "\t\tr8:   %#x\n"
-        "\t\tr9:   %#x\n"
-        "\t\tr10:  %#x\n"
-        "\t\tr11:  %#x\n"
-        "\t\tr12:  %#x\n"
-        "\t\tsp:   %#x\n"
-        "\t\tlr:   %#x\n"
-        "\t\tpc:   %#x\n"
-        "\t\tcpsr: %#x\n",
+        "\t\tr9:   %#x\n",
         execution_context_p->ctx_cpu_saved_registers[CPU_REG_R0],
         execution_context_p->ctx_cpu_saved_registers[CPU_REG_R1],
         execution_context_p->ctx_cpu_saved_registers[CPU_REG_R2],
@@ -335,14 +328,22 @@ rtos_dbg_dump_execution_context(
         execution_context_p->ctx_cpu_saved_registers[CPU_REG_R6],
         execution_context_p->ctx_cpu_saved_registers[CPU_REG_R7],
         execution_context_p->ctx_cpu_saved_registers[CPU_REG_R8],
-        execution_context_p->ctx_cpu_saved_registers[CPU_REG_R9],
+        execution_context_p->ctx_cpu_saved_registers[CPU_REG_R9]);
+
+    debug_printf(
+        "\t\tr10:  %#x\n"
+        "\t\tr11:  %#x\n"
+        "\t\tr12:  %#x\n"
+        "\t\tsp:   %#x\n"
+        "\t\tlr:   %#x\n"
+        "\t\tpc:   %#x\n"
+        "\t\tcpsr: %#x\n",
         execution_context_p->ctx_cpu_saved_registers[CPU_REG_R10],
         execution_context_p->ctx_cpu_saved_registers[CPU_REG_R11],
         execution_context_p->ctx_cpu_saved_registers[CPU_REG_R12],
         execution_context_p->ctx_cpu_saved_registers[CPU_REG_LR],
         execution_context_p->ctx_cpu_saved_registers[CPU_REG_PC],
         execution_context_p->ctx_cpu_saved_registers[CPU_REG_CPSR]);
-
 #elif DEFINED_ARM_CORTEX_M_ARCH()
 
     const rtos_execution_stack_entry_t *context_stack_p;
@@ -365,7 +366,19 @@ rtos_dbg_dump_execution_context(
         "\t\tr6:        %#x\n"
         "\t\tr7:        %#x\n"
         "\t\tr8:        %#x\n"
-        "\t\tr9:        %#x\n"
+        "\t\tr9:        %#x\n",
+        context_stack_p[CPU_REG_R0],
+        context_stack_p[CPU_REG_R1],
+        context_stack_p[CPU_REG_R2],
+        context_stack_p[CPU_REG_R3],
+        execution_context_p->ctx_cpu_saved_registers.cpu_reg_r4,
+        execution_context_p->ctx_cpu_saved_registers.cpu_reg_r5,
+        execution_context_p->ctx_cpu_saved_registers.cpu_reg_r6,
+        execution_context_p->ctx_cpu_saved_registers.cpu_reg_r7,
+        execution_context_p->ctx_cpu_saved_registers.cpu_reg_r8,
+        execution_context_p->ctx_cpu_saved_registers.cpu_reg_r9);
+
+    debug_printf(
         "\t\tr10:       %#x\n"
         "\t\tr11:       %#x\n"
         "\t\tr12:       %#x\n"
@@ -376,16 +389,6 @@ rtos_dbg_dump_execution_context(
         "\t\tmsp:       %#x\n"
         "\t\tpsp:       %#x\n"
         "\t\tlre_on_exc:%#x\n",
-        context_stack_p[CPU_REG_R0],
-        context_stack_p[CPU_REG_R1],
-        context_stack_p[CPU_REG_R2],
-        context_stack_p[CPU_REG_R3],
-        execution_context_p->ctx_cpu_saved_registers.cpu_reg_r4,
-        execution_context_p->ctx_cpu_saved_registers.cpu_reg_r5,
-        execution_context_p->ctx_cpu_saved_registers.cpu_reg_r6,
-        execution_context_p->ctx_cpu_saved_registers.cpu_reg_r7,
-        execution_context_p->ctx_cpu_saved_registers.cpu_reg_r8,
-        execution_context_p->ctx_cpu_saved_registers.cpu_reg_r9,
         execution_context_p->ctx_cpu_saved_registers.cpu_reg_r10,
         execution_context_p->ctx_cpu_saved_registers.cpu_reg_r11,
         context_stack_p[CPU_REG_R12],

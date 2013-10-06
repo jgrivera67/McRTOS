@@ -308,6 +308,7 @@
 #define RTOS_CSW_INTERRUPT_TO_THREAD        0x4
 #define RTOS_CSW_THREAD_TO_THREAD           0x5
 #define RTOS_CSW_RESET_TO_THREAD            0x6
+#define RTOS_CSW_EXITING_HARD_FAULT         0x7
 
 /**
  * ARM CPU word size in bytes
@@ -370,6 +371,14 @@
 #define RTOS_PRIVILEGED_THREAD_MODE     0x4
 #define RTOS_INTERRUPT_MODE             0x8
 
+/**
+ * Execution context types
+ */
+#define RTOS_INVALID_CONTEXT    0x0
+#define RTOS_RESET_CONTEXT      0x1
+#define RTOS_THREAD_CONTEXT     0x2
+#define RTOS_INTERRUPT_CONTEXT  0x8
+
 /*
  * Offsets of struct McRTOS fields accessed from assembly code
  */
@@ -380,6 +389,7 @@
  * assembly code
  */
 #define RTOS_CTX_CPU_MODE_OFFSET        (ARM_CPU_WORD_SIZE_IN_BYTES * 2)
+#define RTOS_CTX_CONTEXT_TYPE_OFFSET    (RTOS_CTX_CPU_MODE_OFFSET + 1)
 #define RTOS_CTX_CPU_REGISTERS_OFFSET   (ARM_CPU_WORD_SIZE_IN_BYTES * 3)
 
 /*

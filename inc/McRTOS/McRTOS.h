@@ -29,22 +29,6 @@ struct rtos_object_pool;
 #define RTOS_HIGHEST_THREAD_PRIORITY    UINT8_C(0)
 #define RTOS_LOWEST_THREAD_PRIORITY     (RTOS_NUM_THREAD_PRIORITIES - 1)
 
-/**
- * Console channels
- */
-enum rtos_console_channels
-{
-    RTOS_COMMAND_LINE_CONSOLE_CHANNEL = 0,
-    RTOS_APP_CONSOLE_CHANNEL,
-
-    /*
-     * Add new entries above here
-     */ 
-    RTOS_CONSOLE_CHANNEL_NONE
-};
-
-C_ASSERT(RTOS_CONSOLE_CHANNEL_NONE == RTOS_NUM_CONSOLE_CHANNELS);
-
 #ifdef LCD_SUPPORTED
 /**
  * LCD channels
@@ -127,12 +111,6 @@ typedef uint32_t rtos_per_cpu_interrupts_bitmap_t;
 C_ASSERT(
     sizeof(rtos_per_cpu_interrupts_bitmap_t) * 8 >= SOC_NUM_INTERRUPT_CHANNELS);
 
-/**
- * Range type for console channels
- */
-typedef _RANGE_(0, RTOS_NUM_CONSOLE_CHANNELS)
-        uint8_t rtos_console_channels_t;
-
 #ifdef LCD_SUPPORTED
 /**
  * Range type for LCD channels
@@ -191,11 +169,6 @@ struct rtos_thread_creation_params
      * Thread priority 
      */
     rtos_thread_prio_t p_priority;
-
-    /**
-     * Stdio console channel assigned to the thread
-     */
-    rtos_console_channels_t p_console_channel;
 
 #   ifdef LCD_SUPPORTED
     /**

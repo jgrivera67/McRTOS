@@ -41,7 +41,6 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
         .p_function_p = buttons_reader_thread_f,
         .p_function_arg_p = NULL,
         .p_priority = BUTTONS_READER_THREAD_PRIORITY,
-        .p_console_channel = RTOS_COMMAND_LINE_CONSOLE_CHANNEL,
         .p_thread_pp = NULL,
     },
 
@@ -51,7 +50,6 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
         .p_function_p = trimpot_reader_thread_f,
         .p_function_arg_p = NULL,
         .p_priority = TRIMPOT_READER_THREAD_PRIORITY,
-        .p_console_channel = RTOS_COMMAND_LINE_CONSOLE_CHANNEL,
         .p_thread_pp = NULL,
     },
 };

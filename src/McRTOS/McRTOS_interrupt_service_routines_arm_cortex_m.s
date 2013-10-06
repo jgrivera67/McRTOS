@@ -146,6 +146,7 @@
      * NOTE: This is necessary so that higher priority interrupts can preempt this
      * ISR (nested interrupts).
      */
+    isb
     cpsie   i
 .endm
 
@@ -193,6 +194,7 @@
      * NOTE: This is necessary so that higher priority interrupts can preempt this
      * ISR (nested interrupts).
      */
+    isb
     cpsie   i
 .endm
 
@@ -220,17 +222,14 @@
     /*
      * Call rtos_k_exit_interrupt()
      *
-     * NOTE: This function only returns if we are in a nested exception.
+     * NOTE: This function never returns here.
      */
     bl      rtos_k_exit_interrupt
 
     /*
-     * Return from exception nested exception:
+     * We should never come back here
      */
-    ldr     r0, =CPU_EXC_RETURN_TO_HANDLER_MODE
-    mov     lr, r0
-    cpsie   i
-    bx      lr
+    bkpt    #0
 .endm
 
 

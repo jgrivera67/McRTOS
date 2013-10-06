@@ -20,13 +20,11 @@
 #include "generic_list.h"
 #include "utils.h"
 #include "compile_time_checks.h"
-//???
-extern struct rtos_interrupt *g_rtos_interrupt_uart0_p;
-//???
+
 /**
  * Number of system threads per CPU
  */
-#define RTOS_NUM_SYSTEM_THREADS_PER_CPU UINT8_C(4)
+#define RTOS_NUM_SYSTEM_THREADS_PER_CPU UINT8_C(2)
 
 /**
  * Number of spokes of the per-cpu timer wheel. It must be a power of 2.
@@ -377,7 +375,6 @@ enum rtos_system_thread_indexes
 {
     RTOS_ROOT_SYSTEM_THREAD = 0,
     RTOS_IDLE_SYSTEM_THREAD,
-    RTOS_COMMAND_LINE_SYSTEM_THREAD,
 
     /*
      * New enum entries must be added above this entry
@@ -458,27 +455,6 @@ struct McRTOS
      * macros.
      */
     cpu_clock_cycles_t rts_cpu_cycles_measure_overhead;
-
-    /**
-     * Currently active console channel used by rtos_console_putchar(),
-     * rtos_console_getchar().
-     *
-     * Console Channel Rules:
-     * - Threads running on different CPU cores are not allowed to use the same
-     *   console channel.
-     * - If a thread sends console output and its console channel is not the
-     *   currently active console channel, the output is discarded.
-     *   If more than one thread sends output to the same console channel, output
-     *   interference may happen among the threads, unless they use a mutex to 
-     *   serialize their console outputs.
-     * - Input received on the current console channel is passed only to the thread
-     *   whose console channel matches the current console channel. There cannot be
-     *   more than one thread reading from the same console channel.
-     *
-     * The current console channel is meant to be changeable using dedicated
-     * keyboard keys, for example up/down arrows.
-     */
-    rtos_console_channels_t   rts_current_console_channel;
 
 #   ifdef LCD_SUPPORTED
     /**
@@ -939,12 +915,6 @@ rtos_preemption_chain_push_context(
     glist_add_head_elem(
         preemption_chain_anchor_p,
         &preempted_context_p->ctx_preemption_chain_node);
-
-    //???
-    if (preempted_context_p == &g_rtos_interrupt_uart0_p->int_execution_context) {
-        //DEBUG_PRINTF("added to preemption chain: %#p\n", preempted_context_p); // ???
-    }
-    //???
 }
 
 
@@ -970,11 +940,6 @@ rtos_preemption_chain_pop_context(
     struct rtos_execution_context *last_preempted_context_p =
         RTOS_PREEMPTION_CHAIN_NODE_GET_EXECUTION_CONTEXT(top_preemption_node_p);
 
-    //???
-    if (last_preempted_context_p == &g_rtos_interrupt_uart0_p->int_execution_context) {
-        //DEBUG_PRINTF("removed from preemption chain: %#p\n", last_preempted_context_p); // ???
-    }
-    //???
     return last_preempted_context_p;
 }
 
@@ -1000,11 +965,6 @@ rtos_preemption_chain_remove_context(
         context_p, preemption_chain_anchor_p);
 
     glist_remove_elem(&context_p->ctx_preemption_chain_node);
-    //???
-    if (context_p == &g_rtos_interrupt_uart0_p->int_execution_context) {
-        //DEBUG_PRINTF("removed from preemption chain: %#p\n", context_p); // ???
-    }
-    //???
 }
 
 #endif /* _McRTOS_INTERNALS_H */

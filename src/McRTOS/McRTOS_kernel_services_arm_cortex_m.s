@@ -36,7 +36,8 @@
  *
  * void
  * rtos_k_restore_execution_context(
- *      const struct rtos_execution_context *execution_context_p)
+ *      const struct rtos_execution_context *execution_context_p,
+ *      rtos_context_switch_type_t ctx_switch_type)
  *
  * @param   execution_context_p (r0): Pointer to the execution context to be
  *          restored.
@@ -45,10 +46,7 @@
  *          this function
  * @return  none
  *
- * @pre     CPU interrupts are disabled and the current CPU mode is privileged
- *          thread mode or handler mode.
- *          The target mode can only be privileged or unprivileged thread mode.
- *          
+ * @pre     CPU interrupts are disabled and the current CPU mode is handler mode.
  *          These assumptions are checked in fdc_trace_rtos_context_switch().
  */
 .thumb_func
@@ -62,7 +60,6 @@ rtos_k_restore_execution_context:
      * NOTE: We can clobber all registers in this function, since they are going 
      * to be restored from the target context.
      */
-    push {lr}
 
 #ifdef _RELIABILITY_CHECKS_
      /*
@@ -79,7 +76,7 @@ rtos_k_restore_execution_context:
 #endif /* _RELIABILITY_CHECKS_ */
 
     /*
-     * Set r4 to &execution_context_p->ctx_cpu_registers[0]
+     * Set r4 to &execution_context_p->ctx_cpu_saved_registers
      *
      * r0 == execution_context_p
      */
@@ -103,7 +100,7 @@ rtos_k_restore_execution_context:
     /*
      * Restore explicitly-saved registers r4-r11:
      *
-     * r4 == &execution_context_p->ctx_cpu_registers[0]
+     * r4 == &execution_context_p->ctx_cpu_saved_registers
      */
     mov     r0, r4
     mov     r1, #(CPU_REG_R8 * ARM_CPU_WORD_SIZE_IN_BYTES)
@@ -114,11 +111,11 @@ rtos_k_restore_execution_context:
     mov     r10, r6
     mov     r11, r7
     mov     r1, r0
-    ldmia   r1!, {r4-r7} /* Cortex-M0 only supports ldm for r0-r7 */
+    ldmia   r1!, {r4-r7} /* Cortex-M0+ only supports ldm for r0-r7 */
 
     /*
      * NOTE: Above, we use "ldmia r1!" instead of "ldmia r1" because for
-     * Cortex-M r1 is incremented with or without the "!".
+     * Cortex-M0+ r1 is incremented with or without the "!".
      */
     
     /*
@@ -131,20 +128,14 @@ rtos_k_restore_execution_context:
     SET_MCRTOS_CURRENT_EXECUTION_CONTEXT r2, r1 
 
     /*
-     *
-     * Get execution_context_p->ctx_cpu_mode:
-     *
-     * r2 == execution_context_p
-     */
-    ldrb    r1, [r2, #RTOS_CTX_CPU_MODE_OFFSET]
-
-    /*
      * Determine if the context to be restored is an interrupt or a
      * thread:
      *
-     * r1 == execution_context_p->ctx_cpu_mode
+     * r0 == &execution_context_p->ctx_cpu_saved_registers
      */
-    cmp     r1, #RTOS_INTERRUPT_MODE
+    ldr     r1, [r0, #(CPU_REG_LR_ON_EXC_ENTRY*ARM_CPU_WORD_SIZE_IN_BYTES)]
+    ldr     r2, =CPU_EXC_RETURN_TO_HANDLER_MODE
+    cmp     r1, r2
     beq     L_target_context_is_interrupt
 
     /*
@@ -166,50 +157,36 @@ rtos_k_restore_execution_context:
     ldr     r1, [r1] 
     msr     msp, r1
 
-#ifdef DEBUG
-    /*
-     * This function is supposed to be invoked only from an exception handler
-     * (an ISR or the PendSV exception handler).
-     *
-     * Check that the current CPU mode is handler mode
-     */
-    mrs     r1, ipsr
-    mov     r0, #CPU_REG_IPSR_EXCEPTION_NUMBER_MASK
-    tst     r1, r0
-    bne     1f
-    ldr     r0, =L_rtos_k_restore_execution_context_assert_cond_str
-    mov     r2, #0
-    bl      capture_assert_failure
-1:
-    /*
-     * Current CPU mode is not thread mode (exception number field > 0)
-     */
-#endif /* DEBUG */
-
     /*
      * Return from exception to thread:
      */
     ldr     r0, =CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP
     mov     lr, r0
+    isb
     cpsie   i
     bx      lr
    
-    /*
-     * Target context is an interrupt context, so return from nested exception:
-     *
-     * NOTE: We need to return to the caller which is either 
-     * cortex_m_hard_fault_exception_handler() or rtos_k_exit_interrupt().
-     * rtos_k_exit_interrupt() will return to the corresponding ISR, so that the
-     * exception stack drains by itself. In that case, we re-enable interrupts in
-     * RTOS_EXIT_ISR(), before returning from the exception.
-     */
 L_target_context_is_interrupt:
-    pop     {pc}
+    /*
+     * Target context is an interrupt context, so we need to restore the MSP
+     * stack pointer:
+     *
+     * NOTE: The caller is rtos_k_exit_interrupt() or 
+     * cortex_m_hard_fault_exception_handler().
+     *
+     * r0 == &execution_context_p->ctx_cpu_saved_registers
+     * r1 == #CPU_EXC_RETURN_TO_HANDLER_MODE
+     */
+    ldr     r2, [r0, #(CPU_REG_MSP * ARM_CPU_WORD_SIZE_IN_BYTES)]
+    msr     msp, r2
 
-L_rtos_k_restore_execution_context_assert_cond_str:
-.asciz "(ipsr & CPU_REG_IPSR_EXCEPTION_NUMBER_MASK) != 0"
-
-.balign 4
+    /*
+     * Return from nested exception:
+     */
+    mov     lr, r1
+    isb
+    cpsie   i
+    bx      lr
 
 .endfunc
 
@@ -258,7 +235,7 @@ rtos_k_synchronous_context_switch:
 #endif /* DEBUG */
 
     /*
-     * Set r0 to &current_execution_context_p->ctx_cpu_registers[0]:
+     * Set r0 to &current_execution_context_p->ctx_cpu_saved_registers:
      *
      * r0 == current_execution_context_p
      *
@@ -275,7 +252,7 @@ rtos_k_synchronous_context_switch:
      * NOTE: The exception will only get triggered when we enable interrupts
      * below.
      *
-     * r0 == &current_execution_context_p->ctx_cpu_registers[0]
+     * r0 == &current_execution_context_p->ctx_cpu_saved_registers
      */
     ldr     r1, =CPU_SCB_ICSR_REGISTER_ADDR
     ldr     r2, [r1]
@@ -283,26 +260,46 @@ rtos_k_synchronous_context_switch:
     orr     r2, r2, r3
     str     r2, [r1]
 
+#ifdef _MEASURE_INTERRUPTS_DISABLED_TIME_
+    /*
+     * Call rtos_stop_interrupts_disabled_time_measure():
+     *
+     * NOTE:
+     * - For Cortex-M, we don't need to use the arg of
+     *   rtos_stop_interrupts_disabled_time_measure()
+     */
+    push    {r0, lr}
+    bl      rtos_stop_interrupts_disabled_time_measure
+    pop     {r0, r1}
+    mov     lr, r1
+#endif /* _MEASURE_INTERRUPTS_DISABLED_TIME_ */
+
     /*
      * Enable interrupts to take the PendSV exception:
      *
-     * NOTE: There is no danger of a race with another interrupt handler
-     * that could get executed before the PendSV exception handler, since
-     * the PendSV exception has higher priority than all interrupts with
-     * configurable priority.
+     * NOTE: We need an ISB barrier before enabling interrupts, to ensure 
+     * that all instructions before this point have executed, so that we can be
+     * certain that the registers saved upon PendSV exception entry have the
+     * values we expect. Also, there is no danger of a race with another
+     * interrupt handler that could get executed before the PendSV exception
+     * handler, since the PendSV exception has higher priority than all
+     * interrupts with configurable priority.
+     *
+     * r0 == &current_execution_context_p->ctx_cpu_saved_registers
      */
+    isb
     cpsie    i
 
     /*
      * When the thread being switched out resumes, it will 
-     * resume here, and we need disable interrupts again as that
+     * resume here, and we need to disable interrupts again as that
      * is expected by the callers of this function:
      */
     cpsid   i
 
 #ifdef _MEASURE_INTERRUPTS_DISABLED_TIME_
     /*
-     * Call rtos_stop_interrupts_disabled_time_measure():
+     * Call rtos_start_interrupts_disabled_time_measure():
      *
      * NOTE:
      * - For Cortex-M, we don't need to use the arg of
