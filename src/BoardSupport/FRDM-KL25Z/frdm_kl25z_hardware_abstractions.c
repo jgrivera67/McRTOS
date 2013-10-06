@@ -1849,7 +1849,7 @@ void
 notify_interrupt_controller_isr_done(interrupt_channel_t interrupt_channel)
 {
     DBG_ASSERT(
-        interrupt_channel < SOC_NUM_INTERRUPT_CHANNELS,
+        interrupt_channel >= -1 && interrupt_channel < SOC_NUM_INTERRUPT_CHANNELS,
         interrupt_channel, SOC_NUM_INTERRUPT_CHANNELS);
 } 
 

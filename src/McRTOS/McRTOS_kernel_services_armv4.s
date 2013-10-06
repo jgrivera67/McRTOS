@@ -467,7 +467,8 @@ rtos_k_synchronous_context_switch:
      * Branch to rtos_thread_scheduler(), instead of calling it, as we
      * will not come back here.
      */
-    b      rtos_thread_scheduler
+    mov     r0, #RTOS_CSW_THREAD_TO_THREAD
+    b       rtos_thread_scheduler
 
 L_rtos_k_synchronous_context_switch_assert_cond_str:
 .asciz "(cpsr & (ARM_MODE_SYS | ARM_INTERRUPTS_DISABLED_MASK)) == (ARM_MODE_SYS | ARM_INTERRUPTS_DISABLED_MASK)"

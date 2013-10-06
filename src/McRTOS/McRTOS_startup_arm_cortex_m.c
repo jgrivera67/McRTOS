@@ -268,11 +268,11 @@ initialize_tick_timer(void)
 uint32_t 
 get_cpu_clock_cycles(void)
 {
+#if 0
     uint32_t reg_value = read_32bit_mmio_register(&SYST_CVR);
     
     reg_value &= MULTI_BIT_MASK(23, 0);
 
-#if 0
     uint32_t delta_cycles;
     if (reg_value < SYSTICK_COUNTER_RELOAD_VALUE) {
         delta_cycles = SYSTICK_COUNTER_RELOAD_VALUE - reg_value;

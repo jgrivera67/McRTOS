@@ -251,15 +251,22 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
                 _rtos_thread_p);                                            \
         } while (0)
 
-#define FDC_ASSERT_RUNNING_THREAD_INVARIANTS(_current_thread_p) \
+#define FDC_ASSERT_RUNNING_THREAD_INVARIANTS(_thread_p, _cpu_controller_p) \
         do {                                                                \
-            FDC_ASSERT_RTOS_THREAD_INVARIANTS(_current_thread_p);           \
             FDC_ASSERT(                                                     \
-                (_current_thread_p)->thr_state == RTOS_THREAD_RUNNING,      \
-                (_current_thread_p)->thr_state, _current_thread_p);         \
+                (_thread_p)->thr_state == RTOS_THREAD_RUNNING,              \
+                (_thread_p)->thr_state, _thread_p);                         \
             FDC_ASSERT(                                                     \
-                GLIST_NODE_IS_UNLINKED(&(_current_thread_p)->thr_list_node),\
-                &(_current_thread_p)->thr_list_node, _current_thread_p);    \
+                GLIST_NODE_IS_UNLINKED(&(_thread_p)->thr_list_node),        \
+                &(_thread_p)->thr_list_node, _thread_p);                    \
+            FDC_ASSERT(                                                     \
+                _thread_p == _cpu_controller_p->cpc_current_thread_p,       \
+                _thread_p, _cpu_controller_p->cpc_current_thread_p);        \
+            FDC_ASSERT(                                                     \
+                &(_thread_p)->thr_execution_context ==                      \
+                    _cpu_controller_p->cpc_current_execution_context_p,     \
+                &(_thread_p)->thr_execution_context,                        \
+                _cpu_controller_p->cpc_current_execution_context_p);        \
         } while (0)
 
 #define FDC_ASSERT_GLIST_ANCHOR_INVARIANTS(_list_p) \
@@ -277,8 +284,10 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
 #define FDC_ASSERT_RTOS_INTERRUPT_E_HANDLER_PRECONDITIONS(_rtos_interrupt_p) \
         check_rtos_interrupt_e_handler_preconditions(_rtos_interrupt_p)
 
-#define FDC_TRACE_RTOS_CONTEXT_SWITCH(_rtos_execution_context_p) \
-        fdc_trace_rtos_context_switch(_rtos_execution_context_p)
+#define FDC_TRACE_RTOS_CONTEXT_SWITCH( \
+            _rtos_execution_context_p, _context_switch_type)            \
+        fdc_trace_rtos_context_switch(                                  \
+            _rtos_execution_context_p, _context_switch_type)
 
 #else
 
@@ -301,13 +310,14 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
             _rtos_execution_context_p)
 
 #define FDC_ASSERT_RTOS_THREAD_INVARIANTS(_rtos_thread_p)
-#define FDC_ASSERT_RUNNING_THREAD_INVARIANTS(_current_thread_p)
+#define FDC_ASSERT_RUNNING_THREAD_INVARIANTS(_current_thread_p, _cpu_controller_p)
 #define FDC_ASSERT_GLIST_ANCHOR_INVARIANTS(_list_p)
 #define FDC_ASSERT_GLIST_ELEM_INVARIANTS(_elem_p)
 #define FDC_ASSERT_INTERRUPT_SOURCE_IS_SET(_interrupt_channel)
 #define FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(_thread_callers_only)
 #define FDC_ASSERT_RTOS_INTERRUPT_E_HANDLER_PRECONDITIONS(_rtos_interrupt_p)
-#define FDC_TRACE_RTOS_CONTEXT_SWITCH(_rtos_execution_context_p)
+#define FDC_TRACE_RTOS_CONTEXT_SWITCH( \
+            _rtos_execution_context_p, _context_switch_type)
 
 #endif /* _RELIABILITY_CHECKS_ */
 
@@ -401,8 +411,8 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
 #define DBG_ASSERT_RTOS_THREAD_INVARIANTS(_rtos_thread_p) \
         FDC_ASSERT_RTOS_THREAD_INVARIANTS(_rtos_thread_p)
 
-#define DBG_ASSERT_RUNNING_THREAD_INVARIANTS(_current_thread_p) \
-        FDC_ASSERT_RUNNING_THREAD_INVARIANTS(_current_thread_p)
+#define DBG_ASSERT_RUNNING_THREAD_INVARIANTS(_current_thread_p, _cpu_controller_p) \
+        FDC_ASSERT_RUNNING_THREAD_INVARIANTS(_current_thread_p, _cpu_controller_p)
 
 #define DBG_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(_thread_callers_only) \
         FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(_thread_callers_only)
@@ -425,7 +435,7 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
             _rtos_execution_context_p)
 
 #define DBG_ASSERT_RTOS_THREAD_INVARIANTS(_rtos_thread_p)
-#define DBG_ASSERT_RUNNING_THREAD_INVARIANTS(_current_thread_p)
+#define DBG_ASSERT_RUNNING_THREAD_INVARIANTS(_current_thread_p, _cpu_controller_p)
 #define DBG_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(_thread_callers_only)
 
 #endif /* DEBUG */
@@ -436,19 +446,22 @@ struct rtos_interrupt;
 typedef uintptr_t fdc_error_t;
 
 /**
+ * Context switch type. Values defined in arm_defs.h (RTOS_CSW_...)
+ */
+typedef _RANGE_(RTOS_CSW_THREAD_TO_INTERRUPT, RTOS_CSW_RESET_TO_THREAD)
+        uint8_t rtos_context_switch_type_t;
+
+/**
  * Context switch trace entry type
  *
- * The trace entry for an application thread to be switched-in:
- * <target CPU mode><from CPU mode><  0x1  ><switched-out reason><priority><relative ID>
- *  1 nible          1 nible        1 nible  1 nible              2 nibles  2 nibles
- *
- * The trace entry for a system thread to be switched-in:
- * <target CPU mode><from CPU mode><  0x2  ><switched-out reason><priority><relative ID>
- *  1 nible          1 nible        1 nible  1 nible              2 nibles  2 nibles
- *
- * The trace entry for an interrupt:
- * <target CPU mode><from CPU mode><  0x4  ><switched-out reason><priority><relative ID>
- *  1 nible          1 nible        1 nible  1 nible              2 nibles  2 nibles
+ * Fields listed from most significant bit to least significant bit:
+ * <target CPU mode>: 4 bits
+ * <from CPU mode> : 4 bits
+ * <context switch type>: 4 bits
+ * <switched-out reason>: 4 bits
+ * <priority>: 6 bits
+ * <context type>: 2 bits
+ * <relative ID>: 8 bits
  */
 typedef uint32_t fdc_context_switch_trace_entry_t;
 
@@ -463,35 +476,39 @@ typedef uint32_t fdc_context_switch_trace_entry_t;
 #define FDC_CST_CONTEXT_ID_SHIFT 0
 
 /**
+ * Context type. Values from enum fdc_cst_context_type below.
+ */
+#define FDC_CST_CONTEXT_TYPE_MASK  MULTI_BIT_MASK(9, 8)
+#define FDC_CST_CONTEXT_TYPE_SHIFT 8
+
+enum fdc_cst_context_type
+{
+    FDC_CST_RESET =                 0x0,
+    FDC_CST_APPLICATION_THREAD =    0x1,
+    FDC_CST_SYSTEM_THREAD =         0x2,
+    FDC_CST_INTERRUPT =             0x3,
+};
+
+/**
  * - For threads, it is the current thread priority
  * - For interrupts, it is the interrupt priority
  */
-#define FDC_CST_CONTEXT_PRIORITY_MASK   MULTI_BIT_MASK(15, 8)
-#define FDC_CST_CONTEXT_PRIORITY_SHIFT  8
+#define FDC_CST_CONTEXT_PRIORITY_MASK   MULTI_BIT_MASK(15, 10)
+#define FDC_CST_CONTEXT_PRIORITY_SHIFT  10
 
 /**
  * Last switched out reason. Value taken from the execution context's field
  * ctx_last_switched_out_reason. 
  * (Value from enum rtos_execution_context_switched_out_reasons)
  */
-#define FDC_CST_LAST_SWITCHED_OUT_REASON_MASK     MULTI_BIT_MASK(19, 16)
-#define FDC_CST_LAST_SWITCHED_OUT_REASON_SHIFT    16
+#define FDC_CST_LAST_SWITCHED_OUT_REASON_MASK   MULTI_BIT_MASK(19, 16)
+#define FDC_CST_LAST_SWITCHED_OUT_REASON_SHIFT  16
 
 /**
- * 0x1 application thread running in unprivileged mode
- * 0x2 system thread
- * 0x4 interrupt
+ * Context switch type. Values defined in arm_defs.h (RTOS_CSW_...)
  */ 
-#define FDC_CST_CONTEXT_TYPE_MASK           MULTI_BIT_MASK(23, 20)
-#define FDC_CST_CONTEXT_TYPE_SHIFT          20
-
-enum fdc_cst_context_type
-{
-    FDC_CST_RESET =                 0x1,
-    FDC_CST_APPLICATION_THREAD =    0x2,
-    FDC_CST_SYSTEM_THREAD =         0x4,
-    FDC_CST_INTERRUPT =             0x8,
-};
+#define FDC_CST_CONTEXT_SWITCH_TYPE_MASK        MULTI_BIT_MASK(23, 20)
+#define FDC_CST_CONTEXT_SWITCH_TYPE_SHIFT       20
 
 #if DEFINED_ARM_CLASSIC_ARCH()
     /**
@@ -664,6 +681,10 @@ struct fdc_info
      * Counters of interrupts received for each interrupt channel
      */
 #   if DEFINED_ARM_CORTEX_M_ARCH()
+    /*
+     * One entry before the array, to allow access to 
+     * fdc_interrupt_channel_counters[-1] for the systick interrupt.
+     */
     uint32_t fdc_systick_interrupt_counter;
 #   endif
     uint32_t fdc_interrupt_channel_counters[SOC_NUM_INTERRUPT_CHANNELS];
@@ -729,7 +750,8 @@ check_rtos_execution_context_cpu_registers(
     _IN_ const struct rtos_execution_context *rtos_execution_context_p);
 
 void fdc_trace_rtos_context_switch(
-    _IN_ const struct rtos_execution_context *rtos_execution_context_p);
+    _IN_ const struct rtos_execution_context *rtos_execution_context_p,
+    _IN_ rtos_context_switch_type_t ctx_switch_type);
 
 void capture_unexpected_undefined_instruction(
      void *location, uintptr_t arg, uint32_t cpsr);

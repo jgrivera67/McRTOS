@@ -60,8 +60,9 @@
 
 /**
  * Macro that retrieves in \_reg_ the value of
- * g_McRTOS_p->rts_cpu_controllers[0].cpc_current_execution_context_p
+ * g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()].cpc_current_execution_context_p
  *
+ * TODO: Add support for multiple cores.
  *
  * INPUT REGISTERS:
  * None

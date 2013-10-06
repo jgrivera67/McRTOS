@@ -101,9 +101,21 @@ L_save_other_registers:
      */
 
     /*
-     * Call rtos_thread_scheduler()
+     * Branch to rtos_thread_scheduler()
+     *
+     * NOTE: For Cortex-M0+ se havew to use 'bl', as 'b' does not have enough
+     * range
      */
+    mrs     r0, psp
+    cmp     r0, #0
+    beq     1f
+    mov     r0, #RTOS_CSW_THREAD_TO_THREAD
+    bl      rtos_thread_scheduler
+    bkpt    #0
+1:
+    mov     r0, #RTOS_CSW_RESET_TO_THREAD
     bl       rtos_thread_scheduler
+    bkpt    #1
 
 .endfunc
 
@@ -198,12 +210,12 @@ cortex_m_hard_fault_exception_handler:
  *
  * void
  * cortex_m_save_other_registers(
- *      cpu_register_t saved_registers[CPU_NUM_SAVED_REGISTERS],
+ *      struct cpu_saved_registers *saved_registers_p,
  *      cpu_register_t lr_on_exception_entry)
  *
  * @pre     This routine is called with interrupts disabled.
  *
- * @param   saved_registers(r0): Pointer to the area of memory 
+ * @param   saved_registers_p(r0): Pointer to the area of memory 
  *          where registers are to be saved.
 
  * @param   lr_on_exception_entry(r1): lr on exception entry

@@ -845,8 +845,8 @@ rtos_remove_runnable_thread(
 #endif /* _CPU_CYCLES_MEASURE_ */
 
 
-_MAY_NOT_RETURN_
-void rtos_thread_scheduler(void);
+_NEVER_RETURN_
+void rtos_thread_scheduler(rtos_context_switch_type_t ctx_switch_type);
 
 extern rtos_timer_function_t rtos_delay_timer_callback;
 
@@ -942,7 +942,7 @@ rtos_preemption_chain_push_context(
 
     //???
     if (preempted_context_p == &g_rtos_interrupt_uart0_p->int_execution_context) {
-        DEBUG_PRINTF("added to preemption chain: %#p\n", preempted_context_p); // ???
+        //DEBUG_PRINTF("added to preemption chain: %#p\n", preempted_context_p); // ???
     }
     //???
 }
@@ -972,7 +972,7 @@ rtos_preemption_chain_pop_context(
 
     //???
     if (last_preempted_context_p == &g_rtos_interrupt_uart0_p->int_execution_context) {
-        DEBUG_PRINTF("removed from preemption chain: %#p\n", last_preempted_context_p); // ???
+        //DEBUG_PRINTF("removed from preemption chain: %#p\n", last_preempted_context_p); // ???
     }
     //???
     return last_preempted_context_p;
@@ -1002,7 +1002,7 @@ rtos_preemption_chain_remove_context(
     glist_remove_elem(&context_p->ctx_preemption_chain_node);
     //???
     if (context_p == &g_rtos_interrupt_uart0_p->int_execution_context) {
-        DEBUG_PRINTF("removed from preemption chain: %#p\n", context_p); // ???
+        //DEBUG_PRINTF("removed from preemption chain: %#p\n", context_p); // ???
     }
     //???
 }

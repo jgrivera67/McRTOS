@@ -15,9 +15,9 @@
 /**
  * Per-CPU McRTOS thread scheduler
  */
-void rtos_thread_scheduler(void)
+void rtos_thread_scheduler(
+        rtos_context_switch_type_t ctx_switch_type)
 {
-    fdc_error_t fdc_error;
     cpu_clock_cycles_t measured_cycles;
     DECLARE_CPU_CYCLES_MEASURE_VARS();
 
@@ -35,15 +35,13 @@ void rtos_thread_scheduler(void)
         rtos_k_find_highest_thread_priority(
             cpu_controller_p->cpc_runnable_thread_priorities);
 
-    if (chosen_thread_prio == RTOS_NUM_THREAD_PRIORITIES)
-    {
-        fdc_error = CAPTURE_FDC_ERROR(
-            "At least the idle thread should be runnable",
-            cpu_controller_p->cpc_runnable_thread_priorities,
-            cpu_controller_p);
-
-        fatal_error_handler(fdc_error);
-    }
+    /*
+     * At least the idle thread should be runnable
+     */ 
+    FDC_ASSERT(
+        chosen_thread_prio < RTOS_NUM_THREAD_PRIORITIES,
+        cpu_controller_p->cpc_runnable_thread_priorities,
+        cpu_controller_p);
 
     struct glist_node *chosen_thread_queue_anchor_p = 
         &cpu_controller_p->cpc_runnable_thread_queues_anchors
@@ -53,17 +51,17 @@ void rtos_thread_scheduler(void)
         GLIST_IS_NOT_EMPTY(chosen_thread_queue_anchor_p),
         chosen_thread_queue_anchor_p, chosen_thread_prio);
 
-    /*
-     * Current execution context is a thread, an interrupt handler or the
-     * reset handler and it is not in preemption chain:
-     *
-     * NOTE: current_context_p may not be the same as
-     * current_thread_p->thr_execution_context.
-     */
-
     struct rtos_execution_context *current_context_p =
         cpu_controller_p->cpc_current_execution_context_p;
 
+    /*
+     * Current execution context is a thread, an interrupt handler or the
+     * reset handler and it is not in a preemption chain:
+     *
+     * NOTE: If this function is invoked from rtos_k_exit_interrupt(),
+     * current_context_p is an interrupt. Otherwise, current_context_p
+     * is a thread or the reset handler.
+     */
     FDC_ASSERT(
         current_context_p->ctx_context_type == RTOS_THREAD_CONTEXT ||
         current_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT ||
@@ -81,9 +79,9 @@ void rtos_thread_scheduler(void)
     {
         /* 
          * This is a synchronous context switch from another thread.
-         * Current thread is not in running state anymore and it is in
-         * a thread queue (a runnable thread queue or a waiting thread queue
-         * depending on its state)
+         * Current thread is not in running state anymore and it is in a thread
+         * queue (a runnable thread queue or a waiting thread queue depending on
+         * its state)
          */
         current_thread_p =
             RTOS_EXECUTION_CONTEXT_GET_THREAD(current_context_p);
@@ -93,8 +91,8 @@ void rtos_thread_scheduler(void)
             current_thread_p, cpu_controller_p->cpc_current_thread_p);
     } else {
         /*
-         * Asynchronous context from an interrupt handler or
-         * fist synchronous context switch from the reset handler
+         * Asynchronous context switch from an interrupt handler or
+         * first synchronous context switch from the reset handler
          */
         current_thread_p = cpu_controller_p->cpc_current_thread_p;
         if (current_thread_p == NULL) {
@@ -117,7 +115,7 @@ void rtos_thread_scheduler(void)
             GLIST_NODE_IS_LINKED(&current_thread_p->thr_list_node),
             &current_thread_p->thr_list_node, current_thread_p);
         
-        FDC_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(
+        DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(
             &current_thread_p->thr_execution_context);
     }
 
@@ -284,17 +282,12 @@ void rtos_thread_scheduler(void)
         chosen_context_p->ctx_context_type, chosen_context_p);
 
     /*
-     * Check saved CPU registers for the thread context to be restored:
-     */
-    FDC_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(chosen_context_p);
-
-    /*
      * Switch to execute the chosen thread context:
      */
 
     chosen_context_p->ctx_last_switched_in_time_stamp = get_cpu_clock_cycles();
 
-    rtos_k_restore_execution_context(chosen_context_p);
+    rtos_k_restore_execution_context(chosen_context_p, ctx_switch_type);
 
     /*
      * We should never come back here:

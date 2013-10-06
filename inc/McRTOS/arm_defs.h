@@ -300,6 +300,16 @@
 #endif /* #if DEFINED_ARM_CLASSIC_ARCH() */
 
 /**
+ * Context switch types
+ */
+#define RTOS_CSW_THREAD_TO_INTERRUPT        0x1
+#define RTOS_CSW_ENTERING_NESTED_INTERRUPT  0x2
+#define RTOS_CSW_EXITING_NESTED_INTERRUPT   0x3
+#define RTOS_CSW_INTERRUPT_TO_THREAD        0x4
+#define RTOS_CSW_THREAD_TO_THREAD           0x5
+#define RTOS_CSW_RESET_TO_THREAD            0x6
+
+/**
  * ARM CPU word size in bytes
  */
 #define ARM_CPU_WORD_SIZE_IN_BYTES  4

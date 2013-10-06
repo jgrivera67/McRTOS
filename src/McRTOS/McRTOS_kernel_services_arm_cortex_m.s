@@ -41,6 +41,8 @@
  * @param   execution_context_p (r0): Pointer to the execution context to be
  *          restored.
  *
+ * @param   context_switch_type(r1): type of context switch that is calling
+ *          this function
  * @return  none
  *
  * @pre     CPU interrupts are disabled and the current CPU mode is privileged
@@ -55,6 +57,7 @@
 rtos_k_restore_execution_context:
     /*
      * r0 == execution_context_p
+     * r1 == context_switch_type
      *
      * NOTE: We can clobber all registers in this function, since they are going 
      * to be restored from the target context.

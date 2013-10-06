@@ -18,6 +18,7 @@
 
 TODO("Remove this pragma")
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wunused-variable"
 
 #if DEFINED_ARM_CLASSIC_ARCH()
 static void
@@ -522,7 +523,7 @@ rtos_k_thread_abort(fdc_error_t fdc_error)
 
     RTOS_THREAD_CHANGE_STATE(current_thread_p, RTOS_THREAD_ABORTED);
 
-    rtos_thread_scheduler();
+    rtos_thread_scheduler(RTOS_CSW_THREAD_TO_THREAD);
 
     /*
      * We should never come back here:
@@ -1820,15 +1821,31 @@ rtos_k_enter_interrupt(
     struct rtos_cpu_controller *cpu_controller_p =
         &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
 
+    DBG_ASSERT(
+        rtos_interrupt_p->int_cpu_controller_p == cpu_controller_p,
+        rtos_interrupt_p, cpu_controller_p);
+
+    interrupt_channel_t interrupt_channel = rtos_interrupt_p->int_channel;
+
+    DBG_ASSERT(
+        interrupt_channel >= -1 && interrupt_channel < SOC_NUM_INTERRUPT_CHANNELS,
+        interrupt_channel, rtos_interrupt_p);
+
     /*
      * Mark interrupt as active:
      */
-    if (rtos_interrupt_p->int_channel < 0) {
-        cpu_controller_p->cpc_active_internal_interrupts |=
-            BIT(-rtos_interrupt_p->int_channel);
+    if (interrupt_channel < 0) {
+        FDC_ASSERT(
+            (cpu_controller_p->cpc_active_internal_interrupts & BIT(-interrupt_channel)) == 0,
+            cpu_controller_p->cpc_active_internal_interrupts, cpu_controller_p);
+
+        cpu_controller_p->cpc_active_internal_interrupts |= BIT(-interrupt_channel);
     } else {
-        cpu_controller_p->cpc_active_external_interrupts |=
-            BIT(rtos_interrupt_p->int_channel);
+        FDC_ASSERT(
+            (cpu_controller_p->cpc_active_external_interrupts & BIT(interrupt_channel)) == 0,
+            cpu_controller_p->cpc_active_external_interrupts, cpu_controller_p);
+
+        cpu_controller_p->cpc_active_external_interrupts |= BIT(interrupt_channel);
     }
 
     struct rtos_execution_context *new_interrupt_context_p =
@@ -1853,20 +1870,9 @@ rtos_k_enter_interrupt(
 
     new_interrupt_context_p->ctx_last_switched_in_time_stamp = get_cpu_clock_cycles();
     
-    /*
-     * Update counter of occurrences of this interrupt:
-     */
     struct fdc_info *fdc_info_p = &cpu_controller_p->cpc_failures_info;
-    interrupt_channel_t interrupt_channel = rtos_interrupt_p->int_channel;
 
     fdc_info_p->fdc_interrupt_channel_counters[interrupt_channel] ++;
-
-    /*
-     * Set current execution context to the calling interrupt context:
-     */
-
-    FDC_TRACE_RTOS_CONTEXT_SWITCH(new_interrupt_context_p);
-    cpu_controller_p->cpc_current_execution_context_p = new_interrupt_context_p;
 
     /*
      * Neither the calling interrupt context nor the interrupted execution context are
@@ -1887,6 +1893,8 @@ rtos_k_enter_interrupt(
         cpu_controller_p->cpc_nested_interrupts_count < SOC_NUM_INTERRUPT_PRIORITIES,
         cpu_controller_p->cpc_nested_interrupts_count, cpu_controller_p);
 
+    rtos_context_switch_type_t ctx_switch_type;
+
     if (cpu_controller_p->cpc_nested_interrupts_count == 0)
     {
         /*
@@ -1896,18 +1904,10 @@ rtos_k_enter_interrupt(
             interrupted_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
             interrupted_context_p->ctx_context_type, interrupted_context_p);
 
-        /*
-         * Current thread is in running state and it is not in any thread queue
-         */
-
         struct rtos_thread *current_thread_p =
             RTOS_EXECUTION_CONTEXT_GET_THREAD(interrupted_context_p);
 
-        DBG_ASSERT(
-            current_thread_p == cpu_controller_p->cpc_current_thread_p,
-            current_thread_p, cpu_controller_p->cpc_current_thread_p);
-
-        DBG_ASSERT_RUNNING_THREAD_INVARIANTS(current_thread_p);
+        DBG_ASSERT_RUNNING_THREAD_INVARIANTS(current_thread_p, cpu_controller_p);
 
         /*
          * Add current thread at the beginning of the corresponding runnable
@@ -1915,22 +1915,25 @@ rtos_k_enter_interrupt(
          */
          rtos_add_head_runnable_thread(
             cpu_controller_p, current_thread_p);
+
+        ctx_switch_type = RTOS_CSW_THREAD_TO_INTERRUPT;
     }
     else
     {
         /*
          * The interrupted context is another interrupt:
          */
-        DBG_ASSERT_RTOS_EXECUTION_CONTEXT_INVARIANTS(interrupted_context_p);
-
         FDC_ASSERT(
             interrupted_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
             interrupted_context_p->ctx_context_type, interrupted_context_p);
+    
+        FDC_ASSERT(
+            cpu_controller_p->cpc_nested_interrupts_count < SOC_NUM_INTERRUPT_PRIORITIES,
+            cpu_controller_p->cpc_nested_interrupts_count, cpu_controller_p);
+
+        ctx_switch_type = RTOS_CSW_ENTERING_NESTED_INTERRUPT;
     }
 
-    /*
-     * Increment interrupt nesting level:
-     */
     cpu_controller_p->cpc_nested_interrupts_count ++;
 
     RTOS_EXECUTION_CONTEXT_SET_SWITCHED_OUT_REASON(
@@ -1945,6 +1948,12 @@ rtos_k_enter_interrupt(
      * Add interrupted execution context at the top of the preemption chain:
      */
     rtos_preemption_chain_push_context(cpu_controller_p, interrupted_context_p);
+
+    /*
+     * Set current execution context to the calling interrupt context:
+     */
+    FDC_TRACE_RTOS_CONTEXT_SWITCH(new_interrupt_context_p, ctx_switch_type);
+    cpu_controller_p->cpc_current_execution_context_p = new_interrupt_context_p;
 
     RTOS_STOP_INTERRUPTS_DISABLED_TIME_MEASURE();
 
@@ -2005,24 +2014,31 @@ rtos_k_exit_interrupt(void)
         current_interrupt_p->int_signature == RTOS_INTERRUPT_SIGNATURE,
         current_interrupt_p->int_signature, current_interrupt_p);
 
-#   ifdef DEBUG
-    if (current_interrupt_p->int_channel < 0) {
+    interrupt_channel_t interrupt_channel = current_interrupt_p->int_channel;
+    
+    /*
+     * Mark interrupt as inactive:
+     */
+    if (interrupt_channel < 0) {
         FDC_ASSERT(
-            cpu_controller_p->cpc_active_internal_interrupts & BIT(-current_interrupt_p->int_channel),
+            cpu_controller_p->cpc_active_internal_interrupts & BIT(-interrupt_channel),
             cpu_controller_p->cpc_active_internal_interrupts, cpu_controller_p);
+
+        cpu_controller_p->cpc_active_internal_interrupts &= ~BIT(-interrupt_channel);
     } else {
         FDC_ASSERT(
-            cpu_controller_p->cpc_active_external_interrupts & BIT(current_interrupt_p->int_channel),
+            cpu_controller_p->cpc_active_external_interrupts & BIT(interrupt_channel),
             cpu_controller_p->cpc_active_external_interrupts, cpu_controller_p);
+
+        cpu_controller_p->cpc_active_external_interrupts &= ~BIT(interrupt_channel);
     }
-#   endif
 
     /* 
      * Notify the interrupt controller that processing for the last interrupt
      * received by the calling CPU core has been completed, so that another
      * interrupt of the same priority or lower can be received by this CPU core:
      */
-    notify_interrupt_controller_isr_done(current_interrupt_p->int_channel);
+    notify_interrupt_controller_isr_done(interrupt_channel);
 
 #if 0 // ???
     /*
@@ -2054,15 +2070,6 @@ rtos_k_exit_interrupt(void)
         preempted_context_p, current_context_p);
 
     /*
-     * Mark interrupt as inactive:
-     */
-    if (current_interrupt_p->int_channel < 0) {
-        cpu_controller_p->cpc_active_internal_interrupts &= ~BIT(-current_interrupt_p->int_channel);
-    } else {
-        cpu_controller_p->cpc_active_external_interrupts &= ~BIT(current_interrupt_p->int_channel);
-    }
-
-    /*
      * Decrement interrupt nesting level:
      */
 
@@ -2076,8 +2083,7 @@ rtos_k_exit_interrupt(void)
     if (cpu_controller_p->cpc_nested_interrupts_count == 0)
     {
         /*
-         * The new current context is a thread and the last preempted context
-         * was also a thread:
+         * The last preempted context was the current thread:
          */
         DBG_ASSERT(
             preempted_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
@@ -2094,13 +2100,13 @@ rtos_k_exit_interrupt(void)
 
         /*
          * Call thread scheduler to ensure that the highest-priority runnable
-         * thread gets to run:
+         * thread gets to run as the new current context:
          *
-         * NOTE: cpu_controller_p->cpc_current_execution_context_p may be updated
-         * again, as rtos_thread_scheduler() may call rtos_k_restore_execution_context()
-         * with the context of a different thread.
+         * NOTE: cpu_controller_p->cpc_current_execution_context_p will be updated
+         * by rtos_k_restore_execution_context(), which is called by
+         * rtos_thread_scheduler().
          */
-        rtos_thread_scheduler(); 
+        rtos_thread_scheduler(RTOS_CSW_INTERRUPT_TO_THREAD); 
 
         /*
          * We should never come back here:
@@ -2118,19 +2124,16 @@ rtos_k_exit_interrupt(void)
             preempted_context_p->ctx_context_type, preempted_context_p);
 
         /*
-         * Check saved CPU registers for the interrupt context to be restored:
-         */
-        FDC_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(preempted_context_p);
-
-        /*
          * Restore execution context of the previous interrupt
          *
          * NOTE: cpu_controller_p->cpc_current_execution_context_p will be updated
          * by rtos_k_restore_execution_context()
          */ 
-        rtos_k_restore_execution_context(preempted_context_p);
+        rtos_k_restore_execution_context(
+            preempted_context_p,
+            RTOS_CSW_EXITING_NESTED_INTERRUPT);
 
-        DEBUG_PRINTF("retuning to interrupted interrupt %#p (#%p)\n", RTOS_EXECUTION_CONTEXT_GET_INTERRUPT(preempted_context_p), preempted_context_p); //???
+        //???DEBUG_PRINTF("retuning to interrupted interrupt %#p (#%p)\n", RTOS_EXECUTION_CONTEXT_GET_INTERRUPT(preempted_context_p), preempted_context_p); //???
 
 #if DEFINED_ARM_CLASSIC_ARCH()
         /*

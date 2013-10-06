@@ -28,6 +28,9 @@ rtos_dbg_dump_exception_info(
     _IN_ const uint32_t *before_exception_stack_p);
 
 static void 
+rtos_dbg_dump_all_execution_contexts(void);
+
+static void 
 rtos_dbg_dump_execution_context(
     _IN_ const struct rtos_execution_context *execution_context_p);
 
@@ -149,6 +152,10 @@ rtos_dbg_parse_command(
         case '\0':
             break;
 
+        case 'a':
+            rtos_dbg_dump_all_execution_contexts();
+            break;
+
         case 'c':
             rtos_dbg_dump_execution_context(
                 current_execution_context_p);
@@ -195,6 +202,7 @@ rtos_dbg_display_help(void)
 {
     debug_printf(
         "McRTOS debugger commands\n"
+        "\ta - dump all execution contexts\n"
         "\tc - dump current execution context\n"
         "\te - dump exception info\n"
         "\th - display this message\n"
@@ -235,6 +243,30 @@ rtos_dbg_dump_exception_info(
 
 
 static void 
+rtos_dbg_dump_all_execution_contexts(void)
+{
+    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
+    struct rtos_cpu_controller *cpu_controller_p =
+        &g_McRTOS_p->rts_cpu_controllers[cpu_id];
+
+    struct glist_node *context_node_p;
+
+    debug_printf("Execution Contexts for CPU core %u\n", cpu_id);
+
+    GLIST_FOR_EACH_NODE(
+        context_node_p,
+        &cpu_controller_p->cpc_execution_contexts_list_anchor)
+    {
+        struct rtos_execution_context *context_p = 
+            GLIST_NODE_ENTRY(
+                context_node_p, struct rtos_execution_context, ctx_list_node);
+
+        rtos_dbg_dump_execution_context(context_p);
+    }
+}
+
+
+static void 
 rtos_dbg_dump_execution_context(
     _IN_ const struct rtos_execution_context *execution_context_p)
 {
@@ -245,8 +277,7 @@ rtos_dbg_dump_execution_context(
            [RTOS_INTERRUPT_CONTEXT] = "RTOS_INTERRUPT_CONTEXT"
     };
 
-    debug_printf("Current Execution Context: %#p\n",
-        execution_context_p);
+    debug_printf("Execution Context: %#p\n", execution_context_p);
 
     if (execution_context_p->ctx_signature != RTOS_EXECUTION_CONTEXT_SIGNATURE) {
 
@@ -415,7 +446,16 @@ rtos_dbg_dump_context_switch_traces(void)
             GET_BIT_FIELD(trace_entry, FDC_CST_CONTEXT_ID_MASK, FDC_CST_CONTEXT_ID_SHIFT);
 
         uint32_t trace_context_type = 
-            GET_BIT_FIELD(trace_entry, FDC_CST_CONTEXT_TYPE_MASK, FDC_CST_CONTEXT_TYPE_SHIFT);
+            GET_BIT_FIELD(
+                trace_entry,
+                FDC_CST_CONTEXT_TYPE_MASK,
+                FDC_CST_CONTEXT_TYPE_SHIFT);
+
+        uint32_t trace_context_switch_type = 
+            GET_BIT_FIELD(
+                trace_entry,
+                FDC_CST_CONTEXT_SWITCH_TYPE_MASK,
+                FDC_CST_CONTEXT_SWITCH_TYPE_SHIFT);
 
         uint32_t last_switched_out_reason =
             GET_BIT_FIELD(trace_entry, FDC_CST_LAST_SWITCHED_OUT_REASON_MASK,
@@ -430,31 +470,31 @@ rtos_dbg_dump_context_switch_traces(void)
         struct rtos_execution_context *execution_context_p;
 
         switch (trace_context_type) {
-        case FDC_CST_RESET:
-            execution_context_p = &cpu_controller_p->cpc_reset_execution_context;
-            break;
         case FDC_CST_APPLICATION_THREAD:
             thread_p = &g_McRTOS_p->rts_app_threads[context_id];
             execution_context_p = &thread_p->thr_execution_context;
             break;
+
         case FDC_CST_SYSTEM_THREAD:
             thread_p = &cpu_controller_p->cpc_system_threads[context_id];
             execution_context_p = &thread_p->thr_execution_context;
             break;
+
         case FDC_CST_INTERRUPT:
             interrupt_p = &g_McRTOS_p->rts_interrupts[context_id];
             execution_context_p = &interrupt_p->int_execution_context;
             break;
+
         default:
             debug_printf("*** Error: Invalid trace entry (trace context type: %u)\n",
                 trace_context_type);
         }
 
         debug_printf(
-            "%3u: %s (context: %#p), last switched-out reason: %u, priority %u\n",
+            "%3u: %s (context: %#p), context switch type: %#x, "
+            "last switched-out reason: %u, priority %u\n",
             i, execution_context_p->ctx_name_p, execution_context_p,
-            last_switched_out_reason, priority
-            );
+            trace_context_switch_type, last_switched_out_reason, priority);
 
 //#       if 0 // ???
         if (thread_p != NULL) {

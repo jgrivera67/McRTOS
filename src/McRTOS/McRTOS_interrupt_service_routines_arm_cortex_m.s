@@ -70,18 +70,16 @@
     ldr     r2, [r2]
 
     /*
-     * Set r0 to &(\_g_rtos_interrupt_p_->int_cpu_controller_p->
-     *               cpc_current_execution_context_p->ctx_cpu_registers[0])
+     * Set r0 to point to current execution context.
      */
-    ldr     r0, [r2, #RTOS_INT_CPU_CONTROLLER_P_OFFSET]
-    ldr     r0, [r0, #RTOS_CPC_CURRENT_EXECUTION_CONTEXT_P_OFFSET]
+    GET_MCRTOS_CURRENT_EXECUTION_CONTEXT r0
+
     add     r0, r0, #RTOS_CTX_CPU_REGISTERS_OFFSET
 
     /*
      * Save non-pre-saved registers:
      * 
-     * r0 == &(\_g_rtos_interrupt_p_->int_cpu_controller_p->
-     *               cpc_current_execution_context_p->ctx_cpu_registers[0]) 
+     * r0 == &(current_execution_context_p->ctx_cpu_saved_registers) 
      */
     mov     r1, lr
     bl      cortex_m_save_other_registers

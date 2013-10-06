@@ -393,7 +393,7 @@ rtos_startup(
         cpu_controller_p->cpc_current_execution_context_p);
 
 #   else
-    rtos_thread_scheduler(); // TODO: change this to synch ctxt switch too
+    rtos_thread_scheduler(RTOS_CSW_RESET_TO_THREAD); // TODO: change this to synch ctxt switch too
 #   endif
 
     /*
@@ -847,6 +847,10 @@ McRTOS_display_stats(void)
             FDC_ASSERT(false, context_p->ctx_context_type, context_p);
         }
 
+        //???
+        uint32_t sp = __get_PSP();
+        DEBUG_PRINTF("before SP %#p\n", sp);
+        //???
         console_printf(
             "%#8p %30s %c%7u %12u %10u %12u %#x%x\n",
             //"%#p %s %c%u %u %u %u %#x%x\n",
@@ -869,5 +873,9 @@ McRTOS_display_stats(void)
             GEN_SIGNATURE('9', '9', '9', '9')
 #endif 
         );
+        //???
+        sp = __get_PSP();
+        DEBUG_PRINTF("After SP %#p\n", sp);
+        //???
     }
 }

@@ -917,14 +917,16 @@ rtos_k_enter_system_call(
 void
 rtos_k_exit_system_call(void);
 
-_NEVER_RETURN_
+_MAY_NOT_RETURN_
+_THREAD_CALLERS_ONLY_
 void
 rtos_k_synchronous_context_switch(
     struct rtos_execution_context *current_execution_context_p);
 
 _NEVER_RETURN_
 void rtos_k_restore_execution_context(
-        _IN_ const struct rtos_execution_context *execution_context_p);
+        _IN_ const struct rtos_execution_context *execution_context_p,
+        _IN_ rtos_context_switch_type_t ctx_switch_type);
 
 void
 rtos_k_capture_failure_data(
