@@ -1924,7 +1924,7 @@ rtos_k_enter_interrupt(
         FDC_ASSERT(
             interrupted_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
             interrupted_context_p->ctx_context_type, interrupted_context_p);
-    
+   
         FDC_ASSERT(
             cpu_controller_p->cpc_nested_interrupts_count < SOC_NUM_INTERRUPT_PRIORITIES,
             cpu_controller_p->cpc_nested_interrupts_count, cpu_controller_p);
@@ -2470,6 +2470,9 @@ rtos_execution_context_init(
 
         execution_context_p->ctx_cpu_saved_registers.cpu_reg_psp =
             (cpu_register_t)stack_pointer;
+
+        execution_context_p->ctx_cpu_saved_registers.cpu_reg_lr_on_exc_entry =
+            CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP;
     }
 
     /*
@@ -2907,6 +2910,7 @@ rtos_k_disable_cpu_interrupts(void)
     cpu_status_register_t old_primask = __get_PRIMASK();
 
     __disable_irq();
+    __ISB();
 
     RTOS_START_INTERRUPTS_DISABLED_TIME_MEASURE();
 
@@ -2927,6 +2931,7 @@ rtos_k_disable_cpu_interrupts(void)
     RTOS_STOP_INTERRUPTS_DISABLED_TIME_MEASURE();
 
    if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
+        __ISB();
         __enable_irq();
    }
 }

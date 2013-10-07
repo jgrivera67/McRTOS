@@ -51,6 +51,7 @@
 
 cortex_m_pendsv_exception_handler:
     cpsid   i
+    isb
 
     /*
      * Pre-saved registers were automatically saved on the stack.
@@ -140,6 +141,7 @@ L_save_other_registers:
 
 cortex_m_hard_fault_exception_handler:
     cpsid   i
+    isb
 
     /*
      * Pre-saved registers were automatically saved on the stack.

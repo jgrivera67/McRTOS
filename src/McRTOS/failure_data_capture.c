@@ -565,8 +565,30 @@ check_rtos_execution_context_cpu_registers(
     if (rtos_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT)
     {
         FDC_ASSERT(
-            (cpu_status_register & CPU_REG_IPSR_EXCEPTION_NUMBER_MASK) == 0,
+            CPU_MODE_IS_THREAD(cpu_status_register),
             cpu_status_register, rtos_execution_context_p);
+
+        FDC_ASSERT(
+            rtos_execution_context_p->
+                ctx_cpu_saved_registers.cpu_reg_lr_on_exc_entry ==
+            CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP,
+            rtos_execution_context_p->
+                ctx_cpu_saved_registers.cpu_reg_lr_on_exc_entry,
+            rtos_execution_context_p);
+    }
+    else
+    {
+        FDC_ASSERT(
+            CPU_MODE_IS_INTERRUPT(cpu_status_register),
+            cpu_status_register, rtos_execution_context_p);
+
+        FDC_ASSERT(
+            rtos_execution_context_p->
+                ctx_cpu_saved_registers.cpu_reg_lr_on_exc_entry ==
+            CPU_EXC_RETURN_TO_HANDLER_MODE,
+            rtos_execution_context_p->
+                ctx_cpu_saved_registers.cpu_reg_lr_on_exc_entry,
+            rtos_execution_context_p);
     }
 
     FDC_ASSERT(

@@ -82,6 +82,7 @@
      * r0 == &(current_execution_context_p->ctx_cpu_saved_registers) 
      */
     mov     r1, lr
+
     bl      cortex_m_save_other_registers
 
     /*
@@ -135,8 +136,16 @@
     /*
      * Cortex-M process leave interrupts enabled on the CPU upon entering 
      * an exception, so we need to disable them here:
+     *
+     * NOTE: A nested interrupt may have occurred between the time the original
+     * interrupt interrupted the current thread and this point (after the CPU 
+     * saved the pre-saved registers on the PSP stack). In that case,
+     * lr will be CPU_EXC_RETURN_TO_HANDLER_MODE but the current context will be
+     * of type RTOS_THREAD_CONTEXT.
+     * TODO: we need to handle that case
      */
     cpsid   i
+    isb
 
     RTOS_ENTER_ISR_COMMON \_g_rtos_interrupt_p_
 
@@ -179,6 +188,7 @@
      * an exception, so we need to disable them here:
      */
     cpsid   i
+    isb
 
     RTOS_ENTER_ISR_COMMON \_g_rtos_interrupt_p_
 
@@ -218,6 +228,7 @@
      * Disable interrupts again:
      */
     cpsid   i
+    isb
 
     /*
      * Call rtos_k_exit_interrupt()
