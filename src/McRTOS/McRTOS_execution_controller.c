@@ -114,9 +114,6 @@ void rtos_thread_scheduler(
         FDC_ASSERT(
             GLIST_NODE_IS_LINKED(&current_thread_p->thr_list_node),
             &current_thread_p->thr_list_node, current_thread_p);
-        
-        DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(
-            &current_thread_p->thr_execution_context);
     }
 
     /*

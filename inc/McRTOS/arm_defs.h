@@ -300,7 +300,7 @@
 #endif /* #if DEFINED_ARM_CLASSIC_ARCH() */
 
 /**
- * Context switch types
+ * Context switch types for context switch tracing (must fit in 4 bits)
  */
 #define RTOS_CSW_THREAD_TO_INTERRUPT        0x1
 #define RTOS_CSW_ENTERING_NESTED_INTERRUPT  0x2
@@ -309,6 +309,8 @@
 #define RTOS_CSW_THREAD_TO_THREAD           0x5
 #define RTOS_CSW_RESET_TO_THREAD            0x6
 #define RTOS_CSW_EXITING_HARD_FAULT         0x7
+#define RTOS_CSW_THREAD_TO_EARLY_NESTED_INTERRUPT   0x8
+#define RTOS_CSW_EXITING_EARLY_NESTED_INTERRUPT     0x9
 
 /**
  * ARM CPU word size in bytes

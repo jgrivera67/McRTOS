@@ -443,7 +443,8 @@ check_rtos_execution_context_invariants(
 #if DEFINED_ARM_CLASSIC_ARCH()
 void
 check_rtos_execution_context_cpu_registers(
-    _IN_ const struct rtos_execution_context *rtos_execution_context_p)
+    _IN_ const struct rtos_execution_context *rtos_execution_context_p,
+    _IN_ rtos_context_switch_type_t ctx_switch_type)
 {
     uint32_t *return_address;
     uint32_t *caller_address;
@@ -525,7 +526,8 @@ uint32_t *g_check_rtos_execution_context_cpu_registers_last_caller = NULL;
 
 void
 check_rtos_execution_context_cpu_registers(
-    _IN_ const struct rtos_execution_context *rtos_execution_context_p)
+    _IN_ const struct rtos_execution_context *rtos_execution_context_p,
+    _IN_ rtos_context_switch_type_t ctx_switch_type)
 {
     /*
      * Capture ARM LR register on entry
@@ -568,10 +570,22 @@ check_rtos_execution_context_cpu_registers(
             CPU_MODE_IS_THREAD(cpu_status_register),
             cpu_status_register, rtos_execution_context_p);
 
+        cpu_register_t expected_lr_on_exc_entry;
+
+        if (ctx_switch_type == RTOS_CSW_THREAD_TO_EARLY_NESTED_INTERRUPT ||
+            ctx_switch_type == RTOS_CSW_EXITING_EARLY_NESTED_INTERRUPT)
+        {
+            expected_lr_on_exc_entry = CPU_EXC_RETURN_TO_HANDLER_MODE;
+        }
+        else
+        {
+            expected_lr_on_exc_entry = CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP;
+        }
+
         FDC_ASSERT(
             rtos_execution_context_p->
                 ctx_cpu_saved_registers.cpu_reg_lr_on_exc_entry ==
-            CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP,
+            expected_lr_on_exc_entry,
             rtos_execution_context_p->
                 ctx_cpu_saved_registers.cpu_reg_lr_on_exc_entry,
             rtos_execution_context_p);
@@ -643,13 +657,14 @@ fdc_trace_rtos_context_switch(
 #   ifdef DEBUG
     switch (ctx_switch_type) {
     case RTOS_CSW_THREAD_TO_INTERRUPT:
+    case RTOS_CSW_THREAD_TO_EARLY_NESTED_INTERRUPT:
         DBG_ASSERT(
             current_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
             current_execution_context_p->ctx_context_type,
             current_execution_context_p);
 
         DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(
-            current_execution_context_p);
+            current_execution_context_p, ctx_switch_type);
 
         DBG_ASSERT(
             target_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
@@ -664,7 +679,7 @@ fdc_trace_rtos_context_switch(
             current_execution_context_p);
 
         DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(
-            current_execution_context_p);
+            current_execution_context_p, ctx_switch_type);
 
         DBG_ASSERT(
             target_execution_context_p != current_execution_context_p,
@@ -692,10 +707,11 @@ fdc_trace_rtos_context_switch(
             target_execution_context_p);
 
         DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(
-            target_execution_context_p);
+            target_execution_context_p, ctx_switch_type);
         break;
 
     case RTOS_CSW_INTERRUPT_TO_THREAD:
+    case RTOS_CSW_EXITING_EARLY_NESTED_INTERRUPT:
         DBG_ASSERT(
             current_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
             current_execution_context_p->ctx_context_type,
@@ -707,7 +723,7 @@ fdc_trace_rtos_context_switch(
             target_execution_context_p);
 
         DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(
-            target_execution_context_p);
+            target_execution_context_p, ctx_switch_type);
         break;
 
     case RTOS_CSW_THREAD_TO_THREAD:
@@ -717,7 +733,7 @@ fdc_trace_rtos_context_switch(
             current_execution_context_p);
 
         DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(
-            current_execution_context_p);
+            current_execution_context_p, ctx_switch_type);
 
         if (target_execution_context_p != current_execution_context_p) {
             DBG_ASSERT(
@@ -726,7 +742,7 @@ fdc_trace_rtos_context_switch(
                 target_execution_context_p);
 
             DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(
-                target_execution_context_p);
+                target_execution_context_p, ctx_switch_type);
         }
         break;
 
@@ -742,7 +758,7 @@ fdc_trace_rtos_context_switch(
             target_execution_context_p);
 
         DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(
-            target_execution_context_p);
+            target_execution_context_p, ctx_switch_type);
         break;
 
     default:
@@ -1225,11 +1241,6 @@ check_rtos_interrupt_entry_preconditions(
     FDC_ASSERT(
         current_context_p->ctx_signature == RTOS_EXECUTION_CONTEXT_SIGNATURE,
         current_context_p->ctx_signature, current_context_p);
-
-    /*
-     * Check saved CPU registers for the interrupted context:
-     */
-    FDC_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(current_context_p);
 
     /*
      * The current context must have been running in either user mode or system

@@ -1907,14 +1907,23 @@ rtos_k_enter_interrupt(
 
         DBG_ASSERT_RUNNING_THREAD_INVARIANTS(current_thread_p, cpu_controller_p);
 
-        /*
-         * Add current thread at the beginning of the corresponding runnable
-         * queue and change its state from running to runnable:
-         */
-         rtos_add_head_runnable_thread(
-            cpu_controller_p, current_thread_p);
+        if (interrupted_context_p->
+                ctx_cpu_saved_registers.cpu_reg_lr_on_exc_entry ==
+            CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP)
+        {
+            /*
+             * Add current thread at the beginning of the corresponding runnable
+             * queue and change its state from running to runnable:
+             */
+             rtos_add_head_runnable_thread(
+                cpu_controller_p, current_thread_p);
 
-        ctx_switch_type = RTOS_CSW_THREAD_TO_INTERRUPT;
+            ctx_switch_type = RTOS_CSW_THREAD_TO_INTERRUPT;
+        }
+        else
+        {
+            ctx_switch_type = RTOS_CSW_THREAD_TO_EARLY_NESTED_INTERRUPT;
+        }
     }
     else
     {
@@ -2096,20 +2105,32 @@ rtos_k_exit_interrupt(void)
 
         DBG_ASSERT_RTOS_THREAD_INVARIANTS(current_thread_p);
 
-        /*
-         * Call thread scheduler to ensure that the highest-priority runnable
-         * thread gets to run as the new current context:
-         *
-         * NOTE: cpu_controller_p->cpc_current_execution_context_p will be updated
-         * by rtos_k_restore_execution_context(), which is called by
-         * rtos_thread_scheduler().
-         */
-        rtos_thread_scheduler(RTOS_CSW_INTERRUPT_TO_THREAD); 
-
-        /*
-         * We should never come back here:
-         */
-        FDC_ASSERT(false, 0, 0);
+        if (preempted_context_p->
+                ctx_cpu_saved_registers.cpu_reg_lr_on_exc_entry ==
+            CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP)
+        {
+            /*
+             * Call thread scheduler to ensure that the highest-priority
+             * runnable thread gets to run as the new current context:
+             *
+             * NOTE: cpu_controller_p->cpc_current_execution_context_p will
+             * be updated by rtos_k_restore_execution_context(), which is
+             * called by rtos_thread_scheduler().
+             */
+            rtos_thread_scheduler(RTOS_CSW_INTERRUPT_TO_THREAD); 
+        }
+        else
+        {
+            /*
+             * Restore execution context of the interrupted thread
+             *
+             * NOTE: cpu_controller_p->cpc_current_execution_context_p will be
+             * updated by rtos_k_restore_execution_context()
+             */ 
+            rtos_k_restore_execution_context(
+                preempted_context_p,
+                RTOS_CSW_EXITING_EARLY_NESTED_INTERRUPT);
+        }
     }
     else
     {
@@ -2130,12 +2151,12 @@ rtos_k_exit_interrupt(void)
         rtos_k_restore_execution_context(
             preempted_context_p,
             RTOS_CSW_EXITING_NESTED_INTERRUPT);
-
-        /*
-         * We should never come back here
-         */
-        FDC_ASSERT(false, 0, 0);
     }
+
+    /*
+     * We should never come back here:
+     */
+    FDC_ASSERT(false, 0, 0);
 }
 
 

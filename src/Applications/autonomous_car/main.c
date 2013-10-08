@@ -149,8 +149,10 @@ buttons_reader_thread_f(void *arg)
 #endif
     } 
 #else
-   for ( ; ; )
-       ;
+   for ( ; ; ) {
+       console_printf("%s\n", __func__);
+       rtos_thread_delay(2000);
+   }
 #endif
 
     fdc_error = CAPTURE_FDC_ERROR(
@@ -198,8 +200,10 @@ trimpot_reader_thread_f(void *arg)
     }   
 
 #else
-   for ( ; ; )
-       ;
+   for ( ; ; ) {
+       console_printf("%s\n", __func__);
+       rtos_thread_delay(3000);
+   }
 #endif
 
     fdc_error = CAPTURE_FDC_ERROR(

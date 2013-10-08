@@ -416,7 +416,7 @@ static const struct uart_device g_uart_devices[] =
             .irp_isr_function_p = kl25_uart0_isr,
             .irp_arg_p =  (void *)&g_uart_devices[0],
             .irp_channel = VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART0),
-            .irp_priority =  SOC_HIGHEST_INTERRUPT_PRIORITY + 1, //SOC_LOWEST_INTERRUPT_PRIORITY - 1,
+            .irp_priority = SOC_LOWEST_INTERRUPT_PRIORITY - 1,
             .irp_cpu_id = 0,
         },
 

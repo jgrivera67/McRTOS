@@ -236,9 +236,9 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
             _rtos_execution_context_p)
 
 #define FDC_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(                \
-            _rtos_execution_context_p)                                  \
+            _rtos_execution_context_p, _ctx_switch_type)                \
         check_rtos_execution_context_cpu_registers(                     \
-            _rtos_execution_context_p)
+            _rtos_execution_context_p, _ctx_switch_type)
 
 #define FDC_ASSERT_RTOS_THREAD_INVARIANTS(_rtos_thread_p) \
         do {                                                                \
@@ -307,7 +307,7 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
             _rtos_execution_context_p)
 
 #define FDC_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS( \
-            _rtos_execution_context_p)
+            _rtos_execution_context_p, _ctx_switch_type)
 
 #define FDC_ASSERT_RTOS_THREAD_INVARIANTS(_rtos_thread_p)
 #define FDC_ASSERT_RUNNING_THREAD_INVARIANTS(_current_thread_p, _cpu_controller_p)
@@ -404,9 +404,9 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
             _rtos_execution_context_p)
 
 #define DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(                \
-            _rtos_execution_context_p)                                  \
+            _rtos_execution_context_p, _ctx_switch_type)                \
         FDC_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(                \
-            _rtos_execution_context_p)
+            _rtos_execution_context_p, _ctx_switch_type)
 
 #define DBG_ASSERT_RTOS_THREAD_INVARIANTS(_rtos_thread_p) \
         FDC_ASSERT_RTOS_THREAD_INVARIANTS(_rtos_thread_p)
@@ -432,7 +432,7 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
             _rtos_execution_context_p)
 
 #define DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS( \
-            _rtos_execution_context_p)
+            _rtos_execution_context_p, _ctx_switch_type)
 
 #define DBG_ASSERT_RTOS_THREAD_INVARIANTS(_rtos_thread_p)
 #define DBG_ASSERT_RUNNING_THREAD_INVARIANTS(_current_thread_p, _cpu_controller_p)
@@ -747,7 +747,8 @@ void check_rtos_execution_context_invariants(
 
 void
 check_rtos_execution_context_cpu_registers(
-    _IN_ const struct rtos_execution_context *rtos_execution_context_p);
+    _IN_ const struct rtos_execution_context *rtos_execution_context_p,
+    _IN_ rtos_context_switch_type_t ctx_switch_type);
 
 void fdc_trace_rtos_context_switch(
     _IN_ const struct rtos_execution_context *rtos_execution_context_p,

@@ -142,7 +142,6 @@
      * saved the pre-saved registers on the PSP stack). In that case,
      * lr will be CPU_EXC_RETURN_TO_HANDLER_MODE but the current context will be
      * of type RTOS_THREAD_CONTEXT.
-     * TODO: we need to handle that case
      */
     cpsid   i
     isb
@@ -186,6 +185,8 @@
     /*
      * Cortex-M process leave interrupts enabled on the CPU upon entering 
      * an exception, so we need to disable them here:
+     *
+     * NOTE: same not as for RTOS_ENTER_ISR()
      */
     cpsid   i
     isb

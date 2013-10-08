@@ -41,6 +41,9 @@
  * cortex_m_pendsv_exception_handler(void)
  *
  * @pre     This exception was triggered from thread mode.
+ * @pre     This exception is configured to have higher priority than all
+ *          interrupts. So no nested exceptions caused by interrupts are
+ *          expected here.
  *
  * @param   none.
  *
@@ -131,6 +134,9 @@ L_save_other_registers:
  *
  * void
  * cortex_m_hard_fault_exception_handler(void)
+ *
+ * @pre     This exception has higher priority than all interrupts.
+ *          So no nested exceptions caused by interrupts are expected here.
  *
  * @param   none
  *
