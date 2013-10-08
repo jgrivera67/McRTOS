@@ -236,7 +236,7 @@ initialize_tick_timer(void)
         .irp_isr_function_p = cortex_m_systick_isr,
         .irp_arg_p =  NULL,
         .irp_channel = VECTOR_NUMBER_TO_IRQ_NUMBER(INT_SysTick),
-        .irp_priority = SOC_HIGHEST_INTERRUPT_PRIORITY + 1,
+        .irp_priority = SYSTICK_INTERRUPT_PRIORITY,
         .irp_cpu_id = 0,
     };
 
