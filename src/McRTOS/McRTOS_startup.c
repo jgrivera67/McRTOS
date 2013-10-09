@@ -236,7 +236,8 @@ lcd_display_greetings(void)
  */
 void
 rtos_startup( 
-    _IN_ const struct rtos_per_cpu_startup_app_configuration *rtos_app_config_p)
+    _IN_ const struct rtos_per_cpu_startup_app_configuration *rtos_app_config_p,
+    _IN_ app_hardware_init_t *app_hardware_init_p)
 {
     FDC_ASSERT_COMING_FROM_RESET();
     FDC_ASSERT_CPU_IS_LITTLE_ENDIAN();
@@ -271,7 +272,9 @@ rtos_startup(
      */
     if (cpu_id == 0)
     {
-        g_McRTOS_p->rts_soc_reset_cause = board_init();
+        g_McRTOS_p->rts_soc_reset_cause = soc_hardware_init();
+
+        app_hardware_init_p();
 
         console_printf_init();
 
@@ -694,7 +697,7 @@ rtos_parse_command_line(
         break;
 
     case 'r':
-        board_reset();
+        soc_reset();
         /*UNREACHABLE*/
         break;
 

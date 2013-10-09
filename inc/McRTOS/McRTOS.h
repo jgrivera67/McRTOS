@@ -369,7 +369,8 @@ struct rtos_lcd_putchar_attributes
 _NEVER_RETURN_
 void 
 rtos_startup( 
-    _IN_ const struct rtos_per_cpu_startup_app_configuration *rtos_app_config_p);
+    _IN_ const struct rtos_per_cpu_startup_app_configuration *rtos_app_config_p,
+    _IN_ app_hardware_init_t *app_hardware_init_p);
 
 /*
  * Functions to be invoked from Application threads, which run in

@@ -117,7 +117,7 @@ rtos_run_debugger(
 {
     bool quit;
 
-    uint32_t old_led_color = set_rgb_led_color(LED_COLOR_RED);
+    turn_on_debugger_led();
    
     do {
         debug_printf("\nMcRTOS debugger> ");
@@ -135,7 +135,7 @@ rtos_run_debugger(
 
     } while (!quit);
 
-    set_rgb_led_color(old_led_color);
+    turn_off_debugger_led();
 }
 
 static bool
@@ -181,7 +181,7 @@ rtos_dbg_parse_command(
             break;
 
         case 'r':
-            board_reset();
+            soc_reset();
             /*UNREACHABLE*/
             break;
 

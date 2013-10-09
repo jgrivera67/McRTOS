@@ -12,6 +12,8 @@
 #include "McRTOS_kernel_services.h"
 #include "failure_data_capture.h"
 #include "utils.h"
+#include "frdm_board.h"
+#include "tfc_board.h"
 
 TODO("Remove these pragmas")
 //#pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -27,6 +29,7 @@ enum app_thread_priorities
     TRIMPOT_READER_THREAD_PRIORITY = RTOS_LOWEST_THREAD_PRIORITY - 1,
 };
 
+static void autonomous_car_hardware_init(void);
 static fdc_error_t buttons_reader_thread_f(void *arg);
 static fdc_error_t trimpot_reader_thread_f(void *arg);
 
@@ -96,11 +99,19 @@ main(void)
 {
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
-    rtos_startup(&g_rtos_app_config[cpu_id]);
+    rtos_startup(&g_rtos_app_config[cpu_id], autonomous_car_hardware_init);
     
     FDC_ASSERT(false, 0, 0);
 
     return -1;
+}
+
+
+static
+void autonomous_car_hardware_init(void)
+{
+    frdm_board_init();
+    tfc_board_init();
 }
 
 

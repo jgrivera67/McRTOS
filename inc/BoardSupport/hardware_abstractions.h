@@ -222,15 +222,17 @@ struct ssp_controller;
 struct buttons_device;
 struct adc_device;
 
+typedef void app_hardware_init_t(void);
+
 /*
  * Exported functions
  */
 
-cpu_reset_cause_t board_init(void);
+cpu_reset_cause_t soc_hardware_init(void);
 
 bool software_reset_happened(void);
 
-void board_reset(void);
+void soc_reset(void);
 
 void install_isr(
     interrupt_channel_t channel,
@@ -332,6 +334,10 @@ void init_trimpot(void);
 uint32_t read_trimpot(void);
 
 void toggle_heartbeat_led(void);
+
+void turn_on_debugger_led(void);
+
+void turn_off_debugger_led(void);
 
 uint32_t read_buttons(
             _IN_ const struct buttons_device *buttons_device_p);

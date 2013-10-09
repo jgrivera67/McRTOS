@@ -380,6 +380,12 @@ GEN_ISR_FUNCTION kl25_uart0_isr, g_rtos_interrupt_uart0_p, \
 GEN_ISR_FUNCTION kl25_adc0_isr, g_rtos_interrupt_adc0_p, \
                  kl25_adc_interrupt_e_handler
 
+/**
+ * TPM1 ISR
+ */
+GEN_ISR_FUNCTION kl25_tpm1_isr, g_rtos_interrupt_tpm1_p, \
+                 kl25_tpm_interrupt_e_handler
+
 .end
 
 

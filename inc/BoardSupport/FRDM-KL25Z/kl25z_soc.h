@@ -35,6 +35,7 @@
 #define UART0_INTERRUPT_PRIORITY    SOC_LOWEST_INTERRUPT_PRIORITY
 #define SYSTICK_INTERRUPT_PRIORITY  (SOC_LOWEST_INTERRUPT_PRIORITY - 1)
 #define ADC_INTERRUPT_PRIORITY      (SOC_LOWEST_INTERRUPT_PRIORITY - 2)
+#define TPM_INTERRUPT_PRIORITY      (SOC_LOWEST_INTERRUPT_PRIORITY - 2)
 
 C_ASSERT(ADC_INTERRUPT_PRIORITY > SOC_HIGHEST_INTERRUPT_PRIORITY);
 
@@ -108,24 +109,6 @@ typedef _RANGE_(INT_SVCall_IRQn, SOC_NUM_INTERRUPT_CHANNELS - 1)
         ((uintptr_t)(_addr) >= SOC_SRAM_BASE &&                        \
          (uintptr_t)(_addr) < SOC_SRAM_BASE + SOC_SRAM_SIZE)
 
-#define LED_RED_PIN_MASK    BIT(18)
-#define LED_GREEN_PIN_MASK  BIT(19)
-#define LED_BLUE_PIN_MASK   BIT(1)
-
-#define LED_COLOR_BLACK     UINT32_C(0x0)
-#define LED_COLOR_RED       LED_RED_PIN_MASK
-#define LED_COLOR_GREEN     LED_GREEN_PIN_MASK
-#define LED_COLOR_YELLOW    (LED_RED_PIN_MASK | LED_GREEN_PIN_MASK)
-#define LED_COLOR_BLUE      LED_BLUE_PIN_MASK
-#define LED_COLOR_MAGENTA   (LED_RED_PIN_MASK | LED_BLUE_PIN_MASK)
-#define LED_COLOR_CYAN      (LED_GREEN_PIN_MASK | LED_GREEN_PIN_MASK)
-#define LED_COLOR_WHITE     (LED_RED_PIN_MASK | LED_GREEN_PIN_MASK | LED_GREEN_PIN_MASK)
-
-void toggle_rgb_led(uint32_t led_color_mask);
-void turn_on_rgb_led(uint32_t led_color_mask);
-void turn_off_rgb_led(uint32_t led_color_mask);
-uint32_t set_rgb_led_color(uint32_t led_color_mask);
-
 struct rtos_interrupt; /* opaque type */
 
 void kl25_uart_interrupt_e_handler(
@@ -133,5 +116,10 @@ void kl25_uart_interrupt_e_handler(
 
 void kl25_adc_interrupt_e_handler(
     struct rtos_interrupt *rtos_interrupt_p);
+
+void kl25_tpm_interrupt_e_handler(
+    struct rtos_interrupt *rtos_interrupt_p);
+
+void kl25_tpm_init(void);
 
 #endif /* __KL25Z_SOC_H */

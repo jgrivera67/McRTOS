@@ -1,5 +1,5 @@
 /**
- * @file kl25z_hardware_abstractions.c
+ * @file kl25z_soc_hardware_abstractions.c
  *
  * Hardware abstraction layer for the KL25Z SoC
  *
@@ -13,9 +13,9 @@
 #include "utils.h"
 #include "McRTOS_config_parameters.h"
 #include "McRTOS_kernel_services.h"
+#include "frdm_board.h"
 
 //TODO("Remove these pragmas")
-//#pragma GCC diagnostic ignored "-Wunused-variable"
 
 /**
  * Crystal frequency in HZ
@@ -169,12 +169,6 @@ static void system_clocks_init(void);
 
 static void pll_init(void);
 
-#if 0 // ???
-static void tfc_gpio_init(void);
-#endif
-
-static void rgb_led_init(void);
-
 static void uart_stop(
     const struct uart_device *uart_device_p);
 
@@ -200,7 +194,6 @@ static isr_function_t dummy_uart1_isr;
 static isr_function_t dummy_uart2_isr;
 static isr_function_t dummy_cmp0_isr;
 static isr_function_t dummy_ftm0_isr;
-static isr_function_t dummy_ftm1_isr;
 static isr_function_t dummy_ftm2_isr;
 static isr_function_t dummy_rtc_alarm_isr;
 static isr_function_t dummy_rtc_seconds_isr;
@@ -218,6 +211,7 @@ static isr_function_t dummy_port_d_isr;
 extern isr_function_t cortex_m_systick_isr;
 extern isr_function_t kl25_uart0_isr;
 extern isr_function_t kl25_adc0_isr;
+extern isr_function_t kl25_tpm1_isr;
 
 static uint32_t g_pll_frequency_in_hz = 0;
 
@@ -256,7 +250,7 @@ isr_function_t *const g_interrupt_vector_table[] __attribute__ ((section(".vecto
     [INT_ADC0] = kl25_adc0_isr, /* ADC0 interrupt */
     [INT_CMP0] = dummy_cmp0_isr, /* CMP0 interrupt */
     [INT_TPM0] = dummy_ftm0_isr, /* FTM0 fault, overflow and channels interrupt */
-    [INT_TPM1] = dummy_ftm1_isr, /* FTM1 fault, overflow and channels interrupt */
+    [INT_TPM1] = kl25_tpm1_isr, /* FTM1 fault, overflow and channels interrupt */
     [INT_TPM2] = dummy_ftm2_isr, /* FTM2 fault, overflow and channels interrupt */
     [INT_RTC] = dummy_rtc_alarm_isr, /* RTC Alarm interrupt */
     [INT_RTC_Seconds] = dummy_rtc_seconds_isr, /* RTC Seconds interrupt */
@@ -505,12 +499,17 @@ const struct adc_device *const g_adc0_device_p = NULL; // TODO
 
 
 /**
+ * Pointer to the McRTOS interrupt object for the TPM interrupt.
+ */
+struct rtos_interrupt *g_rtos_interrupt_tpm1_p = NULL;
+
+/**
  *  Initializes board hardware. 
  *
  *  @pre This function must be called with interrupts disabled.
  */
 cpu_reset_cause_t
-board_init(void)
+soc_hardware_init(void)
 {
     cpu_status_register_t reg_primask = __get_PRIMASK();
    
@@ -520,25 +519,7 @@ board_init(void)
 
     cpu_reset_cause_t reset_cause = find_reset_cause();
 
-    //RCM_RPFC = RCM_RPFC_RSTFLTSS_MASK | RCM_RPFC_RSTFLTSRW(0x2); 
-    //RCM_RPFC = RCM_RPFC_RSTFLTSRW(0x1); 
     system_clocks_init();
-
-    rgb_led_init();
-
-#ifdef DEBUG
-    if (software_reset_happened()) {
-        DEBUG_BLINK_LED(LED_COLOR_YELLOW);
-    } else {
-        DEBUG_BLINK_LED(LED_COLOR_GREEN);
-    }
-#   else
-    if (software_reset_happened()) {
-        (void)set_rgb_led_color(LED_COLOR_CYAN);
-    } else {
-        (void)set_rgb_led_color(LED_COLOR_GREEN);
-    }
-#   endif
 
     cortex_m_nvic_init();
 
@@ -551,8 +532,6 @@ board_init(void)
 #   ifdef DEBUG
     uart_putchar_with_polling(g_console_serial_port_p, '\r');
     uart_putchar_with_polling(g_console_serial_port_p, '\n');
-    //uart_putchar(g_console_serial_port_p, '\r');
-    //uart_putchar(g_console_serial_port_p, '\n');
     DEBUG_PRINTF("UART0 initialized\n");
     DEBUG_PRINTF("Last reset cause: %#x\n", reset_cause);
 #   else
@@ -562,13 +541,12 @@ board_init(void)
 
     init_adc(g_adc0_device_p);
 
-    //??? tfc_gpio_init();
-
     return reset_cause;
 }
 
+
 void
-board_reset(void)
+soc_reset(void)
 {
     __disable_irq();
 
@@ -809,88 +787,6 @@ pll_init(void)
   g_pll_frequency_in_hz = (CRYSTAL_FREQUENCY_HZ / prdiv) * vdiv; //MCGOUT equals PLL output frequency
 }
 
-#if 0 // ???
-//set I/O for H-BRIDGE enables, switches and LEDs
-static void
-tfc_gpio_init(void)
-{
-#   define TFC_HBRIDGE_EN_LOC   BIT(21)
-#   define TFC_BAT_LED0_LOC     BIT(8)
-#   define TFC_BAT_LED1_LOC     BIT(9) 
-#   define TFC_BAT_LED2_LOC     BIT(10) 
-#   define TFC_BAT_LED3_LOC     BIT(11) 
-
-	//enable Clocks to all ports
-	
-	SIM_SCGC5 |= SIM_SCGC5_PORTA_MASK | SIM_SCGC5_PORTB_MASK | SIM_SCGC5_PORTC_MASK | SIM_SCGC5_PORTD_MASK | SIM_SCGC5_PORTE_MASK;
-
-	//Setup Pins as GPIO
-	PORTE_PCR21 = PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK;   
-	PORTE_PCR20 = PORT_PCR_MUX(1);    
-	
-	//Port for Pushbuttons
-	PORTC_PCR13 = PORT_PCR_MUX(1);   
-	PORTC_PCR17 = PORT_PCR_MUX(1);   
-	
-	
-	//Ports for DIP Switches
-	PORTE_PCR2 = PORT_PCR_MUX(1); 
-	PORTE_PCR3 = PORT_PCR_MUX(1);
-	PORTE_PCR4 = PORT_PCR_MUX(1); 
-	PORTE_PCR5 = PORT_PCR_MUX(1);
-	
-	//Ports for LEDs
-	PORTB_PCR8 = PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK;   
-	PORTB_PCR9 = PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK;   
-	PORTB_PCR10 = PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK;   
-	PORTB_PCR11 = PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK;   
-	
-	
-	//Setup the output pins
-    GPIOE_PDDR =  TFC_HBRIDGE_EN_LOC;  
-    GPIOB_PDDR =  TFC_BAT_LED0_LOC	| TFC_BAT_LED1_LOC | TFC_BAT_LED2_LOC | TFC_BAT_LED3_LOC;
-
-    //TFC_HBRIDGE_DISABLE:
-    GPIOE_PCOR = TFC_HBRIDGE_EN_LOC;
-}
-#endif // # if 0
-
-static uint32_t g_rgb_led_current_mask = 0x0;
-
-static void 
-rgb_led_init(void)
-{
-	/* Turn on clock to PortB and PortD module */
-	SIM_SCGC5 |= SIM_SCGC5_PORTB_MASK|SIM_SCGC5_PORTD_MASK;
-	
-	/* Set the PTB18 pin multiplexer to GPIO mode */
-	PORTB_PCR18 = PORT_PCR_MUX(1);
-	
-	/* Set the initial output state to high */
-	GPIOB_PSOR |= LED_RED_PIN_MASK;
-	
-	/* Set the pins direction to output */
-	GPIOB_PDDR |= LED_RED_PIN_MASK;
-	
-	/* Set the PTB19 pin multiplexer to GPIO mode */
-	PORTB_PCR19 = PORT_PCR_MUX(1);
-	
-	/* Set the initial output state to high */
-	GPIOB_PSOR |= LED_GREEN_PIN_MASK;
-	
-	/* Set the pins direction to output */
-	GPIOB_PDDR |= LED_GREEN_PIN_MASK;
-	
-	/* Set the PTD1 pin multiplexer to GPIO mode */
-	PORTD_PCR1 = PORT_PCR_MUX(1);
-	
-	/* Set the initial output state to high */
-	GPIOD_PSOR = LED_BLUE_PIN_MASK;
-	
-	/* Set the pins direction to output */
-	GPIOD_PDDR |= LED_BLUE_PIN_MASK;
-}
-
 
 void
 toggle_heartbeat_led(void)
@@ -899,83 +795,19 @@ toggle_heartbeat_led(void)
 }
 
 
+static uint32_t g_before_debugger_led_color = LED_COLOR_BLACK;
+
 void
-toggle_rgb_led(uint32_t led_color_mask)
+turn_on_debugger_led(void)
 {
-    g_rgb_led_current_mask ^= led_color_mask;
-
-    if (led_color_mask & LED_BLUE_PIN_MASK) {
-        GPIO_PTOR_REG(PTD_BASE_PTR) = LED_BLUE_PIN_MASK;
-        led_color_mask &= ~LED_BLUE_PIN_MASK;
-    }
-
-    if (led_color_mask != 0x0) {
-        GPIO_PTOR_REG(PTB_BASE_PTR) = led_color_mask;
-    }
+    g_before_debugger_led_color = set_rgb_led_color(LED_COLOR_RED);
 }
 
 
 void
-turn_on_rgb_led(uint32_t led_color_mask)
+turn_off_debugger_led(void)
 {
-    g_rgb_led_current_mask |= led_color_mask;
-
-    if (led_color_mask & LED_BLUE_PIN_MASK) {
-        GPIO_PCOR_REG(PTD_BASE_PTR) = LED_BLUE_PIN_MASK;
-        led_color_mask &= ~LED_BLUE_PIN_MASK;
-    }
-
-    if (led_color_mask != 0x0) {
-        GPIO_PCOR_REG(PTB_BASE_PTR) = led_color_mask;
-    }
-}
-
-
-void
-turn_off_rgb_led(uint32_t led_color_mask)
-{
-    g_rgb_led_current_mask &= ~led_color_mask;
-
-    if (led_color_mask & LED_BLUE_PIN_MASK) {
-        GPIO_PSOR_REG(PTD_BASE_PTR) = LED_BLUE_PIN_MASK;
-        led_color_mask &= ~LED_BLUE_PIN_MASK;
-    }
-    
-    if (led_color_mask != 0x0) {
-        GPIO_PSOR_REG(PTB_BASE_PTR) = led_color_mask;
-    }
-}
-
-
-/*
- * Set the LED to the given color and returns the previous color
- */
-uint32_t
-set_rgb_led_color(uint32_t led_color_mask)
-{
-    uint32_t old_rgb_led_mask = g_rgb_led_current_mask;
-
-    g_rgb_led_current_mask = led_color_mask;
-
-    if (led_color_mask & LED_BLUE_PIN_MASK) {
-        GPIO_PCOR_REG(PTD_BASE_PTR) = LED_BLUE_PIN_MASK;
-    } else {
-        GPIO_PSOR_REG(PTD_BASE_PTR) = LED_BLUE_PIN_MASK;
-    }
-
-    if (led_color_mask & LED_RED_PIN_MASK) {
-        GPIO_PCOR_REG(PTB_BASE_PTR) = LED_RED_PIN_MASK;
-    } else {
-        GPIO_PSOR_REG(PTB_BASE_PTR) = LED_RED_PIN_MASK;
-    }
-
-    if (led_color_mask & LED_GREEN_PIN_MASK) {
-        GPIO_PCOR_REG(PTB_BASE_PTR) = LED_GREEN_PIN_MASK;
-    } else {
-        GPIO_PSOR_REG(PTB_BASE_PTR) = LED_GREEN_PIN_MASK;
-    }
-
-    return old_rgb_led_mask;
+    set_rgb_led_color(g_before_debugger_led_color);
 }
 
 
@@ -1828,6 +1660,74 @@ read_trimpot(void)
 
 
 void
+kl25_tpm_init(void)
+{
+    static const struct rtos_interrupt_registration_params rtos_interrupt_params = 
+    {
+        .irp_name_p = "TPM1 intterrupt",
+        .irp_isr_function_p = kl25_tpm1_isr,
+        .irp_arg_p =  NULL,
+        .irp_channel = VECTOR_NUMBER_TO_IRQ_NUMBER(INT_TPM1),
+        .irp_priority = TPM_INTERRUPT_PRIORITY,
+        .irp_cpu_id = 0,
+    };
+
+    uint32_t reg_value;
+
+    /*
+     * Set clock source for the TPM clock (See Page 196 of the KL25 Reference Manual):
+     */
+    reg_value = read_32bit_mmio_register(&SIM_SOPT2);
+    reg_value &= ~(SIM_SOPT2_TPMSRC_MASK);
+    reg_value |= SIM_SOPT2_TPMSRC(1);
+    write_32bit_mmio_register(&SIM_SOPT2, reg_value);
+
+    /*
+     * Enable the Clock to the TPM Module (See Page 207 of f the KL25 Reference Manual)
+     */
+    reg_value = read_32bit_mmio_register(&SIM_SCGC6);
+    reg_value |= SIM_SCGC6_TPM1_MASK; 
+    write_32bit_mmio_register(&SIM_SCGC6, reg_value);
+
+    /* 
+     * Register McRTOS interrupt handler
+     */
+    rtos_k_register_interrupt(
+        &rtos_interrupt_params,
+        &g_rtos_interrupt_tpm1_p);
+
+}
+
+
+void
+kl25_tpm_interrupt_e_handler(
+    struct rtos_interrupt *rtos_interrupt_p)
+{
+    FDC_ASSERT_RTOS_INTERRUPT_E_HANDLER_PRECONDITIONS(rtos_interrupt_p);
+#if 0 //???
+    const struct uart_device *uart_device_p =
+        (struct uart_device *)rtos_interrupt_p->int_arg_p;
+
+    DBG_ASSERT(
+        uart_device_p->urt_signature == UART_DEVICE_SIGNATURE,
+        uart_device_p->urt_signature, uart_device_p);
+
+    uint32_t reg_value;
+
+#endif // ???
+
+#if 0 //???
+               //Clear the overflow mask if set.   According to the reference manual, we clear by writing a logic one!
+               if(TPM1_SC & TPM_SC_TOF_MASK)
+                              TPM1_SC |= TPM_SC_TOF_MASK;
+               
+               if (ServoTickVar < 0xff)//if servo tick less than 255 count up... 
+                              ServoTickVar++;
+#endif
+}
+
+
+void
 assert_interrupt_source_is_set(interrupt_channel_t interrupt_channel)
 {
     FDC_ASSERT(
@@ -1873,7 +1773,6 @@ GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_uart1_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(IN
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_uart2_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART2))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_cmp0_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_CMP0))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_ftm0_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_TPM0))
-GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_ftm1_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_TPM1))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_ftm2_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_TPM2))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_rtc_alarm_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_RTC))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_rtc_seconds_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_RTC_Seconds))

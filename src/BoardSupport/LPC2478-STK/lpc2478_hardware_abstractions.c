@@ -910,9 +910,9 @@ read_input_pin(const struct pin_config_info *pin_info_p)
 
 
 /**
- *  Initializes board hardware
+ *  Initializes SoC hardware
  */
-void board_init(void)
+void soc_hardware_init(void)
 {
     /* Initial SCB Parameters (CCLK 72MHz) */
     static const struct scbParams sCBParams = {
