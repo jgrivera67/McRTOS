@@ -7,6 +7,7 @@
  */ 
 
 #include "hardware_abstractions.h"
+#include "kl25z_soc.h"
 #include "McRTOS_arm_cortex_m.h"
 #include "MKL25Z4.h"
 #include "failure_data_capture.h"
@@ -125,6 +126,7 @@ struct uart_device_var {
     struct rtos_circular_buffer urt_receive_queue;
 };
 
+
 #if 0 // ???
 /**
  * Const fields of the A/D converter device (to be placed in flash)
@@ -193,8 +195,7 @@ static isr_function_t dummy_spi1_isr;
 static isr_function_t dummy_uart1_isr;
 static isr_function_t dummy_uart2_isr;
 static isr_function_t dummy_cmp0_isr;
-static isr_function_t dummy_ftm0_isr;
-static isr_function_t dummy_ftm2_isr;
+static isr_function_t dummy_tpm2_isr;
 static isr_function_t dummy_rtc_alarm_isr;
 static isr_function_t dummy_rtc_seconds_isr;
 static isr_function_t dummy_pit_isr;
@@ -207,11 +208,6 @@ static isr_function_t dummy_lptimer_isr;
 static isr_function_t dummy_reserved_irq29_isr;
 static isr_function_t dummy_port_a_isr;
 static isr_function_t dummy_port_d_isr;
-
-extern isr_function_t cortex_m_systick_isr;
-extern isr_function_t kl25_uart0_isr;
-extern isr_function_t kl25_adc0_isr;
-extern isr_function_t kl25_tpm1_isr;
 
 static uint32_t g_pll_frequency_in_hz = 0;
 
@@ -249,9 +245,9 @@ isr_function_t *const g_interrupt_vector_table[] __attribute__ ((section(".vecto
     [INT_UART2] = dummy_uart2_isr, /* UART2 Status and Error interrupt */
     [INT_ADC0] = kl25_adc0_isr, /* ADC0 interrupt */
     [INT_CMP0] = dummy_cmp0_isr, /* CMP0 interrupt */
-    [INT_TPM0] = dummy_ftm0_isr, /* FTM0 fault, overflow and channels interrupt */
-    [INT_TPM1] = kl25_tpm1_isr, /* FTM1 fault, overflow and channels interrupt */
-    [INT_TPM2] = dummy_ftm2_isr, /* FTM2 fault, overflow and channels interrupt */
+    [INT_TPM0] = kl25_tpm0_isr, /* TPM0 fault, overflow and channels interrupt */
+    [INT_TPM1] = kl25_tpm1_isr, /* TPM1 fault, overflow and channels interrupt */
+    [INT_TPM2] = dummy_tpm2_isr, /* TPM2 fault, overflow and channels interrupt */
     [INT_RTC] = dummy_rtc_alarm_isr, /* RTC Alarm interrupt */
     [INT_RTC_Seconds] = dummy_rtc_seconds_isr, /* RTC Seconds interrupt */
     [INT_PIT] = dummy_pit_isr, /* PIT timer all channels interrupt */
@@ -499,11 +495,6 @@ const struct adc_device *const g_adc0_device_p = NULL; // TODO
 
 
 /**
- * Pointer to the McRTOS interrupt object for the TPM interrupt.
- */
-struct rtos_interrupt *g_rtos_interrupt_tpm1_p = NULL;
-
-/**
  *  Initializes board hardware. 
  *
  *  @pre This function must be called with interrupts disabled.
@@ -656,6 +647,29 @@ system_clocks_init(void)
      */
     reg_value = read_32bit_mmio_register(&SIM_SOPT2);
     reg_value |= SIM_SOPT2_PLLFLLSEL_MASK;
+    write_32bit_mmio_register(&SIM_SOPT2, reg_value);
+
+    /*
+     * Select the clock sources for peripherals to be used:
+     * 01 =  MCGFLLCLK clock or MCGPLLCLK/2 clock
+     */
+
+    reg_value = read_32bit_mmio_register(&SIM_SOPT2);
+    
+    /*
+     * UART0 transmit and receive clock:
+     */
+    SET_BIT_FIELD(
+        reg_value, SIM_SOPT2_UART0SRC_MASK, SIM_SOPT2_UART0SRC_SHIFT,
+        0x1);
+
+    /*
+     * TPM clock:
+     */
+    SET_BIT_FIELD(
+        reg_value, SIM_SOPT2_TPMSRC_MASK, SIM_SOPT2_TPMSRC_SHIFT,
+        0x1);
+
     write_32bit_mmio_register(&SIM_SOPT2, reg_value);
 }
 
@@ -878,16 +892,6 @@ uart_init(
        
     if (uart_device_p == &g_uart_devices[0]) 
     {
-        /*
-         * Select the clock source for the UART0 transmit and receive clock:
-         * 01 =  MCGFLLCLK clock or MCGPLLCLK/2 clock
-         */
-        reg_value = read_32bit_mmio_register(&SIM_SOPT2);
-        SET_BIT_FIELD(
-            reg_value, SIM_SOPT2_UART0SRC_MASK, SIM_SOPT2_UART0SRC_SHIFT,
-            0x1);
-        write_32bit_mmio_register(&SIM_SOPT2, reg_value);
-
         UART0_MemMapPtr uart0_mmio_registers_p = uart_device_p->urt_mmio_uart0_p;
 
         // Select the best OSR value
@@ -1660,42 +1664,123 @@ read_trimpot(void)
 
 
 void
-kl25_tpm_init(void)
+kl25_tpm_init(
+    const struct tpm_device *tpm_device_p)
 {
-    static const struct rtos_interrupt_registration_params rtos_interrupt_params = 
-    {
-        .irp_name_p = "TPM1 intterrupt",
-        .irp_isr_function_p = kl25_tpm1_isr,
-        .irp_arg_p =  NULL,
-        .irp_channel = VECTOR_NUMBER_TO_IRQ_NUMBER(INT_TPM1),
-        .irp_priority = TPM_INTERRUPT_PRIORITY,
-        .irp_cpu_id = 0,
-    };
-
     uint32_t reg_value;
 
-    /*
-     * Set clock source for the TPM clock (See Page 196 of the KL25 Reference Manual):
-     */
-    reg_value = read_32bit_mmio_register(&SIM_SOPT2);
-    reg_value &= ~(SIM_SOPT2_TPMSRC_MASK);
-    reg_value |= SIM_SOPT2_TPMSRC(1);
-    write_32bit_mmio_register(&SIM_SOPT2, reg_value);
+    FDC_ASSERT(
+        tpm_device_p->tpm_signature == TPM_DEVICE_SIGNATURE,
+        tpm_device_p->tpm_signature, tpm_device_p);
 
     /*
-     * Enable the Clock to the TPM Module (See Page 207 of f the KL25 Reference Manual)
+     * Enable the Clock to the TPM Module
      */
     reg_value = read_32bit_mmio_register(&SIM_SCGC6);
-    reg_value |= SIM_SCGC6_TPM1_MASK; 
+    reg_value |= tpm_device_p->tpm_mmio_clock_gate_mask; 
     write_32bit_mmio_register(&SIM_SCGC6, reg_value);
 
+    /*
+     * Blow away the control registers to ensure that the counter is not running
+     */ 
+
+    TPM_MemMapPtr tpm_mmio_registers_p = tpm_device_p->tpm_mmio_p;
+
+    write_32bit_mmio_register(
+        &TPM_SC_REG(tpm_mmio_registers_p), 0x0);
+
+    write_32bit_mmio_register(
+        &TPM_CONF_REG(tpm_mmio_registers_p), 0x0);
+
+   /*
+    * While the counter is disabled we can setup the prescaler
+    */
+
+    reg_value = 0;
+    SET_BIT_FIELD(
+        reg_value, TPM_SC_PS_MASK, TPM_SC_PS_SHIFT,
+        tpm_device_p->tpm_clock_prescale);
+
+#if 0
+    /* 
+     * Enable Interrupts for the Timer Overflow
+     */ 
+    reg_value |= TPM_SC_TOIE_MASK;
+#endif
+
+    /*
+     * Enable the TPM Counter:
+     *
+     * - CMOD = 01: LPTPM counter increments on every LPTPM counter clock.
+     * - CPWMS = 0: Up counting is selected. Also, if for channel n,
+     *   MSnB:MSnA = 1:0, the edge-aligned PWM mode (EPWM) is selected for 
+     *   that channel.
+     */ 
+    SET_BIT_FIELD(
+        reg_value, TPM_SC_CMOD_MASK, TPM_SC_CMOD_SHIFT, 0x1);
+
+    write_32bit_mmio_register(
+        &TPM_SC_REG(tpm_mmio_registers_p), reg_value);
+
+    /* 
+     * Setup the MOD register to get the correct EPWM Period:
+     *
+     * NOTE: The EPWM period is determined by (MOD + 0x0001), for all channels.
+     * The pulse width (duty cycle) for channel n is determined by CnV.
+     * MOD must be less than 0xFFFF in order to get a 100% duty cycle EPWM signal.
+     */
+
+    reg_value = (tpm_device_p->tpm_clock_freq_hz /
+                    (1 << tpm_device_p->tpm_clock_prescale)) / 
+                tpm_device_p->tpm_overflow_freq_hz;
+
+    DBG_ASSERT(
+        reg_value < 0xffff, reg_value, tpm_device_p);
+
+    write_32bit_mmio_register(
+        &TPM_MOD_REG(tpm_mmio_registers_p), reg_value);
+
+    /*
+     * Configure PWM channels:
+     */
+    for (uint32_t i = 0; 
+         i < ARRAY_SIZE(tpm_device_p->tpm_channels);
+         i ++) {
+        if (tpm_device_p->tpm_channels[i].tpm_mmio_pcr_p != NULL) {
+            /*
+             * Set the initial duty cycle for the channel
+             */
+            kl25_tpm_set_duty_cycle(
+                tpm_device_p, i, tpm_device_p->tpm_initial_duty_cycle_us);
+
+            /* 
+             * Enable channel pin:
+             */
+            write_32bit_mmio_register(
+                tpm_device_p->tpm_channels[i].tpm_mmio_pcr_p,
+                tpm_device_p->tpm_mmio_pin_mux_selector_mask);
+
+            /*
+             * Setup PWM channel:
+             */
+            write_32bit_mmio_register(
+                &TPM_CnSC_REG(tpm_mmio_registers_p, i),
+                tpm_device_p->tpm_channels[i].tpm_mmio_CnSC_value);
+        }
+    }
+
+#if 0 // ???
     /* 
      * Register McRTOS interrupt handler
      */
     rtos_k_register_interrupt(
-        &rtos_interrupt_params,
-        &g_rtos_interrupt_tpm1_p);
+        &tpm_device_p->tpm_rtos_interrupt_params,
+        tpm_device_p->tpm_rtos_interrupt_pp);
 
+    DBG_ASSERT(
+        *tpm_device_p->tpm_rtos_interrupt_pp != NULL, 
+        tpm_device_p->tpm_rtos_interrupt_pp, tpm_device_p);
+#endif
 }
 
 
@@ -1704,26 +1789,79 @@ kl25_tpm_interrupt_e_handler(
     struct rtos_interrupt *rtos_interrupt_p)
 {
     FDC_ASSERT_RTOS_INTERRUPT_E_HANDLER_PRECONDITIONS(rtos_interrupt_p);
-#if 0 //???
-    const struct uart_device *uart_device_p =
-        (struct uart_device *)rtos_interrupt_p->int_arg_p;
+
+    const struct tpm_device *tpm_device_p =
+        (struct tpm_device *)rtos_interrupt_p->int_arg_p;
 
     DBG_ASSERT(
-        uart_device_p->urt_signature == UART_DEVICE_SIGNATURE,
-        uart_device_p->urt_signature, uart_device_p);
+        tpm_device_p->tpm_signature == TPM_DEVICE_SIGNATURE,
+        tpm_device_p->tpm_signature, tpm_device_p);
 
     uint32_t reg_value;
+    TPM_MemMapPtr tpm_mmio_registers_p = tpm_device_p->tpm_mmio_p;
 
-#endif // ???
+   /*
+    * Clear the overflow mask if set, by writing a logic one in it:
+    */
+    reg_value = read_32bit_mmio_register(&TPM_SC_REG(tpm_mmio_registers_p));
+    if (reg_value & TPM_SC_TOF_MASK) {
+        write_32bit_mmio_register(
+            &TPM_SC_REG(tpm_mmio_registers_p), reg_value);
+    }
+}
 
-#if 0 //???
-               //Clear the overflow mask if set.   According to the reference manual, we clear by writing a logic one!
-               if(TPM1_SC & TPM_SC_TOF_MASK)
-                              TPM1_SC |= TPM_SC_TOF_MASK;
-               
-               if (ServoTickVar < 0xff)//if servo tick less than 255 count up... 
-                              ServoTickVar++;
-#endif
+
+void
+kl25_tpm_set_duty_cycle(
+    const struct tpm_device *tpm_device_p,
+    pwm_channel_t pwm_channel,
+    pwm_duty_cycle_us_t pwm_duty_cycle_us)
+{
+    //???
+    DEBUG_PRINTF("tpm_device: %s, channel: %u, duty cycle: %u us\n",
+        tpm_device_p->tpm_name_p, pwm_channel, pwm_duty_cycle_us);
+    //???
+    FDC_ASSERT(
+        tpm_device_p->tpm_signature == TPM_DEVICE_SIGNATURE,
+        tpm_device_p->tpm_signature, tpm_device_p);
+
+    FDC_ASSERT(
+        pwm_channel < PWM_MAX_NUM_CHANNELS, pwm_channel, tpm_device_p);
+
+    uint32_t pwm_period_us = UINT32_C(1000000) / tpm_device_p->tpm_overflow_freq_hz;
+
+    FDC_ASSERT(
+        pwm_duty_cycle_us <= pwm_period_us, pwm_duty_cycle_us, pwm_period_us);
+    
+    TPM_MemMapPtr tpm_mmio_registers_p = tpm_device_p->tpm_mmio_p;
+
+    uint32_t tpm_mod_reg_value =
+        read_32bit_mmio_register(&TPM_MOD_REG(tpm_mmio_registers_p));
+
+    DBG_ASSERT(
+        tpm_mod_reg_value <= UINT16_MAX, tpm_mod_reg_value, tpm_device_p);
+
+    /*
+     * Set CnV to duty cycle for the channel, as a fraction of tpm_mod_reg_value:
+     *
+     * new CnV value = tpm_mod_reg_value * (pwm_duty_cycle_us / pwm_period_us)
+     *
+     * NOTE: The actual CnV register is updated after a write is done on the CnV
+     * register and the TPM counter changes from MOD to zero (counter overflow).
+     * Thus there is a worst-case latency of pwm_period_us microseconds from
+     * the timet this function is called to the time the CnV change takes
+     * effect.
+     */
+
+    uint32_t tmp = tpm_mod_reg_value * pwm_duty_cycle_us;
+   
+    FDC_ASSERT(
+        tmp >= tpm_mod_reg_value, tmp, tpm_mod_reg_value);
+
+    uint32_t reg_value = tmp / pwm_period_us;
+
+    write_32bit_mmio_register(
+        &TPM_CnV_REG(tpm_mmio_registers_p, pwm_channel), reg_value);
 }
 
 
@@ -1772,8 +1910,7 @@ GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_spi1_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_uart1_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART1))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_uart2_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART2))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_cmp0_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_CMP0))
-GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_ftm0_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_TPM0))
-GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_ftm2_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_TPM2))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_tpm2_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_TPM2))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_rtc_alarm_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_RTC))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_rtc_seconds_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_RTC_Seconds))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_pit_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_PIT))

@@ -31,7 +31,7 @@
 
 #elif defined(KL25Z_SOC)
 
-#   include "kl25z_soc.h"
+#   include "kl25z_soc_public.h"
 
 #elif defined(LM4F120_SOC)
 
@@ -188,6 +188,18 @@ typedef void isr_function_t(void);
 typedef uint32_t cpu_clock_cycles_t;
 
 C_ASSERT(sizeof(cpu_clock_cycles_t) == sizeof(int32_t));
+
+/** 
+ * PWM channel index type
+ */
+typedef _RANGE_(0, PWM_MAX_NUM_CHANNELS - 1)
+        uint8_t pwm_channel_t;
+
+/** 
+ * PWM duty cycle type (in microseconds)
+ */
+typedef _RANGE_(0, 1000000)
+        uint32_t pwm_duty_cycle_us_t;
 
 /**
  * function signature for an interrupt service routine

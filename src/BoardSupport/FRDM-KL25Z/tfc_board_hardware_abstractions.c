@@ -7,6 +7,7 @@
  */ 
 
 #include "hardware_abstractions.h"
+#include "kl25z_soc.h"
 #include "McRTOS_arm_cortex_m.h"
 #include "MKL25Z4.h"
 #include "failure_data_capture.h"
@@ -16,13 +17,152 @@
 #include "tfc_board.h"
 
 static void tfc_gpio_init(void);
-static void tfc_servos_init(void);
+static void tfc_steering_servo_init(void);
+static void tfc_wheel_motors_init(void);
+
+/**
+ * Pointer to the McRTOS interrupt objects for the TPM interrupts.
+ */
+struct rtos_interrupt *g_rtos_interrupt_tpm0_p = NULL;
+struct rtos_interrupt *g_rtos_interrupt_tpm1_p = NULL;
+
+/**
+ * Global array of const structures for TPM devices for the KL25Z SoC
+ * (allocated in flash space)
+ */
+const struct tpm_device g_tpm_devices[] =
+{
+    [0] = {
+        .tpm_signature = TPM_DEVICE_SIGNATURE,
+        .tpm_name_p = "Wheel motors TPM",
+        .tpm_mmio_p = TPM0_BASE_PTR,
+        .tpm_channels = {
+            [0] = {
+                .tpm_mmio_pcr_p = &PORTC_PCR1, /* Motor B (H-Bridge B - 1) */
+
+                /*
+                 * - Use (MSnB:MSnA = 1:0): Edge-aligned PWM mode.
+                 * - Use (ELSnB:ELSnA = 1:0): Channel output is forced high
+                 *   at the counter overflow (when the zero is loaded into the TPM
+                 *   counter), and it is forced low at channel match
+                 *   (TPM counter = CnV)
+                 */
+                .tpm_mmio_CnSC_value = TPM_CnSC_MSB_MASK | TPM_CnSC_ELSB_MASK
+            },
+            [1] = {
+                .tpm_mmio_pcr_p = &PORTC_PCR2, /* Motor B (H-Bridge B - 2) */
+
+                /*
+                 * - Use (MSnB:MSnA = 1:0): Edge-aligned PWM mode.
+                 * - Use (ELSnB:ELSnA = X:1): Channel output is forced low
+                 *   at the counter overflow (when zero is loaded into the TPM
+                 *   counter), and it is forced high at channel match
+                 *   (TPM counter = CnV).
+                 */
+                .tpm_mmio_CnSC_value = TPM_CnSC_MSB_MASK | TPM_CnSC_ELSA_MASK
+            },
+            [2] = {
+                .tpm_mmio_pcr_p = &PORTC_PCR3, /* Motor A (H-Bridge A - 1) */
+                .tpm_mmio_CnSC_value = TPM_CnSC_MSB_MASK | TPM_CnSC_ELSB_MASK
+            },
+            [3] = {
+                .tpm_mmio_pcr_p = &PORTC_PCR4, /* Motor A (H-Bridge A - 2)  */
+                 /* invert the second PWM signal for a complimentary output */
+                .tpm_mmio_CnSC_value = TPM_CnSC_MSB_MASK | TPM_CnSC_ELSA_MASK
+            },
+            [4] = {
+                .tpm_mmio_pcr_p = NULL,
+            },
+            [5] = {
+                .tpm_mmio_pcr_p = NULL,
+            },
+
+        },
+        .tpm_mmio_pin_mux_selector_mask = PORT_PCR_MUX(0x4),
+        .tpm_mmio_clock_gate_mask = SIM_SCGC6_TPM0_MASK,
+        .tpm_clock_freq_hz = CPU_CLOCK_FREQ_IN_HZ / 2,
+        .tpm_clock_prescale = 0, /* Divide by 1 */
+        .tpm_overflow_freq_hz = TFC_WHEEL_MOTOR_TPM_OVERFLOW_FREQ_HZ,
+        .tpm_initial_duty_cycle_us = TFC_WHEEL_MOTOR_MIDDLE_DUTY_CYCLE_US,
+        .tpm_rtos_interrupt_params = {
+            .irp_name_p = "TPM0 Interrupt",
+            .irp_isr_function_p = kl25_tpm0_isr,
+            .irp_arg_p =  (void *)&g_tpm_devices[0],
+            .irp_channel = VECTOR_NUMBER_TO_IRQ_NUMBER(INT_TPM0),
+            .irp_priority = TPM_INTERRUPT_PRIORITY,
+            .irp_cpu_id = 0,
+        },
+
+        .tpm_rtos_interrupt_pp = &g_rtos_interrupt_tpm0_p,
+    },
+
+    [1] = {
+        .tpm_signature = TPM_DEVICE_SIGNATURE,
+        .tpm_name_p = "Steering servo TPM",
+        .tpm_mmio_p = TPM1_BASE_PTR,
+        .tpm_channels = {
+            [0] = {
+                .tpm_mmio_pcr_p = &PORTB_PCR0, /* Servo Channel 0 */
+                .tpm_mmio_CnSC_value = TPM_CnSC_MSB_MASK | TPM_CnSC_ELSB_MASK
+            },
+            [1] = {
+                .tpm_mmio_pcr_p = NULL, //??? &PORTB_PCR1, /* Servo Channel 1 */
+                //??? .tpm_mmio_CnSC_value = TPM_CnSC_MSB_MASK | TPM_CnSC_ELSB_MASK
+            },
+            [2] = {
+                .tpm_mmio_pcr_p = NULL,
+            },
+            [3] = {
+                .tpm_mmio_pcr_p = NULL,
+            },
+            [4] = {
+                .tpm_mmio_pcr_p = NULL,
+            },
+            [5] = {
+                .tpm_mmio_pcr_p = NULL,
+            },
+        },
+        .tpm_mmio_pin_mux_selector_mask = PORT_PCR_MUX(0x3),
+        .tpm_mmio_clock_gate_mask = SIM_SCGC6_TPM1_MASK,
+        .tpm_clock_freq_hz = CPU_CLOCK_FREQ_IN_HZ / 2,
+        .tpm_clock_prescale = 6, /* Divide by 64 */
+        .tpm_overflow_freq_hz = TFC_STEERING_SERVO_TPM_OVERFLOW_FREQ_HZ,
+        .tpm_initial_duty_cycle_us = TFC_STEERING_SERVO_MIDDLE_DUTY_CYCLE_US,
+        .tpm_rtos_interrupt_params = {
+            .irp_name_p = "TPM1 Interrupt",
+            .irp_isr_function_p = kl25_tpm1_isr,
+            .irp_arg_p =  (void *)&g_tpm_devices[1],
+            .irp_channel = VECTOR_NUMBER_TO_IRQ_NUMBER(INT_TPM1),
+            .irp_priority = TPM_INTERRUPT_PRIORITY,
+            .irp_cpu_id = 0,
+        },
+
+        .tpm_rtos_interrupt_pp = &g_rtos_interrupt_tpm1_p,
+    },
+
+    [2] = {
+        .tpm_signature = TPM_DEVICE_SIGNATURE,
+        .tpm_mmio_p = TPM2_BASE_PTR,
+        .tpm_mmio_clock_gate_mask = SIM_SCGC6_TPM2_MASK,
+    },
+};
+
+/**
+ * PWM device for TFC wheel motors
+ */
+static const struct tpm_device *g_tfc_motors_pwm_device_p = &g_tpm_devices[0];
+
+/**
+ * PWM device for TFC steering servo
+ */
+static const struct tpm_device *g_tfc_steering_servo_pwm_device_p = &g_tpm_devices[1];
 
 void
 tfc_board_init(void)
 {
     tfc_gpio_init();
-    tfc_servos_init();
+    tfc_steering_servo_init();
+    tfc_wheel_motors_init();
 }
 
 /* 
@@ -102,48 +242,67 @@ tfc_gpio_init(void)
 
 
 static void
-tfc_servos_init(void)
+tfc_steering_servo_init(void)
 {
-    kl25_tpm_init();
-
-#if 0 // ???
-               //Blow away the control registers to ensure that the counter is not running
-               TPM1_SC = 0;
-               TPM1_CONF = 0;
-               
-               //While the counter is disabled we can setup the prescaler
-               
-               TPM1_SC = TPM_SC_PS(FTM1_CLK_PRESCALE);
-               TPM1_SC |= TPM_SC_TOIE_MASK; //Enable Interrupts for the Timer Overflow
-               
-               //Setup the mod register to get the correct PWM Period
-               
-               TPM1_MOD = FTM1_CLOCK/(1<<(FTM1_CLK_PRESCALE+1))/FTM1_OVERFLOW_FREQUENCY;
-               
-               //Setup Channels 0 and 1
-               
-               TPM1_C0SC = TPM_CnSC_MSB_MASK | TPM_CnSC_ELSB_MASK;
-               TPM1_C1SC = TPM_CnSC_MSB_MASK | TPM_CnSC_ELSB_MASK;
-               
-               //Enable the Counter
-               
-               //Set the Default duty cycle to servo neutral
-               TFC_SetServo(0, 0.0);
-               TFC_SetServo(1, 0.0);
-               
-               //Enable the TPM COunter
-               TPM1_SC |= TPM_SC_CMOD(1);
-               
-               //Enable TPM1 IRQ on the NVIC
-               //???enable_irq (INT_TPM1-16); already done in tpm_init
-              
-               //Enable the FTM functions on the the port
-               
-               PORTB_PCR0 = PORT_PCR_MUX(3);
-               PORTB_PCR1 = PORT_PCR_MUX(3);
-
-#endif // ???
+    kl25_tpm_init(g_tfc_steering_servo_pwm_device_p);
 }
+
+
+void
+tfc_steering_servo_set(
+    pwm_duty_cycle_us_t pwm_duty_cycle_us)
+{
+    FDC_ASSERT(
+        pwm_duty_cycle_us >= TFC_STEERING_SERVO_MIN_DUTY_CYCLE_US &&
+        pwm_duty_cycle_us <= TFC_STEERING_SERVO_MAX_DUTY_CYCLE_US,
+        pwm_duty_cycle_us, 0);
+
+    kl25_tpm_set_duty_cycle(
+        g_tfc_steering_servo_pwm_device_p,
+        0,
+        pwm_duty_cycle_us);
+}
+
+
+static void
+tfc_wheel_motors_init(void)
+{
+    kl25_tpm_init(g_tfc_motors_pwm_device_p);
+}
+
+
+void
+tfc_wheel_motors_set(
+    pwm_duty_cycle_us_t left_wheel_pwm_duty_cycle_us,
+    pwm_duty_cycle_us_t right_wheel_pwm_duty_cycle_us)
+{
+    FDC_ASSERT(
+        left_wheel_pwm_duty_cycle_us <= TFC_WHEEL_MOTOR_MAX_DUTY_CYCLE_US &&
+        right_wheel_pwm_duty_cycle_us <= TFC_WHEEL_MOTOR_MAX_DUTY_CYCLE_US,
+        left_wheel_pwm_duty_cycle_us, right_wheel_pwm_duty_cycle_us);
+
+    kl25_tpm_set_duty_cycle(
+        g_tfc_motors_pwm_device_p,
+        0,
+        right_wheel_pwm_duty_cycle_us);
+
+    kl25_tpm_set_duty_cycle(
+        g_tfc_motors_pwm_device_p,
+        1,
+        right_wheel_pwm_duty_cycle_us);
+
+    kl25_tpm_set_duty_cycle(
+        g_tfc_motors_pwm_device_p,
+        2,
+        left_wheel_pwm_duty_cycle_us);
+
+    kl25_tpm_set_duty_cycle(
+        g_tfc_motors_pwm_device_p,
+        3,
+        left_wheel_pwm_duty_cycle_us);
+}
+
+
 
 
 

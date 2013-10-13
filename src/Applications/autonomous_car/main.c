@@ -161,7 +161,7 @@ buttons_reader_thread_f(void *arg)
     } 
 #else
    for ( ; ; ) {
-       console_printf("%s\n", __func__);
+       //???console_printf("%s\n", __func__);
        rtos_thread_delay(2000);
    }
 #endif
@@ -212,7 +212,7 @@ trimpot_reader_thread_f(void *arg)
 
 #else
    for ( ; ; ) {
-       console_printf("%s\n", __func__);
+       //???console_printf("%s\n", __func__);
        rtos_thread_delay(3000);
    }
 #endif
