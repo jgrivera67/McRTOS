@@ -270,6 +270,11 @@ struct rtos_execution_context
     uint32_t ctx_accumulated_cpu_usage_milliseconds;
 
     /**
+     * Accumulated CPU usage for this context in CPU cycles under 1 millisecond
+     */
+    uint32_t ctx_accumulated_cpu_usage_cycles;
+
+    /**
      * Pre-filled trace entry for context switch tracing
      */ 
     fdc_context_switch_trace_entry_t ctx_prefilled_trace_entry;

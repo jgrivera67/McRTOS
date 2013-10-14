@@ -16,8 +16,6 @@
 #include "McRTOS_kernel_services.h"
 #include "frdm_board.h"
 
-//TODO("Remove these pragmas")
-
 /**
  * Crystal frequency in HZ
  */
@@ -169,6 +167,8 @@ static cpu_reset_cause_t find_reset_cause(void);
 
 static void system_clocks_init(void);
 
+static void init_cpu_clock_cycles_counter(void);
+
 static void pll_init(void);
 
 static void uart_stop(
@@ -287,72 +287,6 @@ static const struct NV_MemMap nv_cfmconfig __attribute__ ((section(".cfmconfig")
 #endif
   .FOPT = NV_FOPT_RESET_PIN_CFG_MASK
 };
-
-#if 0 // ???
-/**
- * Global definition of const pointer to the array of fast_gpio_port structs,
- * one entry per fast GPIO port of the LPC2478.
- */ 
-static volatile struct fast_gpio_port *const g_fast_gpio_ports_array =
-    (struct fast_gpio_port *)FIO_BASE_ADDR;
-
-/**
- * Global definition of const pointer to the memory-mapped registers of the
- * LPC2478 Pin Connect Block
- */
-pin_connect_block_t *const g_pin_connect_block = (pin_connect_block_t *)PINCON_BASE_ADDR;
-
-/**
- * Global definition of const pointer to the memory-mapped registers of the
- * LPC2478 SCB (System Control Block)
- */
-lpc2478_scb_t *const g_scb_mmio_registers_p = (lpc2478_scb_t *)LPC2478_SCB_BASE_ADDR;
-
-/**
- * Global array of const structures for timer devices for the LPC2478 
- * (allocated in flash space)
- */
-static const struct timer_device g_timer_devices[] =
-{
-    [0] = {
-        .tmr_signature = TIMER_DEVICE_SIGNATURE,
-        .tmr_mmio_registers_p = (lpc2478_timer_t *)LPC2478_TIMER0_BASE_ADDR,
-        .tmr_timer_pclk_shift = PCLK_TIMER0,
-        .tmr_pclksel_index = 0,
-        .tmr_pconp_mask = PCONP_PCTIM0,
-        .tmr_rtos_interrupt_params = {
-            .irp_name_p = "McRTOS Tick Timer Interrupt",
-            .irp_isr_function_p = isr_timer0,
-            .irp_arg_p =  (void *)&g_timer_devices[0],
-            .irp_channel = VIC_CHANNEL_TIMER0,
-            .irp_priority = VIC_VECT_PRIORITY2,
-            .irp_cpu_id = 0,
-        },
-        .tmr_rtos_interrupt_pp = &g_rtos_interrupt_timer0,
-    },
-    [1] = {
-        .tmr_signature = TIMER_DEVICE_SIGNATURE,
-        .tmr_mmio_registers_p = (lpc2478_timer_t *)LPC2478_TIMER1_BASE_ADDR,
-        .tmr_timer_pclk_shift = PCLK_TIMER1,
-        .tmr_pclksel_index = 0,
-        .tmr_pconp_mask = PCONP_PCTIM1,
-    },
-    [2] = {
-        .tmr_signature = TIMER_DEVICE_SIGNATURE,
-        .tmr_mmio_registers_p = (lpc2478_timer_t *)LPC2478_TIMER2_BASE_ADDR,
-        .tmr_timer_pclk_shift = PCLK_TIMER2,
-        .tmr_pclksel_index = 1,
-        .tmr_pconp_mask = PCONP_PCTIM2,
-    },
-    [3] = {
-        .tmr_signature = TIMER_DEVICE_SIGNATURE,
-        .tmr_mmio_registers_p = (lpc2478_timer_t *)LPC2478_TIMER3_BASE_ADDR,
-        .tmr_timer_pclk_shift = PCLK_TIMER3,
-        .tmr_pclksel_index = 1,
-        .tmr_pconp_mask = PCONP_PCTIM3,
-    }
-};
-#endif // ???
 
 /**
  * McRTOS interrupt object for the UART0 interrupts
@@ -495,6 +429,14 @@ const struct adc_device *const g_adc0_device_p = NULL; // TODO
 
 
 /**
+ * Hardware Micro trace buffer (MTB)
+ */
+struct micro_trace_buffer g_micro_trace_buffer = {
+    .mtb_low_border_marker = MICRO_TRACE_BUFFER_BORDER_MARKER,
+    .mtb_high_border_marker = MICRO_TRACE_BUFFER_BORDER_MARKER
+};
+
+/**
  *  Initializes board hardware. 
  *
  *  @pre This function must be called with interrupts disabled.
@@ -511,6 +453,8 @@ soc_hardware_init(void)
     cpu_reset_cause_t reset_cause = find_reset_cause();
 
     system_clocks_init();
+   
+    init_cpu_clock_cycles_counter();
 
     cortex_m_nvic_init();
 
@@ -799,6 +743,187 @@ pll_init(void)
   // Now in PEE
 
   g_pll_frequency_in_hz = (CRYSTAL_FREQUENCY_HZ / prdiv) * vdiv; //MCGOUT equals PLL output frequency
+}
+
+
+static bool g_micro_trace_initialized = false;
+
+void
+micro_trace_init(void)
+{
+    uint32_t reg_value;
+
+    reg_value = read_32bit_mmio_register(&MTB_BASE);
+
+    FDC_ASSERT(
+        reg_value == SOC_SRAM_BASE, reg_value, SOC_SRAM_BASE);
+
+    DBG_ASSERT(
+        (uintptr_t)g_micro_trace_buffer.mtb_buffer % sizeof(uint64_t) == 0,
+        g_micro_trace_buffer.mtb_buffer, 0);
+
+    /*
+     * Set micro-trace buffer cursor
+     */
+    uintptr_t mtb_position_pointer =
+        (uintptr_t)g_micro_trace_buffer.mtb_buffer - SOC_SRAM_BASE;
+
+    FDC_ASSERT(
+        mtb_position_pointer < (1 << 15), mtb_position_pointer, 1 << 15);
+
+    FDC_ASSERT(
+        mtb_position_pointer % sizeof(uint64_t) == 0, mtb_position_pointer, 0);
+
+    reg_value = 0x0;
+
+    SET_BIT_FIELD(
+        reg_value, MTB_POSITION_POINTER_MASK, MTB_POSITION_POINTER_SHIFT,
+        mtb_position_pointer >> 3);
+
+    write_32bit_mmio_register(&MTB_POSITION, reg_value);
+
+    write_32bit_mmio_register(&MTB_FLOW, 0x0);
+
+    /*
+     * Enable micro tracing
+     */
+    reg_value = MTB_MASTER_EN_MASK;
+    SET_BIT_FIELD(
+        reg_value, MTB_MASTER_MASK_MASK, MTB_MASTER_MASK_SHIFT,
+        MTB_MASTER_MASK_VALUE);
+
+    write_32bit_mmio_register(&MTB_MASTER, reg_value);
+
+    g_micro_trace_initialized = true;
+}
+
+
+void
+micro_trace_stop(void)
+{
+    if (! g_micro_trace_initialized) {
+        return;
+    }
+
+    /*
+     * Disable micro tracing
+     */
+    uint32_t reg_value = read_32bit_mmio_register(&MTB_MASTER);
+    reg_value &= ~MTB_MASTER_EN_MASK;
+    write_32bit_mmio_register(&MTB_MASTER, reg_value);
+}
+
+
+void
+micro_trace_restart(void)
+{
+    if (! g_micro_trace_initialized) {
+        return;
+    }
+
+    /*
+     * Re-enable micro tracing
+     */
+    uint32_t reg_value = read_32bit_mmio_register(&MTB_MASTER);
+    reg_value |= MTB_MASTER_EN_MASK;
+    write_32bit_mmio_register(&MTB_MASTER, reg_value);
+}
+
+
+void
+micro_trace_get_cursor(uint64_t **mtb_cursor_pp, bool *mtb_cursor_wrapped_p)
+{
+    if (! g_micro_trace_initialized) {
+        *mtb_cursor_pp = NULL;
+        *mtb_cursor_wrapped_p = false;
+        return;
+    }
+
+    uint32_t reg_value = read_32bit_mmio_register(&MTB_POSITION);
+
+    uintptr_t mtb_position_pointer_field =
+        GET_BIT_FIELD(
+            reg_value, MTB_POSITION_POINTER_MASK, MTB_POSITION_POINTER_SHIFT);
+
+    if (reg_value & MTB_POSITION_WRAP_MASK) {
+        *mtb_cursor_wrapped_p = true;
+    } else {
+        *mtb_cursor_wrapped_p = false;
+    }
+
+    *mtb_cursor_pp = (uint64_t *)(SOC_SRAM_BASE + (mtb_position_pointer_field << 3));
+}
+
+
+static void
+init_cpu_clock_cycles_counter(void)
+{
+    /*
+     * Enable the clock to the PIT Module
+     */
+    uint32_t reg_value = read_32bit_mmio_register(&SIM_SCGC6);
+    reg_value |= SIM_SCGC6_PIT_MASK;
+    write_32bit_mmio_register(&SIM_SCGC6, reg_value);
+
+    /*
+     * Turn on PIT
+     *
+     * Bit MIDS = 0: Clock for standard PIT timers is enabled
+     * Bit FRZ = 1: Timers are stopped in Debug mode.
+     */ 
+    write_32bit_mmio_register(
+        &PIT_MCR,
+        PIT_MCR_FRZ_MASK);
+
+    /*
+     * Configure the lifetimer timer, by chaining timer 1 to timer 0,
+     * and by setting the LDVAL register of each timer to the maximum value.
+     * Each timer is a down counter. Interrupts are left disabled for both
+     * timers.
+     */
+    write_32bit_mmio_register(&PIT_LDVAL0, 0xFFFFFFFF);
+    write_32bit_mmio_register(&PIT_LDVAL1, 0xFFFFFFFF);
+
+    /*
+     * Bit CHN = 1: Timer 1 is chained to previous timer (timer 0).
+     * Bit TIE = 0: Interrupt requests from Timer 1 are disabled.
+     * Bit TEN = 1: Timer 1 is enabled.
+     */
+    write_32bit_mmio_register(
+        &PIT_TCTRL1,
+        PIT_TCTRL_CHN_MASK | PIT_TCTRL_TEN_MASK);
+
+    /*
+     * Bit CHN = 0: Timer 0 is not chained.
+     * Bit TIE = 0: Interrupt requests from Timer 0 are disabled.
+     * Bit TEN = 1: Timer 0 is enabled.
+     */
+    write_32bit_mmio_register(
+        &PIT_TCTRL0,
+        PIT_TCTRL_TEN_MASK);
+}
+
+
+uint64_t 
+get_cpu_clock_cycles64(void)
+{
+    uint32_t low_reg_value = read_32bit_mmio_register(&PIT_LTMR64L);
+    uint32_t high_reg_value = read_32bit_mmio_register(&PIT_LTMR64H);
+   
+    return ((uint64_t)high_reg_value << 32) + low_reg_value;
+}
+
+
+uint32_t 
+get_cpu_clock_cycles(void)
+{
+    uint32_t low_reg_value = read_32bit_mmio_register(&PIT_LTMR64L);
+  
+    /*
+     * TODO: PIT module frequency is half of the CPU frequency, so may
+     * need to multiply by 2 to get the accurate number CPU clock cycles.
+     */
+    return low_reg_value;
 }
 
 

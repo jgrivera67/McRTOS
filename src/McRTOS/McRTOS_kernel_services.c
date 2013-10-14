@@ -1852,7 +1852,6 @@ rtos_k_enter_interrupt(
     struct rtos_execution_context *interrupted_context_p =
         cpu_controller_p->cpc_current_execution_context_p;
 
-#if 0 // ???
     /*
      * Track CPU usage for interrupted execution context:
      */
@@ -1864,7 +1863,6 @@ rtos_k_enter_interrupt(
 
     RTOS_EXECUTION_CONTEXT_UPDATE_CPU_USAGE(
         interrupted_context_p, used_cpu_cycles);
-#endif
 
     new_interrupt_context_p->ctx_last_switched_in_time_stamp = get_cpu_clock_cycles();
     
@@ -2047,7 +2045,6 @@ rtos_k_exit_interrupt(void)
      */
     notify_interrupt_controller_isr_done(interrupt_channel);
 
-#if 0 // ???
     /*
      * Track CPU usage for current execution context:
      */
@@ -2059,7 +2056,6 @@ rtos_k_exit_interrupt(void)
 
     RTOS_EXECUTION_CONTEXT_UPDATE_CPU_USAGE(
         current_context_p, used_cpu_cycles);
-#endif
 
     RTOS_EXECUTION_CONTEXT_SET_SWITCHED_OUT_REASON(
         current_context_p,
@@ -2330,6 +2326,7 @@ rtos_execution_context_init(
     execution_context_p->ctx_last_switched_in_time_stamp = 0;
     execution_context_p->ctx_last_switched_out_time_stamp_in_ticks = 0;
     execution_context_p->ctx_accumulated_cpu_usage_milliseconds = 0;
+    execution_context_p->ctx_accumulated_cpu_usage_cycles = 0;
     execution_context_p->ctx_last_switched_out_reason = CTX_SWITCHED_OUT_NEVER;
     execution_context_p->ctx_switched_out_reason_history = 0x0;
     execution_context_p->ctx_last_preempted_by_p = NULL;

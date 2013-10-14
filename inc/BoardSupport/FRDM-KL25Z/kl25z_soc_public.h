@@ -85,12 +85,15 @@ typedef _RANGE_(INT_SVCall_IRQn, SOC_NUM_INTERRUPT_CHANNELS - 1)
 #define SOC_PERIPHERAL_BRIDGE_MAX_ADDR      UINT32_C(0x400FFFFF)
 #define SOC_PRIVATE_PERIPHERALS_MIN_ADDR    UINT32_C(0xE0000000)
 #define SOC_PRIVATE_PERIPHERALS_MAX_ADDR    UINT32_C(0xE00FFFFF)
+#define SOC_MTB_MIN_ADDR                    UINT32_C(0xF0000000)
+#define SOC_MTB_MAX_ADDR                    UINT32_C(0xF0000FFF)
 
-/* 
- * Micro Trace Buffer (MTB) registers
+/**
+ * Value for the MASK field of the MTB_MASTER register. It determines the
+ * size of the micro trace circular buffer: 
+ * 2^(MASK field + 4) == 2^(6 + 4) = 1024 bytes
  */
-#define SOC_MTB_MIN_ADDR    UINT32_C(0xF0000000)
-#define SOC_MTB_MAX_ADDR    UINT32_C(0xF0000FFF)
+#define MTB_MASTER_MASK_VALUE   0x6
 
 /**
  * Check that an mmio address is in the valid MMIO space
@@ -99,7 +102,9 @@ typedef _RANGE_(INT_SVCall_IRQn, SOC_NUM_INTERRUPT_CHANNELS - 1)
         (((uintptr_t)(_io_addr) >= SOC_PERIPHERAL_BRIDGE_MIN_ADDR &&    \
           (uintptr_t)(_io_addr) <= SOC_PERIPHERAL_BRIDGE_MAX_ADDR) ||   \
          ((uintptr_t)(_io_addr) >= SOC_PRIVATE_PERIPHERALS_MIN_ADDR &&  \
-          (uintptr_t)(_io_addr) <= SOC_PRIVATE_PERIPHERALS_MAX_ADDR))
+          (uintptr_t)(_io_addr) <= SOC_PRIVATE_PERIPHERALS_MAX_ADDR) || \
+         ((uintptr_t)(_io_addr) >= SOC_MTB_MIN_ADDR &&                  \
+          (uintptr_t)(_io_addr) <= SOC_MTB_MAX_ADDR))
 
 /**
  * Check that an address is in flash memory and it is not address 0x0
@@ -119,5 +124,39 @@ typedef _RANGE_(INT_SVCall_IRQn, SOC_NUM_INTERRUPT_CHANNELS - 1)
  * Max number of PWM channels in a PWM device
  */
 #define PWM_MAX_NUM_CHANNELS    6
+
+/**
+ * Hardware micro trace buffer size in bytes
+ */
+#define MICRO_TRACE_BUFFER_SIZE_IN_BYTES    UINT32_C(1024)
+
+C_ASSERT(
+    MICRO_TRACE_BUFFER_SIZE_IN_BYTES ==
+        UINT32_C(1) << (MTB_MASTER_MASK_VALUE + 4));
+
+/**
+ * Hardware micro-trace buffer
+ */
+struct micro_trace_buffer {
+#   define MICRO_TRACE_BUFFER_BORDER_MARKER UINT64_C(0xFACEBBBBFACEBBBB)
+    uint64_t mtb_low_border_marker;
+    
+    /*
+     * The trace buffer must be 8-byte aligned
+     */
+    uint64_t mtb_buffer[MICRO_TRACE_BUFFER_SIZE_IN_BYTES / sizeof(uint64_t)];
+
+    uint64_t mtb_high_border_marker;
+};
+
+void micro_trace_init(void);
+
+void micro_trace_stop(void);
+
+void micro_trace_restart(void);
+
+void micro_trace_get_cursor(uint64_t **mtb_cursor_pp, bool *mtb_cursor_wrapped_p);
+
+extern struct micro_trace_buffer g_micro_trace_buffer;
 
 #endif /* __KL25Z_SOC_PUBLIC_H */

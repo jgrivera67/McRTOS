@@ -262,6 +262,8 @@ void initialize_tick_timer(void);
 
 uint32_t get_cpu_clock_cycles(void);
 
+uint64_t get_cpu_clock_cycles64(void);
+
 void turn_on_power(uint32_t pconp_mask);
 
 void configure_pin(const struct pin_config_info *pin_info_p, bool is_output);

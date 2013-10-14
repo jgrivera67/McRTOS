@@ -46,6 +46,9 @@ rtos_dbg_dump_context_switch_traces(void);
 static void
 rtos_dbg_dump_cpu_controller(void);
 
+static void
+debug_dump_micro_trace_buffer(void);
+
 /**
  * Enters McRTOS debugger from the hard fault exception handler.
  *
@@ -60,6 +63,8 @@ rtos_hard_fault_exception_handler(
         _IN_ const struct rtos_execution_context *current_execution_context_p)
 {
     rtos_execution_stack_entry_t *before_exception_stack_p;
+
+    micro_trace_stop();
 
     /*
      * Determine what stack pointer was in use before the exception
@@ -97,7 +102,9 @@ rtos_hard_fault_exception_handler(
      * Change the saved PC to point to the instruction after the faulting
      * instruction, otherwise we will fall into an infinite loop:
      */
-    before_exception_stack_p[CPU_REG_PC] += sizeof(cpu_instruction_t); 
+    before_exception_stack_p[CPU_REG_PC] += sizeof(cpu_instruction_t);
+
+    micro_trace_restart();
 }
 
 
@@ -239,6 +246,8 @@ rtos_dbg_dump_exception_info(
         before_exception_stack_p[CPU_REG_PSR]);
 
     debug_dump_captured_registers();
+
+    debug_dump_micro_trace_buffer();
 }
 
 
@@ -520,7 +529,7 @@ rtos_dbg_dump_context_switch_traces(void)
             i, execution_context_p->ctx_name_p, execution_context_p,
             trace_context_switch_type, last_switched_out_reason, priority);
 
-//#       if 0 // ???
+#       if 0 // ???
         if (thread_p != NULL) {
             debug_printf(
                 "\tthread: %#p, state: %#x, state history: %#x\n",
@@ -532,7 +541,7 @@ rtos_dbg_dump_context_switch_traces(void)
                 "\tinterrupt: %#p\n", interrupt_p);
 
         }
-//#       endif
+#       endif
     }
 }
 
@@ -565,4 +574,50 @@ rtos_dbg_dump_cpu_controller(void)
         cpu_controller_p->cpc_nested_interrupts_count,
         cpu_controller_p->cpc_thread_scheduler_calls,
         cpu_controller_p->cpc_longest_time_interrupts_disabled);
+}
+
+
+static void
+debug_dump_micro_trace_buffer(void)
+{
+    uint64_t *mtb_cursor_p;
+    bool mtb_cursor_wrapped;
+
+    micro_trace_get_cursor(&mtb_cursor_p, &mtb_cursor_wrapped);
+
+    if (mtb_cursor_p <= &g_micro_trace_buffer.mtb_low_border_marker ||
+        mtb_cursor_p >= &g_micro_trace_buffer.mtb_high_border_marker ||
+        (uintptr_t)mtb_cursor_p % sizeof(uint64_t) != 0) {
+        debug_printf("*** Error: Invalid mtb_cursor_p: %#p\n", mtb_cursor_p);
+    }
+
+    if (g_micro_trace_buffer.mtb_low_border_marker != MICRO_TRACE_BUFFER_BORDER_MARKER ||
+        g_micro_trace_buffer.mtb_high_border_marker != MICRO_TRACE_BUFFER_BORDER_MARKER) {
+        debug_printf("*** Error: MTB buffer overrun\n"); 
+    }
+
+    uint32_t next_entry_to_fill =
+        mtb_cursor_p - g_micro_trace_buffer.mtb_buffer;
+
+    debug_printf(
+        "Hardware micro trace buffer (next entry to fill %u):\n",
+        next_entry_to_fill);
+
+    uint32_t num_entries;
+
+    if (mtb_cursor_wrapped) {
+        num_entries = ARRAY_SIZE(g_micro_trace_buffer.mtb_buffer);
+    } else {
+        num_entries = next_entry_to_fill;
+    }
+
+    for (uint32_t i = 0; i < num_entries; i ++) {
+        uint32_t source_addr = (uint32_t)g_micro_trace_buffer.mtb_buffer[i];
+        uint32_t dest_addr = (uint32_t)(g_micro_trace_buffer.mtb_buffer[i] >> 32);
+
+        debug_printf(
+            "\t%3u: %#p (A bit: %x) -> %#p (S bit: %x)\n", i,
+            source_addr & ~0x1, source_addr & 0x1,
+            dest_addr & ~0x1, dest_addr & 0x1);
+    }
 }

@@ -27,13 +27,6 @@
 .thumb
 //.syntax unified
 
-/*???
-    .thumb_func
-    .align 1
-    .global  Reset_Handler
-    .type    Reset_Handler, %function
-*/
-
 /*
  * PendSV exception handler. It is used for synchronous context switch.
  *

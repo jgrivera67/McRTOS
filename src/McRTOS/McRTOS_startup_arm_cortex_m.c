@@ -25,11 +25,6 @@ extern void main(void);
 struct rtos_interrupt *g_rtos_interrupt_systick_p = NULL;
 
 /**
- * CPU cycles counter
- */
-static uint32_t g_cpu_cycles_count = 0;
-
-/**
  * Exception handlers stack shared among all nested exception handlers
  */
 struct cortex_m_exception_stack 
@@ -262,34 +257,6 @@ initialize_tick_timer(void)
         SysTick_CSR_ENABLE_MASK |
         SysTick_CSR_TICKINT_MASK |
         SysTick_CSR_CLKSOURCE_MASK);
-}
-
-
-uint32_t 
-get_cpu_clock_cycles(void)
-{
-#if 0
-    uint32_t reg_value = read_32bit_mmio_register(&SYST_CVR);
-    
-    reg_value &= MULTI_BIT_MASK(23, 0);
-
-    uint32_t delta_cycles;
-    if (reg_value < SYSTICK_COUNTER_RELOAD_VALUE) {
-        delta_cycles = SYSTICK_COUNTER_RELOAD_VALUE - reg_value;
-    } else {
-        delta_cycles = 0;
-    }
-
-    reg_value = read_32bit_mmio_register(&SYST_CSR);
-    if (reg_value & SysTick_CSR_COUNTFLAG_MASK)
-    {
-        delta_cycles += SYSTICK_COUNTER_RELOAD_VALUE;
-    }
-
-    g_cpu_cycles_count += delta_cycles;
-#endif
-
-    return g_cpu_cycles_count;
 }
 
 

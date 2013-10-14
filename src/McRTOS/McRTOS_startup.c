@@ -276,6 +276,10 @@ rtos_startup(
 
         app_hardware_init_p();
 
+#       ifdef _RELIABILITY_CHECKS_
+        micro_trace_init();
+#       endif
+
         console_printf_init();
 
 #       ifdef LCD_SUPPORTED
@@ -285,7 +289,6 @@ rtos_startup(
          * Calculate  approximate overhead for taking a measurement of time in
          * CPU clock cycles:
          */
-#       if 0
         cpu_clock_cycles_t begin_cycles = get_cpu_clock_cycles();
         cpu_clock_cycles_t end_cycles = get_cpu_clock_cycles();
         g_McRTOS_p->rts_cpu_cycles_measure_overhead =
@@ -296,9 +299,6 @@ rtos_startup(
                 SOC_CPU_CLOCK_FREQ_IN_MEGA_HZ /* 1 microsecond */,
             g_McRTOS_p->rts_cpu_cycles_measure_overhead,
             SOC_CPU_CLOCK_FREQ_IN_MEGA_HZ);
-#       else
-        g_McRTOS_p->rts_cpu_cycles_measure_overhead = 0; 
-#       endif
     }
 
     /*

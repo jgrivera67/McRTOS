@@ -5,7 +5,6 @@
  *
  * @author German Rivera 
  */ 
-
 #include "hardware_abstractions.h"
 #include "kl25z_soc.h"
 #include "McRTOS_arm_cortex_m.h"
@@ -15,6 +14,9 @@
 #include "McRTOS_config_parameters.h"
 #include "McRTOS_kernel_services.h"
 #include "tfc_board.h"
+
+TODO("Remove these pragmas")
+#pragma GCC diagnostic ignored "-Wunused-function"
 
 static void tfc_gpio_init(void);
 static void tfc_steering_servo_init(void);
