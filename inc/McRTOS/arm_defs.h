@@ -28,6 +28,12 @@
 #   endif
 #endif
 
+#ifdef _CPU_CYCLES_MEASURE_
+#   define  _MEASURE_INTERRUPTS_DISABLED_TIME_
+#else
+#   undef   _MEASURE_INTERRUPTS_DISABLED_TIME_
+#endif
+
 #if DEFINED_ARM_CLASSIC_ARCH()
 
 #   define ARM_MODE_USER  0x10      /* Normal User Mode                             */
@@ -130,6 +136,8 @@
 #   define CPU_INTERRUPTS_ARE_DISABLED(_cpsr) \
         (((_cpsr) & ARM_INTERRUPTS_DISABLED_MASK) != 0)
 
+#define GET_FUNCTION_ADDRESS(_func_p)   ((uintptr_t)(_func_p)
+
 #elif DEFINED_ARM_CORTEX_M_ARCH()
 
     /**
@@ -197,6 +205,26 @@
      * svc instruction opcode mask
      */
 #   define  SVC_OP_CODE_MASK        0xDF00
+
+    /**
+     * bl instruction opcode mask
+     */
+#   define  BL_OP_CODE_MASK         0xF000
+
+    /**
+     * bx instruction opcode mask
+     */
+#   define  BX_OP_CODE_MASK         0x4700
+
+    /**
+     * pop instruction opcode mask
+     */
+#   define  POP_OP_CODE_MASK        0xBD00
+
+    /**
+     * "bx lr" instruction
+     */
+#   define  BX_LR_INSTRUCTION       0x4770
 
     /*
      * Bit masks  for the IPSR register
@@ -292,6 +320,8 @@
 
 #   define CPU_INTERRUPTS_ARE_DISABLED(_reg_primask_value) \
         (((_reg_primask_value) & CPU_REG_PRIMASK_PM_MASK) != 0)
+
+#define GET_FUNCTION_ADDRESS(_func_p)   ((uintptr_t)(_func_p) & ~0x1)
 
 #else
 

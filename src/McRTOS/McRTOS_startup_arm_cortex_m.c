@@ -67,16 +67,16 @@ cortex_m_reset_handler(void)
 static void
 copy_initialized_data_section_from_flash_to_ram(void)
 {
-	extern uint32_t _flash_initialized_data_start[];
-	extern uint32_t _ram_initialized_data_start[];
-	extern uint32_t _ram_initialized_data_end[];
+	extern uint32_t __flash_initialized_data_start[];
+	extern uint32_t __ram_initialized_data_start[];
+	extern uint32_t __ram_initialized_data_end[];
         
-        uint32_t *src_word_p = _flash_initialized_data_start;
-        uint32_t *dest_word_p = _ram_initialized_data_start;
+        uint32_t *src_word_p = __flash_initialized_data_start;
+        uint32_t *dest_word_p = __ram_initialized_data_start;
 
         do {
             *dest_word_p++ = *src_word_p++;
-        } while (dest_word_p != _ram_initialized_data_end);
+        } while (dest_word_p != __ram_initialized_data_end);
 }
 
 /**
@@ -85,14 +85,14 @@ copy_initialized_data_section_from_flash_to_ram(void)
 static void
 zero_fill_uninitialized_data_section(void)
 {
-        extern uint32_t _uninitialized_data_start[];
-	extern uint32_t _uninitialized_data_end[];
+        extern uint32_t __uninitialized_data_start[];
+	extern uint32_t __uninitialized_data_end[];
         
-        uint32_t *word_p = _uninitialized_data_start;
+        uint32_t *word_p = __uninitialized_data_start;
 
         do {
             *word_p++ = 0;
-        } while (word_p != _uninitialized_data_end);
+        } while (word_p != __uninitialized_data_end);
 }
 
 

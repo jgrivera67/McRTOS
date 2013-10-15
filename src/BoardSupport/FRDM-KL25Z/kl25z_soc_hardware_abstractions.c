@@ -763,30 +763,50 @@ micro_trace_init(void)
         reg_value == SOC_SRAM_BASE, reg_value, SOC_SRAM_BASE);
 
     DBG_ASSERT(
-        (uintptr_t)g_micro_trace_buffer % sizeof(uint64_t) == 0,
-        g_micro_trace_buffer, 0);
+        (uintptr_t)__micro_trace_buffer % sizeof(uint64_t) == 0 &&
+        (uintptr_t)__micro_trace_buffer == SOC_SRAM_BASE,
+        __micro_trace_buffer, SOC_SRAM_BASE);
 
     DBG_ASSERT(
-        (uintptr_t)g_micro_trace_buffer == SOC_SRAM_BASE,
-        g_micro_trace_buffer, SOC_SRAM_BASE);
+        (uintptr_t)__micro_trace_buffer_end % sizeof(uint64_t) == 0,
+        __micro_trace_buffer_end, 0);
+
+    DBG_ASSERT(
+        __micro_trace_buffer_end - __micro_trace_buffer ==
+            MICRO_TRACE_BUFFER_NUM_ENTRIES,
+        __micro_trace_buffer, __micro_trace_buffer_end);
+
+    /*
+     * Zero-fill trace buffer:
+     */
+    for (uint64_t *entry_p = __micro_trace_buffer;
+         entry_p != __micro_trace_buffer_end; entry_p ++) {
+        *entry_p = 0x0;
+    }
 
     /*
      * Initialize MTB_POSITION register:
-     * - POINTER field (bits 31:3) = 0x0: first entry (index 0)
+     * - POINTER field (bits 31:3) = encoding of __micro_trace_buffer
      * - WRAP bit = 0: No wrap has happened yet
+     *
+     * NOTE: POSITION register bits greater than or equal to 15 are RAZ/WI. 
      */
-    write_32bit_mmio_register(&MTB_POSITION, 0x0);
+    reg_value = 0;
+    SET_BIT_FIELD(
+        reg_value, MTB_POSITION_POINTER_MASK, MTB_POSITION_POINTER_SHIFT,
+        (uintptr_t)__micro_trace_buffer >> MTB_POSITION_POINTER_SHIFT);
+    write_32bit_mmio_register(&MTB_POSITION, reg_value);
 
     /*
      * Initialize MTB_FLOW register:
-     * - WATERMARK field (bits 31:3) = 0x0
+     * - WATERMARK field (bits 31:3) = __micro_trace_buffer_end
      * - AUTOHALT bit = 0
      * - AUTOSTOP bit = 0
      */
     reg_value = 0;
     SET_BIT_FIELD(
         reg_value, MTB_FLOW_WATERMARK_MASK, MTB_FLOW_WATERMARK_SHIFT,
-        MICRO_TRACE_BUFFER_NUM_ENTRIES);
+        (uintptr_t)__micro_trace_buffer_end >> MTB_FLOW_WATERMARK_SHIFT);
     write_32bit_mmio_register(&MTB_FLOW, reg_value);
 
     /*
@@ -794,11 +814,11 @@ micro_trace_init(void)
      * - EN bit = 0: Enable micro tracing
      * - Mask field (bits 4:0) = mask to implicitly set the trace buffer size 
      */
-    reg_value = MTB_MASTER_EN_MASK;
+    reg_value = read_32bit_mmio_register(&MTB_MASTER);
+    reg_value |= MTB_MASTER_EN_MASK;
     SET_BIT_FIELD(
         reg_value, MTB_MASTER_MASK_MASK, MTB_MASTER_MASK_SHIFT,
         MTB_MASTER_MASK_VALUE);
-
     write_32bit_mmio_register(&MTB_MASTER, reg_value);
 
     g_micro_trace_initialized = true;
@@ -841,7 +861,7 @@ void
 micro_trace_get_cursor(uint64_t **mtb_cursor_pp, bool *mtb_cursor_wrapped_p)
 {
     if (! g_micro_trace_initialized) {
-        *mtb_cursor_pp = g_micro_trace_buffer;
+        *mtb_cursor_pp = __micro_trace_buffer;
         *mtb_cursor_wrapped_p = false;
         return;
     }
@@ -858,8 +878,12 @@ micro_trace_get_cursor(uint64_t **mtb_cursor_pp, bool *mtb_cursor_wrapped_p)
         *mtb_cursor_wrapped_p = false;
     }
 
-    //???*mtb_cursor_pp = (uint64_t *)(SOC_SRAM_BASE + (mtb_position_pointer_field << 3));
-    *mtb_cursor_pp = &g_micro_trace_buffer[mtb_position_pointer_field];
+    /*
+     * NOTE: POSITION register bits greater than or equal to 15 are RAZ/WI. 
+     */
+    *mtb_cursor_pp = (uint64_t *)(
+        (uintptr_t)__micro_trace_buffer |
+        (mtb_position_pointer_field << MTB_POSITION_POINTER_SHIFT));
 }
 
 

@@ -585,34 +585,81 @@ debug_dump_micro_trace_buffer(void)
 
     micro_trace_get_cursor(&mtb_cursor_p, &mtb_cursor_wrapped);
 
-    if (mtb_cursor_p < g_micro_trace_buffer ||
-        mtb_cursor_p >=
-            &g_micro_trace_buffer[MICRO_TRACE_BUFFER_NUM_ENTRIES] ||
+    if (mtb_cursor_p < __micro_trace_buffer ||
+        mtb_cursor_p >= __micro_trace_buffer_end ||
         (uintptr_t)mtb_cursor_p % sizeof(uint64_t) != 0) {
         debug_printf("*** Error: Invalid mtb_cursor_p: %#p\n", mtb_cursor_p);
     }
 
-    uint32_t next_entry_to_fill = mtb_cursor_p - g_micro_trace_buffer;
-
-    debug_printf(
-        "Hardware micro trace buffer (next entry to fill %u):\n",
-        next_entry_to_fill);
+    uint32_t next_entry_to_fill = mtb_cursor_p - __micro_trace_buffer;
 
     uint32_t num_entries;
-
+    uint64_t *entry_p;
+   
     if (mtb_cursor_wrapped) {
         num_entries = MICRO_TRACE_BUFFER_NUM_ENTRIES;
+        entry_p = &__micro_trace_buffer[next_entry_to_fill];
     } else {
         num_entries = next_entry_to_fill;
+        entry_p = __micro_trace_buffer;
     }
 
-    for (uint32_t i = 0; i < num_entries; i ++) {
-        uint32_t source_addr = (uint32_t)g_micro_trace_buffer[i];
-        uint32_t dest_addr = (uint32_t)(g_micro_trace_buffer[i] >> 32);
+    /*
+     * Print control flow trace:
+     */
+
+    debug_printf("Micro Trace Buffer Entries: %u\n", num_entries);
+
+    while (num_entries != 0) {
+        uintptr_t source_addr = ((uint32_t)*entry_p & ~0x1);
+        uintptr_t dest_addr = ((uint32_t)(*entry_p >> 32) & ~0x1);
+
+        cpu_instruction_t cpu_instruction = *(cpu_instruction_t *)source_addr;
+
+        const char *prefix;
+
+        switch (cpu_instruction & THUMB_INSTR_OP_CODE_MASK) {
+        case BL_OP_CODE_MASK:
+            prefix = "bl   at:";
+            break;
+
+        case POP_OP_CODE_MASK:
+            prefix = "pop  at:";
+            break;
+
+        case BX_OP_CODE_MASK:
+            if (cpu_instruction == BX_LR_INSTRUCTION) {
+                prefix = "bxlr at:";
+            } else {
+                prefix = "bx   at:";
+            }
+            break;
+        default:
+            prefix = "        ";
+        }
+       
+        const char *dest_func_name;
+
+        if (dest_addr == 
+                GET_FUNCTION_ADDRESS(cortex_m_hard_fault_exception_handler)) {
+            dest_func_name = "cortex_m_hard_fault_exception_handler";
+        } else if (dest_addr ==
+                GET_FUNCTION_ADDRESS(capture_assert_failure)) {
+            dest_func_name = "capture_assert_failure";
+        } else {
+            dest_func_name = "";
+        }
 
         debug_printf(
-            "\t%3u: %#p (A bit: %x) -> %#p (S bit: %x)\n", i,
-            source_addr & ~0x1, source_addr & 0x1,
-            dest_addr & ~0x1, dest_addr & 0x1);
+            "\t%3u: %s %#p -> %#p %s\n",
+            entry_p - __micro_trace_buffer, prefix,
+            source_addr, dest_addr, dest_func_name);
+
+        num_entries --;
+
+        entry_p ++;
+        if (entry_p == __micro_trace_buffer_end) {
+            entry_p = __micro_trace_buffer;
+        }
     }
 }

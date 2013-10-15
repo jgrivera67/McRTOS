@@ -281,7 +281,7 @@ rtos_startup(
         app_hardware_init_p();
 
 #       ifdef _RELIABILITY_CHECKS_
-        //??? micro_trace_init();
+        micro_trace_init();
 #       endif
 
         console_printf_init();

@@ -89,13 +89,6 @@ typedef _RANGE_(INT_SVCall_IRQn, SOC_NUM_INTERRUPT_CHANNELS - 1)
 #define SOC_MTB_MAX_ADDR                    UINT32_C(0xF0000FFF)
 
 /**
- * Value for the MASK field of the MTB_MASTER register. It determines the
- * size of the micro trace circular buffer: 
- * 2^(MASK field + 4) == 2^(6 + 4) = 1024 bytes
- */
-#define MTB_MASTER_MASK_VALUE   6
-
-/**
  * Check that an mmio address is in the valid MMIO space
  */
 #define BOARD_VALID_MMIO_ADDRESS(_io_addr) \
@@ -126,13 +119,17 @@ typedef _RANGE_(INT_SVCall_IRQn, SOC_NUM_INTERRUPT_CHANNELS - 1)
 #define PWM_MAX_NUM_CHANNELS    6
 
 /**
+ * Value for the MASK field of the MTB_MASTER register. It determines the
+ * size of the micro trace circular buffer: 
+ * 2^(MASK field + 4) == 2^(6 + 4) = 1024 bytes
+ */
+#define MTB_MASTER_MASK_VALUE   6
+
+/**
  * Hardware micro trace buffer size in bytes
  */
-#define MICRO_TRACE_BUFFER_SIZE_IN_BYTES    UINT32_C(1024)
-
-C_ASSERT(
-    MICRO_TRACE_BUFFER_SIZE_IN_BYTES ==
-        UINT32_C(1) << (MTB_MASTER_MASK_VALUE + 4));
+#define MICRO_TRACE_BUFFER_SIZE_IN_BYTES \
+        (UINT32_C(1) << (MTB_MASTER_MASK_VALUE + 4))
 
 /**
  * Number of entries in the hardware micro trace buffer
@@ -148,6 +145,10 @@ void micro_trace_restart(void);
 
 void micro_trace_get_cursor(uint64_t **mtb_cursor_pp, bool *mtb_cursor_wrapped_p);
 
-extern uint64_t g_micro_trace_buffer[];
+/*
+ * Variables defined in KL25Z_SOC-flash.ld 
+ */
+extern uint64_t __micro_trace_buffer[];
+extern uint64_t __micro_trace_buffer_end[];
 
 #endif /* __KL25Z_SOC_PUBLIC_H */

@@ -56,7 +56,7 @@ SECTIONS
 
     . = ALIGN(4);
     _etext = .;        /* define a global symbols at end of code */
-    _flash_initialized_data_start = .; 
+    __flash_initialized_data_start = .; 
   } >flash_text
 
   .ARM.extab   : { *(.ARM.extab* .gnu.linkonce.armextab.*) } > flash_text
@@ -70,22 +70,22 @@ SECTIONS
   .mtb :
   {
     . = ALIGN(8);
-    g_micro_trace_buffer = .;
+    __micro_trace_buffer = .;
     . += MICRO_TRACE_BUFFER_SIZE_IN_BYTES;
     . = ALIGN(8);
-    g_micro_trace_buffer_end = .;
+    __micro_trace_buffer_end = .;
   } >sram_data
 
   /* Initialized data sections goes into RAM, load LMA copy after code */
   .data : 
   {
     . = ALIGN(4);
-    _ram_initialized_data_start = .;
+    __ram_initialized_data_start = .;
     *(.data)           /* .data sections */
     *(.data*)          /* .data* sections */
 
     . = ALIGN(4);
-    _ram_initialized_data_end = .;
+    __ram_initialized_data_end = .;
   } >sram_data AT >flash_text
   
   /* Uninitialized data section */
@@ -93,13 +93,13 @@ SECTIONS
   .bss :
   {
     /* This is used by the startup in order to initialize the .bss section */
-    _uninitialized_data_start = .;
+    __uninitialized_data_start = .;
     *(.bss)
     *(.bss*)
     *(COMMON)
 
     . = ALIGN(4);
-    _uninitialized_data_end = .;
+    __uninitialized_data_end = .;
   } >sram_data
 
   .reset_stack :
