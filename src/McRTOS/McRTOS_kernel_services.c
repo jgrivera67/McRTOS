@@ -453,6 +453,7 @@ rtos_k_thread_delay(rtos_milliseconds_t num_milliseconds)
 void
 rtos_k_thread_micro_delay(_IN_ rtos_microseconds_t num_microseconds)
 {
+#   ifdef _CPU_CYCLES_MEASURE_
     cpu_clock_cycles_t cycles_delta;
     cpu_clock_cycles_t start_cycles = get_cpu_clock_cycles();
     cpu_clock_cycles_t target_cpu_cycles_delta =
@@ -472,6 +473,11 @@ rtos_k_thread_micro_delay(_IN_ rtos_microseconds_t num_microseconds)
         cycles_delta =
             CPU_CLOCK_CYCLES_DELTA(start_cycles, get_cpu_clock_cycles());
     } while (cycles_delta < target_cpu_cycles_delta);
+#   else
+  
+    delay_loop(num_microseconds * (SOC_CPU_CLOCK_FREQ_IN_MEGA_HZ / 5));
+
+#   endif
 }
 
 
@@ -1852,6 +1858,7 @@ rtos_k_enter_interrupt(
     struct rtos_execution_context *interrupted_context_p =
         cpu_controller_p->cpc_current_execution_context_p;
 
+#   ifdef _CPU_CYCLES_MEASURE_
     /*
      * Track CPU usage for interrupted execution context:
      */
@@ -1865,7 +1872,8 @@ rtos_k_enter_interrupt(
         interrupted_context_p, used_cpu_cycles);
 
     new_interrupt_context_p->ctx_last_switched_in_time_stamp = get_cpu_clock_cycles();
-    
+#   endif
+
     struct fdc_info *fdc_info_p = &cpu_controller_p->cpc_failures_info;
 
     fdc_info_p->fdc_interrupt_channel_counters[interrupt_channel] ++;
@@ -2045,6 +2053,7 @@ rtos_k_exit_interrupt(void)
      */
     notify_interrupt_controller_isr_done(interrupt_channel);
 
+#   ifdef _CPU_CYCLES_MEASURE_
     /*
      * Track CPU usage for current execution context:
      */
@@ -2056,6 +2065,7 @@ rtos_k_exit_interrupt(void)
 
     RTOS_EXECUTION_CONTEXT_UPDATE_CPU_USAGE(
         current_context_p, used_cpu_cycles);
+#   endif
 
     RTOS_EXECUTION_CONTEXT_SET_SWITCHED_OUT_REASON(
         current_context_p,
@@ -2323,10 +2333,12 @@ rtos_execution_context_init(
     execution_context_p->ctx_stack_pointer_high_water_mark_p = stack_bottom_end_p;
     execution_context_p->ctx_preempted_counter = 0;
     execution_context_p->ctx_switched_out_counter = 0;
+#   ifdef _CPU_CYCLES_MEASURE_
     execution_context_p->ctx_last_switched_in_time_stamp = 0;
-    execution_context_p->ctx_last_switched_out_time_stamp_in_ticks = 0;
     execution_context_p->ctx_accumulated_cpu_usage_milliseconds = 0;
     execution_context_p->ctx_accumulated_cpu_usage_cycles = 0;
+#   endif
+    execution_context_p->ctx_last_switched_out_time_stamp_in_ticks = 0;
     execution_context_p->ctx_last_switched_out_reason = CTX_SWITCHED_OUT_NEVER;
     execution_context_p->ctx_switched_out_reason_history = 0x0;
     execution_context_p->ctx_last_preempted_by_p = NULL;

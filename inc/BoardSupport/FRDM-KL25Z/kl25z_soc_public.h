@@ -93,7 +93,7 @@ typedef _RANGE_(INT_SVCall_IRQn, SOC_NUM_INTERRUPT_CHANNELS - 1)
  * size of the micro trace circular buffer: 
  * 2^(MASK field + 4) == 2^(6 + 4) = 1024 bytes
  */
-#define MTB_MASTER_MASK_VALUE   0x6
+#define MTB_MASTER_MASK_VALUE   6
 
 /**
  * Check that an mmio address is in the valid MMIO space
@@ -135,19 +135,10 @@ C_ASSERT(
         UINT32_C(1) << (MTB_MASTER_MASK_VALUE + 4));
 
 /**
- * Hardware micro-trace buffer
+ * Number of entries in the hardware micro trace buffer
  */
-struct micro_trace_buffer {
-#   define MICRO_TRACE_BUFFER_BORDER_MARKER UINT64_C(0xFACEBBBBFACEBBBB)
-    uint64_t mtb_low_border_marker;
-    
-    /*
-     * The trace buffer must be 8-byte aligned
-     */
-    uint64_t mtb_buffer[MICRO_TRACE_BUFFER_SIZE_IN_BYTES / sizeof(uint64_t)];
-
-    uint64_t mtb_high_border_marker;
-};
+#define MICRO_TRACE_BUFFER_NUM_ENTRIES \
+        (MICRO_TRACE_BUFFER_SIZE_IN_BYTES / sizeof(uint64_t))
 
 void micro_trace_init(void);
 
@@ -157,6 +148,6 @@ void micro_trace_restart(void);
 
 void micro_trace_get_cursor(uint64_t **mtb_cursor_pp, bool *mtb_cursor_wrapped_p);
 
-extern struct micro_trace_buffer g_micro_trace_buffer;
+extern uint64_t g_micro_trace_buffer[];
 
 #endif /* __KL25Z_SOC_PUBLIC_H */

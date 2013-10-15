@@ -260,9 +260,11 @@ void notify_interrupt_controller_isr_done(
 
 void initialize_tick_timer(void);
 
+#ifdef _CPU_CYCLES_MEASURE_
 uint32_t get_cpu_clock_cycles(void);
 
 uint64_t get_cpu_clock_cycles64(void);
+#endif
 
 void turn_on_power(uint32_t pconp_mask);
 

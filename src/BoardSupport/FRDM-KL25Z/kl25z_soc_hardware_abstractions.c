@@ -167,7 +167,9 @@ static cpu_reset_cause_t find_reset_cause(void);
 
 static void system_clocks_init(void);
 
+#ifdef _CPU_CYCLES_MEASURE_
 static void init_cpu_clock_cycles_counter(void);
+#endif
 
 static void pll_init(void);
 
@@ -431,10 +433,10 @@ const struct adc_device *const g_adc0_device_p = NULL; // TODO
 /**
  * Hardware Micro trace buffer (MTB)
  */
-struct micro_trace_buffer g_micro_trace_buffer = {
-    .mtb_low_border_marker = MICRO_TRACE_BUFFER_BORDER_MARKER,
-    .mtb_high_border_marker = MICRO_TRACE_BUFFER_BORDER_MARKER
-};
+#if 0
+uint64_t __attribute__ ((section(".mtb_buf")))
+    g_micro_trace_buffer[MICRO_TRACE_BUFFER_NUM_ENTRIES];
+#endif
 
 /**
  *  Initializes board hardware. 
@@ -453,8 +455,10 @@ soc_hardware_init(void)
     cpu_reset_cause_t reset_cause = find_reset_cause();
 
     system_clocks_init();
-   
+
+#   ifdef _CPU_CYCLES_MEASURE_
     init_cpu_clock_cycles_counter();
+#   endif
 
     cortex_m_nvic_init();
 
@@ -759,33 +763,36 @@ micro_trace_init(void)
         reg_value == SOC_SRAM_BASE, reg_value, SOC_SRAM_BASE);
 
     DBG_ASSERT(
-        (uintptr_t)g_micro_trace_buffer.mtb_buffer % sizeof(uint64_t) == 0,
-        g_micro_trace_buffer.mtb_buffer, 0);
+        (uintptr_t)g_micro_trace_buffer % sizeof(uint64_t) == 0,
+        g_micro_trace_buffer, 0);
+
+    DBG_ASSERT(
+        (uintptr_t)g_micro_trace_buffer == SOC_SRAM_BASE,
+        g_micro_trace_buffer, SOC_SRAM_BASE);
 
     /*
-     * Set micro-trace buffer cursor
+     * Initialize MTB_POSITION register:
+     * - POINTER field (bits 31:3) = 0x0: first entry (index 0)
+     * - WRAP bit = 0: No wrap has happened yet
      */
-    uintptr_t mtb_position_pointer =
-        (uintptr_t)g_micro_trace_buffer.mtb_buffer - SOC_SRAM_BASE;
-
-    FDC_ASSERT(
-        mtb_position_pointer < (1 << 15), mtb_position_pointer, 1 << 15);
-
-    FDC_ASSERT(
-        mtb_position_pointer % sizeof(uint64_t) == 0, mtb_position_pointer, 0);
-
-    reg_value = 0x0;
-
-    SET_BIT_FIELD(
-        reg_value, MTB_POSITION_POINTER_MASK, MTB_POSITION_POINTER_SHIFT,
-        mtb_position_pointer >> 3);
-
-    write_32bit_mmio_register(&MTB_POSITION, reg_value);
-
-    write_32bit_mmio_register(&MTB_FLOW, 0x0);
+    write_32bit_mmio_register(&MTB_POSITION, 0x0);
 
     /*
-     * Enable micro tracing
+     * Initialize MTB_FLOW register:
+     * - WATERMARK field (bits 31:3) = 0x0
+     * - AUTOHALT bit = 0
+     * - AUTOSTOP bit = 0
+     */
+    reg_value = 0;
+    SET_BIT_FIELD(
+        reg_value, MTB_FLOW_WATERMARK_MASK, MTB_FLOW_WATERMARK_SHIFT,
+        MICRO_TRACE_BUFFER_NUM_ENTRIES);
+    write_32bit_mmio_register(&MTB_FLOW, reg_value);
+
+    /*
+     * Initialize MTB_MASTER register:
+     * - EN bit = 0: Enable micro tracing
+     * - Mask field (bits 4:0) = mask to implicitly set the trace buffer size 
      */
     reg_value = MTB_MASTER_EN_MASK;
     SET_BIT_FIELD(
@@ -834,7 +841,7 @@ void
 micro_trace_get_cursor(uint64_t **mtb_cursor_pp, bool *mtb_cursor_wrapped_p)
 {
     if (! g_micro_trace_initialized) {
-        *mtb_cursor_pp = NULL;
+        *mtb_cursor_pp = g_micro_trace_buffer;
         *mtb_cursor_wrapped_p = false;
         return;
     }
@@ -851,10 +858,12 @@ micro_trace_get_cursor(uint64_t **mtb_cursor_pp, bool *mtb_cursor_wrapped_p)
         *mtb_cursor_wrapped_p = false;
     }
 
-    *mtb_cursor_pp = (uint64_t *)(SOC_SRAM_BASE + (mtb_position_pointer_field << 3));
+    //???*mtb_cursor_pp = (uint64_t *)(SOC_SRAM_BASE + (mtb_position_pointer_field << 3));
+    *mtb_cursor_pp = &g_micro_trace_buffer[mtb_position_pointer_field];
 }
 
 
+#ifdef _CPU_CYCLES_MEASURE_
 static void
 init_cpu_clock_cycles_counter(void)
 {
@@ -918,13 +927,14 @@ uint32_t
 get_cpu_clock_cycles(void)
 {
     uint32_t low_reg_value = read_32bit_mmio_register(&PIT_LTMR64L);
-  
+ 
     /*
      * TODO: PIT module frequency is half of the CPU frequency, so may
      * need to multiply by 2 to get the accurate number CPU clock cycles.
      */
-    return low_reg_value;
+    return low_reg_value * 2;
 }
+#endif /* _CPU_CYCLES_MEASURE_ */
 
 
 void

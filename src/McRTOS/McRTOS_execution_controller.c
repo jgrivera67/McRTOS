@@ -282,7 +282,9 @@ void rtos_thread_scheduler(
      * Switch to execute the chosen thread context:
      */
 
+#   ifdef _CPU_CYCLES_MEASURE_
     chosen_context_p->ctx_last_switched_in_time_stamp = get_cpu_clock_cycles();
+#   endif
 
     rtos_k_restore_execution_context(chosen_context_p, ctx_switch_type);
 

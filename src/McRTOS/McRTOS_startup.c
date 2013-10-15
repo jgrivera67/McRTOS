@@ -168,15 +168,22 @@ static struct McRTOS g_McRTOS =
 struct McRTOS *const g_McRTOS_p = &g_McRTOS;
 
 
-#ifdef DEBUG
 /*
  * Check some of the compile-time initializations common to all CPU cores
  */
 static void
 check_mcrtos_common_compile_time_initializations(void)
 {
+    /*
+     * Check that initialized global data was copied correctly from
+     * flash to RAM (to catch problems in the linker script)
+     */
+    FDC_ASSERT(
+        g_McRTOS_p->rts_signature == MCRTOS_SIGNATURE,
+        g_McRTOS_p->rts_signature, g_McRTOS_p);
+
 #ifdef RTOS_USE_DRAM_FOR_APP_THREAD_STACKS
-    DBG_ASSERT(
+    FDC_ASSERT(
         g_McRTOS_p->rts_next_free_app_thread_stack_p ==
         (struct rtos_thread_execution_stack *)
             &g_sdram_map_p->sdr_rtos_app_thread_stacks[0],
@@ -184,7 +191,6 @@ check_mcrtos_common_compile_time_initializations(void)
         &g_sdram_map_p->sdr_rtos_app_thread_stacks[0]);
 #endif
 }
-#endif /* DEBUG */
 
 
 #ifdef LCD_SUPPORTED
@@ -260,12 +266,10 @@ rtos_startup(
 
     cpu_controller_p->cpc_app_config_p = rtos_app_config_p;
 
-#   ifdef DEBUG
     /*
      * Check the compile-time initializations common to all CPU cores:
      */
     check_mcrtos_common_compile_time_initializations();
-#   endif
 
     /*
      * Initialize board hardware on CPU 0:
@@ -277,7 +281,7 @@ rtos_startup(
         app_hardware_init_p();
 
 #       ifdef _RELIABILITY_CHECKS_
-        micro_trace_init();
+        //??? micro_trace_init();
 #       endif
 
         console_printf_init();
@@ -285,8 +289,10 @@ rtos_startup(
 #       ifdef LCD_SUPPORTED
         lcd_printf_init();
 #       endif
+
+#       ifdef _CPU_CYCLES_MEASURE_
         /*
-         * Calculate  approximate overhead for taking a measurement of time in
+         * Calculate approximate overhead for taking a measurement of time in
          * CPU clock cycles:
          */
         cpu_clock_cycles_t begin_cycles = get_cpu_clock_cycles();
@@ -299,6 +305,7 @@ rtos_startup(
                 SOC_CPU_CLOCK_FREQ_IN_MEGA_HZ /* 1 microsecond */,
             g_McRTOS_p->rts_cpu_cycles_measure_overhead,
             SOC_CPU_CLOCK_FREQ_IN_MEGA_HZ);
+#       endif
     }
 
     /*

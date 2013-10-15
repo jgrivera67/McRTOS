@@ -14,8 +14,8 @@
 #define SYSTICK_COUNTER_RELOAD_VALUE \
         (CPU_CLOCK_FREQ_IN_HZ / RTOS_TICK_TIMER_FREQUENCY)
 
-static void copy_data_section_initializers_to_ram(void);
-static void zero_fill_bss(void);
+static void copy_initialized_data_section_from_flash_to_ram(void);
+static void zero_fill_uninitialized_data_section(void);
 
 extern void main(void);
 
@@ -42,8 +42,8 @@ cortex_m_reset_handler(void)
      */
     write_32bit_mmio_register(&SIM_COPC, 0x0);
 
-    copy_data_section_initializers_to_ram();
-    zero_fill_bss();
+    copy_initialized_data_section_from_flash_to_ram();
+    zero_fill_uninitialized_data_section();
 
     /*
      * NOTE: the reset stack markers cannot be initialized at
@@ -65,34 +65,34 @@ cortex_m_reset_handler(void)
  * Copy data section initializers from Flash to SRAM
  */ 
 static void
-copy_data_section_initializers_to_ram(void)
+copy_initialized_data_section_from_flash_to_ram(void)
 {
-	extern uint32_t _etext[];
-	extern uint32_t _sdata[];
-	extern uint32_t _edata[];
+	extern uint32_t _flash_initialized_data_start[];
+	extern uint32_t _ram_initialized_data_start[];
+	extern uint32_t _ram_initialized_data_end[];
         
-        uint32_t *src_word_p = _etext;
-        uint32_t *dest_word_p = _sdata;
+        uint32_t *src_word_p = _flash_initialized_data_start;
+        uint32_t *dest_word_p = _ram_initialized_data_start;
 
         do {
             *dest_word_p++ = *src_word_p++;
-        } while (dest_word_p != _edata);
+        } while (dest_word_p != _ram_initialized_data_end);
 }
 
 /**
  * Zero out uninitialized global and static variables
  */
 static void
-zero_fill_bss(void)
+zero_fill_uninitialized_data_section(void)
 {
-        extern uint32_t __start_bss[];
-	extern uint32_t __end_bss[];
+        extern uint32_t _uninitialized_data_start[];
+	extern uint32_t _uninitialized_data_end[];
         
-        uint32_t *word_p = __start_bss;
+        uint32_t *word_p = _uninitialized_data_start;
 
         do {
             *word_p++ = 0;
-        } while (word_p != __end_bss);
+        } while (word_p != _uninitialized_data_end);
 }
 
 

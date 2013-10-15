@@ -252,17 +252,12 @@ struct rtos_execution_context
      */
     uint32_t ctx_switched_out_counter;
 
+#   ifdef _CPU_CYCLES_MEASURE_
     /**
      * Time stamp (in CPU clock cycles) of the last time this context was
      * switched-in 
      */
     cpu_clock_cycles_t ctx_last_switched_in_time_stamp;
-
-    /**
-     * Time stamp (in ticks since boot) of the last time this context was
-     * switched-out
-     */
-    rtos_ticks_t ctx_last_switched_out_time_stamp_in_ticks;
 
     /**
      * Accumulated CPU usage for this context in milliseconds
@@ -273,6 +268,13 @@ struct rtos_execution_context
      * Accumulated CPU usage for this context in CPU cycles under 1 millisecond
      */
     uint32_t ctx_accumulated_cpu_usage_cycles;
+#   endif
+
+    /**
+     * Time stamp (in ticks since boot) of the last time this context was
+     * switched-out
+     */
+    rtos_ticks_t ctx_last_switched_out_time_stamp_in_ticks;
 
     /**
      * Pre-filled trace entry for context switch tracing

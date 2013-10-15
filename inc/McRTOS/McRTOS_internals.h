@@ -449,12 +449,14 @@ struct McRTOS
      */
     struct rtos_thread_execution_stack *rts_app_threads_execution_stacks_p;
 
+#   ifdef _CPU_CYCLES_MEASURE_
     /**
      * Approximate overhead for taking a measurement of time in CPU clock
      * cycles, using the BEGIN_CPU_CYCLES_MEASURE()/END_CPU_CYCLES_MEASURE()
      * macros.
      */
     cpu_clock_cycles_t rts_cpu_cycles_measure_overhead;
+#   endif
 
 #   ifdef LCD_SUPPORTED
     /**
@@ -573,7 +575,8 @@ extern struct McRTOS *const g_McRTOS_p;
 #define RTOS_EXECUTION_CONTEXT_GET_STACK_POINTER(_execution_context_p)  \
             ((_execution_context_p)->ctx_cpu_registers[CPU_REG_SP])
 
-#define RTOS_EXECUTION_CONTEXT_UPDATE_CPU_USAGE( \
+#ifdef _CPU_CYCLES_MEASURE_
+#   define RTOS_EXECUTION_CONTEXT_UPDATE_CPU_USAGE( \
             _execution_context_p, _used_cpu_cycles)                         \
         do {                                                                \
             DBG_ASSERT(                                                     \
@@ -598,6 +601,10 @@ extern struct McRTOS *const g_McRTOS_p;
             }                                                               \
         } while (0)
 
+#else
+#   define RTOS_EXECUTION_CONTEXT_UPDATE_CPU_USAGE( \
+            _execution_context_p, _used_cpu_cycles)
+#endif
 
 #define RTOS_THREAD_QUEUE_NODE_GET_THREAD(_glist_node_p) \
         GLIST_NODE_ENTRY(_glist_node_p, struct rtos_thread, thr_list_node)

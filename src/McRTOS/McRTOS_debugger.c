@@ -585,19 +585,14 @@ debug_dump_micro_trace_buffer(void)
 
     micro_trace_get_cursor(&mtb_cursor_p, &mtb_cursor_wrapped);
 
-    if (mtb_cursor_p <= &g_micro_trace_buffer.mtb_low_border_marker ||
-        mtb_cursor_p >= &g_micro_trace_buffer.mtb_high_border_marker ||
+    if (mtb_cursor_p < g_micro_trace_buffer ||
+        mtb_cursor_p >=
+            &g_micro_trace_buffer[MICRO_TRACE_BUFFER_NUM_ENTRIES] ||
         (uintptr_t)mtb_cursor_p % sizeof(uint64_t) != 0) {
         debug_printf("*** Error: Invalid mtb_cursor_p: %#p\n", mtb_cursor_p);
     }
 
-    if (g_micro_trace_buffer.mtb_low_border_marker != MICRO_TRACE_BUFFER_BORDER_MARKER ||
-        g_micro_trace_buffer.mtb_high_border_marker != MICRO_TRACE_BUFFER_BORDER_MARKER) {
-        debug_printf("*** Error: MTB buffer overrun\n"); 
-    }
-
-    uint32_t next_entry_to_fill =
-        mtb_cursor_p - g_micro_trace_buffer.mtb_buffer;
+    uint32_t next_entry_to_fill = mtb_cursor_p - g_micro_trace_buffer;
 
     debug_printf(
         "Hardware micro trace buffer (next entry to fill %u):\n",
@@ -606,14 +601,14 @@ debug_dump_micro_trace_buffer(void)
     uint32_t num_entries;
 
     if (mtb_cursor_wrapped) {
-        num_entries = ARRAY_SIZE(g_micro_trace_buffer.mtb_buffer);
+        num_entries = MICRO_TRACE_BUFFER_NUM_ENTRIES;
     } else {
         num_entries = next_entry_to_fill;
     }
 
     for (uint32_t i = 0; i < num_entries; i ++) {
-        uint32_t source_addr = (uint32_t)g_micro_trace_buffer.mtb_buffer[i];
-        uint32_t dest_addr = (uint32_t)(g_micro_trace_buffer.mtb_buffer[i] >> 32);
+        uint32_t source_addr = (uint32_t)g_micro_trace_buffer[i];
+        uint32_t dest_addr = (uint32_t)(g_micro_trace_buffer[i] >> 32);
 
         debug_printf(
             "\t%3u: %#p (A bit: %x) -> %#p (S bit: %x)\n", i,
