@@ -1976,10 +1976,6 @@ kl25_tpm_set_duty_cycle(
     pwm_channel_t pwm_channel,
     pwm_duty_cycle_us_t pwm_duty_cycle_us)
 {
-    //???
-    DEBUG_PRINTF("tpm_device: %s, channel: %u, duty cycle: %u us\n",
-        tpm_device_p->tpm_name_p, pwm_channel, pwm_duty_cycle_us);
-    //???
     FDC_ASSERT(
         tpm_device_p->tpm_signature == TPM_DEVICE_SIGNATURE,
         tpm_device_p->tpm_signature, tpm_device_p);
@@ -2015,7 +2011,8 @@ kl25_tpm_set_duty_cycle(
     uint32_t tmp = tpm_mod_reg_value * pwm_duty_cycle_us;
    
     FDC_ASSERT(
-        tmp >= tpm_mod_reg_value, tmp, tpm_mod_reg_value);
+        tmp >= tpm_mod_reg_value || pwm_duty_cycle_us == 0,
+        tmp, tpm_mod_reg_value);
 
     uint32_t reg_value = tmp / pwm_period_us;
 

@@ -41,6 +41,18 @@
 #define TFC_STEERING_SERVO_MAX_DUTY_CYCLE_US    UINT32_C(2000)
 
 /**
+ * Steering servo off duty cycle in microseconds 
+ * (wheels turned left)
+ */
+#define TFC_STEERING_SERVO_OFF_DUTY_CYCLE_US    UINT32_C(0)
+
+/**
+ * Steering servo "wheels straight" duty cycle in microseconds
+ */
+#define TFC_STEERING_SERVO_STRAIGHT_DUTY_CYCLE_US \
+        TFC_STEERING_SERVO_MIDDLE_DUTY_CYCLE_US
+
+/**
  * Wheel motor PWM overflow frequency in Hz
  * (PWM period: 200 us)
  */
@@ -63,6 +75,12 @@
  * (limit for wheel speed going forward)
  */
 #define TFC_WHEEL_MOTOR_MAX_DUTY_CYCLE_US    UINT32_C(200)
+
+/**
+ * Wheel motor stopped duty cycle in microseconds
+ */
+#define TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US \
+        TFC_WHEEL_MOTOR_MIDDLE_DUTY_CYCLE_US
 
 void tfc_board_init(void);
 

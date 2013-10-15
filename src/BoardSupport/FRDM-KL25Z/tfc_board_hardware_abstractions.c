@@ -85,7 +85,7 @@ const struct tpm_device g_tpm_devices[] =
         .tpm_clock_freq_hz = CPU_CLOCK_FREQ_IN_HZ / 2,
         .tpm_clock_prescale = 0, /* Divide by 1 */
         .tpm_overflow_freq_hz = TFC_WHEEL_MOTOR_TPM_OVERFLOW_FREQ_HZ,
-        .tpm_initial_duty_cycle_us = TFC_WHEEL_MOTOR_MIDDLE_DUTY_CYCLE_US,
+        .tpm_initial_duty_cycle_us = TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US,
         .tpm_rtos_interrupt_params = {
             .irp_name_p = "TPM0 Interrupt",
             .irp_isr_function_p = kl25_tpm0_isr,
@@ -107,10 +107,17 @@ const struct tpm_device g_tpm_devices[] =
                 .tpm_mmio_pcr_p = &PORTB_PCR0, /* Servo Channel 0 */
                 .tpm_mmio_CnSC_value = TPM_CnSC_MSB_MASK | TPM_CnSC_ELSB_MASK
             },
+#           if 0
             [1] = {
-                .tpm_mmio_pcr_p = NULL, //??? &PORTB_PCR1, /* Servo Channel 1 */
-                //??? .tpm_mmio_CnSC_value = TPM_CnSC_MSB_MASK | TPM_CnSC_ELSB_MASK
+                .tpm_mmio_pcr_p = &PORTB_PCR1, /* Servo Channel 1 */
+                .tpm_mmio_CnSC_value = TPM_CnSC_MSB_MASK | TPM_CnSC_ELSB_MASK
             },
+#           else
+            [1] = {
+                .tpm_mmio_pcr_p = NULL,
+            },
+#           endif
+
             [2] = {
                 .tpm_mmio_pcr_p = NULL,
             },
@@ -129,7 +136,7 @@ const struct tpm_device g_tpm_devices[] =
         .tpm_clock_freq_hz = CPU_CLOCK_FREQ_IN_HZ / 2,
         .tpm_clock_prescale = 6, /* Divide by 64 */
         .tpm_overflow_freq_hz = TFC_STEERING_SERVO_TPM_OVERFLOW_FREQ_HZ,
-        .tpm_initial_duty_cycle_us = TFC_STEERING_SERVO_MIDDLE_DUTY_CYCLE_US,
+        .tpm_initial_duty_cycle_us = TFC_STEERING_SERVO_OFF_DUTY_CYCLE_US,
         .tpm_rtos_interrupt_params = {
             .irp_name_p = "TPM1 Interrupt",
             .irp_isr_function_p = kl25_tpm1_isr,
