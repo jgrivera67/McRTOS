@@ -1,5 +1,5 @@
 /**
- * @file tfc_board__hardware_abstractions.c
+ * @file tfc_board_hardware_abstractions.c
  *
  * Hardware abstraction layer for the TFC add-on board
  *
@@ -17,10 +17,126 @@
 
 TODO("Remove these pragmas")
 #pragma GCC diagnostic ignored "-Wunused-function"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 
-static void tfc_gpio_init(void);
+#define TFC_NUM_BATTERY_LEDS    4
+#define TFC_NUM_DIP_SWITCHES    4
+#define TFC_NUM_PUSH_BUTTONS    2
+#define TFC_NUM_CAMERA_PIXELS   128
+
+#define TFC_CAMERA_SI_DELAY     50
+#define TFC_CAMERA_CLK_DELAY    50
+
+/*
+ * KL25 GPIO PORT B Pins
+ */
+#define TFC_BATTERY_LEDS_FIRST_PIN_INDEX    8
+
+/*
+ * KL25 GPIO PORT C Pins
+ */
+#define TFC_PUSH_BUTTON_SW1_PIN_INDEX 13
+#define TFC_PUSH_BUTTON_SW2_PIN_INDEX 17
+
+/*
+ * KL25 GPIO PORT D Pins
+ */
+
+#define TFC_CAMERA_AO0_PIN_INDEX    5
+#define TFC_CAMERA_AO1_PIN_INDEX    6
+#define TFC_CAMERA_SI_PIN_INDEX     7
+
+/*
+ * KL25 GPIO PORT E Pins
+ */
+
+#define TFC_CAMERA_CLK_PIN_INDEX            1
+#define TFC_DIP_SWITCHES_FIRST_PIN_INDEX    2
+#define TFC_HBRIDGE_FAULT_PIN_INDEX         20
+#define TFC_HBRIDGE_ENABLE_PIN_INDEX        21
+
+/*
+ * ADC channels
+ */
+#define TFC_BATTERY_SENSE_CHANNEL	4
+#define TFC_LINESCAN_0_ADC_CHANNEL	6
+#define TFC_LINESCAN_1_ADC_CHANNEL	7
+#define TFC_POT_1_ADC_CHANNEL		12
+#define TFC_POT_0_ADC_CHANNEL		13
+
+/**
+ * Steering servo PWM overflow frequency in Hz
+ * (PWM period: 20 ms)
+ */
+#define TFC_STEERING_SERVO_TPM_OVERFLOW_FREQ_HZ UINT16_C(50)
+
+/**
+ * Steering servo minimum duty cycle in microseconds
+ * (limit for steering to the left)
+ */
+#define TFC_STEERING_SERVO_MIN_DUTY_CYCLE_US    UINT32_C(1000)
+
+/**
+ * Steering servo middle duty cycle in microseconds
+ * (for center position - wheels straight)
+ */
+#define TFC_STEERING_SERVO_MIDDLE_DUTY_CYCLE_US   UINT32_C(1500)
+
+/**
+ * Steering servo maximum duty cycle in microseconds
+ * (limit for steering to the right)
+ */
+#define TFC_STEERING_SERVO_MAX_DUTY_CYCLE_US    UINT32_C(2000)
+
+/**
+ * Steering servo off duty cycle in microseconds 
+ * (wheels turned left)
+ */
+#define TFC_STEERING_SERVO_OFF_DUTY_CYCLE_US    UINT32_C(0)
+
+/**
+ * Steering servo "wheels straight" duty cycle in microseconds
+ */
+#define TFC_STEERING_SERVO_STRAIGHT_DUTY_CYCLE_US \
+        TFC_STEERING_SERVO_MIDDLE_DUTY_CYCLE_US
+
+/**
+ * Wheel motor PWM overflow frequency in Hz
+ * (PWM period: 200 us)
+ */
+#define TFC_WHEEL_MOTOR_TPM_OVERFLOW_FREQ_HZ UINT16_C(5000)
+
+/**
+ * Wheel motor minimum duty cycle in microseconds
+ * (limit for wheel speed going backwards)
+ */
+#define TFC_WHEEL_MOTOR_MIN_DUTY_CYCLE_US   UINT32_C(0)
+
+/**
+ * Wheel motor middle duty cycle in microseconds
+ * (for center position - wheel stopped)
+ */
+#define TFC_WHEEL_MOTOR_MIDDLE_DUTY_CYCLE_US    UINT32_C(100)
+
+/**
+ * Wheel motor maximum duty cycle in microseconds
+ * (limit for wheel speed going forward)
+ */
+#define TFC_WHEEL_MOTOR_MAX_DUTY_CYCLE_US    UINT32_C(200)
+
+/**
+ * Wheel motor stopped duty cycle in microseconds
+ */
+#define TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US \
+        TFC_WHEEL_MOTOR_MIDDLE_DUTY_CYCLE_US
+
 static void tfc_steering_servo_init(void);
 static void tfc_wheel_motors_init(void);
+static void tfc_camera_init(void);
+static void tfc_battery_sensor_init(void);
+static void tfc_trimpots_init(void);
+static void tfc_push_buttons_init(void);
+static void tfc_dip_switches_init(void);
 
 /**
  * Pointer to the McRTOS interrupt objects for the TPM interrupts.
@@ -166,87 +282,244 @@ static const struct tpm_device *g_tfc_motors_pwm_device_p = &g_tpm_devices[0];
  */
 static const struct tpm_device *g_tfc_steering_servo_pwm_device_p = &g_tpm_devices[1];
 
+/*
+ *  A/D converter
+ */
+
+/**
+ * McRTOS interrupt object for the A/D converter interrupts
+ */
+struct rtos_interrupt *g_rtos_interrupt_adc0_p = NULL;
+
+/**
+ * Global non-const structure for A/D converter device
+ * (allocated in SRAM space)
+ */
+static struct adc_device_var g_adc_device_var = {
+    .ad_initialized = false,
+    .ad_adc_channels = {
+        [TFC_BATTERY_SENSE_CHANNEL] = {
+            .adc_mux_selector = ADC_MUX_SIDE_B
+        },
+
+        [TFC_LINESCAN_0_ADC_CHANNEL] = {
+            .adc_mux_selector = ADC_MUX_SIDE_B
+        },
+
+        [TFC_LINESCAN_1_ADC_CHANNEL] = {
+            .adc_mux_selector = ADC_MUX_SIDE_B
+        },
+
+        [TFC_POT_1_ADC_CHANNEL] = {
+            .adc_mux_selector = ADC_MUX_SIDE_A
+        },
+
+        [TFC_POT_0_ADC_CHANNEL] = {
+            .adc_mux_selector = ADC_MUX_SIDE_A
+        },
+    }
+
+};
+
+/**
+ * Global const structure for the A/D converter device
+ * (allocated in flash space)
+ */
+static const struct adc_device g_adc0_device = {
+    .ad_signature = ADC_DEVICE_SIGNATURE,
+    .ad_var_p = &g_adc_device_var,
+    .ad_mmio_registers_p = ADC0_BASE_PTR, 
+    .ad_rtos_interrupt_params = {
+        .irp_name_p = "ADC Interrupt",
+        .irp_isr_function_p = kl25_adc0_isr,
+        .irp_arg_p = (void *)&g_adc0_device,
+        .irp_channel = VECTOR_NUMBER_TO_IRQ_NUMBER(INT_ADC0),
+        .irp_priority = ADC_INTERRUPT_PRIORITY,
+        .irp_cpu_id = 0,
+    },
+
+    .ad_rtos_interrupt_pp = &g_rtos_interrupt_adc0_p,
+
+    .ad_mutex_name = "ADC0 mutex",
+    .ad_channel_condvar_name = "ADC0 channel condvar",
+};
+
+const struct adc_device *const g_adc0_device_p = &g_adc0_device;
+
+/**
+ * TFC H-Bridge Enable pin for wheel motors (KL25's pin PTE21)
+ */
+static struct pin_config_info g_tfc_hbridge_enable_pin =
+    PIN_COFIG_INFO_INITIALIZER(
+        TFC_HBRIDGE_ENABLE_PIN_INDEX,
+        PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK,
+        true,
+        PORTE_BASE_PTR,
+        PTE_BASE_PTR);
+
+/**
+ * TFC H-Bridge Fault pin for wheel motors (KL25's pin PTE20)
+ */
+static struct pin_config_info g_tfc_hbridge_fault_pin =
+    PIN_COFIG_INFO_INITIALIZER(
+        TFC_HBRIDGE_FAULT_PIN_INDEX,
+        PORT_PCR_MUX(1),
+        true,
+        PORTE_BASE_PTR,
+        PTE_BASE_PTR);
+
+/**
+ * TFC camera SI pin (KL25's pin PTD7)
+ */
+static struct pin_config_info g_tfc_camera_si_pin =
+    PIN_COFIG_INFO_INITIALIZER(
+        TFC_CAMERA_SI_PIN_INDEX,
+        PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK,
+        true,
+        PORTD_BASE_PTR,
+        PTD_BASE_PTR);
+
+/**
+ * TFC camera CLK pin (KL25's pin PTE1)
+ */
+static struct pin_config_info g_tfc_camera_clk_pin =
+    PIN_COFIG_INFO_INITIALIZER(
+        TFC_CAMERA_CLK_PIN_INDEX,
+        PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK,
+        true,
+        PORTE_BASE_PTR,
+        PTE_BASE_PTR);
+
+/**
+ * TFC camera AO0 pin (KL25's pin PTD5)
+ */
+static struct pin_config_info g_tfc_camera_ao0_pin =
+    PIN_COFIG_INFO_INITIALIZER(
+        TFC_CAMERA_AO0_PIN_INDEX,
+        PORT_PCR_MUX(0),
+        true,
+        PORTD_BASE_PTR,
+        PTD_BASE_PTR);
+
+#if 0
+/**
+ * TFC camera AO1 pin (KL25's pin PTD6)
+ */
+static struct pin_config_info g_tfc_camera_ao1_pin =
+    PIN_COFIG_INFO_INITIALIZER(
+        TFC_CAMERA_AO1_PIN_INDEX,
+        PORT_PCR_MUX(0),
+        true,
+        PORTD_BASE_PTR,
+        PTD_BASE_PTR);
+#endif
+
+/**
+ * TFC Battery LEDs pins (KL25's pins PTB8 - PTB11)
+ */
+static struct pin_config_info g_tfc_battery_led_pins[] = {
+    [0] = PIN_COFIG_INFO_INITIALIZER(
+            TFC_BATTERY_LEDS_FIRST_PIN_INDEX,
+            PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK,
+            true,
+            PORTB_BASE_PTR,
+            PTB_BASE_PTR),
+    [1] = PIN_COFIG_INFO_INITIALIZER(
+            TFC_BATTERY_LEDS_FIRST_PIN_INDEX + 1,
+            PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK,
+            true,
+            PORTB_BASE_PTR,
+            PTB_BASE_PTR),
+    [2] = PIN_COFIG_INFO_INITIALIZER(
+            TFC_BATTERY_LEDS_FIRST_PIN_INDEX + 2,
+            PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK,
+            true,
+            PORTB_BASE_PTR,
+            PTB_BASE_PTR),
+    [3] = PIN_COFIG_INFO_INITIALIZER(
+            TFC_BATTERY_LEDS_FIRST_PIN_INDEX + 3,
+            PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK,
+            true,
+            PORTB_BASE_PTR,
+            PTB_BASE_PTR)
+};
+
+C_ASSERT(ARRAY_SIZE(g_tfc_battery_led_pins) == TFC_NUM_BATTERY_LEDS);
+
+/**
+ * TFC DIP switches pins (KL25's pins PTE2 - PTE5)
+ */
+static struct pin_config_info g_tfc_dip_switch_pins[] = {
+    [0] = PIN_COFIG_INFO_INITIALIZER(
+            TFC_DIP_SWITCHES_FIRST_PIN_INDEX,
+            PORT_PCR_MUX(1),
+            true,
+            PORTE_BASE_PTR,
+            PTE_BASE_PTR),
+    [1] = PIN_COFIG_INFO_INITIALIZER(
+            TFC_DIP_SWITCHES_FIRST_PIN_INDEX + 1,
+            PORT_PCR_MUX(1),
+            true,
+            PORTE_BASE_PTR,
+            PTE_BASE_PTR),
+    [2] = PIN_COFIG_INFO_INITIALIZER(
+            TFC_DIP_SWITCHES_FIRST_PIN_INDEX + 2,
+            PORT_PCR_MUX(1),
+            true,
+            PORTE_BASE_PTR,
+            PTE_BASE_PTR),
+    [3] = PIN_COFIG_INFO_INITIALIZER(
+            TFC_DIP_SWITCHES_FIRST_PIN_INDEX + 3,
+            PORT_PCR_MUX(1),
+            true,
+            PORTE_BASE_PTR,
+            PTE_BASE_PTR)
+};
+
+C_ASSERT(ARRAY_SIZE(g_tfc_dip_switch_pins) == TFC_NUM_DIP_SWITCHES);
+
+/**
+ * TFC push buttons pins (KL25's pins PTC13, PTE17)
+ */
+static struct pin_config_info g_tfc_push_button_pins[] = {
+    [0] = PIN_COFIG_INFO_INITIALIZER(
+            TFC_PUSH_BUTTON_SW1_PIN_INDEX,
+            PORT_PCR_MUX(1),
+            true,
+            PORTC_BASE_PTR,
+            PTC_BASE_PTR),
+    [1] = PIN_COFIG_INFO_INITIALIZER(
+            TFC_PUSH_BUTTON_SW2_PIN_INDEX,
+            PORT_PCR_MUX(1),
+            true,
+            PORTC_BASE_PTR,
+            PTC_BASE_PTR)
+};
+
+C_ASSERT(ARRAY_SIZE(g_tfc_push_button_pins) == TFC_NUM_PUSH_BUTTONS);
+
 void
 tfc_board_init(void)
 {
-    tfc_gpio_init();
+    init_adc(g_adc0_device_p);
     tfc_steering_servo_init();
     tfc_wheel_motors_init();
+    tfc_camera_init();
+    tfc_trimpots_init();
+    tfc_push_buttons_init();
+    tfc_dip_switches_init();
+    tfc_battery_sensor_init();
 }
 
-/* 
- * Set I/O for H-BRIDGE enables, switches and LEDs for the TFC add-on board
- */ 
-static void
-tfc_gpio_init(void)
+
+void
+tfc_board_stop(void)
 {
-        uint32_t reg_value;
-
-	/*
-         * Setup Pins as GPIO
-         */
-	write_32bit_mmio_register(
-            &PORTE_PCR21, PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK);
-
-        write_32bit_mmio_register(
-	    &PORTE_PCR20, PORT_PCR_MUX(1));
-	
-	/*
-         * Port for Pushbuttons
-         */ 
-        write_32bit_mmio_register(
-	    &PORTC_PCR13, PORT_PCR_MUX(1));
-
-        write_32bit_mmio_register(
-            &PORTC_PCR17, PORT_PCR_MUX(1));
-	
-	/*
-         * Ports for DIP Switches
-         */ 
-        write_32bit_mmio_register(
-	    &PORTE_PCR2, PORT_PCR_MUX(1)); 
-
-        write_32bit_mmio_register(
-	    &PORTE_PCR3, PORT_PCR_MUX(1));
-
-        write_32bit_mmio_register(
-	    &PORTE_PCR4, PORT_PCR_MUX(1));
-
-        write_32bit_mmio_register(
-	    &PORTE_PCR5, PORT_PCR_MUX(1));
-	
-	/*
-         * Ports for LEDs
-         */ 
-        write_32bit_mmio_register(
-	    &PORTB_PCR8, PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK);
-
-        write_32bit_mmio_register(
-	    &PORTB_PCR9, PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK);
-
-        write_32bit_mmio_register(
-	    &PORTB_PCR10, PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK);
-
-        write_32bit_mmio_register(
-	    &PORTB_PCR11, PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK);   
-	
-	/*
-         * Setup the output pins
-         */
-        reg_value = read_32bit_mmio_register(&GPIOE_PDDR);
-	reg_value |= TFC_HBRIDGE_EN_LOC;
-        write_32bit_mmio_register(&GPIOE_PDDR, reg_value);
-
-        reg_value = read_32bit_mmio_register(&GPIOB_PDDR);
-	reg_value |= TFC_BAT_LED0_LOC | TFC_BAT_LED1_LOC | TFC_BAT_LED2_LOC |
-                     TFC_BAT_LED3_LOC;
-        write_32bit_mmio_register(&GPIOB_PDDR, reg_value);
-
-        /*
-         * TFC_HBRIDGE_DISABLE:
-         */ 
-        write_32bit_mmio_register(
-            &GPIOE_PCOR, TFC_HBRIDGE_EN_LOC);
+    tfc_steering_servo_set(
+        TFC_STEERING_SERVO_OFF_DUTY_CYCLE_US);
+    tfc_wheel_motors_set(
+        TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US,
+        TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US);
 }
 
 
@@ -276,6 +549,17 @@ tfc_steering_servo_set(
 static void
 tfc_wheel_motors_init(void)
 {
+    /*
+     * Setup GPIO pins for wheel motor signals:
+     */
+    configure_pin(&g_tfc_hbridge_enable_pin, true);
+    configure_pin(&g_tfc_hbridge_fault_pin, false);
+
+    /*
+     * Disable TFC H-Bridge:
+     */
+    deactivate_output_pin(&g_tfc_hbridge_enable_pin);
+
     kl25_tpm_init(g_tfc_motors_pwm_device_p);
 }
 
@@ -312,6 +596,123 @@ tfc_wheel_motors_set(
 }
 
 
+static void
+tfc_camera_init(void) 
+{
+    /*
+     * Setup GPIO pins for camera signals:
+     */
+    configure_pin(&g_tfc_camera_si_pin, true);
+    configure_pin(&g_tfc_camera_clk_pin, true);
+    configure_pin(&g_tfc_camera_ao0_pin, false);
 
+#   if 0
+    configure_pin(&g_tfc_camera_ao1_pin, false);
+#   endif
+
+    deactivate_output_pin(&g_tfc_camera_si_pin);
+    deactivate_output_pin(&g_tfc_camera_clk_pin);
+}
+
+
+void
+tfc_camera_read(
+    _OUT_ tfc_camera_raw_pixel_t camera_raw_pixels[])
+{
+    activate_output_pin(&g_tfc_camera_si_pin);
+    delay_loop(TFC_CAMERA_SI_DELAY);
+    activate_output_pin(&g_tfc_camera_clk_pin);
+    delay_loop(TFC_CAMERA_CLK_DELAY);
+    deactivate_output_pin(&g_tfc_camera_si_pin);
+
+    for (int i = 0; i < TFC_NUM_CAMERA_PIXELS; i++) {
+        camera_raw_pixels[i] =
+            read_adc_channel(g_adc0_device_p, TFC_LINESCAN_0_ADC_CHANNEL);
+
+        deactivate_output_pin(&g_tfc_camera_clk_pin);
+        delay_loop(TFC_CAMERA_CLK_DELAY);
+        activate_output_pin(&g_tfc_camera_clk_pin);
+        //delay???
+    }
+
+    deactivate_output_pin(&g_tfc_camera_clk_pin);
+}
+
+
+static void
+tfc_trimpots_init(void) 
+{
+#if 0 // ???
+    for (int i = 0; i < TFC_NUM_TRIMPOTS; i++) {
+        configure_pin(&g_tfc_trimpot_pins[i], false);
+#endif
+}
+
+
+void
+tfc_trimpots_read(
+    _OUT_ tfc_trimpot_reading_t trimpot_readings[])
+{
+    trimpot_readings[0] = read_adc_channel(g_adc0_device_p, TFC_POT_0_ADC_CHANNEL);
+    trimpot_readings[1] = read_adc_channel(g_adc0_device_p, TFC_POT_1_ADC_CHANNEL);
+}
+
+
+static void
+tfc_battery_sensor_init(void) 
+{
+    /*
+     * Initialize battery level LEDs:
+     */
+    for (int i = 0; i < TFC_NUM_BATTERY_LEDS; i++) {
+        configure_pin(&g_tfc_battery_led_pins[i], true);
+        deactivate_output_pin(&g_tfc_battery_led_pins[i]);
+    }
+
+#if 0 // ???
+    configure_pin(&g_tfc_battery_sensor_pin, false);
+#endif
+}
+
+
+tfc_battery_reading_t
+tfc_battery_sensor_read(void) 
+{
+    return read_adc_channel(g_adc0_device_p, TFC_BATTERY_SENSE_CHANNEL);
+}
+
+
+static void
+tfc_push_buttons_init(void) 
+{
+    for (int i = 0; i < TFC_NUM_PUSH_BUTTONS; i++) {
+        configure_pin(&g_tfc_push_button_pins[i], false);
+    }
+}
+
+
+void
+tfc_push_buttons_read(
+        _OUT_ bool push_buttons[])
+{
+
+}
+
+
+static void
+tfc_dip_switches_init(void) 
+{
+    for (int i = 0; i < TFC_NUM_DIP_SWITCHES; i++) {
+        configure_pin(&g_tfc_dip_switch_pins[i], false);
+    }
+}
+
+
+void
+tfc_dip_switches_read(
+        _OUT_ bool dip_switches[])
+{
+
+}
 
 

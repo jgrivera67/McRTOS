@@ -243,11 +243,15 @@ lcd_display_greetings(void)
 void
 rtos_startup( 
     _IN_ const struct rtos_per_cpu_startup_app_configuration *rtos_app_config_p,
-    _IN_ app_hardware_init_t *app_hardware_init_p)
+    _IN_ app_hardware_init_t *app_hardware_init_p,
+    _IN_ app_hardware_stop_t *app_hardware_stop_p)
 {
     FDC_ASSERT_COMING_FROM_RESET();
     FDC_ASSERT_CPU_IS_LITTLE_ENDIAN();
-    FDC_ASSERT(rtos_app_config_p != NULL, 0, 0);
+    FDC_ASSERT_VALID_RAM_OR_ROM_POINTER(rtos_app_config_p, sizeof(uint32_t));
+    FDC_ASSERT_VALID_FUNCTION_POINTER(app_hardware_init_p);
+    FDC_ASSERT_VALID_FUNCTION_POINTER(app_hardware_stop_p);
+
 
     struct rtos_thread *rtos_thread_p;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
@@ -261,6 +265,9 @@ rtos_startup(
      */
     __disable_irq();
 #   endif
+
+    g_McRTOS_p->rts_app_hardware_init_p = app_hardware_init_p;
+    g_McRTOS_p->rts_app_hardware_stop_p = app_hardware_stop_p;
 
     rtos_init_reset_execution_context(cpu_controller_p);
 
@@ -278,7 +285,7 @@ rtos_startup(
     {
         g_McRTOS_p->rts_soc_reset_cause = soc_hardware_init();
 
-        app_hardware_init_p();
+        g_McRTOS_p->rts_app_hardware_init_p();
 
 #       ifdef _RELIABILITY_CHECKS_
         micro_trace_init();
@@ -392,6 +399,21 @@ rtos_startup(
      * We should never come here
      */
     FDC_ASSERT(false, 0, 0);
+}
+
+
+/**
+ * Reboot McRTOS by causing a software-induced SoC reset.
+ */
+void
+rtos_reboot(void)
+{
+    FDC_ASSERT_VALID_FUNCTION_POINTER(g_McRTOS_p->rts_app_hardware_stop_p);
+
+    console_printf("\nMcRTOS rebooting ...\n");
+
+    g_McRTOS_p->rts_app_hardware_stop_p();
+    soc_reset();
 }
 
 
@@ -704,7 +726,7 @@ rtos_parse_command_line(
         break;
 
     case 'r':
-        soc_reset();
+        rtos_reboot();
         /*UNREACHABLE*/
         break;
 

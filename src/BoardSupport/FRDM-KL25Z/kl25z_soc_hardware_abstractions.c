@@ -125,44 +125,6 @@ struct uart_device_var {
 };
 
 
-#if 0 // ???
-/**
- * Const fields of the A/D converter device (to be placed in flash)
- */
-struct adc_device {
-#   define ADC_DEVICE_SIGNATURE  GEN_SIGNATURE('A', '/', 'D', 'C')
-    uint32_t ad_signature;
-    lpc2478_adc_t *ad_mmio_registers_p;
-    struct rtos_interrupt_registration_params ad_rtos_interrupt_params;
-    struct rtos_interrupt **ad_rtos_interrupt_pp;
-    const char *ad_channel_condvar_names[NUM_ADC_CHANNELS];
-    struct adc_channel *ad_adc_channels_p;
-};
-
-/**
- * Non-const fields of an A/D converter channel (to be placed in SRAM)
- */
-struct adc_channel {
-    /**
-     * Condvar to signal a thread waiting for an A/D conversion
-     */
-    struct rtos_condvar adc_condvar;
-    
-    /**
-     * Last value read from the V/VREF field of the corresponding ADC channel's
-     * reg_AD0DR[] register, by the A/D conversion completion interrupt handler.
-     */
-    volatile uint16_t adc_result;
-
-    /**
-     * Boolean flag that indicates if an outstanding A/D conversion has completed
-     */
-    volatile uint8_t adc_conversion_completed;
-
-    uint8_t  adc_reserved;
-};
-#endif // ???
-
 static cpu_reset_cause_t find_reset_cause(void);
 
 static void system_clocks_init(void);
@@ -177,7 +139,7 @@ static void uart_stop(
     const struct uart_device *uart_device_p);
 
 static void
-init_adc(const struct adc_device *adc_device_p);
+kl25_adc_calibrate(const struct adc_device *adc_device_p);
 
 /* 
  * Function prototypes for dummy VIC interrupt ISRs
@@ -379,56 +341,6 @@ C_ASSERT(
 
 const struct uart_device *const g_console_serial_port_p = &g_uart_devices[0];
 
-/*
- *  A/D converter
- */
-
-/**
- * McRTOS interrupt object for the A/D converter interrupts
- */
-struct rtos_interrupt *g_rtos_interrupt_adc0_p = NULL;
-
-#if 0 // ???
-/**
- * Global const structure for the A/D converter device
- * (allocated in flash space)
- */
-static const struct adc_device g_adc0_device = {
-    .ad_signature = ADC_DEVICE_SIGNATURE,
-    .ad_mmio_registers_p = (lpc2478_adc_t *)LPC2478_ADC_BASE_ADDR,
-    .ad_rtos_interrupt_params = {
-        .irp_name_p = "ADC Interrupt",
-        .irp_isr_function_p = isr_adc,
-        .irp_arg_p = (void *)&g_adc_device,
-        .irp_channel = VIC_CHANNEL_AD0,
-        .irp_priority = VIC_VECT_PRIORITY3,
-        .irp_cpu_id = 0,
-    },
-
-    .ad_rtos_interrupt_pp = &g_rtos_interrupt_adc,
-
-#   define ADC_CONDVAR_NAME_ENTRY(_channel) \
-        [_channel] = "A/D channel " #_channel " condvar"
-
-    .ad_channel_condvar_names = {
-        ADC_CONDVAR_NAME_ENTRY(0),
-        ADC_CONDVAR_NAME_ENTRY(1),
-        ADC_CONDVAR_NAME_ENTRY(2),
-        ADC_CONDVAR_NAME_ENTRY(3),
-        ADC_CONDVAR_NAME_ENTRY(4),
-        ADC_CONDVAR_NAME_ENTRY(5),
-        ADC_CONDVAR_NAME_ENTRY(6),
-        ADC_CONDVAR_NAME_ENTRY(7),
-    },
-
-    .ad_adc_channels_p = g_adc_channels,
-};
-
-const struct adc_device *const g_adc0_device_p = &g_adc0_device;
-#else
-const struct adc_device *const g_adc0_device_p = NULL; // TODO
-#endif
-
 
 /**
  * Hardware Micro trace buffer (MTB)
@@ -477,8 +389,6 @@ soc_hardware_init(void)
     uart_putchar(g_console_serial_port_p, '\r');
     uart_putchar(g_console_serial_port_p, '\n');
 #   endif
-
-    init_adc(g_adc0_device_p);
 
     return reset_cause;
 }
@@ -574,7 +484,7 @@ system_clocks_init(void)
     /*
      * Set the system dividers:
      *
-     * NOTE: This is not relaly needed, as these are the settings at reset time.
+     * NOTE: This is not really needed, as these are the settings at reset time.
      */  
     write_32bit_mmio_register(
         &SIM_CLKDIV1,
@@ -961,6 +871,118 @@ get_cpu_clock_cycles(void)
 #endif /* _CPU_CYCLES_MEASURE_ */
 
 
+/**
+ * It configures a GPIO pin of the KL25 SoC
+ */
+void
+configure_pin(const struct pin_config_info *pin_info_p, bool is_output)
+{
+    uint32_t reg_value;
+
+    write_32bit_mmio_register(
+        &PORT_PCR_REG(pin_info_p->pin_port_base_p, pin_info_p->pin_bit_mask),
+        pin_info_p->pin_pcr_value);
+
+    if (is_output) {
+        /*
+         * Initialize pin to be de-asserted, before setting it as an
+         * output pin:
+         */ 
+        deactivate_output_pin(pin_info_p);
+
+        reg_value = read_32bit_mmio_register(
+                        &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p));
+        reg_value |= pin_info_p->pin_bit_mask;
+        write_32bit_mmio_register(
+            &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p), reg_value);
+    }
+    else
+    {
+        reg_value = read_32bit_mmio_register(
+                        &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p));
+        reg_value &= ~pin_info_p->pin_bit_mask;
+        write_32bit_mmio_register(
+            &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p), reg_value);
+    }
+}
+
+
+void
+activate_output_pin(const struct pin_config_info *pin_info_p)
+{
+#   ifdef DEBUG
+    uint32_t reg_value = read_32bit_mmio_register(
+                            &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p));
+    
+    FDC_ASSERT(
+        reg_value & pin_info_p->pin_bit_mask,
+        pin_info_p, reg_value);
+#   endif
+
+    if (pin_info_p->pin_is_active_high) {
+        write_32bit_mmio_register(
+            &GPIO_PSOR_REG(pin_info_p->pin_gpio_base_p),
+            pin_info_p->pin_bit_mask);
+    } else {
+        write_32bit_mmio_register(
+            &GPIO_PCOR_REG(pin_info_p->pin_gpio_base_p),
+            pin_info_p->pin_bit_mask);
+    }
+}
+
+
+void
+deactivate_output_pin(const struct pin_config_info *pin_info_p)
+{
+#   ifdef DEBUG
+    uint32_t reg_value = read_32bit_mmio_register(
+                            &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p));
+    
+    FDC_ASSERT(
+        reg_value & pin_info_p->pin_bit_mask,
+        pin_info_p, reg_value);
+#   endif
+
+    if (pin_info_p->pin_is_active_high) {
+        write_32bit_mmio_register(
+            &GPIO_PCOR_REG(pin_info_p->pin_gpio_base_p),
+            pin_info_p->pin_bit_mask);
+    } else {
+        write_32bit_mmio_register(
+            &GPIO_PSOR_REG(pin_info_p->pin_gpio_base_p),
+            pin_info_p->pin_bit_mask);
+    }
+}
+
+
+void
+toggle_output_pin(const struct pin_config_info *pin_info_p)
+{
+#   ifdef DEBUG
+    uint32_t reg_value = read_32bit_mmio_register(
+                            &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p));
+    
+    FDC_ASSERT(
+        reg_value & pin_info_p->pin_bit_mask,
+        pin_info_p, reg_value);
+#   endif
+
+    write_32bit_mmio_register(
+        &GPIO_PTOR_REG(pin_info_p->pin_gpio_base_p),
+        pin_info_p->pin_bit_mask);
+}
+
+
+bool
+read_input_pin(const struct pin_config_info *pin_info_p)
+{
+    uint32_t reg_value = read_32bit_mmio_register(
+        &GPIO_PDIR_REG(pin_info_p->pin_gpio_base_p));
+
+    return (reg_value & pin_info_p->pin_bit_mask) != 0;
+}
+
+
 void
 toggle_heartbeat_led(void)
 {
@@ -992,10 +1014,15 @@ uart_init(
 {
     uint32_t reg_value;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
+
+    FDC_ASSERT(
+        uart_device_p->urt_signature == UART_DEVICE_SIGNATURE,
+        uart_device_p->urt_signature, uart_device_p);
+
     struct uart_device_var *uart_var_p = uart_device_p->urt_var_p;
     UART_MemMapPtr uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
 
-    FDC_ASSERT(!uart_var_p->urt_initialized, 0, 0);
+    FDC_ASSERT(!uart_var_p->urt_initialized, uart_device_p, 0);
     FDC_ASSERT(mode == 0, mode, uart_device_p);
     FDC_ASSERT_CPU_INTERRUPTS_DISABLED();
 
@@ -1437,76 +1464,128 @@ uart_getchar_with_polling(
 }
 
 
-static void
+void
 init_adc(const struct adc_device *adc_device_p)
 {
-#if 0 // ???
     uint32_t reg_value;
 
     FDC_ASSERT(
         adc_device_p->ad_signature == ADC_DEVICE_SIGNATURE,
         adc_device_p->ad_signature, adc_device_p);
 
-    lpc2478_adc_t *adc_mmio_registers_p = adc_device_p->ad_mmio_registers_p;
+    struct adc_device_var *adc_var_p = adc_device_p->ad_var_p;
+    ADC_MemMapPtr adc_mmio_registers_p = adc_device_p->ad_mmio_registers_p;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 	
-    /*
-     * Turn on ADC power in the System Control Block
-     */
-    turn_on_power(PCONP_PCADC);
+    FDC_ASSERT(!adc_var_p->ad_initialized, adc_device_p, 0);
+    FDC_ASSERT_CPU_INTERRUPTS_DISABLED();
 
-    uint32_t adc_pclksel_freq = get_peripheral_clock_freq(0, PCLK_ADC);
+    /*
+     * Enable the Clock to the ADC Module
+     */
+    reg_value = read_32bit_mmio_register(&SIM_SCGC6);
+    reg_value |= SIM_SCGC6_ADC0_MASK;
+    write_32bit_mmio_register(&SIM_SCGC6, reg_value);
+
+    /*
+     * NOTE: For the KL25 ADC to operate properly, it must be calibrated
+     * first.
+     */
+    kl25_adc_calibrate(adc_device_p);
+
+    /*
+     * Configure ADC_CFG1 register:
+     * - ADLPC bit = 0: Normal power configuration
+     * - ADLSMP bit = 1: Long sample time
+     * - ADIV = 0x2: clock rate is (input clock)/4
+     * - MODE = 0x1:  single-ended 12-bit conversion
+     * - ADICLK = 0x0: Bus clock 
+     */
+    reg_value = ADC_CFG1_ADLSMP_MASK;
+    SET_BIT_FIELD(
+        reg_value, ADC_CFG1_ADIV_MASK, ADC_CFG1_ADIV_SHIFT, 0x2);
+    SET_BIT_FIELD(
+        reg_value, ADC_CFG1_MODE_MASK, ADC_CFG1_MODE_SHIFT, 0x1);
+    SET_BIT_FIELD(
+        reg_value, ADC_CFG1_ADICLK_MASK, ADC_CFG1_ADICLK_SHIFT, 0x0);
+    write_32bit_mmio_register(
+        &ADC_CFG1_REG(adc_mmio_registers_p), reg_value);
+
+    /*
+     * Configure ADC_CFG2 register:
+     * - MUXSEL bit = 0: ADxxa channels are selected (side A of the mux)
+     * - ADACKEN bit = 0: Asynchronous clock output disabled
+     * - ADHSC bit = 1: High-speed conversion sequence selected with 2
+     *   additional ADCK cycles to total conversion time
+     * - ADLSTS = 0x0: Default longest sample time; 20 extra ADCK cycles;
+     *   24 ADCK cycles total. 
+     */
+    reg_value = ADC_CFG2_ADHSC_MASK;
+    SET_BIT_FIELD(
+        reg_value, ADC_CFG2_ADLSTS_MASK, ADC_CFG2_ADLSTS_SHIFT, 0x0);
+    write_32bit_mmio_register(
+        &ADC_CFG2_REG(adc_mmio_registers_p), reg_value);
+
+    /*
+     * Configure ADC_SC1A register:
+     * - AIEN bit = 1: Conversion complete interrupt is enabled.
+     * - DIFF bit = 0: Single-ended conversions and input channels are selected.
+     * - ADCH = 0x1F: ADC conversion turned off
+     */ 
+    reg_value = ADC_SC1_AIEN_MASK;
+    SET_BIT_FIELD(
+        reg_value, ADC_SC1_ADCH_MASK, ADC_SC1_ADCH_SHIFT, 0x1F);
+    write_32bit_mmio_register(
+        &ADC_SC1A_REG(adc_mmio_registers_p), reg_value);
+
+    /*
+     * Configure ADC_SC2 register:
+     * - ADTRG bit = 0: Software trigger selected.
+     * - ACFE bit = 0: Compare function disabled.
+     * - ACREN bit = 0: Range function disabled.
+     * - DMAEN bit = 0: DMA is disabled.
+     * - REFSEL = 0x0: Default voltage reference pin pair, that is, external
+     *   pins VREFH and VREFL.
+     */
+    reg_value = 0x0;
+    write_32bit_mmio_register(
+        &ADC_SC2_REG(adc_mmio_registers_p), reg_value);
     
-    FDC_ASSERT(adc_pclksel_freq != 0, 0, 0);
+    /*
+     * Configure ADC_SC3 register:
+     * CAL bit = 0: calibration disabled
+     * ADCO bit = 0: 0 One conversion
+     * AVGE bit = 0: Hardware average function disabled.
+     */
+    reg_value = 0x0;
+    write_32bit_mmio_register(
+        &ADC_SC3_REG(adc_mmio_registers_p), reg_value);
 
     /*
-     *  Calculate value for the ADC clock divider:
-     *
-     * The APB clock (PCLK) is divided by this value plus one to produce the
-     * clock for the A/D converter, which should be less than or equal to 4.5 MHz.
-     *
-     * adc_pclksel_freq / (adc_clock_divider + 1) = ADC_CLOCK_FREQUENCY
-     *
-     * So,
-     * adc_clock_divider = (adc_pclk_freq / ADC_CLOCK_FREQUENCY) - 1
-     */
-    uint8_t adc_clock_divider = (adc_pclksel_freq / ADC_CLOCK_FREQUENCY) - 1;
-  
-    /*
-     * Initialize of the AD0CR register:
+     * McRTOS-related initialization of the ADC device:
      */
 
-    reg_value = read_32bit_mmio_register(
-                    &adc_mmio_registers_p->reg_AD0CR);
-
-    reg_value &= ~AD0CR_BURST_MASK;
-    CLEAR_BIT_FIELD(reg_value, AD0CR_SEL_MASK);
-    CLEAR_BIT_FIELD(reg_value, AD0CR_START_MASK);
-    SET_BIT_FIELD(reg_value, AD0CR_CLKDIV_MASK, AD0CR_CLKDIV_SHIFT,
-                  adc_clock_divider);
-    reg_value |= AD0CR_PDN_MASK;
-
-    write_reg_AD0CR(&adc_mmio_registers_p->reg_AD0CR, reg_value);
-
+    rtos_k_mutex_init(
+        adc_device_p->ad_mutex_name,
+        cpu_id,
+        &adc_var_p->ad_mutex);
+    
     for (uint8_t i = 0; i < NUM_ADC_CHANNELS; i ++)
     {
-        struct adc_channel *adc_channel_p = &adc_device_p->ad_adc_channels_p[i];
+        struct adc_channel *adc_channel_p = &adc_var_p->ad_adc_channels[i];
 
         rtos_k_condvar_init(
-            adc_device_p->ad_channel_condvar_names[i],
+            adc_device_p->ad_channel_condvar_name,
             cpu_id,
             &adc_channel_p->adc_condvar);
 
         adc_channel_p->adc_conversion_completed = false;
     }
 
-    /*
-     * Disable interrupts in the ARM core
-     */
-    cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
+    adc_var_p->ad_active_adc_channel = ADC_CHANNEL_NONE;
 
     /*
-     * Install ISR before enabling interrupt source:
+     * Register McRTOS interrupt handler
      */
     rtos_k_register_interrupt(
         &adc_device_p->ad_rtos_interrupt_params,
@@ -1516,219 +1595,207 @@ init_adc(const struct adc_device *adc_device_p)
         *adc_device_p->ad_rtos_interrupt_pp != NULL,
         adc_device_p->ad_rtos_interrupt_pp, cpu_id);
 
-    /*
-     * Enable a separate interrupt for each A/D channel in the A/D converter:
-     */
-    write_32bit_mmio_register(
-        &adc_mmio_registers_p->reg_AD0INTEN,
-        AD0INTEN_ADINTEN_MASK);
-
-    /*
-     * Restore previous interrupt masking in the ARM core
-     */
-    rtos_k_restore_cpu_interrupts(cpu_status_register);
-
-#else
-    FDC_ASSERT(adc_device_p == NULL, adc_device_p, 0); // TODO
-#endif
+    adc_var_p->ad_initialized = true;
 }
 
 
+static void
+kl25_adc_calibrate(const struct adc_device *adc_device_p)
+{
+    uint32_t reg_value;
+    ADC_MemMapPtr adc_mmio_registers_p = adc_device_p->ad_mmio_registers_p;
+
+    /*
+     * Configure ADC_CFG1 register:
+     * - ADLPC bit = 0: Normal power configuration
+     * - ADLSMP bit = 1: Long sample time
+     * - ADIV = 0x3: clock rate is (input clock)/8 = 3MHz (<= 4MHz)
+     * - MODE = 0x1:  single-ended 12-bit conversion
+     * - ADICLK = 0x0: Bus clock 
+     */
+    reg_value = ADC_CFG1_ADLSMP_MASK;
+    SET_BIT_FIELD(
+        reg_value, ADC_CFG1_ADIV_MASK, ADC_CFG1_ADIV_SHIFT, 0x3);
+    SET_BIT_FIELD(
+        reg_value, ADC_CFG1_MODE_MASK, ADC_CFG1_MODE_SHIFT, 0x1);
+    SET_BIT_FIELD(
+        reg_value, ADC_CFG1_ADICLK_MASK, ADC_CFG1_ADICLK_SHIFT, 0x0);
+    write_32bit_mmio_register(
+        &ADC_CFG1_REG(adc_mmio_registers_p), reg_value);
+
+    /*
+     * Configure ADC_CFG2 register:
+     * - MUXSEL bit = 0: ADxxa channels are selected
+     * - ADACKEN bit = 0: Asynchronous clock output disabled
+     * - ADHSC bit = 1: High-speed conversion sequence selected with 2
+     *   additional ADCK cycles to total conversion time
+     * - ADLSTS = 0x0: Default longest sample time; 20 extra ADCK cycles;
+     *   24 ADCK cycles total. 
+     */
+    reg_value = ADC_CFG2_ADHSC_MASK;
+    SET_BIT_FIELD(
+        reg_value, ADC_CFG2_ADLSTS_MASK, ADC_CFG2_ADLSTS_SHIFT, 0x0);
+    write_32bit_mmio_register(
+        &ADC_CFG2_REG(adc_mmio_registers_p), reg_value);
+
+    /*
+     * Configure ADC_SC1A register:
+     * - AIEN bit = 0: Conversion complete interrupt is enabled.
+     * - DIFF bit = 0: Single-ended conversions and input channels are selected.
+     * - ADC_SC1_ADCH_MASK = 0x1F: ADC turned off
+     */ 
+    reg_value = 0x0;
+    SET_BIT_FIELD(
+        reg_value, ADC_SC1_ADCH_MASK, ADC_SC1_ADCH_SHIFT, 0x1F);
+    write_32bit_mmio_register(
+        &ADC_SC1A_REG(adc_mmio_registers_p), reg_value);
+
+    /*
+     * Configure ADC_SC2 register:
+     * - ADTRG bit = 0: Software trigger selected.
+     * - ACFE bit = 0: Compare function disabled.
+     * - ACREN bit = 0: Range function disabled.
+     * - DMAEN bit = 0: DMA is disabled.
+     * - REFSEL = 0x0: Default voltage reference pin pair, that is, external
+     *   pins VREFH and VREFL.
+     */
+    write_32bit_mmio_register(
+        &ADC_SC2_REG(adc_mmio_registers_p), 0x0);
+    
+    /*
+     * Configure ADC_SC3 register:
+     * - CAL bit = 1: calibration enabled
+     * - ADCO bit = 0: 0 One conversion
+     * - AVGE bit = 1: Hardware average function enabled.
+     * - AVGS = 0x3: 32 samples averaged.
+     */
+    reg_value = (ADC_SC3_CAL_MASK | ADC_SC3_AVGE_MASK);
+    SET_BIT_FIELD(
+        reg_value, ADC_SC3_AVGS_MASK, ADC_SC3_AVGS_SHIFT, 0x3);
+    write_32bit_mmio_register(
+        &ADC_SC3_REG(adc_mmio_registers_p), reg_value);
+
+    /*
+     * Wait for calibration to be completed:
+     */
+    do {
+        reg_value = read_32bit_mmio_register(
+                         &ADC_SC1A_REG(adc_mmio_registers_p));
+    } while ((reg_value & ADC_SC1_COCO_MASK) == 0); 
+  
+    reg_value = read_32bit_mmio_register(
+                    &ADC_SC3_REG(adc_mmio_registers_p));
+    
+    if (reg_value & ADC_SC3_CALF_MASK) {
+        fdc_error_t fdc_error =
+            CAPTURE_FDC_ERROR("ADC calibration failed", 0, 0);
+
+        fatal_error_handler(fdc_error);
+    }
+    
+    /*
+     * Calculate plus-side calibration:
+     */
+    uint16_t calibration_var = 0x0;
+    calibration_var +=
+        read_32bit_mmio_register(&ADC_CLP0_REG(adc_mmio_registers_p)); 
+    calibration_var +=
+        read_32bit_mmio_register(&ADC_CLP1_REG(adc_mmio_registers_p)); 
+    calibration_var +=
+        read_32bit_mmio_register(&ADC_CLP2_REG(adc_mmio_registers_p)); 
+    calibration_var +=
+        read_32bit_mmio_register(&ADC_CLP3_REG(adc_mmio_registers_p)); 
+    calibration_var +=
+        read_32bit_mmio_register(&ADC_CLP4_REG(adc_mmio_registers_p)); 
+    calibration_var +=
+        read_32bit_mmio_register(&ADC_CLPS_REG(adc_mmio_registers_p)); 
+    calibration_var /= 2;
+    calibration_var |= BIT(15); /* Set MSB */
+
+    write_32bit_mmio_register(
+        &ADC_PG_REG(adc_mmio_registers_p), (uint32_t)calibration_var);
+
+    /*
+     * Calculate minus-side calibration:
+     */
+    calibration_var = 0x0;
+    calibration_var +=
+        read_32bit_mmio_register(&ADC_CLM0_REG(adc_mmio_registers_p)); 
+    calibration_var +=
+        read_32bit_mmio_register(&ADC_CLM1_REG(adc_mmio_registers_p)); 
+    calibration_var +=
+        read_32bit_mmio_register(&ADC_CLM2_REG(adc_mmio_registers_p)); 
+    calibration_var +=
+        read_32bit_mmio_register(&ADC_CLM3_REG(adc_mmio_registers_p)); 
+    calibration_var +=
+        read_32bit_mmio_register(&ADC_CLM4_REG(adc_mmio_registers_p)); 
+    calibration_var +=
+        read_32bit_mmio_register(&ADC_CLMS_REG(adc_mmio_registers_p)); 
+    calibration_var /= 2;
+    calibration_var |= BIT(15); /* Set MSB */
+
+    write_32bit_mmio_register(
+        &ADC_MG_REG(adc_mmio_registers_p), (uint32_t)calibration_var);
+}
+
+
+/**
+ * ADC interrupt handler with interrupts enabled
+ */
 void
 kl25_adc_interrupt_e_handler(
     struct rtos_interrupt *rtos_interrupt_p)
 {
-    FDC_ASSERT(
-        rtos_interrupt_p == g_rtos_interrupt_adc0_p,
-        rtos_interrupt_p, g_rtos_interrupt_adc0_p);
-}
-
-
-#if 0 // ???
-/**
- * Clear last interrupt for the given UART
- */ 
-void
-clear_adc_interrupt_source(
-    _IN_ const struct adc_device *adc_device_p)
-{
-    DBG_ASSERT_CPU_INTERRUPTS_DISABLED();
-    DBG_ASSERT(
-        adc_device_p->ad_signature == ADC_DEVICE_SIGNATURE,
-        adc_device_p->ad_signature, adc_device_p);
-
     uint32_t reg_value;
-    lpc2478_adc_t *adc_mmio_registers_p = adc_device_p->ad_mmio_registers_p;
 
-    FDC_ASSERT_INTERRUPT_SOURCE_IS_SET(VIC_CHANNEL_AD0);
+    FDC_ASSERT_RTOS_INTERRUPT_E_HANDLER_PRECONDITIONS(rtos_interrupt_p);
 
-    reg_value = read_32bit_mmio_register(&adc_mmio_registers_p->reg_AD0STAT);
-                
-    FDC_ASSERT(
-        (reg_value & AD0STAT_ADINT_MASK) != 0 &&
-        (reg_value & AD0STAT_DONE_MASK) != 0,
-        reg_value, 0);
+    const struct adc_device *adc_device_p =
+        (struct adc_device *)rtos_interrupt_p->int_arg_p;
 
-    uint32_t adc_done_mask = (reg_value & AD0STAT_DONE_MASK);
-
-    for (uint8_t i = 0; i < NUM_ADC_CHANNELS; i ++)
-    {
-        if (adc_done_mask & BIT(i))
-        {
-            struct adc_channel *adc_channel_p = &g_adc_channels[i];
-
-            /*
-             * Read the corresponding reg_AD0DR register, to clear the
-             * interrupt source:
-             */
-            reg_value = read_32bit_mmio_register(&adc_mmio_registers_p->reg_AD0DR[i]);
-
-            adc_channel_p->adc_result = GET_BIT_FIELD(
-                reg_value, AD0DR_V_OVER_VREF_MASK, AD0DR_V_OVER_VREF_SHIFT);
-
-            FDC_ASSERT(
-                !adc_channel_p->adc_conversion_completed,
-                adc_channel_p, i);
-
-            adc_channel_p->adc_conversion_completed = true;
-        }
-    }
-}
-
-
-/** 
- * A/D converter interrupt handler
- */
-void
-adc_interrupt_handler(
-    _IN_ const struct adc_device *adc_device_p)
-{
     DBG_ASSERT(
         adc_device_p->ad_signature == ADC_DEVICE_SIGNATURE,
         adc_device_p->ad_signature, adc_device_p);
 
-    struct rtos_interrupt *adc_interrupt_p =
-        *adc_device_p->ad_rtos_interrupt_pp;
+    struct adc_device_var *const adc_var_p = adc_device_p->ad_var_p;
+    ADC_MemMapPtr adc_mmio_registers_p = adc_device_p->ad_mmio_registers_p;
 
-    FDC_ASSERT_RTOS_INTERRUPT_HANDLER_PRECONDITIONS(adc_interrupt_p);
- 
+    reg_value = read_32bit_mmio_register(
+                    &ADC_SC1A_REG(adc_mmio_registers_p));
+
+#   ifdef DEBUG
+    uint8_t sc1_adch =
+        GET_BIT_FIELD(
+            reg_value, ADC_SC1_ADCH_MASK, ADC_SC1_ADCH_SHIFT);
+
+    FDC_ASSERT(
+        adc_var_p->ad_active_adc_channel == sc1_adch,
+        adc_var_p->ad_active_adc_channel, sc1_adch);
+#   endif
+
+    struct adc_channel *adc_channel_p = 
+        &adc_var_p->ad_adc_channels[adc_var_p->ad_active_adc_channel];
+
+    DBG_ASSERT(
+        !adc_channel_p->adc_conversion_completed,
+        adc_var_p->ad_active_adc_channel, adc_device_p);
+
     /*
-     * Signal condition variables of the channels for an A/D conversion
-     * has completed 
+     * Get A/D conversion result:
+     * (this also clears the ADC interrupt)
      */
-    for (uint8_t i = 0; i < NUM_ADC_CHANNELS; i ++)
-    {
-        struct adc_channel *adc_channel_p = &g_adc_channels[i];
-            
-        if (adc_channel_p->adc_conversion_completed)
-        {
-            rtos_k_condvar_signal(&adc_channel_p->adc_condvar);
-        }
-    }
+    reg_value = read_32bit_mmio_register(
+                    &ADC_RA_REG(adc_mmio_registers_p));
+
+    adc_channel_p->adc_result = reg_value;
+    adc_channel_p->adc_conversion_completed = true;
+
+    rtos_k_condvar_signal(&adc_channel_p->adc_condvar);
+
+    adc_var_p->ad_active_adc_channel = ADC_CHANNEL_NONE;
 }
 
-
-void
-select_input_pin_adc_channel(
-    _IN_ uint8_t adc_channel)
-{
-    uint32_t reg_value;
-
-    FDC_ASSERT(adc_channel < NUM_ADC_CHANNELS, adc_channel, NUM_ADC_CHANNELS);
-
-    switch (adc_channel)
-    {
-    case 0:
-        reg_value = read_32bit_mmio_register(
-                        &g_pin_connect_block->reg_PINSEL[1]);
-
-        reg_value |= PINSEL_MASK(PINSEL_ALT_01, 7); /* P0.23 */
-
-        write_32bit_mmio_register(
-            &g_pin_connect_block->reg_PINSEL[1], reg_value);
-
-        break;
-
-    case 1:
-        reg_value = read_32bit_mmio_register(
-                        &g_pin_connect_block->reg_PINSEL[1]);
-
-        reg_value |= PINSEL_MASK(PINSEL_ALT_01, 8); /* P0.24 */
-
-        write_32bit_mmio_register(
-            &g_pin_connect_block->reg_PINSEL[1], reg_value);
-
-        break;
-
-    case 2:
-        reg_value = read_32bit_mmio_register(
-                        &g_pin_connect_block->reg_PINSEL[1]);
-
-        reg_value |= PINSEL_MASK(PINSEL_ALT_01, 9); /* P0.25 */
-
-        write_32bit_mmio_register(
-            &g_pin_connect_block->reg_PINSEL[1], reg_value);
-
-        break;
-
-    case 3:
-        reg_value = read_32bit_mmio_register(
-                        &g_pin_connect_block->reg_PINSEL[1]);
-
-        reg_value |= PINSEL_MASK(PINSEL_ALT_01, 10); /* P0.26 */
-
-        write_32bit_mmio_register(
-            &g_pin_connect_block->reg_PINSEL[1], reg_value);
-
-        break;
-	
-    case 4:
-        reg_value = read_32bit_mmio_register(
-                        &g_pin_connect_block->reg_PINSEL[3]);
-
-        reg_value |= PINSEL_MASK(PINSEL_ALT_11, 14); /* P1.30 */
-
-        write_32bit_mmio_register(
-            &g_pin_connect_block->reg_PINSEL[3], reg_value);
-
-        break;
-
-    case 5:
-        reg_value = read_32bit_mmio_register(
-                        &g_pin_connect_block->reg_PINSEL[3]);
-
-        reg_value |= PINSEL_MASK(PINSEL_ALT_11, 15); /* P1.31 */
-
-        write_32bit_mmio_register(
-            &g_pin_connect_block->reg_PINSEL[3], reg_value);
-
-        break;
-
-    case 6:
-        reg_value = read_32bit_mmio_register(
-                        &g_pin_connect_block->reg_PINSEL[0]);
-
-        reg_value |= PINSEL_MASK(PINSEL_ALT_11, 12); /* P0.12 */
-
-        write_32bit_mmio_register(
-            &g_pin_connect_block->reg_PINSEL[0], reg_value);
-
-        break;
-
-    case 7:
-        reg_value = read_32bit_mmio_register(
-                        &g_pin_connect_block->reg_PINSEL[0]);
-
-        reg_value |= PINSEL_MASK(PINSEL_ALT_11, 13); /* P0.13 */
-
-        write_32bit_mmio_register(
-            &g_pin_connect_block->reg_PINSEL[0], reg_value);
-
-        break;
-    }
-}
-
-
+ 
 /*
  * Starts an A/D conversion for a given ADC channel and then it waits
  * until the A/D conversion is done.
@@ -1739,37 +1806,72 @@ read_adc_channel(
     _IN_ uint8_t adc_channel)
 {
     uint32_t reg_value;
-    fdc_error_t fdc_error;
     struct adc_channel *adc_channel_p;
 
     FDC_ASSERT(
         adc_device_p->ad_signature == ADC_DEVICE_SIGNATURE,
         adc_device_p->ad_signature, adc_device_p);
 
-    FDC_ASSERT(adc_channel < NUM_ADC_CHANNELS, adc_channel, NUM_ADC_CHANNELS);
+    FDC_ASSERT(
+        adc_channel < NUM_ADC_CHANNELS, adc_channel, NUM_ADC_CHANNELS);
 
-    lpc2478_adc_t *adc_mmio_registers_p = adc_device_p->ad_mmio_registers_p;
+    struct adc_device_var *adc_var_p = adc_device_p->ad_var_p;
+    ADC_MemMapPtr adc_mmio_registers_p = adc_device_p->ad_mmio_registers_p;
+	
+    FDC_ASSERT(adc_var_p->ad_initialized, adc_device_p, 0);
 
-    adc_channel_p = &g_adc_channels[adc_channel];
+    adc_channel_p = &adc_var_p->ad_adc_channels[adc_channel];
+
     FDC_ASSERT(
         !adc_channel_p->adc_conversion_completed,
         adc_channel_p, adc_channel);
 
-    reg_value = read_32bit_mmio_register(
-                    &adc_mmio_registers_p->reg_AD0CR);
+    /*
+     * Acquire mutex to serialize software-triggered conversions:
+     *
+     * NOTE: For the KL25 ADC, only one software-triggered
+     * conversion can be done at one time, regardless of 
+     * using different channels.
+     */
+    rtos_mutex_acquire(&adc_var_p->ad_mutex);
+
+    FDC_ASSERT(
+        adc_var_p->ad_active_adc_channel == ADC_CHANNEL_NONE,
+        adc_var_p->ad_active_adc_channel, adc_var_p);
+
+    adc_var_p->ad_active_adc_channel = adc_channel;
 
     /*
-     * Select the channel pin:
-     */ 
-    SET_BIT_FIELD(reg_value, AD0CR_SEL_MASK, AD0CR_SEL_SHIFT, BIT(adc_channel));
-   
-    /*
-     * Indicate that we want to start the A/D conversion now:
+     * Set ADC_CFG2 register's MUXEL bit to select side A or side B of
+     * the channel:
      */
-    
-    SET_BIT_FIELD(reg_value, AD0CR_START_MASK, AD0CR_START_SHIFT, 0x1);
-   
-    write_reg_AD0CR(&adc_mmio_registers_p->reg_AD0CR, reg_value);
+    reg_value = read_32bit_mmio_register(&ADC_CFG2_REG(adc_mmio_registers_p));
+    if (adc_var_p->ad_adc_channels[adc_channel].adc_mux_selector ==
+            ADC_MUX_SIDE_A) {
+        /*
+         * Select channel side A:
+         */ 
+        reg_value &= ~ADC_CFG2_MUXSEL_MASK;
+    } else {
+        /*
+         * Select channel side B:
+         */ 
+        reg_value |= ADC_CFG2_MUXSEL_MASK;
+    }
+
+    write_32bit_mmio_register(
+        &ADC_CFG2_REG(adc_mmio_registers_p), reg_value);
+
+    /*
+     * Start ADC conversion on the given channel, by setting the channel number
+     * on the ADCH field of the ADC_SC1A register:
+     */
+    reg_value = read_32bit_mmio_register(
+                    &ADC_SC1A_REG(adc_mmio_registers_p));
+    SET_BIT_FIELD(
+        reg_value, ADC_SC1_ADCH_MASK, ADC_SC1_ADCH_SHIFT, adc_channel);
+    write_32bit_mmio_register(
+        &ADC_SC1A_REG(adc_mmio_registers_p), reg_value);
 
     /*
      * Wait until the conversion is complete:
@@ -1783,43 +1885,12 @@ read_adc_channel(
 
     adc_channel_p->adc_conversion_completed = false;
 
-#if 0 // XXX Remove this code
-    uint32_t adc_done_mask;
-    do {
-        reg_value = read_32bit_mmio_register(&adc_mmio_registers_p->reg_AD0STAT);
-                
-        FDC_ASSERT(
-            (reg_value & AD0STAT_ADINT_MASK) != 0 &&
-            (reg_value & AD0STAT_DONE_MASK) != 0,
-            reg_value, 0);
-
-        adc_done_mask = (reg_value & AD0STAT_DONE_MASK);
-    } while ((adc_done_mask & BIT(adc_channel)) == 0);
-
-    reg_value = read_32bit_mmio_register(&adc_mmio_registers_p->reg_AD0DR[adc_channel]);
-
-    adc_channel_p->adc_result = GET_BIT_FIELD(
-        reg_value, AD0DR_V_OVER_VREF_MASK, AD0DR_V_OVER_VREF_SHIFT);
-#endif // XXX
-
     rtos_k_restore_cpu_interrupts(cpu_status_register);
+
+    rtos_mutex_release(&adc_var_p->ad_mutex);
 
     return adc_channel_p->adc_result;
 }
-
-
-void
-init_trimpot(void)
-{
-    select_input_pin_adc_channel(TRIMPOT_ADC_CHANNEL);
-}
-    
-uint32_t
-read_trimpot(void)
-{
-    return read_adc_channel(g_adc0_device_p, TRIMPOT_ADC_CHANNEL);
-}
-#endif
 
 
 void
@@ -1831,6 +1902,8 @@ kl25_tpm_init(
     FDC_ASSERT(
         tpm_device_p->tpm_signature == TPM_DEVICE_SIGNATURE,
         tpm_device_p->tpm_signature, tpm_device_p);
+
+    FDC_ASSERT_CPU_INTERRUPTS_DISABLED();
 
     /*
      * Enable the Clock to the TPM Module

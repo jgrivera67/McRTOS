@@ -125,6 +125,38 @@ C_ASSERT(LCD_FRAME_BUFFER_SIZE % sizeof(uint64_t) == 0);
 #define ETHERNET_DATA_FRAGMENT_BUFFER_POOL_SIZE (UINT32_C(12288) * DRAM_PAGE_SIZE)
 
 /**
+ * Initialize a configurable pin
+ */
+#define PIN_COFIG_INFO_INITIALIZER(_gpio_port_index, _pin_bit_index,    \
+                                   _pin_function,                       \
+                                   _pin_is_active_high)                 \
+    {                                                                   \
+        .gpio_port_index = (_gpio_port_index),                          \
+        .pin_bit_index = (_pin_bit_index),                              \
+        .pinsel_mode_mask = GET_PINSEL_MODE_MASK(_pin_bit_index),       \
+        .pinsel_mode_shift = GET_PINSEL_MODE_SHIFT(_pin_bit_index),     \
+        .pin_function = (_pin_function),                                \
+        .pin_is_active_high = (_pin_is_active_high),                    \
+    }
+
+/**
+ * Pin configuration parameters
+ */
+struct pin_config_info {
+    uint32_t pinsel_mode_mask;
+    uint8_t gpio_port_index;
+    uint8_t pin_bit_index;
+    uint8_t pinsel_mode_shift;
+    uint8_t pin_function;
+
+    /*
+     * The following fields is only meaningful if pin_function is PINSEL_PRIMARY
+     */ 
+    uint8_t pin_is_active_high;         /*  false - low, true - high */
+    uint16_t reserved2;
+};
+
+/**
  * SDRAM map
  */
 struct sdram_map

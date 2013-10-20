@@ -85,16 +85,16 @@ rtos_hard_fault_exception_handler(
 
     rtos_run_debugger(current_execution_context_p, before_exception_stack_p);
 
-#   if 0
+#   ifndef DEBUG
     cpu_instruction_t *instruction_p =
         (cpu_instruction_t *)(before_exception_stack_p[CPU_REG_PC]);
 
     /*
      * If the instruction that caused the exception is not breakpoint,
-     * trigger a software reset when exiting the McRTOS debugger:
+     * reboot the system:
      */
     if ((*instruction_p & THUMB_INSTR_OP_CODE_MASK) != BKPT_OP_CODE_MASK) {
-        NVIC_SystemReset();
+        rtos_reboot();
     }
 #   endif
 
@@ -188,7 +188,7 @@ rtos_dbg_parse_command(
             break;
 
         case 'r':
-            soc_reset();
+            rtos_reboot();
             /*UNREACHABLE*/
             break;
 

@@ -492,6 +492,16 @@ struct McRTOS
     volatile bool rts_stop_idle_cpu;
 
     /**
+     * Pointer to function to initialize application-specific hardware
+     */
+    app_hardware_init_t *rts_app_hardware_init_p;
+
+    /**
+     * Pointer to function to stop application-specific hardware
+     */
+    app_hardware_stop_t *rts_app_hardware_stop_p;
+
+    /**
      * Array of interrupt objects, one for each interrupt registered with McRTOS.
      */
     struct rtos_interrupt rts_interrupts[RTOS_MAX_NUM_INTERRUPTS];

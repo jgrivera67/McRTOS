@@ -10,6 +10,27 @@
 
 #include <stdint.h>
 
+/**
+ * Indexes in g_frdm_rgb_led_pins[] 
+ */
+enum {
+    FRDM_RED_LED =      0x0,
+    FRDM_GREEN_LED =    0x1,
+    FRDM_BLUE_LED =     0x2,
+    FRDM_NUM_RGB_LED_PINS
+};
+
+/*
+ * KL25 GPIO PORT B Pins
+ */
+#define FRDM_RGB_LED_RED_PIN_INDEX      18
+#define FRDM_RGB_LED_GREEN_PIN_INDEX    19
+
+/*
+ * KL25 GPIO PORT D Pins
+ */
+#define FRDM_RGB_LED_BLUE_PIN_INDEX     1
+
 #define LED_RED_PIN_MASK    BIT(18)
 #define LED_GREEN_PIN_MASK  BIT(19)
 #define LED_BLUE_PIN_MASK   BIT(1)
@@ -24,6 +45,7 @@
 #define LED_COLOR_WHITE     (LED_RED_PIN_MASK | LED_GREEN_PIN_MASK | LED_GREEN_PIN_MASK)
 
 void frdm_board_init(void);
+void frdm_board_stop(void);
 
 void toggle_rgb_led(uint32_t led_color_mask);
 void turn_on_rgb_led(uint32_t led_color_mask);

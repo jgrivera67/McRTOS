@@ -30,6 +30,7 @@ enum app_thread_priorities
 };
 
 static void autonomous_car_hardware_init(void);
+static void autonomous_car_hardware_stop(void);
 static fdc_error_t buttons_reader_thread_f(void *arg);
 static fdc_error_t trimpot_reader_thread_f(void *arg);
 
@@ -99,7 +100,10 @@ main(void)
 {
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
-    rtos_startup(&g_rtos_app_config[cpu_id], autonomous_car_hardware_init);
+    rtos_startup(
+        &g_rtos_app_config[cpu_id],
+        autonomous_car_hardware_init,
+        autonomous_car_hardware_stop);
     
     FDC_ASSERT(false, 0, 0);
 
@@ -114,6 +118,13 @@ void autonomous_car_hardware_init(void)
     tfc_board_init();
 }
 
+
+static
+void autonomous_car_hardware_stop(void)
+{
+    frdm_board_stop();
+    tfc_board_stop();
+}
 
 /**
  * Buttons reader thread

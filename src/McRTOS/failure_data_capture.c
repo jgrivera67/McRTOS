@@ -194,6 +194,8 @@ capture_assert_failure(
      */ 
     CAPTURE_ARM_LR_REGISTER(return_address);
 
+    micro_trace_stop();
+
     /*
      * The exact location of the assertion is the place where this
      * function was invoked
@@ -213,7 +215,9 @@ capture_assert_failure(
     if (fdc_info_p->fdc_asserts_failures_breakpoint_on)
     {
         ARTIFICIAL_BREAK_POINT();
-    } 
+    } else {
+        micro_trace_restart();
+    }
 }
 
 
@@ -234,6 +238,8 @@ capture_fdc_error(
      */ 
     CAPTURE_ARM_LR_REGISTER(return_address);
     
+    micro_trace_stop();
+
     error_address = return_address - 1;
 
     rtos_capture_failure_data(
@@ -249,6 +255,8 @@ capture_fdc_error(
     if (fdc_info_p->fdc_error_breakpoint_on)
     {
         ARTIFICIAL_BREAK_POINT();
+    } else {
+        micro_trace_restart();
     }
 
     return (fdc_error_t)error_address;

@@ -39,6 +39,97 @@ struct tpm_device {
     struct rtos_interrupt **tpm_rtos_interrupt_pp;
 };
 
+/**
+ * Number of A/D converter channels
+ */
+#define NUM_ADC_CHANNELS    24 
+
+#define ADC_CHANNEL_NONE    NUM_ADC_CHANNELS   
+
+/**
+ * Max value of the result of a 12-bit A/D conversion
+ */
+#define ADC_RESULT_MAX_VALUE    ((UINT16_C(1) << 12) - 1)
+
+#define ADC_SC1A_REG(_adc_mmio_registers_p) \
+        ADC_SC1_REG(_adc_mmio_registers_p, 0)
+
+#define ADC_RA_REG(_adc_mmio_registers_p) \
+        ADC_R_REG(_adc_mmio_registers_p, 0)
+
+/**
+ * Const fields of the A/D converter device (to be placed in flash)
+ */
+struct adc_device {
+#   define ADC_DEVICE_SIGNATURE  GEN_SIGNATURE('A', '/', 'D', 'C')
+    uint32_t ad_signature;
+    struct adc_device_var *ad_var_p;
+    ADC_MemMapPtr ad_mmio_registers_p;
+    struct rtos_interrupt_registration_params ad_rtos_interrupt_params;
+    struct rtos_interrupt **ad_rtos_interrupt_pp;
+    const char *ad_mutex_name;
+    const char *ad_channel_condvar_name;
+};
+
+/**
+ * Non-const fields of an A/D converter channel (to be placed in SRAM)
+ */
+struct adc_channel {
+    /**
+     * Last value read from the V/VREF field of the corresponding ADC channel's
+     * reg_AD0DR[] register, by the A/D conversion completion interrupt handler.
+     */
+    volatile uint16_t adc_result;
+
+    /**
+     * Boolean flag that indicates if an outstanding A/D conversion has completed
+     */
+    volatile uint8_t adc_conversion_completed;
+
+    /**
+     * ADC Mux selector
+     */ 
+    const uint8_t adc_mux_selector;
+#   define ADC_MUX_SIDE_A   0
+#   define ADC_MUX_SIDE_B   1
+
+    /**
+     * Condvar to signal a thread waiting for an A/D conversion
+     */
+    struct rtos_condvar adc_condvar;
+};
+
+/**
+ * Non-const fields of a ADC device (to be placed in SRAM)
+ */
+struct adc_device_var {
+    /**
+     * Flag idicating if init_adc() has been called for this ADC device
+     */
+    bool ad_initialized;
+
+    /**
+     * A/D converter channel on which the current conversion was started
+     * or ADC_CHANNEL_NONE if none.
+     */
+    uint8_t ad_active_adc_channel;
+
+    /**
+     * Mutex to serialize software-triggered conversions.
+     *
+     * NOTE: For the KL25 ADC, only one software-triggered
+     * conversion can be done at one time, regardless of 
+     * using different channels.
+     */
+    struct rtos_mutex ad_mutex;
+
+    /**
+     * A/D converter channels
+     */
+    struct adc_channel ad_adc_channels[NUM_ADC_CHANNELS];
+};
+
+
 void kl25_tpm_init(
     const struct tpm_device *tpm_device_p);
 

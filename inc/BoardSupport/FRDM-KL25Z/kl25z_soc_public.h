@@ -137,6 +137,31 @@ typedef _RANGE_(INT_SVCall_IRQn, SOC_NUM_INTERRUPT_CHANNELS - 1)
 #define MICRO_TRACE_BUFFER_NUM_ENTRIES \
         (MICRO_TRACE_BUFFER_SIZE_IN_BYTES / sizeof(uint64_t))
 
+/**
+ * Initialize a configurable pin
+ */
+#define PIN_COFIG_INFO_INITIALIZER(                                     \
+            _pin_bit_index, _pcr_value, _pin_is_active_high,            \
+            _port_base_p, _gpio_base_p)                                 \
+    {                                                                   \
+        .pin_port_base_p = (_port_base_p),                              \
+        .pin_gpio_base_p = (_gpio_base_p),                              \
+        .pin_pcr_value = (_pcr_value),                                  \
+        .pin_bit_mask = BIT(_pin_bit_index),                            \
+        .pin_is_active_high = (_pin_is_active_high),                    \
+    }
+
+/**
+ * Pin configuration parameters
+ */
+struct pin_config_info {
+    PORT_MemMapPtr pin_port_base_p;
+    GPIO_MemMapPtr pin_gpio_base_p;
+    uint32_t pin_pcr_value;
+    uint32_t pin_bit_mask;
+    bool pin_is_active_high; /*  false - low, true - high */
+};
+
 void micro_trace_init(void);
 
 void micro_trace_stop(void);

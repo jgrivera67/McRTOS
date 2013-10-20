@@ -43,21 +43,6 @@
 
 #endif /* platform-specific */
 
-/**
- * Initialize a configurable pin
- */
-#define PIN_COFIG_INFO_INITIALIZER(_gpio_port_index, _pin_bit_index,    \
-                                   _pin_function,                       \
-                                   _pin_is_active_high)                 \
-    {                                                                   \
-        .gpio_port_index = (_gpio_port_index),                          \
-        .pin_bit_index = (_pin_bit_index),                              \
-        .pinsel_mode_mask = GET_PINSEL_MODE_MASK(_pin_bit_index),       \
-        .pinsel_mode_shift = GET_PINSEL_MODE_SHIFT(_pin_bit_index),     \
-        .pin_function = (_pin_function),                                \
-        .pin_is_active_high = (_pin_is_active_high),                    \
-    }
-
 /*
  * Pressed buttons bit masks
  */
@@ -208,26 +193,10 @@ typedef void isr_function_t(void);
 
 C_ASSERT(sizeof(isr_function_t *) == sizeof(uint32_t));
 
-/**
- * Pin configuration parameters
- */
-struct pin_config_info {
-    uint32_t pinsel_mode_mask;
-    uint8_t gpio_port_index;
-    uint8_t pin_bit_index;
-    uint8_t pinsel_mode_shift;
-    uint8_t pin_function;
-
-    /*
-     * The following fields is only meaningful if pin_function is PINSEL_PRIMARY
-     */ 
-    uint8_t pin_is_active_high;         /*  false - low, true - high */
-    uint16_t reserved2;
-};
-
 /*
  * Opaque Types
  */
+struct pin_config_info;
 struct timer_device;
 struct uart_device;
 struct ssp_controller;
@@ -235,6 +204,7 @@ struct buttons_device;
 struct adc_device;
 
 typedef void app_hardware_init_t(void);
+typedef void app_hardware_stop_t(void);
 
 /*
  * Exported functions
@@ -244,6 +214,7 @@ cpu_reset_cause_t soc_hardware_init(void);
 
 bool software_reset_happened(void);
 
+_NEVER_RETURN_
 void soc_reset(void);
 
 void install_isr(
@@ -273,6 +244,8 @@ void configure_pin(const struct pin_config_info *pin_info_p, bool is_output);
 void activate_output_pin(const struct pin_config_info *pin_info_p);
 
 void deactivate_output_pin(const struct pin_config_info *pin_info_p);
+
+void toggle_output_pin(const struct pin_config_info *pin_info_p);
 
 bool read_input_pin(const struct pin_config_info *pin_info_p);
 
@@ -330,6 +303,9 @@ void clear_ssp_controller_interrupt_source(
 
 void ssp_controller_interrupt_handler(
     _IN_ const struct ssp_controller *ssp_controller_p);
+
+void init_adc(
+    _IN_ const struct adc_device *adc_device_p);
 
 void init_adc_channel(
         _IN_ const struct adc_device *adc_device_p,
