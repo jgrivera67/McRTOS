@@ -162,14 +162,18 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
     FDC_ASSERT(BOARD_VALID_MMIO_ADDRESS(_io_addr), _io_addr, 0)
 
 #if DEFINED_ARM_CLASSIC_ARCH()
+#   define VALID_CODE_ADDRESS(_code_addr) \
+           (BOARD_VALID_FLASH_ADDRESS(_code_addr) &&                    \
+            (uintptr_t)(_code_addr) % sizeof(uint32_t) == 0 &&          \
+            (uintptr_t)(_code_addr) >= (uintptr_t)__flash_text_start && \
+            (uintptr_t)(_code_addr) < (uintptr_t)__flash_text_end)
+
     /**
      * Check that a code address is in flash memory and word aligned
      */
-#   define FDC_ASSERT_VALID_CODE_ADDRESS(_code_addr, _context_p) \
-            FDC_ASSERT(                                                 \
-                BOARD_VALID_FLASH_ADDRESS(_code_addr) &&                \
-                (uintptr_t)(_code_addr) % sizeof(uint32_t) == 0,        \
-                _code_addr, _context_p)
+#   define FDC_ASSERT_VALID_CODE_ADDRESS(_code_addr, _context_p)    \
+            FDC_ASSERT(                                             \
+                VALID_CODE_ADDRESS(_code_addr), _code_addr, _context_p)
 
     /**
      * Check that a function pointer points to flash memory
@@ -178,13 +182,17 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
            FDC_ASSERT_VALID_CODE_ADDRESS(_func_ptr, NULL)
                 
 #elif DEFINED_ARM_CORTEX_M_ARCH()
+#   define VALID_CODE_ADDRESS(_code_addr) \
+           (BOARD_VALID_FLASH_ADDRESS(_code_addr) &&                    \
+            (uintptr_t)(_code_addr) >= (uintptr_t)__flash_text_start && \
+            (uintptr_t)(_code_addr) < (uintptr_t)__flash_text_end)
+
     /**
      * Check that a code address is in flash memory and half-word aligned
      */
-#   define FDC_ASSERT_VALID_CODE_ADDRESS(_code_addr, _context_p) \
-            FDC_ASSERT(                                                 \
-                BOARD_VALID_FLASH_ADDRESS(_code_addr),                  \
-                _code_addr, _context_p)
+#   define FDC_ASSERT_VALID_CODE_ADDRESS(_code_addr, _context_p)    \
+            FDC_ASSERT(                                             \
+                VALID_CODE_ADDRESS(_code_addr), _code_addr, _context_p)
 
     /**
      * Check that lowest bit of function pointer is set (code compiled for
@@ -780,6 +788,9 @@ check_rtos_interrupt_e_handler_preconditions(
 void
 check_synchronous_context_switch_preconditions(
     _IN_ const struct rtos_execution_context *current_execution_context_p);
+
+extern uint32_t __flash_text_start[];
+extern uint32_t __flash_text_end[];
 
 #endif /* _FAILURE_DATA_CAPTURE_H */
 

@@ -132,6 +132,11 @@ static struct rtos_circular_buffer g_camera_frame_buffer_pool;
 static struct rtos_circular_buffer g_captured_camera_frames_circular_buffer;
 
 /**
+ * Counter of dropped camera frames:
+ */
+static uint32_t g_dropped_camera_frames_count = 0;
+
+/**
  * Application's main()
  *
  * This function is invoked from the Reset exception handler for each CPU core.
@@ -266,8 +271,6 @@ camera_frame_reader_thread_f(void *arg)
 
     console_printf("Initializing camera frame reader thread ...\n");
     
-    uint32_t dropped_frames_count = 0;
-
     for ( ; ; ) {
         rtos_thread_delay(TFC_CAMERA_EXPOSURE_TIME_MS);
 
@@ -294,10 +297,7 @@ camera_frame_reader_thread_f(void *arg)
                             false);
 
                 if (read_ok) {
-                    dropped_frames_count ++;
-                    DEBUG_PRINTF(
-                        "Frame was dropped (total frames dropped %u)\n",
-                        dropped_frames_count);
+                    ATOMIC_POST_INCREMENT_UINT32(&g_dropped_camera_frames_count);
                 }
             }
         } while (!read_ok);
@@ -350,7 +350,9 @@ camera_frame_normalizer_thread_f(void *arg)
             true);
 
         //???
-        console_printf("Frame %u\n", frame_count);
+        console_printf("Frame %u (dropped frames %u)\n",
+            frame_count, g_dropped_camera_frames_count);
+
         dump_camera_frame(camera_frame_buffer_p);
         //???
         frame_count ++;

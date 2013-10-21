@@ -43,6 +43,7 @@ SECTIONS
   .text :
   {
     . = ALIGN(4);
+    __flash_text_start = .;
     *(.text)           /* .text sections (code) */
     *(.text*)          /* .text* sections (code) */
     *(.rodata)         /* .rodata sections (constants, strings, etc.) */
@@ -55,7 +56,7 @@ SECTIONS
     KEEP (*(.fini))
 
     . = ALIGN(4);
-    _etext = .;        /* define a global symbols at end of code */
+    __flash_text_end = .; 
     __flash_initialized_data_start = .; 
   } >flash_text
 

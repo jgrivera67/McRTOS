@@ -40,6 +40,12 @@ rtos_dbg_dump_memory(
     _IN_ uint32_t num_words,
     _IN_ const char *title);
 
+static void 
+rtos_dbg_dump_memory_with_call_stack(
+    _IN_ const uint32_t *addr,
+    _IN_ uint32_t num_words,
+    _IN_ const char *title);
+
 static void
 rtos_dbg_dump_context_switch_traces(void);
 
@@ -171,8 +177,8 @@ rtos_dbg_parse_command(
         case 'e':
             rtos_dbg_dump_exception_info(
                 before_exception_stack_p);
-            rtos_dbg_dump_memory(
-                before_exception_stack_p, 32, "Stack before exception");
+            rtos_dbg_dump_memory_with_call_stack(
+                before_exception_stack_p, 64, "Stack before exception");
             break;
 
         case 'h':
@@ -426,7 +432,7 @@ rtos_dbg_dump_execution_context(
                 context_stack_p, execution_context_p->ctx_execution_stack_bottom_end_p);
         }
 
-        rtos_dbg_dump_memory(
+        rtos_dbg_dump_memory_with_call_stack(
             execution_context_p->ctx_execution_stack_top_end_p - 1,
             RTOS_THREAD_STACK_NUM_ENTRIES + 2,
             "Stack entries");
@@ -448,6 +454,30 @@ rtos_dbg_dump_memory(
     }
 }
 
+
+static void 
+rtos_dbg_dump_memory_with_call_stack(
+    _IN_ const uint32_t *addr,
+    _IN_ uint32_t num_words,
+    _IN_ const char *title)
+{
+    debug_printf("%s: Memory at %#p (%u words):\n",
+        title, addr, num_words);
+
+    for (uint32_t i = 0; i < num_words; i ++) {
+        uint32_t stack_entry = addr[i];
+        if ((stack_entry & 0x1) != 0 && VALID_CODE_ADDRESS(stack_entry)) {
+            cpu_instruction_t *call_stack_entry =
+                 (cpu_instruction_t *)((stack_entry & ~0x1) -
+                                       sizeof(cpu_instruction_t));
+
+            debug_printf("\t%3u: [%#p]: %#x (call stack entry: %#p)\n",
+                i, addr + i, stack_entry, call_stack_entry);
+        } else {
+            debug_printf("\t%3u: [%#p]: %#x\n", i, addr + i, stack_entry);
+        }
+    }
+}
 
 static void
 rtos_dbg_dump_context_switch_traces(void)
@@ -617,7 +647,7 @@ debug_dump_micro_trace_buffer(void)
         uintptr_t dest_addr = (uint32_t)(*entry_p >> 32);
 
         source_addr &= ~0x1;
-        if (BOARD_VALID_FLASH_ADDRESS(source_addr)) {
+        if (VALID_CODE_ADDRESS(source_addr)) {
             cpu_instruction_t cpu_instruction = *(cpu_instruction_t *)source_addr;
 
             switch (cpu_instruction & THUMB_INSTR_OP_CODE_MASK) {
@@ -642,7 +672,7 @@ debug_dump_micro_trace_buffer(void)
         }
 
         dest_addr &= ~0x1;
-        if (BOARD_VALID_FLASH_ADDRESS(dest_addr)) {
+        if (VALID_CODE_ADDRESS(dest_addr)) {
             if (dest_addr == 
                     GET_FUNCTION_ADDRESS(cortex_m_hard_fault_exception_handler)) {
                 dest_func_name = "cortex_m_hard_fault_exception_handler";

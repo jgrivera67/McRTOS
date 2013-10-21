@@ -909,6 +909,8 @@ rtos_k_mutex_release_internal(
     _IN_    struct rtos_cpu_controller *cpu_controller_p,
     _IN_    bool in_condvar_wait)
 {
+    cpu_status_register_t cpu_status_register;
+
     FDC_ASSERT(
         rtos_mutex_p->mtx_signature == RTOS_MUTEX_SIGNATURE,
         rtos_mutex_p->mtx_signature, rtos_mutex_p);
@@ -931,12 +933,16 @@ rtos_k_mutex_release_internal(
         mutex_owner_p == current_thread_p,
         mutex_owner_p, current_thread_p);
 
-    FDC_ASSERT_PRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED();
+    if (in_condvar_wait) {
+        FDC_ASSERT_CPU_INTERRUPTS_DISABLED();
+    } else {
+        FDC_ASSERT_PRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED();
 
-    /*
-     * Disable interrupts in the ARM core
-     */
-    cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
+        /*
+         * Disable interrupts in the ARM core
+         */
+        cpu_status_register = rtos_k_disable_cpu_interrupts();
+    }
 
     /*
      * If there are waiters for the mutex, remove the first waiter,
@@ -1003,42 +1009,39 @@ rtos_k_mutex_release_internal(
 
     current_thread_p->thr_owned_mutexes_count --;
 
-    if (in_condvar_wait)
+    if (!in_condvar_wait)
     {
-        goto Exit;
+        /*
+         * If current thread had its priority boosted, lower it back to its
+         * base priority:
+         */
+        if (current_thread_p->thr_current_priority <
+            current_thread_p->thr_base_priority)
+        {
+            RTOS_THREAD_CHANGE_PRIORITY(
+                current_thread_p, current_thread_p->thr_base_priority);
+        }
+
+        /*
+         * Add current thread at the beginning of the corresponding runnable
+         * queue and change its state from running to runnable
+         */
+        rtos_add_head_runnable_thread(
+            cpu_controller_p, current_thread_p);
+
+        /*
+         * Perform a synchronous context switch:
+         *
+         * NOTE: When this thread is switched in again, it will start
+         * executing after this call
+         */
+        rtos_k_synchronous_context_switch(&current_thread_p->thr_execution_context);
+
+        /*
+         * Restore previous interrupt masking in the ARM core
+         */
+        rtos_k_restore_cpu_interrupts(cpu_status_register);
     }
-
-    /*
-     * If current thread had its priority boosted, lower it back to its
-     * base priority:
-     */
-    if (current_thread_p->thr_current_priority <
-        current_thread_p->thr_base_priority)
-    {
-        RTOS_THREAD_CHANGE_PRIORITY(
-            current_thread_p, current_thread_p->thr_base_priority);
-    }
-
-    /*
-     * Add current thread at the beginning of the corresponding runnable queue
-     * and change its state from running to runnable
-     */
-    rtos_add_head_runnable_thread(
-        cpu_controller_p, current_thread_p);
-
-    /*
-     * Perform a synchronous context switch:
-     *
-     * NOTE: When this thread is switched in again, it will start
-     * executing after this call
-     */
-    rtos_k_synchronous_context_switch(&current_thread_p->thr_execution_context);
-
-Exit:
-    /*
-     * Restore previous interrupt masking in the ARM core
-     */
-    rtos_k_restore_cpu_interrupts(cpu_status_register);
 }
 
 
@@ -1229,6 +1232,11 @@ rtos_k_condvar_wait(
      * Restore previous interrupt masking in the ARM core
      */
     rtos_k_restore_cpu_interrupts(cpu_status_register);
+
+    /*
+     * Reacquire the mutex:
+     */
+    rtos_k_mutex_acquire(rtos_mutex_p);
 }
 
 
