@@ -196,7 +196,7 @@ struct rtos_mutex_creation_params
     /**
      * Pointer to created mutex object returned by McRTOS
      */
-    struct rtos_mutex **const p_mutex_pp;
+    struct rtos_mutex **p_mutex_pp;
 }; 
 
 

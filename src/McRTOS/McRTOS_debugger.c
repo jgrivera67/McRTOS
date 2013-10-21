@@ -611,43 +611,58 @@ debug_dump_micro_trace_buffer(void)
     debug_printf("Micro Trace Buffer Entries: %u\n", num_entries);
 
     while (num_entries != 0) {
-        uintptr_t source_addr = ((uint32_t)*entry_p & ~0x1);
-        uintptr_t dest_addr = ((uint32_t)(*entry_p >> 32) & ~0x1);
-
-        cpu_instruction_t cpu_instruction = *(cpu_instruction_t *)source_addr;
-
-        const char *prefix;
-
-        switch (cpu_instruction & THUMB_INSTR_OP_CODE_MASK) {
-        case BL_OP_CODE_MASK:
-            prefix = "bl   at:";
-            break;
-
-        case POP_OP_CODE_MASK:
-            prefix = "pop  at:";
-            break;
-
-        case BX_OP_CODE_MASK:
-            if (cpu_instruction == BX_LR_INSTRUCTION) {
-                prefix = "bxlr at:";
-            } else {
-                prefix = "bx   at:";
-            }
-            break;
-        default:
-            prefix = "        ";
-        }
-       
+        const char *prefix = "        ";
         const char *dest_func_name;
+        uintptr_t source_addr = (uint32_t)*entry_p;
+        uintptr_t dest_addr = (uint32_t)(*entry_p >> 32);
 
-        if (dest_addr == 
-                GET_FUNCTION_ADDRESS(cortex_m_hard_fault_exception_handler)) {
-            dest_func_name = "cortex_m_hard_fault_exception_handler";
-        } else if (dest_addr ==
-                GET_FUNCTION_ADDRESS(capture_assert_failure)) {
-            dest_func_name = "capture_assert_failure";
+        source_addr &= ~0x1;
+        if (BOARD_VALID_FLASH_ADDRESS(source_addr)) {
+            cpu_instruction_t cpu_instruction = *(cpu_instruction_t *)source_addr;
+
+            switch (cpu_instruction & THUMB_INSTR_OP_CODE_MASK) {
+            case BL_OP_CODE_MASK:
+                prefix = "bl   at:";
+                break;
+
+            case POP_OP_CODE_MASK:
+                prefix = "pop  at:";
+                break;
+
+            case BX_OP_CODE_MASK:
+                if (cpu_instruction == BX_LR_INSTRUCTION) {
+                    prefix = "bxlr at:";
+                } else {
+                    prefix = "bx   at:";
+                }
+                break;
+            }
         } else {
-            dest_func_name = "";
+            source_addr |= 0x1;
+        }
+
+        dest_addr &= ~0x1;
+        if (BOARD_VALID_FLASH_ADDRESS(dest_addr)) {
+            if (dest_addr == 
+                    GET_FUNCTION_ADDRESS(cortex_m_hard_fault_exception_handler)) {
+                dest_func_name = "cortex_m_hard_fault_exception_handler";
+            } else if (dest_addr ==
+                        GET_FUNCTION_ADDRESS(capture_assert_failure)) {
+                dest_func_name = "capture_assert_failure";
+            } else {
+                dest_func_name = "";
+            }
+        } else {
+            dest_addr |= 0x1;
+            if (dest_addr == CPU_EXC_RETURN_TO_HANDLER_MODE) {
+                dest_func_name = "Exception return to handler mode";
+            } else if (dest_addr == CPU_EXC_RETURN_TO_THREAD_MODE_USING_MSP) {
+                dest_func_name = "Exception return to thread mode using MSP";
+            } else if (dest_addr == CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP) {
+                dest_func_name = "Exception return to thread mode using PSP";
+            } else {
+                dest_func_name = "Unexpected destination address";
+            }
         }
 
         debug_printf(
