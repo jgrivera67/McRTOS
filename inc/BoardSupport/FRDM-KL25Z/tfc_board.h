@@ -10,6 +10,16 @@
 
 #include <stdint.h>
 
+#define TFC_NUM_BATTERY_LEDS    4
+#define TFC_NUM_DIP_SWITCHES    4
+#define TFC_NUM_PUSH_BUTTONS    2
+#define TFC_NUM_CAMERA_PIXELS   128
+
+/**
+ * Camera exposure time in milliseconds
+ */
+#define TFC_CAMERA_EXPOSURE_TIME_MS 50
+
 /*
  * Camera raw pixel range type
  */
@@ -41,8 +51,8 @@ tfc_wheel_motors_set(
     pwm_duty_cycle_us_t right_wheel_pwm_duty_cycle_us);
 
 void
-tfc_camera_read(
-    _OUT_ tfc_camera_raw_pixel_t camera_raw_pixels[]);
+tfc_camera_read_frame(
+    _OUT_ tfc_camera_raw_pixel_t camera_frame_raw_pixels[]);
 
 tfc_battery_reading_t
 tfc_battery_sensor_read(void);

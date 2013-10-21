@@ -19,11 +19,6 @@ TODO("Remove these pragmas")
 #pragma GCC diagnostic ignored "-Wunused-function"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
-#define TFC_NUM_BATTERY_LEDS    4
-#define TFC_NUM_DIP_SWITCHES    4
-#define TFC_NUM_PUSH_BUTTONS    2
-#define TFC_NUM_CAMERA_PIXELS   128
-
 #define TFC_CAMERA_SI_DELAY     50
 #define TFC_CAMERA_CLK_DELAY    50
 
@@ -616,8 +611,8 @@ tfc_camera_init(void)
 
 
 void
-tfc_camera_read(
-    _OUT_ tfc_camera_raw_pixel_t camera_raw_pixels[])
+tfc_camera_read_frame(
+    _OUT_ tfc_camera_raw_pixel_t camera_frame_raw_pixels[])
 {
     activate_output_pin(&g_tfc_camera_si_pin);
     delay_loop(TFC_CAMERA_SI_DELAY);
@@ -626,13 +621,13 @@ tfc_camera_read(
     deactivate_output_pin(&g_tfc_camera_si_pin);
 
     for (int i = 0; i < TFC_NUM_CAMERA_PIXELS; i++) {
-        camera_raw_pixels[i] =
+        camera_frame_raw_pixels[i] =
             read_adc_channel(g_adc0_device_p, TFC_LINESCAN_0_ADC_CHANNEL);
 
         deactivate_output_pin(&g_tfc_camera_clk_pin);
         delay_loop(TFC_CAMERA_CLK_DELAY);
         activate_output_pin(&g_tfc_camera_clk_pin);
-        //delay???
+        delay_loop(TFC_CAMERA_CLK_DELAY);
     }
 
     deactivate_output_pin(&g_tfc_camera_clk_pin);

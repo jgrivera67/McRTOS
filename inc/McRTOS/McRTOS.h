@@ -248,25 +248,25 @@ struct rtos_msg_channel_creation_params
     const char *p_name_p;
 
     /**
+     * Number of entries of the circular buffer that implements the msg channel
+     */
+    uint16_t p_num_entries;
+
+    /**
+     * Pointer to array of msg entries. Each message is a void pointer
+     */
+    void **p_storage_array_p;
+
+    /**
+     * Pointer to the mutex to serialize access to the message channel or NULL
+     * if serialization is to be done by disabling interrupts.
+     */
+    struct rtos_mutex *p_mutex_p;
+    
+    /**
      * Pointer to created msg_channel object returned by McRTOS
      */
     struct rtos_msg_channel **const p_msg_channel_pp;
-};
-
-/**
- * Block of parameters for creating a object_pool
- */ 
-struct rtos_object_pool_creation_params
-{ 
-    /**
-     * Pointer to object_pool name string for debugging purposes
-     */ 
-    const char *p_name_p;
-
-    /**
-     * Pointer to created object_pool object returned by McRTOS
-     */
-    struct rtos_object_pool **const p_object_pool_pp;
 };
 
 /**
@@ -293,59 +293,20 @@ struct rtos_per_cpu_startup_app_configuration
     const struct rtos_thread_creation_params *const stc_autostart_threads_p;
 
     /**
-     * Number of application mutexes to be created for this CPU core,
-     * when McRTOS starts running. 
+     * Pointer to function that initializes application-specific hardware
      */ 
-    const rtos_num_app_mutexes_t stc_num_prebuilt_mutexes;
+    app_hardware_init_t *const stc_app_hardware_init_p;
 
     /**
-     * Pointer to array of mutex creation structures.
+     * Pointer to function that stops application-specific hardware
      */ 
-    const struct rtos_mutex_creation_params *const stc_prebuilt_mutexes_p;
+    app_hardware_stop_t *const stc_app_hardware_stop_p;
 
     /**
-     * Number of application condvars to be created for this CPU core,
-     * when McRTOS starts running. 
+     * Pointer to function that does application-specific initialization before
+     * auto-start application threads are created.
      */ 
-    const rtos_num_app_condvars_t stc_num_prebuilt_condvars;
-
-    /**
-     * Pointer to array of condvar creation structures.
-     */ 
-    const struct rtos_condvar_creation_params *const stc_prebuilt_condvars_p;
-
-    /**
-     * Number of application timers to be created for this CPU core,
-     * when McRTOS starts running. 
-     */ 
-    const rtos_num_app_timers_t stc_num_prebuilt_timers;
-
-    /**
-     * Pointer to array of timer creation structures.
-     */ 
-    const struct rtos_timer_creation_params *const stc_prebuilt_timers_p;
-
-    /**
-     * Number of application message channels to be created for this CPU core,
-     * when McRTOS starts running. 
-     */ 
-    const rtos_num_app_msg_channels_t stc_num_prebuilt_msg_channels;
-
-    /**
-     * Pointer to array of timer creation structures.
-     */ 
-    const struct rtos_msg_channel_creation_params *const stc_prebuilt_msg_channels_p;
-
-    /**
-     * Number of application object pools to be created for this CPU core,
-     * when McRTOS starts running. 
-     */ 
-    const rtos_num_app_object_pools_t stc_num_prebuilt_object_pools;
-
-    /**
-     * Pointer to array of object pool creation structures.
-     */ 
-    const struct rtos_object_pool_creation_params *const stc_prebuilt_object_pools_p;
+    app_software_init_t *const stc_app_software_init_p;
 };
 
 /**
@@ -369,9 +330,7 @@ struct rtos_lcd_putchar_attributes
 _NEVER_RETURN_
 void 
 rtos_startup( 
-    _IN_ const struct rtos_per_cpu_startup_app_configuration *rtos_app_config_p,
-    _IN_ app_hardware_init_t *app_hardware_init_p,
-    _IN_ app_hardware_stop_t *app_hardware_stop_p);
+    _IN_ const struct rtos_per_cpu_startup_app_configuration *rtos_app_config_p);
 
 _NEVER_RETURN_
 void

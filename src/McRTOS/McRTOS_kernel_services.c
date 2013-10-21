@@ -2857,9 +2857,11 @@ rtos_k_lcd_draw_tile(
                 circ_buf_p->cb_entries_filled > 0,                          \
                 circ_buf_p->cb_entries_filled, circ_buf_p);                 \
                                                                             \
-            *entry_value_p =                                                \
-                ((_entry_type *)circ_buf_p->cb_storage_array_p)[            \
-                circ_buf_p->cb_read_cursor];                                \
+            if (entry_value_p != NULL) {                                    \
+                *entry_value_p =                                            \
+                    ((_entry_type *)circ_buf_p->cb_storage_array_p)[        \
+                    circ_buf_p->cb_read_cursor];                            \
+            }                                                               \
                                                                             \
             circ_buf_p->cb_entries_filled --;                               \
             circ_buf_p->cb_read_cursor ++;                                  \

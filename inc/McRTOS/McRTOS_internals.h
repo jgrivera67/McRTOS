@@ -502,6 +502,12 @@ struct McRTOS
     app_hardware_stop_t *rts_app_hardware_stop_p;
 
     /**
+     * Pointer to function that initializes application-specific software
+     * before auto-start application threads are created
+     */
+    app_software_init_t *rts_app_software_init_p;
+
+    /**
      * Array of interrupt objects, one for each interrupt registered with McRTOS.
      */
     struct rtos_interrupt rts_interrupts[RTOS_MAX_NUM_INTERRUPTS];

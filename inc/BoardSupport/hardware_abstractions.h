@@ -205,6 +205,7 @@ struct adc_device;
 
 typedef void app_hardware_init_t(void);
 typedef void app_hardware_stop_t(void);
+typedef void app_software_init_t(void);
 
 /*
  * Exported functions

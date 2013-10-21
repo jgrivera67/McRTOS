@@ -22,8 +22,7 @@ TODO("Remove these pragmas")
  */
 enum system_thread_priorities
 {
-    RTOS_ROOT_THREAD_PRIORITY = 0,
-    RTOS_COMMAND_LINE_THREAD_PRIORITY = 1,
+    RTOS_ROOT_THREAD_PRIORITY = RTOS_HIGHEST_THREAD_PRIORITY,
     RTOS_IDLE_THREAD_PRIORITY = RTOS_LOWEST_THREAD_PRIORITY,
 };
 
@@ -242,16 +241,14 @@ lcd_display_greetings(void)
  */
 void
 rtos_startup( 
-    _IN_ const struct rtos_per_cpu_startup_app_configuration *rtos_app_config_p,
-    _IN_ app_hardware_init_t *app_hardware_init_p,
-    _IN_ app_hardware_stop_t *app_hardware_stop_p)
+    _IN_ const struct rtos_per_cpu_startup_app_configuration *rtos_app_config_p)
 {
     FDC_ASSERT_COMING_FROM_RESET();
     FDC_ASSERT_CPU_IS_LITTLE_ENDIAN();
     FDC_ASSERT_VALID_RAM_OR_ROM_POINTER(rtos_app_config_p, sizeof(uint32_t));
-    FDC_ASSERT_VALID_FUNCTION_POINTER(app_hardware_init_p);
-    FDC_ASSERT_VALID_FUNCTION_POINTER(app_hardware_stop_p);
-
+    FDC_ASSERT_VALID_FUNCTION_POINTER(rtos_app_config_p->stc_app_hardware_init_p);
+    FDC_ASSERT_VALID_FUNCTION_POINTER(rtos_app_config_p->stc_app_hardware_stop_p);
+    FDC_ASSERT_VALID_FUNCTION_POINTER(rtos_app_config_p->stc_app_software_init_p);
 
     struct rtos_thread *rtos_thread_p;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
@@ -266,8 +263,9 @@ rtos_startup(
     __disable_irq();
 #   endif
 
-    g_McRTOS_p->rts_app_hardware_init_p = app_hardware_init_p;
-    g_McRTOS_p->rts_app_hardware_stop_p = app_hardware_stop_p;
+    g_McRTOS_p->rts_app_hardware_init_p = rtos_app_config_p->stc_app_hardware_init_p;
+    g_McRTOS_p->rts_app_hardware_stop_p = rtos_app_config_p->stc_app_hardware_stop_p;
+    g_McRTOS_p->rts_app_software_init_p = rtos_app_config_p->stc_app_software_init_p;
 
     rtos_init_reset_execution_context(cpu_controller_p);
 
@@ -547,60 +545,14 @@ rtos_root_thread_f(void *arg)
     }
 
     /*
-     * Create pre-built application mutexes for this CPU core:
+     * Do application-specific software initializations that are to done before
+     * auto-start application threads are created:
      */
-
-    rtos_num_app_mutexes_t num_app_mutexes =
-        rtos_app_config_p->stc_num_prebuilt_mutexes;
-
-    for (rtos_num_app_mutexes_t i = 0; i < num_app_mutexes; i ++)
-    {
-        fdc_error = rtos_k_create_mutex(
-                        &rtos_app_config_p->stc_prebuilt_mutexes_p[i]);
-
-        if (fdc_error != 0)
-        {
-            console_printf(
-                "CPU core %u: *** Error creating application mutex %u ***\n",
-                cpu_id, i);
-
-            fatal_error_handler(fdc_error);
-        }
-
-        console_printf("CPU core %u: %s created\n", cpu_id,
-            rtos_app_config_p->stc_prebuilt_mutexes_p[i].p_name_p);
-
-    }
-
-    /*
-     * Create pre-built application condvars for this CPU core:
-     */
-
-    rtos_num_app_condvars_t num_app_condvars =
-        rtos_app_config_p->stc_num_prebuilt_condvars;
-
-    for (rtos_num_app_condvars_t i = 0; i < num_app_condvars; i ++)
-    {
-        fdc_error = rtos_k_create_condvar(
-                        &rtos_app_config_p->stc_prebuilt_condvars_p[i]);
-
-        if (fdc_error != 0)
-        {
-            console_printf(
-                "CPU core %u: *** Error creating application condvar %u ***\n",
-                cpu_id, i);
-
-            fatal_error_handler(fdc_error);
-        }
-
-        console_printf("CPU core %u: %s created\n", cpu_id,
-            rtos_app_config_p->stc_prebuilt_condvars_p[i].p_name_p);
-    }
+    g_McRTOS_p->rts_app_software_init_p();
 
     /*
      * Create auto-start application threads for this CPU core
      */
-
     rtos_num_app_threads_t num_app_threads =
         rtos_app_config_p->stc_num_autostart_threads;
 
