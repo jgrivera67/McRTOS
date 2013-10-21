@@ -147,6 +147,7 @@ typedef _RANGE_(INT_SVCall_IRQn, SOC_NUM_INTERRUPT_CHANNELS - 1)
         .pin_port_base_p = (_port_base_p),                              \
         .pin_gpio_base_p = (_gpio_base_p),                              \
         .pin_pcr_value = (_pcr_value),                                  \
+        .pin_bit_index = _pin_bit_index,                                \
         .pin_bit_mask = BIT(_pin_bit_index),                            \
         .pin_is_active_high = (_pin_is_active_high),                    \
     }
@@ -159,7 +160,9 @@ struct pin_config_info {
     GPIO_MemMapPtr pin_gpio_base_p;
     uint32_t pin_pcr_value;
     uint32_t pin_bit_mask;
-    bool pin_is_active_high; /*  false - low, true - high */
+    uint8_t pin_bit_index;
+    uint8_t pin_is_active_high; /*  false - low, true - high */
+    uint16_t reserved;
 };
 
 void micro_trace_init(void);

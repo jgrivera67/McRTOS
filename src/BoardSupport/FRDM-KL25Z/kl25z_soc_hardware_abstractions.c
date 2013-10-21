@@ -880,16 +880,10 @@ configure_pin(const struct pin_config_info *pin_info_p, bool is_output)
     uint32_t reg_value;
 
     write_32bit_mmio_register(
-        &PORT_PCR_REG(pin_info_p->pin_port_base_p, pin_info_p->pin_bit_mask),
+        &PORT_PCR_REG(pin_info_p->pin_port_base_p, pin_info_p->pin_bit_index),
         pin_info_p->pin_pcr_value);
 
     if (is_output) {
-        /*
-         * Initialize pin to be de-asserted, before setting it as an
-         * output pin:
-         */ 
-        deactivate_output_pin(pin_info_p);
-
         reg_value = read_32bit_mmio_register(
                         &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p));
         reg_value |= pin_info_p->pin_bit_mask;
@@ -940,7 +934,7 @@ deactivate_output_pin(const struct pin_config_info *pin_info_p)
     
     FDC_ASSERT(
         reg_value & pin_info_p->pin_bit_mask,
-        pin_info_p, reg_value);
+        reg_value, pin_info_p->pin_bit_mask);
 #   endif
 
     if (pin_info_p->pin_is_active_high) {
@@ -1786,6 +1780,10 @@ kl25_adc_interrupt_e_handler(
      */
     reg_value = read_32bit_mmio_register(
                     &ADC_RA_REG(adc_mmio_registers_p));
+
+    FDC_ASSERT(
+        reg_value <= ADC_RESULT_MAX_VALUE,
+        reg_value, ADC_RESULT_MAX_VALUE);
 
     adc_channel_p->adc_result = reg_value;
     adc_channel_p->adc_conversion_completed = true;
