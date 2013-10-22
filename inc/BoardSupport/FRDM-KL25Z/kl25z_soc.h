@@ -42,9 +42,28 @@ struct tpm_device {
 /**
  * Number of A/D converter channels
  */
-#define NUM_ADC_CHANNELS    24 
+#define NUM_ADC_CHANNELS    14 
 
 #define ADC_CHANNEL_NONE    NUM_ADC_CHANNELS   
+
+/**
+ * ADC_CFG1 register MODE field
+ * 0x0 - single-ended 8-bit conversion 
+ * 0x1 - single-ended 12-bit conversion 
+ * 0x2 - single-ended 10-bit conversion 
+ * 0x3 - single-ended 16-bit conversion 
+ */
+#if ADC_RESOLUTION == 8
+#   define ADC_CFG1_MODE_VALUE   0x0
+#elif ADC_RESOLUTION == 12
+#   define ADC_CFG1_MODE_VALUE   0x1
+#elif ADC_RESOLUTION == 10
+#   define ADC_CFG1_MODE_VALUE   0x2
+#elif ADC_RESOLUTION == 16
+#   define ADC_CFG1_MODE_VALUE   0x3
+#else
+#   error "ADC_RESOLUTION value not supported"
+#endif
 
 #define ADC_SC1A_REG(_adc_mmio_registers_p) \
         ADC_SC1_REG(_adc_mmio_registers_p, 0)

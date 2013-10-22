@@ -1491,14 +1491,14 @@ init_adc(const struct adc_device *adc_device_p)
      * - ADLPC bit = 0: Normal power configuration
      * - ADLSMP bit = 1: Long sample time
      * - ADIV = 0x2: clock rate is (input clock)/4
-     * - MODE = 0x1:  single-ended 12-bit conversion
+     * - MODE = ADC_CFG1_MODE_VALUE
      * - ADICLK = 0x0: Bus clock 
      */
     reg_value = ADC_CFG1_ADLSMP_MASK;
     SET_BIT_FIELD(
         reg_value, ADC_CFG1_ADIV_MASK, ADC_CFG1_ADIV_SHIFT, 0x2);
     SET_BIT_FIELD(
-        reg_value, ADC_CFG1_MODE_MASK, ADC_CFG1_MODE_SHIFT, 0x1);
+        reg_value, ADC_CFG1_MODE_MASK, ADC_CFG1_MODE_SHIFT, ADC_CFG1_MODE_VALUE);
     SET_BIT_FIELD(
         reg_value, ADC_CFG1_ADICLK_MASK, ADC_CFG1_ADICLK_SHIFT, 0x0);
     write_32bit_mmio_register(
@@ -1603,14 +1603,14 @@ kl25_adc_calibrate(const struct adc_device *adc_device_p)
      * - ADLPC bit = 0: Normal power configuration
      * - ADLSMP bit = 1: Long sample time
      * - ADIV = 0x3: clock rate is (input clock)/8 = 3MHz (<= 4MHz)
-     * - MODE = 0x1:  single-ended 12-bit conversion
+     * - MODE = ADC_CFG1_MODE_VALUE
      * - ADICLK = 0x0: Bus clock 
      */
     reg_value = ADC_CFG1_ADLSMP_MASK;
     SET_BIT_FIELD(
         reg_value, ADC_CFG1_ADIV_MASK, ADC_CFG1_ADIV_SHIFT, 0x3);
     SET_BIT_FIELD(
-        reg_value, ADC_CFG1_MODE_MASK, ADC_CFG1_MODE_SHIFT, 0x1);
+        reg_value, ADC_CFG1_MODE_MASK, ADC_CFG1_MODE_SHIFT, ADC_CFG1_MODE_VALUE);
     SET_BIT_FIELD(
         reg_value, ADC_CFG1_ADICLK_MASK, ADC_CFG1_ADICLK_SHIFT, 0x0);
     write_32bit_mmio_register(

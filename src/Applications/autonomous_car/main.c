@@ -113,12 +113,12 @@ C_ASSERT(ARRAY_SIZE(g_rtos_app_config) == SOC_NUM_CPU_CORES);
 #define FILTER_PIXEL_READING(_x) \
         ((_x) >> PIXEL_READING_FILTER_SHIFT)
 
-#define PIXEL_READING_FILTER_SHIFT  10
+#define PIXEL_READING_FILTER_SHIFT  (ADC_RESOLUTION - 1)
 
 /**
  * Number of camera frame buffers
  */ 
-#define NUM_CAMERA_FRAME_BUFFERS    4
+#define NUM_CAMERA_FRAME_BUFFERS    8
 
 /**
  * Array of camera frame buffers
@@ -388,8 +388,8 @@ camera_frame_normalizer_thread_f(void *arg)
 
 
 static tfc_trimpot_reading_t g_last_trimpot_readings[TFC_NUM_TRIMPOTS] = {
-    [0] = ADC_RESULT_MAX_VALUE + 1,
-    [1] = ADC_RESULT_MAX_VALUE + 1
+    [0] = 0,
+    [1] = 0 
 };
 
 /**
@@ -399,8 +399,7 @@ static fdc_error_t
 trimpot_reader_thread_f(void *arg)
 {
 #   define TRIMPOTS_SAMPLING_PERIOD_MS  250
-#   define TRIMPOT_READING_MASK         (~0x7f)
-#   define TRIMPOT_READING_SHIFT        7
+#   define TRIMPOT_READING_SHIFT        (ADC_RESOLUTION - 5)
 #   define FILTER_TRIMPOT_READING(_x) \
             ((_x) >> TRIMPOT_READING_SHIFT)
 

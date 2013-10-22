@@ -119,9 +119,14 @@ typedef _RANGE_(INT_SVCall_IRQn, SOC_NUM_INTERRUPT_CHANNELS - 1)
 #define PWM_MAX_NUM_CHANNELS    6
 
 /**
- * Max value of the result of a 12-bit A/D conversion
+ * A/D conversion resolution in bits
  */
-#define ADC_RESULT_MAX_VALUE    ((UINT16_C(1) << 12) - 1)
+#define ADC_RESOLUTION  8
+
+/**
+ * Max value of the result of an A/D conversion
+ */
+#define ADC_RESULT_MAX_VALUE    ((UINT32_C(1) << ADC_RESOLUTION) - 1)
 
 /**
  * Value for the MASK field of the MTB_MASTER register. It determines the
@@ -156,6 +161,21 @@ typedef _RANGE_(INT_SVCall_IRQn, SOC_NUM_INTERRUPT_CHANNELS - 1)
         .pin_bit_mask = BIT(_pin_bit_index),                            \
         .pin_is_active_high = (_pin_is_active_high),                    \
     }
+
+/**
+ * ADC result range type
+ */
+#if ADC_RESOLUTION <= 8
+    typedef _RANGE_(0, ADC_RESULT_MAX_VALUE)
+            uint8_t adc_result_t;
+#elif ADC_RESOLUTION <= 16
+    typedef _RANGE_(0, ADC_RESULT_MAX_VALUE)
+            uint16_t adc_result_t;
+#else
+#   error "ADC_RESOLUTION value not supported"
+#endif
+
+C_ASSERT(sizeof(adc_result_t) * 8 >= ADC_RESOLUTION);
 
 /**
  * Pin configuration parameters

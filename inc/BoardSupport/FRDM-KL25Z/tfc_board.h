@@ -24,20 +24,17 @@
 /*
  * Camera raw pixel range type
  */
-typedef _RANGE_(0, ADC_RESULT_MAX_VALUE)
-        uint16_t tfc_camera_raw_pixel_t;
+typedef adc_result_t tfc_camera_raw_pixel_t;
 
 /*
  * Trimpot reading range type
  */
-typedef _RANGE_(0, ADC_RESULT_MAX_VALUE)
-        uint16_t tfc_trimpot_reading_t;
+typedef adc_result_t tfc_trimpot_reading_t;
 
 /*
  * Battery sensor reading range type
  */
-typedef _RANGE_(0, ADC_RESULT_MAX_VALUE)
-        uint16_t tfc_battery_reading_t;
+typedef adc_result_t tfc_battery_reading_t;
 
 void tfc_board_init(void);
 void tfc_board_stop(void);
