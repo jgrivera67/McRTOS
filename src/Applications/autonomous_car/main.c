@@ -16,9 +16,12 @@
 #include "tfc_board.h"
 
 TODO("Remove these pragmas")
-//#pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-function"
+
+#define BLACK_SPOT_MIN_WIDTH    8
+#define BLACK_SPOT_MAX_WIDTH    24
 
 /**
  * Application thread priorities
@@ -26,25 +29,20 @@ TODO("Remove these pragmas")
 enum app_thread_priorities
 {
     CAMERA_FRAME_READER_THREAD_PRIORITY = RTOS_HIGHEST_THREAD_PRIORITY,
-    CAMERA_FRAME_NORMALIZER_THREAD_PRIORITY = RTOS_HIGHEST_THREAD_PRIORITY + 1,
-    BUTTONS_READER_THREAD_PRIORITY = RTOS_LOWEST_THREAD_PRIORITY - 1,
+    CAR_DRIVER_THREAD_PRIORITY = RTOS_HIGHEST_THREAD_PRIORITY + 1,
+    SWITCHES_AND_BUTTONS_READER_THREAD_PRIORITY = RTOS_LOWEST_THREAD_PRIORITY - 1,
     TRIMPOT_READER_THREAD_PRIORITY = RTOS_LOWEST_THREAD_PRIORITY - 1,
 };
 
-/**
- * Camera frame converted to a bit map, where each bit represents a pixel.
- * 0 is a black pixel, 1 is white pixel.
- */
-struct normalized_frame {
-    uint32_t nf_bit_map[TFC_NUM_CAMERA_PIXELS / (sizeof(uint32_t) * 8)];
-};
+typedef _RANGE_(0, TFC_NUM_CAMERA_PIXELS - 1)
+        uint8_t black_spot_position_t;
 
 static void autonomous_car_hardware_init(void);
 static void autonomous_car_hardware_stop(void);
 static void autonomous_car_app_init(void);
 static fdc_error_t camera_frame_reader_thread_f(void *arg);
-static fdc_error_t camera_frame_normalizer_thread_f(void *arg);
-static fdc_error_t buttons_reader_thread_f(void *arg);
+static fdc_error_t car_driver_thread_f(void *arg);
+static fdc_error_t switches_and_buttons_reader_thread_f(void *arg);
 static fdc_error_t trimpot_reader_thread_f(void *arg);
 
 /**
@@ -63,10 +61,10 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
 
     [1] =
     {
-        .p_name_p = "camera frame normalizer thread",
-        .p_function_p = camera_frame_normalizer_thread_f,
+        .p_name_p = "car driver thread",
+        .p_function_p = car_driver_thread_f,
         .p_function_arg_p = NULL,
-        .p_priority = CAMERA_FRAME_NORMALIZER_THREAD_PRIORITY,
+        .p_priority = CAR_DRIVER_THREAD_PRIORITY,
         .p_thread_pp = NULL,
     },
 
@@ -79,16 +77,14 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
         .p_thread_pp = NULL,
     },
 
-#if 0
     [3] =
     {
-        .p_name_p = "buttons reader thread",
-        .p_function_p = buttons_reader_thread_f,
+        .p_name_p = "switches & buttons reader thread",
+        .p_function_p = switches_and_buttons_reader_thread_f,
         .p_function_arg_p = NULL,
-        .p_priority = BUTTONS_READER_THREAD_PRIORITY,
+        .p_priority = SWITCHES_AND_BUTTONS_READER_THREAD_PRIORITY,
         .p_thread_pp = NULL,
     },
-#endif
 };
 
 C_ASSERT(
@@ -129,19 +125,9 @@ C_ASSERT(ARRAY_SIZE(g_rtos_app_config) == SOC_NUM_CPU_CORES);
 #define NUM_CAMERA_FRAMES    8
 
 /**
- * Number of normalized camera frame buffers
- */ 
-#define NUM_NORMALIZED_FRAMES    (NUM_CAMERA_FRAMES * 2)
-
-/**
  * Array of raw camera frame buffers
  */
 static struct tfc_camera_frame g_camera_frames[NUM_CAMERA_FRAMES];
-
-/**
- * Array of normalized camera frame buffers
- */
-static struct normalized_frame g_normalized_frames[NUM_NORMALIZED_FRAMES];
 
 /**
  * Circular buffer of pointers used to keep track of available camera frame 
@@ -152,14 +138,20 @@ static struct rtos_circular_buffer g_camera_frame_buffer_pool;
 /**
  * Circular buffer of pointers where pointers to captured camera raw frames 
  * are stored by the camera_frame_reader_thread_f thread, and consumed by
- * the camera_frame_normalizer_thread_f
+ * the car_driver_thread_f
  */
 static struct rtos_circular_buffer g_captured_camera_frames_queue;
 
 /**
- * Counter of dropped camera frames:
+ * Count of dropped camera frames
  */
-static uint32_t g_dropped_camera_frames_count = 0;
+static uint32_t g_dropped_camera_frames = 0;
+
+/**
+ * Flag to enable/disable dumping of camera frames to the console. It can
+ * be changed through a DIP switch.
+ */ 
+static volatile bool g_dump_camera_frames_on = true;
 
 /**
  * Application's main()
@@ -273,20 +265,6 @@ void autonomous_car_app_init(void)
         &g_captured_camera_frames_queue);
 }
 
-//???
-static void
-dump_camera_frame(
-    _IN_ struct tfc_camera_frame *camera_frame_p)
-{
-    for (int i = 0; i < TFC_NUM_CAMERA_PIXELS; i ++) {
-        console_printf("%x ",
-            FILTER_PIXEL_READING(camera_frame_p->cf_pixels[i]));
-    }
-
-    console_printf("\n");
-}
-//???
-
 
 static fdc_error_t
 camera_frame_reader_thread_f(void *arg)
@@ -324,7 +302,7 @@ camera_frame_reader_thread_f(void *arg)
                             false);
 
                 if (read_ok) {
-                    ATOMIC_POST_INCREMENT_UINT32(&g_dropped_camera_frames_count);
+                    ATOMIC_POST_INCREMENT_UINT32(&g_dropped_camera_frames);
                 }
             }
         } while (!read_ok);
@@ -354,16 +332,47 @@ camera_frame_reader_thread_f(void *arg)
 }
 
 
+static black_spot_position_t
+find_black_spot(
+    _IN_ struct tfc_camera_frame *camera_frame_p)
+{
+    black_spot_position_t black_spot_position = 0;
+
+    for (int i = 0; i < TFC_NUM_CAMERA_PIXELS; i ++) {
+        if (g_dump_camera_frames_on) {
+            console_printf("%x",
+                FILTER_PIXEL_READING(camera_frame_p->cf_pixels[i]));
+        }
+
+        //XXX
+    }
+
+    if (g_dump_camera_frames_on) {
+        console_printf("\n");
+        console_printf("Dropped frames: %u\n", g_dropped_camera_frames);
+    }
+
+    return black_spot_position;
+}
+
+
+static void
+drive_car(
+    _IN_ black_spot_position_t black_spot_position)
+{
+
+}
+
+
 static fdc_error_t
-camera_frame_normalizer_thread_f(void *arg)
+car_driver_thread_f(void *arg)
 {
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
-    uint32_t frame_count = 0;
 
     FDC_ASSERT(arg == NULL, arg, cpu_id);
 
-    console_printf("Initializing camera frame normalizer thread ...\n");
+    console_printf("Initializing car driver thread ...\n");
     
     for ( ; ; ) {
         struct tfc_camera_frame *camera_frame_p;
@@ -376,13 +385,8 @@ camera_frame_normalizer_thread_f(void *arg)
             (void **)&camera_frame_p,
             true);
 
-        //???
-        console_printf("Frame %u (dropped frames %u)\n",
-            frame_count, g_dropped_camera_frames_count);
-
-        dump_camera_frame(camera_frame_p);
-        //???
-        frame_count ++;
+        black_spot_position_t black_spot_position =
+            find_black_spot(camera_frame_p);
 
         /*
          * Return frame buffer to the frame buffer pool:
@@ -393,6 +397,8 @@ camera_frame_normalizer_thread_f(void *arg)
                             false);
 
         FDC_ASSERT(write_ok, 0, 0);
+
+        drive_car(black_spot_position);
     }
 
     fdc_error =
@@ -458,59 +464,35 @@ trimpot_reader_thread_f(void *arg)
 }
 
 
-/**
- * Buttons reader thread
- */
 static fdc_error_t
-buttons_reader_thread_f(void *arg)
+switches_and_buttons_reader_thread_f(void *arg)
 {
+#   define SWITCHES_AND_BUTTONS_READER_THREAD_PERIOD_MS 200
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
     FDC_ASSERT(arg == NULL, arg, cpu_id);
 
-    console_printf("Initializing McRTOS buttons reader thread ...\n");
+    console_printf("Initializing switches & buttons reader thread ...\n");
 
-#if 0 // ???
-    uint32_t buttons_pressed;
+    bool push_buttons[TFC_NUM_PUSH_BUTTONS];
+    bool dip_switches[TFC_NUM_DIP_SWITCHES];
 
-    init_buttons(g_buttons_device_p);
 
-    for ( ; ; )
-    {
-        buttons_pressed = read_buttons(g_buttons_device_p);
+    for ( ; ; ) {
+        tfc_dip_switches_read(dip_switches);
 
-        buttons_pressed &= (BUTTON1_PRESSED_MASK | BUTTON2_PRESSED_MASK);
-        
-        if (buttons_pressed == BUTTON1_PRESSED_MASK)
-        {
-        }
-        else if (buttons_pressed == BUTTON2_PRESSED_MASK)
-        {
-        }
-        else if (buttons_pressed != 0)
-        {
-            /*
-             * Both buttons are pressed at the same time
-             */
-            DBG_ASSERT(
-                buttons_pressed == (BUTTON1_PRESSED_MASK | BUTTON2_PRESSED_MASK),
-                buttons_pressed, 0);
-        }
+        //XXX
 
-#ifndef USE_GPIO_INTERRUPTS
-        rtos_thread_delay(200);
-#endif
+        tfc_push_buttons_read(push_buttons);
+
+        //XXX
+
+        rtos_thread_delay(SWITCHES_AND_BUTTONS_READER_THREAD_PERIOD_MS);
     } 
-#else
-   for ( ; ; ) {
-       //???console_printf("%s\n", __func__);
-       rtos_thread_delay(2000);
-   }
-#endif
 
     fdc_error = CAPTURE_FDC_ERROR(
-        "McRTOS buttons reader thread should not have terminated",
+        "thread should not have terminated",
         cpu_id, rtos_thread_self());
 
     return fdc_error;
