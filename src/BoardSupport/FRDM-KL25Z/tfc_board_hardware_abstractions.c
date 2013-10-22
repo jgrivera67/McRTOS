@@ -612,7 +612,7 @@ tfc_camera_init(void)
 
 void
 tfc_camera_read_frame(
-    _OUT_ tfc_camera_raw_pixel_t camera_frame_raw_pixels[])
+    _OUT_ struct tfc_camera_frame *camera_frame_p)
 {
     activate_output_pin(&g_tfc_camera_si_pin);
     delay_loop(TFC_CAMERA_SI_DELAY);
@@ -621,7 +621,7 @@ tfc_camera_read_frame(
     deactivate_output_pin(&g_tfc_camera_si_pin);
 
     for (int i = 0; i < TFC_NUM_CAMERA_PIXELS; i++) {
-        camera_frame_raw_pixels[i] =
+        camera_frame_p->cf_pixels[i] =
             read_adc_channel(g_adc0_device_p, TFC_LINESCAN_0_ADC_CHANNEL);
 
         deactivate_output_pin(&g_tfc_camera_clk_pin);

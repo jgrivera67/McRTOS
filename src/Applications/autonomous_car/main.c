@@ -31,6 +31,14 @@ enum app_thread_priorities
     TRIMPOT_READER_THREAD_PRIORITY = RTOS_LOWEST_THREAD_PRIORITY - 1,
 };
 
+/**
+ * Camera frame converted to a bit map, where each bit represents a pixel.
+ * 0 is a black pixel, 1 is white pixel.
+ */
+struct normalized_frame {
+    uint32_t nf_bit_map[TFC_NUM_CAMERA_PIXELS / (sizeof(uint32_t) * 8)];
+};
+
 static void autonomous_car_hardware_init(void);
 static void autonomous_car_hardware_stop(void);
 static void autonomous_car_app_init(void);
@@ -116,15 +124,24 @@ C_ASSERT(ARRAY_SIZE(g_rtos_app_config) == SOC_NUM_CPU_CORES);
 #define PIXEL_READING_FILTER_SHIFT  (ADC_RESOLUTION - 1)
 
 /**
- * Number of camera frame buffers
+ * Number of raw camera frame buffers
  */ 
-#define NUM_CAMERA_FRAME_BUFFERS    8
+#define NUM_CAMERA_FRAMES    8
 
 /**
- * Array of camera frame buffers
+ * Number of normalized camera frame buffers
+ */ 
+#define NUM_NORMALIZED_FRAMES    (NUM_CAMERA_FRAMES * 2)
+
+/**
+ * Array of raw camera frame buffers
  */
-static tfc_camera_raw_pixel_t
-    g_camera_frame_buffers[NUM_CAMERA_FRAME_BUFFERS][TFC_NUM_CAMERA_PIXELS];
+static struct tfc_camera_frame g_camera_frames[NUM_CAMERA_FRAMES];
+
+/**
+ * Array of normalized camera frame buffers
+ */
+static struct normalized_frame g_normalized_frames[NUM_NORMALIZED_FRAMES];
 
 /**
  * Circular buffer of pointers used to keep track of available camera frame 
@@ -137,7 +154,7 @@ static struct rtos_circular_buffer g_camera_frame_buffer_pool;
  * are stored by the camera_frame_reader_thread_f thread, and consumed by
  * the camera_frame_normalizer_thread_f
  */
-static struct rtos_circular_buffer g_captured_camera_frames_circular_buffer;
+static struct rtos_circular_buffer g_captured_camera_frames_queue;
 
 /**
  * Counter of dropped camera frames:
@@ -185,14 +202,14 @@ void autonomous_car_app_init(void)
     /**
      * Array of entries for g_camera_frame_buffer_pool
      */
-    static tfc_camera_raw_pixel_t
-        *g_camera_frame_buffer_pool_entries[NUM_CAMERA_FRAME_BUFFERS];
+    static struct tfc_camera_frame
+        *g_camera_frame_buffer_pool_entries[NUM_CAMERA_FRAMES];
 
     /**
-     * Array of entries for g_captured_camera_frames_circular_buffer
+     * Array of entries for g_captured_camera_frames_queue
      */
-    static tfc_camera_raw_pixel_t
-        *g_captured_camera_frames_circular_buffer_entries[NUM_CAMERA_FRAME_BUFFERS];
+    static struct tfc_camera_frame
+        *g_captured_camera_frames_queue_entries[NUM_CAMERA_FRAMES];
 
     /**
      * Pointer to mutex to serialize access to g_camera_frame_buffer_pool
@@ -200,9 +217,9 @@ void autonomous_car_app_init(void)
     static struct rtos_mutex *g_camera_frame_buffer_pool_mutex_p;
 
     /**
-     * Pointer to mutex to serialize access to g_camera_frames_circular_buffer
+     * Pointer to mutex to serialize access to g_camera_frames_queue
      */
-    static struct rtos_mutex *g_captured_camera_frames_circular_buffer_mutex_p;
+    static struct rtos_mutex *g_captured_camera_frames_queue_mutex_p;
 
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
@@ -220,17 +237,17 @@ void autonomous_car_app_init(void)
     }
 
     rtos_k_pointer_circular_buffer_init(
-        "Camera frame buffer pool",
-        NUM_CAMERA_FRAME_BUFFERS,
-        (void **)g_captured_camera_frames_circular_buffer_entries,
+        "Raw camera frame buffer pool",
+        NUM_CAMERA_FRAMES,
+        (void **)g_captured_camera_frames_queue_entries,
         g_camera_frame_buffer_pool_mutex_p,
         cpu_id,
         &g_camera_frame_buffer_pool);
 
-    for (int i = 0; i < NUM_CAMERA_FRAME_BUFFERS; i++) {
+    for (int i = 0; i < NUM_CAMERA_FRAMES; i++) {
         bool write_ok = rtos_k_pointer_circular_buffer_write(
                             &g_camera_frame_buffer_pool,
-                            g_camera_frame_buffers[i],
+                            &g_camera_frames[i],
                             false);
 
         DBG_ASSERT(write_ok, 0, 0);
@@ -241,7 +258,7 @@ void autonomous_car_app_init(void)
      */
 
     mutex_params.p_name_p = "Captured camera frames circular buffer mutex";
-    mutex_params.p_mutex_pp = &g_captured_camera_frames_circular_buffer_mutex_p;
+    mutex_params.p_mutex_pp = &g_captured_camera_frames_queue_mutex_p;
     fdc_error = rtos_k_create_mutex(&mutex_params);
     if (fdc_error != 0) {
         fatal_error_handler(fdc_error);
@@ -249,21 +266,21 @@ void autonomous_car_app_init(void)
 
     rtos_k_pointer_circular_buffer_init(
         "Captured camera frames",
-        NUM_CAMERA_FRAME_BUFFERS,
-        (void **)g_captured_camera_frames_circular_buffer_entries,
-        g_captured_camera_frames_circular_buffer_mutex_p,
+        NUM_CAMERA_FRAMES,
+        (void **)g_captured_camera_frames_queue_entries,
+        g_captured_camera_frames_queue_mutex_p,
         cpu_id,
-        &g_captured_camera_frames_circular_buffer);
+        &g_captured_camera_frames_queue);
 }
 
 //???
 static void
 dump_camera_frame(
-    _IN_ tfc_camera_raw_pixel_t camera_frame_raw_pixels[])
+    _IN_ struct tfc_camera_frame *camera_frame_p)
 {
     for (int i = 0; i < TFC_NUM_CAMERA_PIXELS; i ++) {
         console_printf("%x ",
-            FILTER_PIXEL_READING(camera_frame_raw_pixels[i]));
+            FILTER_PIXEL_READING(camera_frame_p->cf_pixels[i]));
     }
 
     console_printf("\n");
@@ -288,7 +305,7 @@ camera_frame_reader_thread_f(void *arg)
          * Get next available buffer from the frame buffer pool:
          */
         bool read_ok;
-        tfc_camera_raw_pixel_t *frame_buffer_p = NULL;
+        struct tfc_camera_frame *frame_buffer_p = NULL;
 
         do {
             read_ok = rtos_k_pointer_circular_buffer_read(
@@ -302,7 +319,7 @@ camera_frame_reader_thread_f(void *arg)
                  * frame, to use its buffer to capture the next camera frame:
                  */
                 read_ok = rtos_k_pointer_circular_buffer_read(
-                            &g_captured_camera_frames_circular_buffer,
+                            &g_captured_camera_frames_queue,
                             (void **)&frame_buffer_p,
                             false);
 
@@ -321,7 +338,7 @@ camera_frame_reader_thread_f(void *arg)
 
         bool write_ok =
             rtos_k_pointer_circular_buffer_write(
-                &g_captured_camera_frames_circular_buffer,
+                &g_captured_camera_frames_queue,
                 frame_buffer_p,
                 false);
 
@@ -349,21 +366,21 @@ camera_frame_normalizer_thread_f(void *arg)
     console_printf("Initializing camera frame normalizer thread ...\n");
     
     for ( ; ; ) {
-        tfc_camera_raw_pixel_t *camera_frame_buffer_p;
+        struct tfc_camera_frame *camera_frame_p;
 
         /*
          * Get the next camera frame to process, or wait if there is none yet:
          */
         (void)rtos_k_pointer_circular_buffer_read(
-            &g_captured_camera_frames_circular_buffer,
-            (void **)&camera_frame_buffer_p,
+            &g_captured_camera_frames_queue,
+            (void **)&camera_frame_p,
             true);
 
         //???
         console_printf("Frame %u (dropped frames %u)\n",
             frame_count, g_dropped_camera_frames_count);
 
-        dump_camera_frame(camera_frame_buffer_p);
+        dump_camera_frame(camera_frame_p);
         //???
         frame_count ++;
 
@@ -372,7 +389,7 @@ camera_frame_normalizer_thread_f(void *arg)
          */
         bool write_ok = rtos_k_pointer_circular_buffer_write(
                             &g_camera_frame_buffer_pool,
-                            camera_frame_buffer_p,
+                            camera_frame_p,
                             false);
 
         FDC_ASSERT(write_ok, 0, 0);

@@ -36,6 +36,13 @@ typedef adc_result_t tfc_trimpot_reading_t;
  */
 typedef adc_result_t tfc_battery_reading_t;
 
+/**
+ * Raw camera frame, where each pixel is presented by a sampled voltage.
+ */
+struct tfc_camera_frame {
+    tfc_camera_raw_pixel_t cf_pixels[TFC_NUM_CAMERA_PIXELS];
+};
+
 void tfc_board_init(void);
 void tfc_board_stop(void);
 
@@ -50,7 +57,7 @@ tfc_wheel_motors_set(
 
 void
 tfc_camera_read_frame(
-    _OUT_ tfc_camera_raw_pixel_t camera_frame_raw_pixels[]);
+    _OUT_ struct tfc_camera_frame *camera_frame_p);
 
 tfc_battery_reading_t
 tfc_battery_sensor_read(void);
