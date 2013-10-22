@@ -119,6 +119,11 @@ typedef _RANGE_(INT_SVCall_IRQn, SOC_NUM_INTERRUPT_CHANNELS - 1)
 #define PWM_MAX_NUM_CHANNELS    6
 
 /**
+ * Max value of the result of a 12-bit A/D conversion
+ */
+#define ADC_RESULT_MAX_VALUE    ((UINT16_C(1) << 12) - 1)
+
+/**
  * Value for the MASK field of the MTB_MASTER register. It determines the
  * size of the micro trace circular buffer: 
  * 2^(MASK field + 4) == 2^(6 + 4) = 1024 bytes

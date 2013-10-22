@@ -637,10 +637,7 @@ tfc_camera_read_frame(
 static void
 tfc_trimpots_init(void) 
 {
-#if 0 // ???
-    for (int i = 0; i < TFC_NUM_TRIMPOTS; i++) {
-        configure_pin(&g_tfc_trimpot_pins[i], false);
-#endif
+
 }
 
 

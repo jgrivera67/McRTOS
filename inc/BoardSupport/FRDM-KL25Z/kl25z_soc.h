@@ -46,11 +46,6 @@ struct tpm_device {
 
 #define ADC_CHANNEL_NONE    NUM_ADC_CHANNELS   
 
-/**
- * Max value of the result of a 12-bit A/D conversion
- */
-#define ADC_RESULT_MAX_VALUE    ((UINT16_C(1) << 12) - 1)
-
 #define ADC_SC1A_REG(_adc_mmio_registers_p) \
         ADC_SC1_REG(_adc_mmio_registers_p, 0)
 

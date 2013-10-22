@@ -13,6 +13,7 @@
 #define TFC_NUM_BATTERY_LEDS    4
 #define TFC_NUM_DIP_SWITCHES    4
 #define TFC_NUM_PUSH_BUTTONS    2
+#define TFC_NUM_TRIMPOTS        2
 #define TFC_NUM_CAMERA_PIXELS   128
 
 /**

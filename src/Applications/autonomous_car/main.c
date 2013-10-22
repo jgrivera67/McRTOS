@@ -62,22 +62,22 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
         .p_thread_pp = NULL,
     },
 
-#if 0
     [2] =
-    {
-        .p_name_p = "buttons reader thread",
-        .p_function_p = buttons_reader_thread_f,
-        .p_function_arg_p = NULL,
-        .p_priority = BUTTONS_READER_THREAD_PRIORITY,
-        .p_thread_pp = NULL,
-    },
-
-    [3] =
     {
         .p_name_p = "trimpot reader thread",
         .p_function_p = trimpot_reader_thread_f,
         .p_function_arg_p = NULL,
         .p_priority = TRIMPOT_READER_THREAD_PRIORITY,
+        .p_thread_pp = NULL,
+    },
+
+#if 0
+    [3] =
+    {
+        .p_name_p = "buttons reader thread",
+        .p_function_p = buttons_reader_thread_f,
+        .p_function_arg_p = NULL,
+        .p_priority = BUTTONS_READER_THREAD_PRIORITY,
         .p_thread_pp = NULL,
     },
 #endif
@@ -108,9 +108,17 @@ static const struct rtos_per_cpu_startup_app_configuration g_rtos_app_config[] =
 C_ASSERT(ARRAY_SIZE(g_rtos_app_config) == SOC_NUM_CPU_CORES);
 
 /**
+ * Macro to filter a raw pixel reading
+ */
+#define FILTER_PIXEL_READING(_x) \
+        ((_x) >> PIXEL_READING_FILTER_SHIFT)
+
+#define PIXEL_READING_FILTER_SHIFT  10
+
+/**
  * Number of camera frame buffers
  */ 
-#define NUM_CAMERA_FRAME_BUFFERS   4
+#define NUM_CAMERA_FRAME_BUFFERS    4
 
 /**
  * Array of camera frame buffers
@@ -248,17 +256,19 @@ void autonomous_car_app_init(void)
         &g_captured_camera_frames_circular_buffer);
 }
 
-
+//???
 static void
 dump_camera_frame(
     _IN_ tfc_camera_raw_pixel_t camera_frame_raw_pixels[])
 {
     for (int i = 0; i < TFC_NUM_CAMERA_PIXELS; i ++) {
-        console_printf("%#x ", camera_frame_raw_pixels[i]);
+        console_printf("%x ",
+            FILTER_PIXEL_READING(camera_frame_raw_pixels[i]));
     }
 
     console_printf("\n");
 }
+//???
 
 
 static fdc_error_t
@@ -377,6 +387,61 @@ camera_frame_normalizer_thread_f(void *arg)
 }
 
 
+static tfc_trimpot_reading_t g_last_trimpot_readings[TFC_NUM_TRIMPOTS] = {
+    [0] = ADC_RESULT_MAX_VALUE + 1,
+    [1] = ADC_RESULT_MAX_VALUE + 1
+};
+
+/**
+ * Trimpot reader thread
+ */
+static fdc_error_t
+trimpot_reader_thread_f(void *arg)
+{
+#   define TRIMPOTS_SAMPLING_PERIOD_MS  250
+#   define TRIMPOT_READING_MASK         (~0x7f)
+#   define TRIMPOT_READING_SHIFT        7
+#   define FILTER_TRIMPOT_READING(_x) \
+            ((_x) >> TRIMPOT_READING_SHIFT)
+
+    static tfc_trimpot_reading_t trimpot_readings[TFC_NUM_TRIMPOTS];
+
+    fdc_error_t fdc_error;
+    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
+
+    FDC_ASSERT(arg == NULL, arg, cpu_id);
+
+    console_printf("Initializing McRTOS trimpot sensing thread ...\n");
+
+    for ( ; ; )
+    {
+        tfc_trimpots_read(trimpot_readings);
+        for (int i = 0; i < TFC_NUM_TRIMPOTS; i ++) {
+            tfc_trimpot_reading_t filtered_reading =
+                FILTER_TRIMPOT_READING(trimpot_readings[i]);
+
+            tfc_trimpot_reading_t filtered_last_reading =
+                FILTER_TRIMPOT_READING(g_last_trimpot_readings[i]);
+
+            if (filtered_reading != filtered_last_reading) {
+                console_printf(
+                    "Trimpot %u changed: %#x\n", i, filtered_reading);
+
+                g_last_trimpot_readings[i] = trimpot_readings[i];
+            }
+        }
+        
+        rtos_thread_delay(TRIMPOTS_SAMPLING_PERIOD_MS);
+    }   
+
+    fdc_error = CAPTURE_FDC_ERROR(
+        "thread should not have terminated",
+        cpu_id, rtos_thread_self());
+
+    return fdc_error;
+}
+
+
 /**
  * Buttons reader thread
  */
@@ -430,57 +495,6 @@ buttons_reader_thread_f(void *arg)
 
     fdc_error = CAPTURE_FDC_ERROR(
         "McRTOS buttons reader thread should not have terminated",
-        cpu_id, rtos_thread_self());
-
-    return fdc_error;
-}
-
-
-volatile uint32_t g_last_trimpot_reading = 0; // XXX
-
-/**
- * Trimpot reader thread
- */
-static fdc_error_t
-trimpot_reader_thread_f(void *arg)
-{
-    fdc_error_t fdc_error;
-    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
-
-    FDC_ASSERT(arg == NULL, arg, cpu_id);
-
-    console_printf("Initializing McRTOS trimpot sensing thread ...\n");
-
-#if 0 // ???
-    uint32_t trimpot_reading;
-    uint32_t old_trimpot_reading;
-
-    init_trimpot();
-
-    old_trimpot_reading = 0;
-    for ( ; ; )
-    {
-        trimpot_reading = read_trimpot() & ~0xf;
-        if (trimpot_reading != old_trimpot_reading)
-        {
-            console_printf("Trimpot changed: 0x%x\n", trimpot_reading);
-
-            g_last_trimpot_reading = trimpot_reading;
-            old_trimpot_reading = trimpot_reading;
-        }
-        
-        rtos_thread_delay(250);
-    }   
-
-#else
-   for ( ; ; ) {
-       //???console_printf("%s\n", __func__);
-       rtos_thread_delay(3000);
-   }
-#endif
-
-    fdc_error = CAPTURE_FDC_ERROR(
-        "McRTOS trimpot sensing thread should not have terminated",
         cpu_id, rtos_thread_self());
 
     return fdc_error;

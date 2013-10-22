@@ -8,13 +8,12 @@
 
 #include "hardware_abstractions.h"
 #include "kl25z_soc.h"
+#include "frdm_board.h"
 #include "McRTOS_arm_cortex_m.h"
-#include "MKL25Z4.h"
 #include "failure_data_capture.h"
 #include "utils.h"
 #include "McRTOS_config_parameters.h"
 #include "McRTOS_kernel_services.h"
-#include "frdm_board.h"
 
 /**
  * Crystal frequency in HZ
