@@ -131,7 +131,8 @@ CPPFLAGS     += $(addprefix -I ,$(include_dirs)) \
 
 ifeq "$(BUILD_FLAVOR)" "debug"
     CPPFLAGS += -DDEBUG \
-		-D_RELIABILITY_CHECKS_ #\
+		-D_RELIABILITY_CHECKS_ \
+		-D_BRANCH_MICRO_TRACING_ #\
 		#-D_CPU_CYCLES_MEASURE_
     OPT = -O0 
 endif

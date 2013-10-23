@@ -62,14 +62,19 @@
 		(uintptr_t)(_enclosed_struct_p) - 				    \
 		offsetof(_enclosing_struct_type, _enclosing_struct_field)))
 
-#define STRINGIFY_LITERAL(_x)   #_x
+#define STRINGIFY_LITERAL(_num_literal) \
+        __STRINGIFY_EXPANDED_LITERAL(_num_literal)
+
+#define __STRINGIFY_EXPANDED_LITERAL(_expanded_num_literal) \
+        #_expanded_num_literal
 
 #define IS_PRINT(_c)    ((_c) >= ' ' && (_c) <= '~')
 
 #ifdef DEBUG
 #   define DEBUG_PRINTF(_fmt, ...) \
-            debug_printf("DBG: %s:%u " _fmt, __func__, __LINE__, ##__VA_ARGS__)
-
+            debug_printf("DBG: %s:" STRINGIFY_LITERAL(__LINE__) " " _fmt, \
+                         __func__, ##__VA_ARGS__)
+            
 #   define DEBUG_BREAK_POINT()  ARTIFICIAL_BREAK_POINT()
 
 #   define DEBUG_BLINK_LED(_led_mask) \

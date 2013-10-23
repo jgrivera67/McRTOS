@@ -20,6 +20,12 @@ TODO("Remove these pragmas")
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-function"
 
+#define BLACK_SPOT_SET_POINT \
+        ((TFC_NUM_CAMERA_PIXELS / 2) - (BLACK_SPOT_AVG_WIDTH / 2))
+
+#define BLACK_SPOT_AVG_WIDTH  \
+        ((BLACK_SPOT_MIN_WIDTH + BLACK_SPOT_MAX_WIDTH) / 2)
+
 #define BLACK_SPOT_MIN_WIDTH    8
 #define BLACK_SPOT_MAX_WIDTH    24
 
@@ -349,7 +355,7 @@ find_black_spot(
 
     if (g_dump_camera_frames_on) {
         console_printf("\n");
-        console_printf("Dropped frames: %u\n", g_dropped_camera_frames);
+        DEBUG_PRINTF("Dropped frames: %u\n", g_dropped_camera_frames);
     }
 
     return black_spot_position;

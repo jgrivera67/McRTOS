@@ -285,7 +285,7 @@ rtos_startup(
 
         g_McRTOS_p->rts_app_hardware_init_p();
 
-#       ifdef _RELIABILITY_CHECKS_
+#       ifdef _BRANCH_MICRO_TRACING_
         micro_trace_init();
 #       endif
 
