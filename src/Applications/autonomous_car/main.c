@@ -123,7 +123,15 @@ C_ASSERT(ARRAY_SIZE(g_rtos_app_config) == SOC_NUM_CPU_CORES);
 #define FILTER_PIXEL_READING(_x) \
         ((_x) >> PIXEL_READING_FILTER_SHIFT)
 
-#define PIXEL_READING_FILTER_SHIFT  (ADC_RESOLUTION - 1)
+#define PIXEL_READING_FILTER_SHIFT  (ADC_RESOLUTION - PIXEL_MEANINGFUL_TOP_BITS)
+
+#define PIXEL_MEANINGFUL_TOP_BITS    3
+
+/**
+ * Macro that determines if a pixel is white.
+ */
+#define IS_PIXEL_WHITE(_filtered_pixel) \
+        ((_filtered_pixel) >= ((UINT32_C(1) << (PIXEL_MEANINGFUL_TOP_BITS - 1)) - 1))
 
 /**
  * Number of raw camera frame buffers
@@ -347,7 +355,8 @@ find_black_spot(
     for (int i = 0; i < TFC_NUM_CAMERA_PIXELS; i ++) {
         if (g_dump_camera_frames_on) {
             console_printf("%x",
-                FILTER_PIXEL_READING(camera_frame_p->cf_pixels[i]));
+                IS_PIXEL_WHITE(
+                    FILTER_PIXEL_READING(camera_frame_p->cf_pixels[i])));
         }
 
         //XXX
