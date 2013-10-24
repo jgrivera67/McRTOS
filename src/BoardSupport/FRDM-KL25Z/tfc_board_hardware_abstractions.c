@@ -530,8 +530,10 @@ tfc_steering_servo_set(
     pwm_duty_cycle_us_t pwm_duty_cycle_us)
 {
     FDC_ASSERT(
-        pwm_duty_cycle_us >= TFC_STEERING_SERVO_MIN_DUTY_CYCLE_US &&
-        pwm_duty_cycle_us <= TFC_STEERING_SERVO_MAX_DUTY_CYCLE_US,
+        (pwm_duty_cycle_us >= TFC_STEERING_SERVO_MIN_DUTY_CYCLE_US &&
+         pwm_duty_cycle_us <= TFC_STEERING_SERVO_MAX_DUTY_CYCLE_US) 
+        ||
+        pwm_duty_cycle_us == TFC_STEERING_SERVO_OFF_DUTY_CYCLE_US,
         pwm_duty_cycle_us, 0);
 
     kl25_tpm_set_duty_cycle(
