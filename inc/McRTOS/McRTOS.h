@@ -269,6 +269,18 @@ struct rtos_msg_channel_creation_params
     struct rtos_msg_channel **const p_msg_channel_pp;
 };
 
+typedef void cmd_function_t(const char *cmd_line);
+
+/**
+ * Console command
+ */
+struct rtos_console_command 
+{
+    const char *cmd_name_p;
+    const char *cmd_description_p;
+    cmd_function_t *cmd_function_p;
+};
+
 /**
  * McRTOS per-cpu startup application configuration structure
  */ 
@@ -291,7 +303,13 @@ struct rtos_per_cpu_startup_app_configuration
      * threads to be started on this CPU core, when McRTOS starts running.
      */ 
     const struct rtos_thread_creation_params *const stc_autostart_threads_p;
+};
 
+/**
+ * McRTOS startup application configuration structure
+ */ 
+struct rtos_startup_app_configuration
+{
     /**
      * Pointer to function that initializes application-specific hardware
      */ 
@@ -307,6 +325,21 @@ struct rtos_per_cpu_startup_app_configuration
      * auto-start application threads are created.
      */ 
     app_software_init_t *const stc_app_software_init_p;
+
+    /**
+     * Number of application-specific console commands
+     */ 
+    const uint8_t stc_num_app_console_commands;
+
+    /**
+     * Pointer to array of application-specific console command
+     */ 
+    const struct rtos_console_command *const stc_app_console_commands_p;
+
+    /**
+     * Per-cpu application configuration
+     */
+    const struct rtos_per_cpu_startup_app_configuration stc_per_cpu_config[SOC_NUM_CPU_CORES];
 };
 
 /**
@@ -330,7 +363,7 @@ struct rtos_lcd_putchar_attributes
 _NEVER_RETURN_
 void 
 rtos_startup( 
-    _IN_ const struct rtos_per_cpu_startup_app_configuration *rtos_app_config_p);
+    _IN_ const struct rtos_startup_app_configuration *rtos_app_config_p);
 
 _NEVER_RETURN_
 void

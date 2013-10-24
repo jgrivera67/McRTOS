@@ -507,6 +507,16 @@ struct McRTOS
      */
     app_software_init_t *rts_app_software_init_p;
 
+   /**
+     * Number of application-specific console commands
+     */ 
+    uint8_t rts_num_app_console_commands;
+
+    /**
+     * Pointer to array of application-specific console command
+     */ 
+    const struct rtos_console_command *rts_app_console_commands_p;
+
     /**
      * Array of interrupt objects, one for each interrupt registered with McRTOS.
      */

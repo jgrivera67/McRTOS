@@ -50,6 +50,7 @@ static fdc_error_t camera_frame_reader_thread_f(void *arg);
 static fdc_error_t car_driver_thread_f(void *arg);
 static fdc_error_t switches_and_buttons_reader_thread_f(void *arg);
 static fdc_error_t trimpot_reader_thread_f(void *arg);
+static void toggle_dump_camera_frames(const char *cmd_line);
 
 /**
  * Array of application threads for CPU core 0
@@ -97,25 +98,42 @@ C_ASSERT(
     ARRAY_SIZE(g_app_threads_cpu0) <= RTOS_MAX_NUM_APP_THREADS);
 
 /**
- * McRTOS application startup configuration
- */ 
-static const struct rtos_per_cpu_startup_app_configuration g_rtos_app_config[] =
+ * Array of application-specific console commands
+ */
+static const struct rtos_console_command g_app_console_commands[] =
 {
-    /*
-     * CPU core 0
-     */
     [0] =
     {
-        .stc_idle_thread_hook_function_p = NULL,
-        .stc_num_autostart_threads = ARRAY_SIZE(g_app_threads_cpu0),
-        .stc_autostart_threads_p = g_app_threads_cpu0,
-        .stc_app_hardware_init_p = autonomous_car_hardware_init,
-        .stc_app_hardware_stop_p = autonomous_car_hardware_stop,
-        .stc_app_software_init_p = autonomous_car_app_init
+        .cmd_name_p = "d",
+        .cmd_description_p = "Toggle on/off dumping filtered camera frames",
+        .cmd_function_p = toggle_dump_camera_frames,
     },
 };
 
-C_ASSERT(ARRAY_SIZE(g_rtos_app_config) == SOC_NUM_CPU_CORES);
+
+/**
+ * McRTOS application startup configuration
+ */ 
+static const struct rtos_startup_app_configuration g_rtos_app_config =
+{
+    .stc_app_hardware_init_p = autonomous_car_hardware_init,
+    .stc_app_hardware_stop_p = autonomous_car_hardware_stop,
+    .stc_app_software_init_p = autonomous_car_app_init,
+    .stc_num_app_console_commands = ARRAY_SIZE(g_app_console_commands),
+    .stc_app_console_commands_p = g_app_console_commands,
+    .stc_per_cpu_config =
+    {
+        /*
+         * CPU core 0
+         */
+        [0] =
+        {
+            .stc_idle_thread_hook_function_p = NULL,
+            .stc_num_autostart_threads = ARRAY_SIZE(g_app_threads_cpu0),
+            .stc_autostart_threads_p = g_app_threads_cpu0,
+        },
+    },
+};
 
 /**
  * Macro to filter a raw pixel reading
@@ -165,7 +183,7 @@ static uint32_t g_dropped_camera_frames = 0;
  * Flag to enable/disable dumping of camera frames to the console. It can
  * be changed through a DIP switch.
  */ 
-static volatile bool g_dump_camera_frames_on = true;
+static volatile bool g_dump_camera_frames_on = false;
 
 /**
  * Application's main()
@@ -175,10 +193,7 @@ static volatile bool g_dump_camera_frames_on = true;
 int
 main(void)
 {
-    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
-
-    rtos_startup(
-        &g_rtos_app_config[cpu_id]);
+    rtos_startup(&g_rtos_app_config);
     
     FDC_ASSERT(false, 0, 0);
 
@@ -368,6 +383,13 @@ find_black_spot(
     }
 
     return black_spot_position;
+}
+
+
+static void
+toggle_dump_camera_frames(const char *cmd_line)
+{
+    g_dump_camera_frames_on ^= true;
 }
 
 

@@ -234,14 +234,13 @@ lcd_display_greetings(void)
  * When this function is invoked, McRTOS takes control of the machine, and
  * this function only returns if there is an initialization error in McRTOS.
  *
- * @param   rtos_app_config_p Pointer to startup application configuration for
- *          the calling CPU core.
+ * @param   rtos_app_config_p Pointer to startup application configuration.
  *
  * @return  none
  */
 void
 rtos_startup( 
-    _IN_ const struct rtos_per_cpu_startup_app_configuration *rtos_app_config_p)
+    _IN_ const struct rtos_startup_app_configuration *rtos_app_config_p)
 {
     FDC_ASSERT_COMING_FROM_RESET();
     FDC_ASSERT_CPU_IS_LITTLE_ENDIAN();
@@ -249,6 +248,20 @@ rtos_startup(
     FDC_ASSERT_VALID_FUNCTION_POINTER(rtos_app_config_p->stc_app_hardware_init_p);
     FDC_ASSERT_VALID_FUNCTION_POINTER(rtos_app_config_p->stc_app_hardware_stop_p);
     FDC_ASSERT_VALID_FUNCTION_POINTER(rtos_app_config_p->stc_app_software_init_p);
+    FDC_ASSERT_VALID_RAM_OR_ROM_POINTER(
+        rtos_app_config_p->stc_app_console_commands_p, sizeof(uint32_t));
+
+    for (int i = 0; i < rtos_app_config_p->stc_num_app_console_commands; i ++) 
+    {
+        FDC_ASSERT_VALID_RAM_OR_ROM_POINTER(
+            rtos_app_config_p->stc_app_console_commands_p[i].cmd_name_p, sizeof(char));
+
+        FDC_ASSERT_VALID_RAM_OR_ROM_POINTER(
+            rtos_app_config_p->stc_app_console_commands_p[i].cmd_description_p, sizeof(char));
+
+        FDC_ASSERT_VALID_FUNCTION_POINTER(
+            rtos_app_config_p->stc_app_console_commands_p[i].cmd_function_p);
+    }
 
     struct rtos_thread *rtos_thread_p;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
@@ -267,9 +280,15 @@ rtos_startup(
     g_McRTOS_p->rts_app_hardware_stop_p = rtos_app_config_p->stc_app_hardware_stop_p;
     g_McRTOS_p->rts_app_software_init_p = rtos_app_config_p->stc_app_software_init_p;
 
+    g_McRTOS_p->rts_num_app_console_commands =
+        rtos_app_config_p->stc_num_app_console_commands;
+
+    g_McRTOS_p->rts_app_console_commands_p =
+        rtos_app_config_p->stc_app_console_commands_p;
+
     rtos_init_reset_execution_context(cpu_controller_p);
 
-    cpu_controller_p->cpc_app_config_p = rtos_app_config_p;
+    cpu_controller_p->cpc_app_config_p = rtos_app_config_p->stc_per_cpu_config;
 
     /*
      * Check the compile-time initializations common to all CPU cores:
@@ -662,6 +681,7 @@ static void
 rtos_parse_command_line(
     const char *cmd_line)
 {
+    int i;
     uint8_t c = cmd_line[0]; // ???
 
     switch (c) {
@@ -687,7 +707,16 @@ rtos_parse_command_line(
         break;
 
     default:
-        console_printf("Invalid command: \'%s\' (type h for help)\n", cmd_line);
+        for (i = 0; i < g_McRTOS_p->rts_num_app_console_commands; i++) {
+            if (c == g_McRTOS_p->rts_app_console_commands_p[i].cmd_name_p[0]) {
+                g_McRTOS_p->rts_app_console_commands_p[i].cmd_function_p(cmd_line);
+                break;
+            }
+        }
+
+        if (i == g_McRTOS_p->rts_num_app_console_commands) {
+            console_printf("Invalid command: \'%s\' (type h for help)\n", cmd_line);
+        }
     }
 }
 
@@ -701,7 +730,15 @@ McRTOS_display_help(void)
         "\th - display this message\n"
         "\ti - toggle on/off stopping the CPU in the idle thread\n"
         "\tr - reset CPU\n"
-        "\ts - display McRTOS stats (until any key is pressed)\n\n");
+        "\ts - display McRTOS stats (until any key is pressed)\n");
+
+    for (int i = 0; i < g_McRTOS_p->rts_num_app_console_commands; i++) {
+        console_printf("\t%s - %s\n",
+            g_McRTOS_p->rts_app_console_commands_p[i].cmd_name_p,
+            g_McRTOS_p->rts_app_console_commands_p[i].cmd_description_p);
+    }
+
+    console_printf("\n");
 }
 
 
