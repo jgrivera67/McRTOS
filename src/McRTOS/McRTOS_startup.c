@@ -425,7 +425,7 @@ rtos_startup(
 void
 rtos_reboot(void)
 {
-    FDC_ASSERT_VALID_FUNCTION_POINTER(g_McRTOS_p->rts_app_hardware_stop_p);
+    DBG_ASSERT_VALID_FUNCTION_POINTER(g_McRTOS_p->rts_app_hardware_stop_p);
 
     console_printf("\nMcRTOS rebooting ...\n");
 

@@ -41,6 +41,7 @@ struct cortex_m_exception_stack
 
 
 void cortex_m_reset_handler(void);
+bool cortex_m_mpu_init(void);
 void cortex_m_nvic_init(void);
 void cortex_m_systick_init(void);
 void cortex_m_nmi_isr(void);

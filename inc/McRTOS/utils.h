@@ -56,6 +56,11 @@
 
 #define HOW_MANY(_m, _n)  (((size_t)(_m) - 1) / (_n) + 1)
 
+#define UINT_DIV_APPROX(_m, _n) \
+        ((natural_t)(_m) / (natural_t)(_n) +                            \
+         ((natural_t)(_m) % (natural_t)(_n) > (natural_t)(_n) / 2 ?     \
+          1 : 0))
+
 #define ENCLOSING_STRUCT(                                                           \
             _enclosed_struct_p, _enclosing_struct_type,  _enclosing_struct_field)   \
 	((_enclosing_struct_type *)(					            \
@@ -69,6 +74,8 @@
         #_expanded_num_literal
 
 #define IS_PRINT(_c)    ((_c) >= ' ' && (_c) <= '~')
+
+#define ABS(_value)     ((_value) < 0 ? -(_value) : (_value))
 
 #ifdef DEBUG
 #   define DEBUG_PRINTF(_fmt, ...) \
@@ -122,6 +129,8 @@
  * ASCII codes of common control characters
  */ 
 #define CTRL_C  UINT8_C(0x03)
+
+typedef unsigned int natural_t;
 
 void copy_memory_block(
     _OUT_ void *dest,

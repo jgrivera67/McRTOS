@@ -95,11 +95,32 @@ zero_fill_uninitialized_data_section(void)
         } while (word_p != __uninitialized_data_end);
 }
 
+/**
+ * Initializes the Memory Protection Unit (MPU) if available.
+ * It returns true if MPU is present
+ */
+bool
+cortex_m_mpu_init(void)
+{
+    uint32_t reg_value =
+        read_32bit_mmio_register((volatile uint32_t *)&MPU->TYPE);
+
+    uint32_t num_data_regions =
+        GET_BIT_FIELD(reg_value, MPU_TYPE_DREGION_Msk, MPU_TYPE_DREGION_Pos);
+
+    FDC_ASSERT(
+        num_data_regions == 0x0 || num_data_regions == 0x8,
+        num_data_regions, 0);
+
+    return (num_data_regions != 0x0);
+}
+
 
 /**
  * Initialize NVIC
  */
-void cortex_m_nvic_init(void)
+void
+cortex_m_nvic_init(void)
 {
     /*
      * Check that the vector table pointer registers points to address 0x0

@@ -56,6 +56,7 @@ typedef _RANGE_(INT_SVCall_IRQn, SOC_NUM_INTERRUPT_CHANNELS - 1)
 //#pragma GCC diagnostic warning "-Wcpp"
 #pragma GCC diagnostic ignored "-Wcpp"
 
+#define __MPU_PRESENT   1
 #define __CHECK_DEVICE_DEFINES
 #include "core_cm0plus.h"
 

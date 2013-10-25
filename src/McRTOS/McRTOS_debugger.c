@@ -72,6 +72,8 @@ rtos_hard_fault_exception_handler(
 
     micro_trace_stop();
 
+    g_McRTOS_p->rts_app_hardware_stop_p();
+
     /*
      * Determine what stack pointer was in use before the exception
      */

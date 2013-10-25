@@ -371,6 +371,8 @@ soc_hardware_init(void)
     init_cpu_clock_cycles_counter();
 #   endif
 
+    bool mpu_present = cortex_m_mpu_init();
+
     cortex_m_nvic_init();
 
     uart_init(
@@ -384,6 +386,7 @@ soc_hardware_init(void)
     uart_putchar_with_polling(g_console_serial_port_p, '\n');
     DEBUG_PRINTF("UART0 initialized\n");
     DEBUG_PRINTF("Last reset cause: %#x\n", reset_cause);
+    DEBUG_PRINTF("MPU %s present\n", mpu_present ? "" : "not");
 #   else
     uart_putchar(g_console_serial_port_p, '\r');
     uart_putchar(g_console_serial_port_p, '\n');
