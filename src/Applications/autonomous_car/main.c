@@ -26,7 +26,7 @@ TODO("Remove these pragmas")
 #define BLACK_SPOT_AVG_WIDTH  \
         ((BLACK_SPOT_MIN_WIDTH + BLACK_SPOT_MAX_WIDTH) / 2)
 
-#define BLACK_SPOT_MIN_WIDTH    24 
+#define BLACK_SPOT_MIN_WIDTH    24
 #define BLACK_SPOT_MAX_WIDTH    32
 
 /**
@@ -36,8 +36,9 @@ enum app_thread_priorities
 {
     CAMERA_FRAME_READER_THREAD_PRIORITY = RTOS_HIGHEST_THREAD_PRIORITY,
     CAR_DRIVER_THREAD_PRIORITY = RTOS_HIGHEST_THREAD_PRIORITY + 1,
-    SWITCHES_AND_BUTTONS_READER_THREAD_PRIORITY = RTOS_LOWEST_THREAD_PRIORITY - 1,
     TRIMPOT_READER_THREAD_PRIORITY = RTOS_LOWEST_THREAD_PRIORITY - 1,
+    SWITCHES_AND_BUTTONS_READER_THREAD_PRIORITY = RTOS_LOWEST_THREAD_PRIORITY - 1,
+    BATTERY_MONITOR_THREAD_PRIORITY = RTOS_LOWEST_THREAD_PRIORITY - 1,
 };
 
 typedef _RANGE_(0, TFC_NUM_CAMERA_PIXELS - 1)
@@ -50,6 +51,7 @@ static fdc_error_t camera_frame_reader_thread_f(void *arg);
 static fdc_error_t car_driver_thread_f(void *arg);
 static fdc_error_t switches_and_buttons_reader_thread_f(void *arg);
 static fdc_error_t trimpot_reader_thread_f(void *arg);
+static fdc_error_t battery_monitor_thread_f(void *arg);
 static void toggle_dump_camera_frames(const char *cmd_line);
 
 /**
@@ -90,6 +92,15 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
         .p_function_p = switches_and_buttons_reader_thread_f,
         .p_function_arg_p = NULL,
         .p_priority = SWITCHES_AND_BUTTONS_READER_THREAD_PRIORITY,
+        .p_thread_pp = NULL,
+    },
+
+    [4] =
+    {
+        .p_name_p = "battery monitor thread",
+        .p_function_p = battery_monitor_thread_f,
+        .p_function_arg_p = NULL,
+        .p_priority = BATTERY_MONITOR_THREAD_PRIORITY,
         .p_thread_pp = NULL,
     },
 };
@@ -143,13 +154,16 @@ static const struct rtos_startup_app_configuration g_rtos_app_config =
 
 #define PIXEL_READING_FILTER_SHIFT  (ADC_RESOLUTION - PIXEL_MEANINGFUL_TOP_BITS)
 
-#define PIXEL_MEANINGFUL_TOP_BITS    3
+#define PIXEL_MEANINGFUL_TOP_BITS    4
+
+#define MAX_FILTERED_PIXEL_READING \
+        ((UINT32_C(1) << PIXEL_MEANINGFUL_TOP_BITS) - 1)
 
 /**
  * Macro that determines if a pixel is white.
  */
 #define IS_PIXEL_WHITE(_filtered_pixel) \
-        ((_filtered_pixel) >= ((UINT32_C(1) << (PIXEL_MEANINGFUL_TOP_BITS - 1)) - 1))
+        ((_filtered_pixel) > MAX_FILTERED_PIXEL_READING / 4)
 
 /**
  * Number of raw camera frame buffers
@@ -164,7 +178,7 @@ static const struct rtos_startup_app_configuration g_rtos_app_config =
 #define TRIMPOT_READING_SHIFT \
         (ADC_RESOLUTION - TRIMPOT_MEANINGFUL_TOP_BITS)
 
-#define TRIMPOT_MEANINGFUL_TOP_BITS    5
+#define TRIMPOT_MEANINGFUL_TOP_BITS    4
 
 #define MAX_FILTERED_TRIMPOT_READING \
         ((UINT32_C(1) << TRIMPOT_MEANINGFUL_TOP_BITS) - 1)
@@ -173,7 +187,24 @@ static const struct rtos_startup_app_configuration g_rtos_app_config =
  * Index in g_last_trimpot_readings[] for the trimpot used to set
  * the initial forward speed for the car's wheels
  */
-#define INITIAL_WHEEL_SPEED_TRIMPOT 0
+#define BASE_WHEEL_SPEED_TRIMPOT 0
+
+/**
+ * Macro to filter a battery reading
+ */
+#define FILTER_BATTERY_READING(_x)  ((_x) >> BATTERY_READING_SHIFT)
+
+#define BATTERY_READING_SHIFT \
+        (ADC_RESOLUTION - BATTERY_MEANINGFUL_TOP_BITS)
+
+#define BATTERY_MEANINGFUL_TOP_BITS    4
+
+#define MAX_FILTERED_BATTERY_READING \
+        ((UINT32_C(1) << BATTERY_MEANINGFUL_TOP_BITS) - 1)
+
+C_ASSERT(
+    HOW_MANY(MAX_FILTERED_BATTERY_READING, TFC_NUM_BATTERY_LEDS) == 
+    TFC_NUM_BATTERY_LEDS);
 
 /**
  * Array of raw camera frame buffers
@@ -233,7 +264,6 @@ void autonomous_car_hardware_init(void)
 {
     frdm_board_init();
     tfc_board_init();
-    tfc_trimpots_read(g_last_trimpot_readings);
     DEBUG_PRINTF("Car hardware initialized\n");
 }
 
@@ -322,6 +352,11 @@ void autonomous_car_app_init(void)
         g_captured_camera_frames_queue_mutex_p,
         cpu_id,
         &g_captured_camera_frames_queue);
+
+    /*
+     * Get initial trimpot reading:
+     */ 
+    tfc_trimpots_read(g_last_trimpot_readings);
 }
 
 
@@ -396,30 +431,35 @@ find_black_spot(
     _IN_ struct tfc_camera_frame *camera_frame_p,
     _OUT_ black_spot_position_t *black_spot_position_p)
 {
-    int i;
+    natural_t i;
     black_spot_position_t first_black_pixel;
     bool black_spot_found = false;
     bool first_black_pixel_found = false;
-    int black_spot_width = 0;
+    natural_t black_spot_width = 0;
+    natural_t consecutive_white_pixel_count = 0;
     
-    for (i = 0; i < TFC_NUM_CAMERA_PIXELS; i ++) {
-        bool is_pixel_white = 
-                IS_PIXEL_WHITE(
-                    FILTER_PIXEL_READING(camera_frame_p->cf_pixels[i]));
+    for (i = BLACK_SPOT_MIN_WIDTH / 4 ; i < TFC_NUM_CAMERA_PIXELS; i ++) {
+        natural_t filtered_pixel = 
+                    FILTER_PIXEL_READING(camera_frame_p->cf_pixels[i]);
+
+        bool is_pixel_white = IS_PIXEL_WHITE(filtered_pixel);
 
         if (g_dump_camera_frames_on) {
-            console_printf("%x", is_pixel_white);
+            console_printf("%x", filtered_pixel);
         }
 
         if (is_pixel_white) {
+            consecutive_white_pixel_count ++;
             if (first_black_pixel_found) {
-                if (black_spot_width < BLACK_SPOT_MIN_WIDTH) {
+                if (consecutive_white_pixel_count == 3) {
+                    consecutive_white_pixel_count = 0;
                     first_black_pixel_found = false;
                 } else {
-                    break;
+                    black_spot_width ++;
                 }
             }
         } else {
+            consecutive_white_pixel_count = 0;
             if (first_black_pixel_found) {
                 black_spot_width ++;
             } else {
@@ -428,28 +468,30 @@ find_black_spot(
                 black_spot_width = 1;
             }
         }
+
+        if (black_spot_width == BLACK_SPOT_MIN_WIDTH) {
+            black_spot_found = true;
+            break;
+        }
     }
 
     if (g_dump_camera_frames_on) {
         for ( ; i < TFC_NUM_CAMERA_PIXELS; i ++) {
             console_printf("%x",
-                IS_PIXEL_WHITE(
-                    FILTER_PIXEL_READING(camera_frame_p->cf_pixels[i])));
+                FILTER_PIXEL_READING(camera_frame_p->cf_pixels[i]));
         }
 
         console_printf("\n");
         DEBUG_PRINTF("Dropped frames: %u\n", g_dropped_camera_frames);
     }
 
-    if (black_spot_width >= BLACK_SPOT_MIN_WIDTH &&
-        black_spot_width <= BLACK_SPOT_MAX_WIDTH) {
+    if (black_spot_found) {
         DBG_ASSERT(
             first_black_pixel_found &&
-            first_black_pixel < TFC_NUM_CAMERA_PIXELS,
-            first_black_pixel, black_spot_width);
+            first_black_pixel <= TFC_NUM_CAMERA_PIXELS - BLACK_SPOT_MIN_WIDTH,
+            first_black_pixel_found, first_black_pixel);
 
         *black_spot_position_p = first_black_pixel;
-        black_spot_found = true;
     }
    
     return black_spot_found;   
@@ -490,11 +532,18 @@ calculate_base_wheel_motor_pwm_duty_cycle_us(void)
 {
     natural_t base_wheel_speed_delta =
         FILTER_TRIMPOT_READING(
-            g_last_trimpot_readings[INITIAL_WHEEL_SPEED_TRIMPOT]) *
+            g_last_trimpot_readings[BASE_WHEEL_SPEED_TRIMPOT]) *
         UINT_DIV_APPROX(
             TFC_WHEEL_MOTOR_MAX_SPEED_DELTA, MAX_FILTERED_TRIMPOT_READING);
 
-    return TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US + base_wheel_speed_delta;
+    pwm_duty_cycle_us_t base_wheel_motor_pwm_duty_cycle_us =
+        TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US + base_wheel_speed_delta;
+
+    if (base_wheel_motor_pwm_duty_cycle_us > TFC_WHEEL_MOTOR_MAX_DUTY_CYCLE_US) {
+        base_wheel_motor_pwm_duty_cycle_us = TFC_WHEEL_MOTOR_MAX_DUTY_CYCLE_US;
+    }
+
+    return base_wheel_motor_pwm_duty_cycle_us;
 }
 
 
@@ -506,8 +555,6 @@ drive_car(
     _IN_ black_spot_position_t black_spot_position,
     _IN_ pwm_duty_cycle_us_t base_wheel_motor_pwm_duty_cycle_us)
 {
-    //???DEBUG_PRINTF("black spot position %u\n", black_spot_position);
-
 #   define STEERING_SERVO_PROPORTIONAL_GAIN \
         UINT_DIV_APPROX(                                                \
             TFC_STEERING_SERVO_MAX_DUTY_CYCLE_US -                      \
@@ -524,6 +571,8 @@ drive_car(
 #   define ERROR_THRESHOLD_IN_PIXELS    (TFC_NUM_CAMERA_PIXELS / 4)
 
     static int previous_errors[2] = {0, 0};
+    static pwm_duty_cycle_us_t steering_servo_pwm_duty_cycle_us =
+                                    TFC_STEERING_SERVO_STRAIGHT_DUTY_CYCLE_US;
 
     /*
      * Calculate PID values:
@@ -545,9 +594,9 @@ drive_car(
              STEERING_SERVO_INTEGRAL_GAIN * error +
              STEERING_SERVO_DERIVATIVE_GAIN * derivative_term;
 
-    pwm_duty_cycle_us_t steering_servo_pwm_duty_cycle_us =
+    steering_servo_pwm_duty_cycle_us =
         (pwm_duty_cycle_us_t)calculate_new_manipulated_var_value(
-                                TFC_STEERING_SERVO_STRAIGHT_DUTY_CYCLE_US,
+                                steering_servo_pwm_duty_cycle_us,
                                 offset_steering_servo_pwm_duty_cycle,
                                 TFC_STEERING_SERVO_MIN_DUTY_CYCLE_US,
                                 TFC_STEERING_SERVO_MAX_DUTY_CYCLE_US);
@@ -564,6 +613,7 @@ drive_car(
      *   wheel go slower than the outer wheel.
      */
 
+#if 0 //???
     // this is wrong XXX
     int offset_wheel_motor_pwm_duty_cycle = 
              WHEEL_MOTOR_PROPORTIONAL_GAIN * delta_error + 
@@ -583,8 +633,15 @@ drive_car(
                                 offset_wheel_motor_pwm_duty_cycle,
                                 TFC_WHEEL_MOTOR_MIN_DUTY_CYCLE_US,
                                 TFC_WHEEL_MOTOR_MAX_DUTY_CYCLE_US);
+#else
+    pwm_duty_cycle_us_t left_wheel_pwm_duty_cycle_us =
+                                base_wheel_motor_pwm_duty_cycle_us;
 
-# if 0
+    pwm_duty_cycle_us_t right_wheel_pwm_duty_cycle_us = 
+                                base_wheel_motor_pwm_duty_cycle_us;
+#endif
+
+#if 0 //???
     if (ABS(error) >= ERROR_THRESHOLD_IN_PIXELS) {
         if (error < 0) {
             /*
@@ -609,18 +666,16 @@ drive_car(
     tfc_steering_servo_set(
         steering_servo_pwm_duty_cycle_us);
 
-#if 0 // ???
     tfc_wheel_motors_set(
         left_wheel_pwm_duty_cycle_us,
         right_wheel_pwm_duty_cycle_us);
-#endif
 }
 
 
 static fdc_error_t
 car_driver_thread_f(void *arg)
 {
-#   define MAX_NO_BLACK_SPOT_FOUND_COUNT    4
+#   define MAX_NO_BLACK_SPOT_FOUND_COUNT    8
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
     uint32_t no_black_spot_found_count = 0;
@@ -710,7 +765,7 @@ trimpot_reader_thread_f(void *arg)
 
     FDC_ASSERT(arg == NULL, arg, cpu_id);
 
-    console_printf("Initializing McRTOS trimpot sensing thread ...\n");
+    console_printf("Initializing trimpot sensing thread ...\n");
 
     for ( ; ; )
     {
@@ -775,3 +830,47 @@ switches_and_buttons_reader_thread_f(void *arg)
     return fdc_error;
 }
 
+
+/**
+ * Battery monitor thread
+ */
+static fdc_error_t
+battery_monitor_thread_f(void *arg)
+{
+#   define BATTERY_SAMPLING_PERIOD_MS  1500
+    fdc_error_t fdc_error;
+    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
+    static natural_t last_battery_reading = 0;
+
+    FDC_ASSERT(arg == NULL, arg, cpu_id);
+
+    console_printf("Initializing battery monitor thread ...\n");
+
+    for ( ; ; )
+    {
+        tfc_battery_reading_t battery_reading = tfc_battery_sensor_read();
+      
+        if (battery_reading != last_battery_reading) {
+            natural_t battery_level = 
+                HOW_MANY(
+                    FILTER_BATTERY_READING(battery_reading),
+                    TFC_NUM_BATTERY_LEDS);
+
+            if (battery_level > TFC_NUM_BATTERY_LEDS) {
+                battery_level = TFC_NUM_BATTERY_LEDS;
+            }
+
+            tfc_battery_leds_set(battery_level);
+
+            last_battery_reading = battery_reading;
+        }
+
+        rtos_thread_delay(BATTERY_SAMPLING_PERIOD_MS);
+    }   
+
+    fdc_error = CAPTURE_FDC_ERROR(
+        "thread should not have terminated",
+        cpu_id, rtos_thread_self());
+
+    return fdc_error;
+}

@@ -125,6 +125,9 @@ tfc_battery_reading_t
 tfc_battery_sensor_read(void);
 
 void
+tfc_battery_leds_set(natural_t battery_level);
+
+void
 tfc_trimpots_read(
         _OUT_ tfc_trimpot_reading_t trimpot_readings[]);
 

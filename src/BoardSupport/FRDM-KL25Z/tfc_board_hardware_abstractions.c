@@ -635,6 +635,23 @@ tfc_battery_sensor_read(void)
 }
 
 
+void
+tfc_battery_leds_set(natural_t battery_level) 
+{
+    natural_t i;
+
+    FDC_ASSERT(battery_level <= TFC_NUM_BATTERY_LEDS, battery_level, 0);
+
+    for (i = 0; i < battery_level; i++) {
+        activate_output_pin(&g_tfc_battery_led_pins[i]);
+    }
+
+    for ( ; i < TFC_NUM_BATTERY_LEDS; i++) {
+        deactivate_output_pin(&g_tfc_battery_led_pins[i]);
+    }
+}
+
+
 static void
 tfc_push_buttons_init(void) 
 {
