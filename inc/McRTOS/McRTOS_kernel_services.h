@@ -936,7 +936,6 @@ rtos_k_capture_failure_data(
 void
 rtos_k_set_fdc_params(
     _IN_ bool assert_break_point_on,
-    _IN_ bool error_breakpoint_on,
     _IN_ bool exception_debugger_on);
 
 _THREAD_CALLERS_ONLY_

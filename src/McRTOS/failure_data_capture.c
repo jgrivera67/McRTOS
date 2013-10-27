@@ -180,7 +180,6 @@ rtos_k_capture_failure_data(
 void
 rtos_k_set_fdc_params(
     _IN_ bool assert_break_point_on,
-    _IN_ bool error_breakpoint_on,
     _IN_ bool exception_debugger_on)
 {
     struct rtos_cpu_controller *cpu_controller_p =
@@ -188,7 +187,6 @@ rtos_k_set_fdc_params(
     struct fdc_info *fdc_info_p = &cpu_controller_p->cpc_failures_info;
 
     fdc_info_p->fdc_asserts_failures_breakpoint_on = assert_break_point_on;
-    fdc_info_p->fdc_error_breakpoint_on = error_breakpoint_on;
     fdc_info_p->fdc_exception_debugger_on = exception_debugger_on;
 }
 

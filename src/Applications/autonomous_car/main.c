@@ -162,8 +162,8 @@ static const struct rtos_startup_app_configuration g_rtos_app_config =
 /**
  * Macro that determines if a pixel is white.
  */
-#define IS_PIXEL_WHITE(_filtered_pixel) \
-        ((_filtered_pixel) > MAX_FILTERED_PIXEL_READING / 4)
+#define IS_PIXEL_WHITE(_filtered_pixel, _white_threshold) \
+        ((_filtered_pixel) > (_white_threshold))
 
 /**
  * Number of raw camera frame buffers
@@ -184,10 +184,10 @@ static const struct rtos_startup_app_configuration g_rtos_app_config =
         ((UINT32_C(1) << TRIMPOT_MEANINGFUL_TOP_BITS) - 1)
 
 /**
- * Index in g_last_trimpot_readings[] for the trimpot used to set
- * the initial forward speed for the car's wheels
+ * Trimpots assignments
  */
-#define BASE_WHEEL_SPEED_TRIMPOT 0
+#define BASE_WHEEL_SPEED_TRIMPOT    0
+#define WHITE_THRESHOLD_TRIMPOT     1
 
 /**
  * Macro to filter a battery reading
@@ -244,8 +244,8 @@ static volatile tfc_trimpot_reading_t g_last_trimpot_readings[TFC_NUM_TRIMPOTS] 
 };
 
 #define ASSERT_BREAKPOINT_DIP_SWITCH    0
-#define ERROR_BREAKPOINT_DIP_SWITCH     1
-#define EXCEPTION_DEBUGGER_DIP_SWITCH   2
+#define EXCEPTION_DEBUGGER_DIP_SWITCH   1
+#define ACTIVE_DIFFERENTIAL_DIP_SWITCH  2
 #define DRIVE_FAST_DIP_SWITCH           3
 
 static volatile bool g_dip_switches_on[TFC_NUM_DIP_SWITCHES];
@@ -382,18 +382,17 @@ void autonomous_car_app_init(void)
 
     rtos_set_fdc_params(
         g_dip_switches_on[ASSERT_BREAKPOINT_DIP_SWITCH],
-        g_dip_switches_on[ERROR_BREAKPOINT_DIP_SWITCH],
         g_dip_switches_on[EXCEPTION_DEBUGGER_DIP_SWITCH]);
 
     console_printf(
         "DIP Switches:\n"
         "\tAssert breakpoints %s\n"
-        "\tError breakpoints %s\n"
         "\tException debugger %s\n"
+        "\tActive differential %s\n"
         "\tDrive fast %s\n",
         g_dip_switches_on[ASSERT_BREAKPOINT_DIP_SWITCH] ? "ON" : "OFF",
-        g_dip_switches_on[ERROR_BREAKPOINT_DIP_SWITCH] ? "ON" : "OFF",
         g_dip_switches_on[EXCEPTION_DEBUGGER_DIP_SWITCH] ? "ON" : "OFF",
+        g_dip_switches_on[ACTIVE_DIFFERENTIAL_DIP_SWITCH] ? "ON" : "OFF",
         g_dip_switches_on[DRIVE_FAST_DIP_SWITCH] ? "ON" : "OFF");
 }
 
@@ -502,6 +501,9 @@ find_black_spot(
     bw_cluster_bit_map_t bw_cluster_bit_map = 0x0;
     bw_cluster_bit_map_t bw_super_cluster_bit_map = 0x0;
 
+    tfc_trimpot_reading_t white_threshold =
+        FILTER_TRIMPOT_READING(g_last_trimpot_readings[WHITE_THRESHOLD_TRIMPOT]);
+
     /* 
      * Form a bit map of "mostly" black and "mostly" white clusters of pixels:
      *
@@ -523,7 +525,7 @@ find_black_spot(
             console_printf("%x", filtered_pixel);
         }
 
-        bool is_pixel_white = IS_PIXEL_WHITE(filtered_pixel);
+        bool is_pixel_white = IS_PIXEL_WHITE(filtered_pixel, white_threshold);
 
         if (is_pixel_white) {
             white_count ++;
@@ -688,10 +690,15 @@ Exit:
     if (g_dump_camera_frames_on) {
         console_printf("\n");
         console_printf(
-            "Black spot position: %d, b/w cluster bitmap: %#x, "
-            "b/w super cluster bitmap: %#x, dropped frames: %u\n",
+            "Black spot position: %d, "
+            "white threshold: %#x, "
+            "b/w cluster bitmap: %#x, "
+            "b/w super cluster bitmap: %#x, "
+            "dropped frames: %u\n",
                 black_spot_found ? *black_spot_position_p : -1,
-                bw_cluster_bit_map, bw_super_cluster_bit_map,
+                white_threshold,
+                bw_cluster_bit_map,
+                bw_super_cluster_bit_map,
                 g_dropped_camera_frames);
     }
 
@@ -774,9 +781,6 @@ drive_car(
                 TFC_WHEEL_MOTOR_MIN_DUTY_CYCLE_US + 1,                  \
             TFC_NUM_CAMERA_PIXELS)
 
-#   define WHEEL_MOTOR_INTEGRAL_GAIN        0
-#   define WHEEL_MOTOR_DERIVATIVE_GAIN      0
-
 #   define PID_ERROR_THRESHOLD_IN_PIXELS    (TFC_NUM_CAMERA_PIXELS / 16)
 
     static int previous_errors[2] = {0, 0};
@@ -852,27 +856,43 @@ drive_car(
                                 TFC_WHEEL_MOTOR_MIN_DUTY_CYCLE_US,
                                 TFC_WHEEL_MOTOR_MAX_DUTY_CYCLE_US);
 
-    pwm_duty_cycle_us_t left_wheel_pwm_duty_cycle_us =
-        wheel_motor_pwm_duty_cycle_us;
+    pwm_duty_cycle_us_t left_wheel_pwm_duty_cycle_us;
+    pwm_duty_cycle_us_t right_wheel_pwm_duty_cycle_us;
 
-    pwm_duty_cycle_us_t right_wheel_pwm_duty_cycle_us =
-        wheel_motor_pwm_duty_cycle_us;
-
-    if (ABS(error) >= PID_ERROR_THRESHOLD_IN_PIXELS &&
+    if (g_dip_switches_on[ACTIVE_DIFFERENTIAL_DIP_SWITCH] &&
+        ABS(error) >= PID_ERROR_THRESHOLD_IN_PIXELS &&
         wheel_motor_pwm_duty_cycle_us != TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US) {
+        int offset_wheel_differential = 
+                 -WHEEL_MOTOR_PROPORTIONAL_GAIN * ABS(error);
+
         if (error < 0) {
             /*
              * Help steer left by making left wheel spin slower
              */
-            left_wheel_pwm_duty_cycle_us -= 
-                wheel_motor_pwm_duty_cycle_us / 4;
+            left_wheel_pwm_duty_cycle_us = 
+                (pwm_duty_cycle_us_t)calculate_new_manipulated_var_value(
+                                        wheel_motor_pwm_duty_cycle_us,
+                                        offset_wheel_differential,
+                                        TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US,
+                                        TFC_WHEEL_MOTOR_MAX_DUTY_CYCLE_US);
+
+            right_wheel_pwm_duty_cycle_us = wheel_motor_pwm_duty_cycle_us;
         } else {
             /*
              * Help steer right by making right wheel spin slower
              */
-            right_wheel_pwm_duty_cycle_us -=
-                wheel_motor_pwm_duty_cycle_us / 4;
+            right_wheel_pwm_duty_cycle_us =
+                (pwm_duty_cycle_us_t)calculate_new_manipulated_var_value(
+                                        wheel_motor_pwm_duty_cycle_us,
+                                        offset_wheel_differential,
+                                        TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US,
+                                        TFC_WHEEL_MOTOR_MAX_DUTY_CYCLE_US);
+
+            left_wheel_pwm_duty_cycle_us = wheel_motor_pwm_duty_cycle_us;
         }
+    } else {
+        left_wheel_pwm_duty_cycle_us = wheel_motor_pwm_duty_cycle_us;
+        right_wheel_pwm_duty_cycle_us = wheel_motor_pwm_duty_cycle_us;
     }
         
     /*
@@ -930,17 +950,29 @@ car_driver_thread_f(void *arg)
         FDC_ASSERT(write_ok, 0, 0);
 
         if (black_spot_found) {
+            if (no_black_spot_found_count != 0) {
+                console_printf(
+                    "Black spot found after %u attempts\n",
+                    no_black_spot_found_count);
+
+                no_black_spot_found_count = 0;
+            }
+
             drive_car(
                 black_spot_position, base_wheel_motor_pwm_duty_cycle_us);
         } else {
-            (void)CAPTURE_FDC_ERROR("Black spot not found", 0, 0);
-            no_black_spot_found_count ++;
-            if (no_black_spot_found_count == MAX_NO_BLACK_SPOT_FOUND_COUNT) {
-                no_black_spot_found_count = 0;
+            if (no_black_spot_found_count == 0) {
+                console_printf(
+                    "Black spot not found (white threshold %#x)\n",
+                    FILTER_TRIMPOT_READING(
+                        g_last_trimpot_readings[WHITE_THRESHOLD_TRIMPOT]));
+
                 tfc_wheel_motors_set(
                     TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US,
                     TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US);
-            } 
+            }
+
+            no_black_spot_found_count ++;
         }
     }
 
@@ -1031,17 +1063,16 @@ switches_and_buttons_reader_thread_f(void *arg)
                         dip_switches[i] ? "ON" : "OFF");
                     break;
 
-                case ERROR_BREAKPOINT_DIP_SWITCH:
-                    fdc_setting_changed = true;
-                    console_printf(
-                        "Error breakpoints changed to %s\n",
-                        dip_switches[i] ? "ON" : "OFF");
-                    break;
-
                 case EXCEPTION_DEBUGGER_DIP_SWITCH:
                     fdc_setting_changed = true;
                     console_printf(
                         "Exception debugger changed to %s\n",
+                        dip_switches[i] ? "ON" : "OFF");
+                    break;
+
+                case ACTIVE_DIFFERENTIAL_DIP_SWITCH:
+                    console_printf(
+                        "Active differential changed to %s\n",
                         dip_switches[i] ? "ON" : "OFF");
                     break;
 
@@ -1057,7 +1088,6 @@ switches_and_buttons_reader_thread_f(void *arg)
         if (fdc_setting_changed) {
             rtos_set_fdc_params(
                 dip_switches[ASSERT_BREAKPOINT_DIP_SWITCH],
-                dip_switches[ERROR_BREAKPOINT_DIP_SWITCH],
                 dip_switches[EXCEPTION_DEBUGGER_DIP_SWITCH]);
         }
 
@@ -1072,10 +1102,12 @@ switches_and_buttons_reader_thread_f(void *arg)
                 switch (i) {
                 case TURN_ON_CAR_PUSH_BUTTON:
                     g_car_turned_on = true;
+                    tfc_battery_leds_set(TFC_NUM_BATTERY_LEDS);
                     console_printf("Car turned on\n");
                     break;
                 case TURN_OFF_CAR_PUSH_BUTTON:
                     g_car_turned_on = false;
+                    tfc_battery_leds_set(0);
                     console_printf("Car turned off\n");
                     break;
                 }
