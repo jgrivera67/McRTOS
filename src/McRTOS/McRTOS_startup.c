@@ -70,7 +70,7 @@ static void rtos_parse_command_line(const char *cmd_line);
 static void McRTOS_display_help(void);
 static void McRTOS_display_stats(void);
 
-static const char g_McRTOS_version[] = "McRTOS v0.04";
+static const char g_McRTOS_version[] = "McRTOS v0.5";
 
 static const char g_McRTOS_build_timestamp[] = "built " __DATE__ " " __TIME__;
 

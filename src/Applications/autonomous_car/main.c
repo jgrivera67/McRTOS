@@ -238,7 +238,7 @@ static volatile bool g_dump_camera_frames_on = false;
 /**
  * Last trimpot readings
  */
-static tfc_trimpot_reading_t g_last_trimpot_readings[TFC_NUM_TRIMPOTS] = {
+static volatile tfc_trimpot_reading_t g_last_trimpot_readings[TFC_NUM_TRIMPOTS] = {
     [0] = 0,
     [1] = 0 
 };
@@ -248,7 +248,17 @@ static tfc_trimpot_reading_t g_last_trimpot_readings[TFC_NUM_TRIMPOTS] = {
 #define EXCEPTION_DEBUGGER_DIP_SWITCH   2
 #define DRIVE_FAST_DIP_SWITCH           3
 
-static bool g_dip_switches_on[TFC_NUM_DIP_SWITCHES];
+static volatile bool g_dip_switches_on[TFC_NUM_DIP_SWITCHES];
+
+#define TURN_ON_CAR_PUSH_BUTTON     0
+#define TURN_OFF_CAR_PUSH_BUTTON    1 
+
+static volatile bool g_push_buttons[TFC_NUM_PUSH_BUTTONS];
+
+/**
+ * Flag to enable/disable driving the car
+ */ 
+static volatile bool g_car_turned_on = false;
 
 /**
  * Application's main()
@@ -363,12 +373,12 @@ void autonomous_car_app_init(void)
     /*
      * Get initial trimpot reading:
      */ 
-    tfc_trimpots_read(g_last_trimpot_readings);
+    tfc_trimpots_read((tfc_trimpot_reading_t *)g_last_trimpot_readings);
 
     /*
      * Get initial dip switches settings:
      */
-    tfc_dip_switches_read(g_dip_switches_on);
+    tfc_dip_switches_read((bool *)g_dip_switches_on);
 
     rtos_set_fdc_params(
         g_dip_switches_on[ASSERT_BREAKPOINT_DIP_SWITCH],
@@ -393,13 +403,36 @@ camera_frame_reader_thread_f(void *arg)
 {
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
+    bool car_turned_on = false;
+    rtos_milliseconds_t sampling_period = TFC_CAMERA_EXPOSURE_TIME_MS;
 
     FDC_ASSERT(arg == NULL, arg, cpu_id);
 
     console_printf("Initializing camera frame reader thread ...\n");
     
     for ( ; ; ) {
-        rtos_thread_delay(TFC_CAMERA_EXPOSURE_TIME_MS);
+        rtos_thread_delay(sampling_period);
+
+        if (car_turned_on != g_car_turned_on) {
+            car_turned_on = g_car_turned_on;
+            if (car_turned_on) {
+                sampling_period = TFC_CAMERA_EXPOSURE_TIME_MS;
+                tfc_steering_servo_set(
+                    TFC_STEERING_SERVO_STRAIGHT_DUTY_CYCLE_US);
+            } else {
+                sampling_period = TFC_CAMERA_EXPOSURE_TIME_MS * 4;
+                tfc_wheel_motors_set(
+                    TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US,
+                    TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US);
+
+                tfc_steering_servo_set(
+                    TFC_STEERING_SERVO_OFF_DUTY_CYCLE_US);
+            }
+        }
+
+        if (!car_turned_on) {
+            continue;
+        }
 
         /*
          * Get next available buffer from the frame buffer pool:
@@ -862,14 +895,10 @@ car_driver_thread_f(void *arg)
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
     uint32_t no_black_spot_found_count = 0;
-    bool wheels_stopped = true;
 
     FDC_ASSERT(arg == NULL, arg, cpu_id);
 
     console_printf("Initializing car driver thread ...\n");
-
-    tfc_steering_servo_set(
-        TFC_STEERING_SERVO_STRAIGHT_DUTY_CYCLE_US);
 
     black_spot_position_t black_spot_position = BLACK_SPOT_SET_POINT;
 
@@ -901,14 +930,6 @@ car_driver_thread_f(void *arg)
         FDC_ASSERT(write_ok, 0, 0);
 
         if (black_spot_found) {
-            if (wheels_stopped) {
-                tfc_wheel_motors_set(
-                    base_wheel_motor_pwm_duty_cycle_us,
-                    base_wheel_motor_pwm_duty_cycle_us);
-
-                wheels_stopped = false;
-            }
-
             drive_car(
                 black_spot_position, base_wheel_motor_pwm_duty_cycle_us);
         } else {
@@ -919,9 +940,7 @@ car_driver_thread_f(void *arg)
                 tfc_wheel_motors_set(
                     TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US,
                     TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US);
-
-                wheels_stopped = true;
-            }
+            } 
         }
     }
 
@@ -1047,7 +1066,21 @@ switches_and_buttons_reader_thread_f(void *arg)
          */ 
         tfc_push_buttons_read(push_buttons);
 
-        //XXX
+        for (natural_t i = 0; i < TFC_NUM_PUSH_BUTTONS; i++) {
+            if (push_buttons[i] != g_push_buttons[i]) {
+                g_push_buttons[i] = push_buttons[i];
+                switch (i) {
+                case TURN_ON_CAR_PUSH_BUTTON:
+                    g_car_turned_on = true;
+                    console_printf("Car turned on\n");
+                    break;
+                case TURN_OFF_CAR_PUSH_BUTTON:
+                    g_car_turned_on = false;
+                    console_printf("Car turned off\n");
+                    break;
+                }
+            }
+        }
 
         rtos_thread_delay(SWITCHES_AND_BUTTONS_READER_THREAD_PERIOD_MS);
     } 
@@ -1089,9 +1122,15 @@ battery_monitor_thread_f(void *arg)
                 battery_level = TFC_NUM_BATTERY_LEDS;
             }
 
-            tfc_battery_leds_set(battery_level);
+            if (g_car_turned_on) {
+                tfc_battery_leds_set(battery_level);
+            }
 
             last_battery_reading = battery_reading;
+        } else {
+            if (!g_car_turned_on) {
+                tfc_battery_leds_set(0);
+            }
         }
 
         rtos_thread_delay(BATTERY_SAMPLING_PERIOD_MS);
