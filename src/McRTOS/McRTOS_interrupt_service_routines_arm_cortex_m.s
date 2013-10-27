@@ -21,15 +21,6 @@
 .text
 .thumb
 //.syntax unified
-//.arch armv6-m
-
-/*???
-    .thumb_func
-    .align 1
-    .global  Reset_Handler
-    .type    Reset_Handler, %function
-*/
-
 
 /**
  * This macro saves non-pre-saved registers upon entry to an exception

@@ -26,7 +26,7 @@ TODO("Remove these pragmas")
 #define BLACK_SPOT_AVG_WIDTH  \
         ((BLACK_SPOT_MIN_WIDTH + BLACK_SPOT_MAX_WIDTH) / 2)
 
-#define BLACK_SPOT_MIN_WIDTH    24
+#define BLACK_SPOT_MIN_WIDTH    16 
 #define BLACK_SPOT_MAX_WIDTH    32
 
 /**
@@ -243,6 +243,13 @@ static tfc_trimpot_reading_t g_last_trimpot_readings[TFC_NUM_TRIMPOTS] = {
     [1] = 0 
 };
 
+#define ASSERT_BREAKPOINT_DIP_SWITCH    0
+#define ERROR_BREAKPOINT_DIP_SWITCH     1
+#define EXCEPTION_DEBUGGER_DIP_SWITCH   2
+#define DRIVE_FAST_DIP_SWITCH           3
+
+static bool g_dip_switches_on[TFC_NUM_DIP_SWITCHES];
+
 /**
  * Application's main()
  *
@@ -357,6 +364,27 @@ void autonomous_car_app_init(void)
      * Get initial trimpot reading:
      */ 
     tfc_trimpots_read(g_last_trimpot_readings);
+
+    /*
+     * Get initial dip switches settings:
+     */
+    tfc_dip_switches_read(g_dip_switches_on);
+
+    rtos_set_fdc_params(
+        g_dip_switches_on[ASSERT_BREAKPOINT_DIP_SWITCH],
+        g_dip_switches_on[ERROR_BREAKPOINT_DIP_SWITCH],
+        g_dip_switches_on[EXCEPTION_DEBUGGER_DIP_SWITCH]);
+
+    console_printf(
+        "DIP Switches:\n"
+        "\tAssert breakpoints %s\n"
+        "\tError breakpoints %s\n"
+        "\tException debugger %s\n"
+        "\tDrive fast %s\n",
+        g_dip_switches_on[ASSERT_BREAKPOINT_DIP_SWITCH] ? "ON" : "OFF",
+        g_dip_switches_on[ERROR_BREAKPOINT_DIP_SWITCH] ? "ON" : "OFF",
+        g_dip_switches_on[EXCEPTION_DEBUGGER_DIP_SWITCH] ? "ON" : "OFF",
+        g_dip_switches_on[DRIVE_FAST_DIP_SWITCH] ? "ON" : "OFF");
 }
 
 
@@ -431,69 +459,209 @@ find_black_spot(
     _IN_ struct tfc_camera_frame *camera_frame_p,
     _OUT_ black_spot_position_t *black_spot_position_p)
 {
-    natural_t i;
-    black_spot_position_t first_black_pixel;
-    bool black_spot_found = false;
-    bool first_black_pixel_found = false;
-    natural_t black_spot_width = 0;
-    natural_t consecutive_white_pixel_count = 0;
+#   define NUM_BW_CLUSTERS              (sizeof(bw_cluster_bit_map_t) * 8)
+#   define BW_CLUSTER_SIZE              (TFC_NUM_CAMERA_PIXELS / NUM_BW_CLUSTERS)
+#   define NUM_BW_SUPER_CLUSTERS        (NUM_BW_CLUSTERS / BW_CLUSTER_SIZE)
+
+    typedef uint32_t bw_cluster_bit_map_t;
     
-    for (i = BLACK_SPOT_MIN_WIDTH / 4 ; i < TFC_NUM_CAMERA_PIXELS; i ++) {
+    bool black_spot_found = false;
+    bw_cluster_bit_map_t bw_cluster_bit_map = 0x0;
+    bw_cluster_bit_map_t bw_super_cluster_bit_map = 0x0;
+
+    /* 
+     * Form a bit map of "mostly" black and "mostly" white clusters of pixels:
+     *
+     * NOTE: Each bit in the bitmap represents a B/W cluster of BW_CLUSTER_SIZE
+     * pixels:
+     * 0 - "mostly" black cluster
+     * 1 - "mostly" white cluster
+     */
+    natural_t cluster_bit_cursor_mask = BIT(NUM_BW_CLUSTERS - 1);
+    natural_t black_count = 0;
+    natural_t white_count = 0;
+    natural_t black_cluster_count = 0;
+
+    for (natural_t i = 0; i < TFC_NUM_CAMERA_PIXELS; i ++) {
         natural_t filtered_pixel = 
                     FILTER_PIXEL_READING(camera_frame_p->cf_pixels[i]);
-
-        bool is_pixel_white = IS_PIXEL_WHITE(filtered_pixel);
 
         if (g_dump_camera_frames_on) {
             console_printf("%x", filtered_pixel);
         }
 
+        bool is_pixel_white = IS_PIXEL_WHITE(filtered_pixel);
+
         if (is_pixel_white) {
-            consecutive_white_pixel_count ++;
-            if (first_black_pixel_found) {
-                if (consecutive_white_pixel_count == 3) {
-                    consecutive_white_pixel_count = 0;
-                    first_black_pixel_found = false;
-                } else {
-                    black_spot_width ++;
-                }
-            }
+            white_count ++;
         } else {
-            consecutive_white_pixel_count = 0;
-            if (first_black_pixel_found) {
-                black_spot_width ++;
-            } else {
-                first_black_pixel_found = true;
-                first_black_pixel = i;
-                black_spot_width = 1;
-            }
+            black_count ++;
         }
 
-        if (black_spot_width == BLACK_SPOT_MIN_WIDTH) {
+        if ((i + 1) % BW_CLUSTER_SIZE == 0) {
+            DBG_ASSERT(
+                cluster_bit_cursor_mask != 0x0, 0, 0);
+
+            if (white_count > black_count) {
+                bw_cluster_bit_map |= cluster_bit_cursor_mask;
+            } else {
+                black_cluster_count ++;
+            }
+
+            white_count = 0;
+            black_count = 0;
+            cluster_bit_cursor_mask >>= 1;
+        }
+    }
+
+    DBG_ASSERT(black_cluster_count <= NUM_BW_CLUSTERS,
+        black_cluster_count, NUM_BW_CLUSTERS);
+
+    if (black_cluster_count == 0) {
+        DBG_ASSERT(
+            bw_cluster_bit_map == (bw_cluster_bit_map_t)-1,
+            bw_cluster_bit_map, 0);
+
+        goto Exit;
+    }
+
+    if (black_cluster_count == NUM_BW_CLUSTERS) {
+        DBG_ASSERT(bw_cluster_bit_map == 0x0, bw_cluster_bit_map, 0);
+        goto Exit;
+    }
+    
+    /* 
+     * Form a bit map of "mostly" black and "mostly" white super-clusters of
+     * clusters:
+     *
+     * NOTE: Each bit in the bitmap represents a B/W super-cluster of
+     * BW_CLUSTER_SIZE clusters:
+     * 0 - "mostly" black super-cluster
+     * 1 - "mostly" white super-cluster
+     */
+
+    natural_t cluster_cursor = 0;
+    natural_t black_super_cluster_count = 0;
+
+    white_count = 0;
+    black_count = 0;
+    natural_t super_cluster_bit_cursor_mask = BIT(NUM_BW_SUPER_CLUSTERS - 1);
+    for (cluster_bit_cursor_mask = BIT(NUM_BW_CLUSTERS - 1);
+         cluster_bit_cursor_mask != 0x0;
+         cluster_bit_cursor_mask >>= 1) {
+        if (bw_cluster_bit_map & cluster_bit_cursor_mask) {
+            white_count ++;
+        } else {
+            black_count ++;
+        }
+
+        if ((cluster_cursor + 1) % BW_CLUSTER_SIZE == 0) {
+            if (white_count > black_count) {
+                bw_super_cluster_bit_map |= super_cluster_bit_cursor_mask;
+            } else {
+                black_super_cluster_count ++;
+            }
+
+            white_count = 0;
+            black_count = 0;
+            super_cluster_bit_cursor_mask >>= 1;
+        }
+
+        cluster_cursor ++;
+    }
+
+    DBG_ASSERT(cluster_cursor == NUM_BW_CLUSTERS, 
+        cluster_cursor, NUM_BW_CLUSTERS);
+
+    DBG_ASSERT(
+        (bw_super_cluster_bit_map & ~(BIT(NUM_BW_SUPER_CLUSTERS) - 1)) == 0x0,
+         bw_super_cluster_bit_map, 0);
+
+    DBG_ASSERT(
+        black_super_cluster_count <= NUM_BW_SUPER_CLUSTERS,
+        black_super_cluster_count, NUM_BW_SUPER_CLUSTERS);
+
+    if (black_super_cluster_count == 0) {
+        DBG_ASSERT(
+            bw_super_cluster_bit_map == BIT(NUM_BW_SUPER_CLUSTERS) - 1,
+            bw_super_cluster_bit_map, BIT(NUM_BW_SUPER_CLUSTERS) - 1);
+        goto Exit;
+    }
+
+    if (black_super_cluster_count == NUM_BW_SUPER_CLUSTERS) {
+        DBG_ASSERT(
+            bw_super_cluster_bit_map == 0x0, bw_super_cluster_bit_map, 0);
+        goto Exit;
+    }
+   
+    /*
+     * Find the super-cluster that is closest to the center of the processed
+     * camera frame:
+     */
+    natural_t super_cluster_index;
+#if 1
+    for (natural_t i = 0; i < NUM_BW_SUPER_CLUSTERS / 2; i ++) {
+        super_cluster_index = (NUM_BW_SUPER_CLUSTERS / 2) + i;
+        natural_t bit_mask = 
+            BIT((NUM_BW_SUPER_CLUSTERS - 1) - super_cluster_index);
+        if ((bw_super_cluster_bit_map & bit_mask) == 0) {
+            black_spot_found = true;
+            break;
+        }
+
+        super_cluster_index = (NUM_BW_SUPER_CLUSTERS / 2) - i - 1;
+        bit_mask = BIT((NUM_BW_SUPER_CLUSTERS - 1) - super_cluster_index);
+        if ((bw_super_cluster_bit_map & bit_mask) == 0) {
             black_spot_found = true;
             break;
         }
     }
+#else
+    static natural_t last_super_cluster_index = 0;
 
-    if (g_dump_camera_frames_on) {
-        for ( ; i < TFC_NUM_CAMERA_PIXELS; i ++) {
-            console_printf("%x",
-                FILTER_PIXEL_READING(camera_frame_p->cf_pixels[i]));
+    if (last_super_cluster_index < NUM_BW_SUPER_CLUSTERS / 2) {
+        for (natural_t i = 0; i < NUM_BW_SUPER_CLUSTERS; i ++) {
+            natural_t bit_mask = BIT((NUM_BW_SUPER_CLUSTERS - 1) - i);
+            if ((bw_super_cluster_bit_map & bit_mask) == 0) {
+                black_spot_found = true;
+                super_cluster_index = i;
+                break;
+            }
         }
-
-        console_printf("\n");
-        DEBUG_PRINTF("Dropped frames: %u\n", g_dropped_camera_frames);
+    } else {
+        for (int i = NUM_BW_SUPER_CLUSTERS - 1; i >= 0; i --) {
+            natural_t bit_mask = BIT((NUM_BW_SUPER_CLUSTERS - 1) - i);
+            if ((bw_super_cluster_bit_map & bit_mask) == 0) {
+                black_spot_found = true;
+                super_cluster_index = i;
+                break;
+            }
+        }
     }
+
+    last_super_cluster_index = super_cluster_index;
+#endif
 
     if (black_spot_found) {
         DBG_ASSERT(
-            first_black_pixel_found &&
-            first_black_pixel <= TFC_NUM_CAMERA_PIXELS - BLACK_SPOT_MIN_WIDTH,
-            first_black_pixel_found, first_black_pixel);
+            super_cluster_index < NUM_BW_SUPER_CLUSTERS,
+            super_cluster_index, NUM_BW_SUPER_CLUSTERS);
 
-        *black_spot_position_p = first_black_pixel;
+        *black_spot_position_p =
+            super_cluster_index * (BW_CLUSTER_SIZE * BW_CLUSTER_SIZE);
     }
-   
+ 
+Exit:
+    if (g_dump_camera_frames_on) {
+        console_printf("\n");
+        console_printf(
+            "Black spot position: %d, b/w cluster bitmap: %#x, "
+            "b/w super cluster bitmap: %#x, dropped frames: %u\n",
+                black_spot_found ? *black_spot_position_p : -1,
+                bw_cluster_bit_map, bw_super_cluster_bit_map,
+                g_dropped_camera_frames);
+    }
+
     return black_spot_found;   
 }
 
@@ -561,18 +729,29 @@ drive_car(
                 TFC_STEERING_SERVO_MIN_DUTY_CYCLE_US + 1,               \
             TFC_NUM_CAMERA_PIXELS)
 
-#   define STEERING_SERVO_DERIVATIVE_GAIN   0
-#   define STEERING_SERVO_INTEGRAL_GAIN     0
+#   define STEERING_SERVO_INTEGRAL_GAIN \
+        UINT_DIV_APPROX(STEERING_SERVO_PROPORTIONAL_GAIN, 50)
 
-#   define WHEEL_MOTOR_PROPORTIONAL_GAIN    0
-#   define WHEEL_MOTOR_DERIVATIVE_GAIN      0
+#   define STEERING_SERVO_DERIVATIVE_GAIN \
+        UINT_DIV_APPROX(STEERING_SERVO_PROPORTIONAL_GAIN, 200)
+
+#   define WHEEL_MOTOR_PROPORTIONAL_GAIN \
+        UINT_DIV_APPROX(                                                \
+            TFC_WHEEL_MOTOR_MAX_DUTY_CYCLE_US -                         \
+                TFC_WHEEL_MOTOR_MIN_DUTY_CYCLE_US + 1,                  \
+            TFC_NUM_CAMERA_PIXELS)
+
 #   define WHEEL_MOTOR_INTEGRAL_GAIN        0
+#   define WHEEL_MOTOR_DERIVATIVE_GAIN      0
 
-#   define ERROR_THRESHOLD_IN_PIXELS    (TFC_NUM_CAMERA_PIXELS / 4)
+#   define PID_ERROR_THRESHOLD_IN_PIXELS    (TFC_NUM_CAMERA_PIXELS / 16)
 
     static int previous_errors[2] = {0, 0};
     static pwm_duty_cycle_us_t steering_servo_pwm_duty_cycle_us =
                                     TFC_STEERING_SERVO_STRAIGHT_DUTY_CYCLE_US;
+
+    static pwm_duty_cycle_us_t wheel_motor_pwm_duty_cycle_us =
+                                    TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US;
 
     /*
      * Calculate PID values:
@@ -608,59 +787,63 @@ drive_car(
      * - The smaller ABS(error) the faster you can go. The larger ABS(error)
      *   the slower you should go.
      * - For ABS(error) close to zero, you can go to the maximum forward speed.
-     * - For ABS(error) >= ERROR_THRESHOLD_IN_PIXELS (i.e. sharp turns), you should
+     * - For ABS(error) >= PID_ERROR_THRESHOLD_IN_PIXELS (i.e. sharp turns), you should
      *   push the breaks by making the wheels turn backwards and/or make the inner
      *   wheel go slower than the outer wheel.
      */
 
-#if 0 //???
-    // this is wrong XXX
-    int offset_wheel_motor_pwm_duty_cycle = 
-             WHEEL_MOTOR_PROPORTIONAL_GAIN * delta_error + 
-             WHEEL_MOTOR_INTEGRAL_GAIN * error +
-             WHEEL_MOTOR_DERIVATIVE_GAIN * derivative_term;
+    int offset_wheel_motor_pwm_duty_cycle;
 
-    pwm_duty_cycle_us_t left_wheel_pwm_duty_cycle_us =
+    if (g_dip_switches_on[DRIVE_FAST_DIP_SWITCH]) {
+        if (wheel_motor_pwm_duty_cycle_us ==
+                TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US) {
+            wheel_motor_pwm_duty_cycle_us = base_wheel_motor_pwm_duty_cycle_us;
+        }
+        
+        if (ABS(error) <= PID_ERROR_THRESHOLD_IN_PIXELS) {
+            offset_wheel_motor_pwm_duty_cycle = 
+                WHEEL_MOTOR_PROPORTIONAL_GAIN * ABS(error);
+        } else {
+            offset_wheel_motor_pwm_duty_cycle = 
+                -WHEEL_MOTOR_PROPORTIONAL_GAIN * ABS(error);
+        }
+    } else {
+        wheel_motor_pwm_duty_cycle_us = base_wheel_motor_pwm_duty_cycle_us;
+        offset_wheel_motor_pwm_duty_cycle = 0;
+    }
+
+    wheel_motor_pwm_duty_cycle_us =
         (pwm_duty_cycle_us_t)calculate_new_manipulated_var_value(
-                                base_wheel_motor_pwm_duty_cycle_us,
+                                wheel_motor_pwm_duty_cycle_us,
                                 offset_wheel_motor_pwm_duty_cycle,
                                 TFC_WHEEL_MOTOR_MIN_DUTY_CYCLE_US,
                                 TFC_WHEEL_MOTOR_MAX_DUTY_CYCLE_US);
 
-    pwm_duty_cycle_us_t right_wheel_pwm_duty_cycle_us = 
-        (pwm_duty_cycle_us_t)calculate_new_manipulated_var_value(
-                                base_wheel_motor_pwm_duty_cycle_us,
-                                offset_wheel_motor_pwm_duty_cycle,
-                                TFC_WHEEL_MOTOR_MIN_DUTY_CYCLE_US,
-                                TFC_WHEEL_MOTOR_MAX_DUTY_CYCLE_US);
-#else
     pwm_duty_cycle_us_t left_wheel_pwm_duty_cycle_us =
-                                base_wheel_motor_pwm_duty_cycle_us;
+        wheel_motor_pwm_duty_cycle_us;
 
-    pwm_duty_cycle_us_t right_wheel_pwm_duty_cycle_us = 
-                                base_wheel_motor_pwm_duty_cycle_us;
-#endif
+    pwm_duty_cycle_us_t right_wheel_pwm_duty_cycle_us =
+        wheel_motor_pwm_duty_cycle_us;
 
-#if 0 //???
-    if (ABS(error) >= ERROR_THRESHOLD_IN_PIXELS) {
+    if (ABS(error) >= PID_ERROR_THRESHOLD_IN_PIXELS &&
+        wheel_motor_pwm_duty_cycle_us != TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US) {
         if (error < 0) {
             /*
              * Help steer left by making left wheel spin slower
              */
-            left_wheel_pwm_duty_cycle_us /= 2;
+            left_wheel_pwm_duty_cycle_us -= 
+                wheel_motor_pwm_duty_cycle_us / 4;
         } else {
             /*
              * Help steer right by making right wheel spin slower
              */
-            right_wheel_pwm_duty_cycle_us /= 2;
+            right_wheel_pwm_duty_cycle_us -=
+                wheel_motor_pwm_duty_cycle_us / 4;
         }
-    } else {
-        
     }
-#endif
-
+        
     /*
-     * Set commands to actuators:
+     * Send commands to actuators:
      */
 
     tfc_steering_servo_set(
@@ -675,7 +858,7 @@ drive_car(
 static fdc_error_t
 car_driver_thread_f(void *arg)
 {
-#   define MAX_NO_BLACK_SPOT_FOUND_COUNT    8
+#   define MAX_NO_BLACK_SPOT_FOUND_COUNT   16 
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
     uint32_t no_black_spot_found_count = 0;
@@ -687,6 +870,8 @@ car_driver_thread_f(void *arg)
 
     tfc_steering_servo_set(
         TFC_STEERING_SERVO_STRAIGHT_DUTY_CYCLE_US);
+
+    black_spot_position_t black_spot_position = BLACK_SPOT_SET_POINT;
 
     for ( ; ; ) {
         struct tfc_camera_frame *camera_frame_p;
@@ -701,8 +886,6 @@ car_driver_thread_f(void *arg)
             &g_captured_camera_frames_queue,
             (void **)&camera_frame_p,
             true);
-
-        black_spot_position_t black_spot_position;
 
         bool black_spot_found =
             find_black_spot(camera_frame_p, &black_spot_position);
@@ -809,13 +992,59 @@ switches_and_buttons_reader_thread_f(void *arg)
 
     bool push_buttons[TFC_NUM_PUSH_BUTTONS];
     bool dip_switches[TFC_NUM_DIP_SWITCHES];
-
+    bool fdc_setting_changed;
 
     for ( ; ; ) {
+        /*
+         * Read DIP switches:
+         */ 
         tfc_dip_switches_read(dip_switches);
 
-        //XXX
+        fdc_setting_changed = false;
+        for (natural_t i = 0; i < TFC_NUM_DIP_SWITCHES; i++) {
+            if (dip_switches[i] != g_dip_switches_on[i]) {
+                g_dip_switches_on[i] = dip_switches[i];
+                switch (i) {
+                case ASSERT_BREAKPOINT_DIP_SWITCH:
+                    fdc_setting_changed = true;
+                    console_printf(
+                        "Assert breakpoints changed to %s\n",
+                        dip_switches[i] ? "ON" : "OFF");
+                    break;
 
+                case ERROR_BREAKPOINT_DIP_SWITCH:
+                    fdc_setting_changed = true;
+                    console_printf(
+                        "Error breakpoints changed to %s\n",
+                        dip_switches[i] ? "ON" : "OFF");
+                    break;
+
+                case EXCEPTION_DEBUGGER_DIP_SWITCH:
+                    fdc_setting_changed = true;
+                    console_printf(
+                        "Exception debugger changed to %s\n",
+                        dip_switches[i] ? "ON" : "OFF");
+                    break;
+
+                case DRIVE_FAST_DIP_SWITCH:
+                    console_printf(
+                        "Drive fast changed to %s\n",
+                         dip_switches[i] ? "ON" : "OFF");
+                    break;
+                }
+            }
+        }
+
+        if (fdc_setting_changed) {
+            rtos_set_fdc_params(
+                dip_switches[ASSERT_BREAKPOINT_DIP_SWITCH],
+                dip_switches[ERROR_BREAKPOINT_DIP_SWITCH],
+                dip_switches[EXCEPTION_DEBUGGER_DIP_SWITCH]);
+        }
+
+        /*
+         * Read push buttons:
+         */ 
         tfc_push_buttons_read(push_buttons);
 
         //XXX
@@ -854,7 +1083,7 @@ battery_monitor_thread_f(void *arg)
             natural_t battery_level = 
                 HOW_MANY(
                     FILTER_BATTERY_READING(battery_reading),
-                    TFC_NUM_BATTERY_LEDS);
+                    2);
 
             if (battery_level > TFC_NUM_BATTERY_LEDS) {
                 battery_level = TFC_NUM_BATTERY_LEDS;

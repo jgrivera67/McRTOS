@@ -46,11 +46,14 @@ cortex_m_reset_handler(void)
     zero_fill_uninitialized_data_section();
 
     /*
-     * NOTE: the reset stack markers cannot be initialized at
-     * compile-time as it is not in the .data section
+     * NOTE: the stack markers cannot be initialized at
+     * compile-time as the stack is not in the .data section
      */
     g_cortex_m_exception_stack.es_stack_overflow_marker = RTOS_STACK_OVERFLOW_MARKER;
     g_cortex_m_exception_stack.es_stack_underflow_marker = RTOS_STACK_UNDERFLOW_MARKER;
+    for (uint32_t i = 0; i < RTOS_INTERRUPT_STACK_NUM_ENTRIES; ++ i) {
+        g_cortex_m_exception_stack.es_stack[i] = RTOS_STACK_UNUSED_SIGNATURE;
+    }
 
     main();
 

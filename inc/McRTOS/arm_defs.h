@@ -373,15 +373,16 @@
 #define  RTOS_TIMER_START_SYSTEM_CALL                   0xe
 #define  RTOS_TIMER_STOP_SYSTEM_CALL                    0xf
 #define  RTOS_CAPTURE_FAILURE_DATA_SYSTEM_CALL          0x10
-#define  RTOS_CONSOLE_PUTCHAR_SYSTEM_CALL               0x11
-#define  RTOS_CONSOLE_GETCHAR_SYSTEM_CALL               0x12
-#define  RTOS_LCD_PUTCHAR_SYSTEM_CALL                   0x13
-#define  RTOS_LCD_DRAW_TILE_SYSTEM_CALL                 0x14
-#define  RTOS_APP_SYSTEM_CALL                           0x15
-#define  RTOS_THREAD_SELF_SYSTEM_CALL                   0x16
-#define  RTOS_THREAD_NAME_SYSTEM_CALL                   0x17
-#define  RTOS_THREAD_CONDVAR_WAIT_INTERRUPT_SYSTEM_CALL 0x18
-#define  RTOS_THREAD_YIELD_SYSTEM_CALL                  0x19
+#define  RTOS_SET_FDC_PARAMS_SYSTEM_CALL                0x11
+#define  RTOS_CONSOLE_PUTCHAR_SYSTEM_CALL               0x12
+#define  RTOS_CONSOLE_GETCHAR_SYSTEM_CALL               0x13
+#define  RTOS_LCD_PUTCHAR_SYSTEM_CALL                   0x14
+#define  RTOS_LCD_DRAW_TILE_SYSTEM_CALL                 0x15
+#define  RTOS_APP_SYSTEM_CALL                           0x16
+#define  RTOS_THREAD_SELF_SYSTEM_CALL                   0x17
+#define  RTOS_THREAD_NAME_SYSTEM_CALL                   0x18
+#define  RTOS_THREAD_CONDVAR_WAIT_INTERRUPT_SYSTEM_CALL 0x19
+#define  RTOS_THREAD_YIELD_SYSTEM_CALL                  0x1a
 
 /*
  * CAUTION: This macro needs to be updated when new system

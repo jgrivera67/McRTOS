@@ -68,11 +68,14 @@ void
 rtos_hard_fault_exception_handler(
         _IN_ const struct rtos_execution_context *current_execution_context_p)
 {
+    micro_trace_stop();
+    g_McRTOS_p->rts_app_hardware_stop_p();
+
     rtos_execution_stack_entry_t *before_exception_stack_p;
 
-    micro_trace_stop();
-
-    g_McRTOS_p->rts_app_hardware_stop_p();
+    struct rtos_cpu_controller *cpu_controller_p =
+        &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
+    struct fdc_info *fdc_info_p = &cpu_controller_p->cpc_failures_info;
 
     /*
      * Determine what stack pointer was in use before the exception
@@ -91,20 +94,11 @@ rtos_hard_fault_exception_handler(
             (void *)before_exception_stack_p[CPU_REG_PC], 0,
             before_exception_stack_p[CPU_REG_PSR]);
 
-    rtos_run_debugger(current_execution_context_p, before_exception_stack_p);
-
-#   ifndef DEBUG
-    cpu_instruction_t *instruction_p =
-        (cpu_instruction_t *)(before_exception_stack_p[CPU_REG_PC]);
-
-    /*
-     * If the instruction that caused the exception is not breakpoint,
-     * reboot the system:
-     */
-    if ((*instruction_p & THUMB_INSTR_OP_CODE_MASK) != BKPT_OP_CODE_MASK) {
+    if (fdc_info_p->fdc_exception_debugger_on) {
+        rtos_run_debugger(current_execution_context_p, before_exception_stack_p);
+    } else {
         rtos_reboot();
     }
-#   endif
 
     /*
      * Change the saved PC to point to the instruction after the faulting
@@ -280,6 +274,12 @@ rtos_dbg_dump_all_execution_contexts(void)
 
         rtos_dbg_dump_execution_context(context_p);
     }
+
+    rtos_dbg_dump_memory_with_call_stack(
+        g_cortex_m_exception_stack.es_stack - 1,
+        RTOS_INTERRUPT_STACK_NUM_ENTRIES + 2,
+        "Stack shared by all exceptions");
+    
 }
 
 

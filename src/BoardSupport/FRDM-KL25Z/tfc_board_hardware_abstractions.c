@@ -665,7 +665,9 @@ void
 tfc_push_buttons_read(
         _OUT_ bool push_buttons[])
 {
-
+    for (int i = 0; i < TFC_NUM_PUSH_BUTTONS; i++) {
+        push_buttons[i] = read_input_pin(&g_tfc_push_button_pins[i]);
+    }
 }
 
 
@@ -682,7 +684,9 @@ void
 tfc_dip_switches_read(
         _OUT_ bool dip_switches[])
 {
-
+    for (int i = 0; i < TFC_NUM_DIP_SWITCHES; i++) {
+        dip_switches[i] = read_input_pin(&g_tfc_dip_switch_pins[i]);
+    }
 }
 
 

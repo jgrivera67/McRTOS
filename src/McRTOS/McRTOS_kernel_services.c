@@ -43,10 +43,9 @@ volatile uint32_t g_rtos_atomic_ops_spinlock = 0x0;
 
 #endif
 
-#define GEN_SYSTEM_CALL_DISPATCH_ENTRY(_system_call_name,               \
-                                       _rtos_k_function_suffix)         \
-        [RTOS_ ## _system_call_name ## _SYSTEM_CALL] =                  \
-            rtos_k_ ## _rtos_k_function_suffix
+#define GEN_SYSTEM_CALL_DISPATCH_ENTRY(_system_call_number,             \
+                                       _rtos_k_function)                \
+        [_system_call_number] = _rtos_k_function
 
 /**
  * System call dispatch table
@@ -56,34 +55,62 @@ volatile uint32_t g_rtos_atomic_ops_spinlock = 0x0;
  */
 const void *const g_rtos_system_call_dispatch_table[] =
 {
-    GEN_SYSTEM_CALL_DISPATCH_ENTRY(CREATE_THREAD, create_thread),
-    GEN_SYSTEM_CALL_DISPATCH_ENTRY(THREAD_DELAY, thread_delay),
-    GEN_SYSTEM_CALL_DISPATCH_ENTRY(THREAD_ABORT, thread_abort),
-    GEN_SYSTEM_CALL_DISPATCH_ENTRY(THREAD_CONDVAR_WAIT, thread_condvar_wait),
-    GEN_SYSTEM_CALL_DISPATCH_ENTRY(THREAD_CONDVAR_SIGNAL, thread_condvar_signal),
-    GEN_SYSTEM_CALL_DISPATCH_ENTRY(CREATE_MUTEX, create_mutex),         
-    GEN_SYSTEM_CALL_DISPATCH_ENTRY(MUTEX_ACQUIRE, mutex_acquire),
-    GEN_SYSTEM_CALL_DISPATCH_ENTRY(MUTEX_RELEASE, mutex_release),
-    GEN_SYSTEM_CALL_DISPATCH_ENTRY(CREATE_CONDVAR, create_condvar),
-    GEN_SYSTEM_CALL_DISPATCH_ENTRY(CONDVAR_WAIT, condvar_wait),
-    GEN_SYSTEM_CALL_DISPATCH_ENTRY(CONDVAR_WAIT_INTERRUPT, condvar_wait_interrupt),
-    GEN_SYSTEM_CALL_DISPATCH_ENTRY(CONDVAR_SIGNAL, condvar_signal),
-    GEN_SYSTEM_CALL_DISPATCH_ENTRY(CONDVAR_BROADCAST, condvar_broadcast),
-    GEN_SYSTEM_CALL_DISPATCH_ENTRY(CREATE_TIMER, create_timer),
-    GEN_SYSTEM_CALL_DISPATCH_ENTRY(TIMER_START, timer_start),
-    GEN_SYSTEM_CALL_DISPATCH_ENTRY(TIMER_STOP, timer_stop),
-    GEN_SYSTEM_CALL_DISPATCH_ENTRY(CAPTURE_FAILURE_DATA, capture_failure_data),
-    GEN_SYSTEM_CALL_DISPATCH_ENTRY(CONSOLE_PUTCHAR, console_putchar),             
-    GEN_SYSTEM_CALL_DISPATCH_ENTRY(CONSOLE_GETCHAR, console_getchar),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_CREATE_THREAD_SYSTEM_CALL, rtos_k_create_thread),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_THREAD_DELAY_SYSTEM_CALL, rtos_k_thread_delay),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_THREAD_ABORT_SYSTEM_CALL, rtos_k_thread_abort),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_THREAD_CONDVAR_WAIT_SYSTEM_CALL, rtos_k_thread_condvar_wait),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_THREAD_CONDVAR_SIGNAL_SYSTEM_CALL, rtos_k_thread_condvar_signal),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_CREATE_MUTEX_SYSTEM_CALL, rtos_k_create_mutex),         
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_MUTEX_ACQUIRE_SYSTEM_CALL, rtos_k_mutex_acquire),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_MUTEX_RELEASE_SYSTEM_CALL, rtos_k_mutex_release),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_CREATE_CONDVAR_SYSTEM_CALL, rtos_k_create_condvar),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_CONDVAR_WAIT_SYSTEM_CALL, rtos_k_condvar_wait),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_CONDVAR_WAIT_INTERRUPT_SYSTEM_CALL, rtos_k_condvar_wait_interrupt),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_CONDVAR_SIGNAL_SYSTEM_CALL, rtos_k_condvar_signal),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_CONDVAR_BROADCAST_SYSTEM_CALL, rtos_k_condvar_broadcast),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_CREATE_TIMER_SYSTEM_CALL, rtos_k_create_timer),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_TIMER_START_SYSTEM_CALL, rtos_k_timer_start),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_TIMER_STOP_SYSTEM_CALL, rtos_k_timer_stop),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_CAPTURE_FAILURE_DATA_SYSTEM_CALL, rtos_k_capture_failure_data),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_SET_FDC_PARAMS_SYSTEM_CALL, rtos_k_set_fdc_params),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_CONSOLE_PUTCHAR_SYSTEM_CALL, rtos_k_console_putchar),             
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_CONSOLE_GETCHAR_SYSTEM_CALL, rtos_k_console_getchar),
 #ifdef LCD_SUPPORTED
-    GEN_SYSTEM_CALL_DISPATCH_ENTRY(LCD_PUTCHAR, lcd_putchar),             
-    GEN_SYSTEM_CALL_DISPATCH_ENTRY(LCD_DRAW_TILE, lcd_draw_tile), 
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_LCD_PUTCHAR_SYSTEM_CALL, rtos_k_lcd_putchar),             
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_LCD_DRAW_TILE_SYSTEM_CALL, rtos_k_lcd_draw_tile), 
 #endif
-    GEN_SYSTEM_CALL_DISPATCH_ENTRY(APP, app_system_call),
-    GEN_SYSTEM_CALL_DISPATCH_ENTRY(THREAD_SELF, thread_self),
-    GEN_SYSTEM_CALL_DISPATCH_ENTRY(THREAD_NAME, thread_name),
-    GEN_SYSTEM_CALL_DISPATCH_ENTRY(THREAD_CONDVAR_WAIT_INTERRUPT, thread_condvar_wait_interrupt),
-    GEN_SYSTEM_CALL_DISPATCH_ENTRY(THREAD_YIELD, thread_yield),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_APP_SYSTEM_CALL, rtos_k_app_system_call),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_THREAD_SELF_SYSTEM_CALL, rtos_k_thread_self),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_THREAD_NAME_SYSTEM_CALL, rtos_k_thread_name),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_THREAD_CONDVAR_WAIT_INTERRUPT_SYSTEM_CALL, rtos_k_thread_condvar_wait_interrupt),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_THREAD_YIELD_SYSTEM_CALL, rtos_k_thread_yield),
 };
 
 C_ASSERT(ARRAY_SIZE(g_rtos_system_call_dispatch_table) == RTOS_NUM_SYSTEM_CALLS);

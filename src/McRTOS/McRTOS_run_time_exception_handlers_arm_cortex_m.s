@@ -187,13 +187,14 @@ cortex_m_hard_fault_exception_handler:
      */
     mov     r0, r2
     mov     r4, r2  /* saved r2 to r4 */
+    mov     r5, r1  /* saved r1 to r5 */
     bl      rtos_hard_fault_exception_handler
   
     /*
      * Return from the exception:
      *
-     * NOTE: rtos_hard_fault_exception_handler() only returns here if this
-     * exception was caused by a bkpt instruction
+     * NOTE: rtos_hard_fault_exception_handler() only returns here if
+     * fdc_exception_debugger_on is set.
      *
      * r4 == current_execution_context_p
      */

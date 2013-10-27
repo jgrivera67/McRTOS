@@ -374,7 +374,6 @@ console_printf(const char *fmt, ...)
     cpu_status_register_t cpu_status_register;
 
     bool caller_is_thread = rtos_k_caller_is_thread();
-    //???bool caller_is_thread = false;
 
     if (caller_is_thread) {
         putchar_func_p = rtos_console_putchar;

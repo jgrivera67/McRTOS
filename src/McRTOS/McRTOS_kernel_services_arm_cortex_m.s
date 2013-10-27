@@ -24,12 +24,6 @@
 .text
 .thumb
 
-/*???
-    .align 1
-    .global    Reset_Handler
-    .type    Reset_Handler, %function
-*/
-
 /**
  * Restores the given McRTOS execution context CPU registers on the calling
  * CPU core and updates cpc_current_execution_context_p for the calling CPU.

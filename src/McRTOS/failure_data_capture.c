@@ -177,6 +177,22 @@ rtos_k_capture_failure_data(
 }
 
 
+void
+rtos_k_set_fdc_params(
+    _IN_ bool assert_break_point_on,
+    _IN_ bool error_breakpoint_on,
+    _IN_ bool exception_debugger_on)
+{
+    struct rtos_cpu_controller *cpu_controller_p =
+        &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
+    struct fdc_info *fdc_info_p = &cpu_controller_p->cpc_failures_info;
+
+    fdc_info_p->fdc_asserts_failures_breakpoint_on = assert_break_point_on;
+    fdc_info_p->fdc_error_breakpoint_on = error_breakpoint_on;
+    fdc_info_p->fdc_exception_debugger_on = exception_debugger_on;
+}
+
+
 /**
  * Captures failure data for an assertion failure
  */ 
@@ -807,30 +823,6 @@ fdc_trace_rtos_context_switch(
         actual_arm_mode == ARM_MODE_SYS,
         actual_arm_mode, target_execution_context_p);
 
-    cpu_status_register_t target_cpsr =
-        target_execution_context_p->ctx_cpu_registers[CPU_REG_CPSR];
-
-    uint32_t target_arm_mode = (target_cpsr & ARM_MODE_MASK);
-
-    DBG_ASSERT(
-        target_arm_mode == ARM_MODE_USER ||
-        target_arm_mode == ARM_MODE_SYS,
-        target_arm_mode, target_execution_context_p);
-
-    /*
-     * If the target cpu mode is user mode, interrupts are enabled in the
-     * target context. However, if the target cpu mode is system mode,
-     * interrupts may or may not be enabled. They disabled in case of
-     * synchronous context switches (i.e. threads getting blocked on a mutex
-     * or condvar).
-     */
-    if (target_arm_mode == ARM_MODE_USER)
-    {
-        DBG_ASSERT(
-            CPU_INTERRUPTS_ARE_ENABLED(target_cpsr),
-            target_cpsr, target_execution_context_p);
-    }
-
 #   elif DEFINED_ARM_CORTEX_M_ARCH()
 
     cpu_status_register_t actual_primask = __get_PRIMASK();
@@ -850,36 +842,6 @@ fdc_trace_rtos_context_switch(
          CPU_MODE_IS_PRIVILEGED(actual_control_reg) &&
          CPU_USING_MSP_STACK_POINTER(actual_control_reg),
         actual_ipsr, actual_control_reg);
-
-#   ifdef DEBUG
-    if (current_execution_context_p->ctx_context_type != RTOS_THREAD_CONTEXT ||
-        target_execution_context_p->ctx_context_type != RTOS_INTERRUPT_CONTEXT) {    
-        uint32_t *target_stack_p;
-
-        if (target_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT) {
-            target_stack_p =
-                (uint32_t *)target_execution_context_p->ctx_cpu_saved_registers.cpu_reg_psp;
-        } else {
-            target_stack_p =
-                (uint32_t *)target_execution_context_p->ctx_cpu_saved_registers.cpu_reg_msp;
-        }
-        
-        cpu_status_register_t target_psr = target_stack_p[CPU_REG_PSR];
-    
-        DBG_ASSERT(
-            CPU_MODE_IS_THREAD(target_psr) ||
-            CPU_MODE_IS_INTERRUPT(target_psr),
-            target_psr, target_execution_context_p);
-    }
-#   endif /* DEBUG */
-
-    /*
-     * If the target cpu mode is unprivileged thread mode, interrupts are
-     * enabled in the target context. However, if the target cpu mode is
-     * privileged thread mode, interrupts may or may not be enabled. They 
-     * disabled in case of synchronous context switches (i.e. threads getting
-     * blocked on a mutex or condvar).
-     */
 
 #   else
 #       error "CPU architecture not supported"
