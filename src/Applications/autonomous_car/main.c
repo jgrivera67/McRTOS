@@ -297,6 +297,9 @@ void autonomous_car_hardware_stop(void)
 static
 void autonomous_car_app_init(void)
 {
+    static const char g_app_version[] = "Autonomous car v0.1";
+    static const char g_app_build_timestamp[] = "built " __DATE__ " " __TIME__;
+
     /**
      * Array of entries for g_camera_frame_buffer_pool
      */
@@ -385,11 +388,13 @@ void autonomous_car_app_init(void)
         g_dip_switches_on[EXCEPTION_DEBUGGER_DIP_SWITCH]);
 
     console_printf(
+        "%s\n%s\n"
         "DIP Switches:\n"
         "\tAssert breakpoints %s\n"
         "\tException debugger %s\n"
         "\tActive differential %s\n"
         "\tDrive fast %s\n",
+        g_app_version, g_app_build_timestamp,
         g_dip_switches_on[ASSERT_BREAKPOINT_DIP_SWITCH] ? "ON" : "OFF",
         g_dip_switches_on[EXCEPTION_DEBUGGER_DIP_SWITCH] ? "ON" : "OFF",
         g_dip_switches_on[ACTIVE_DIFFERENTIAL_DIP_SWITCH] ? "ON" : "OFF",
@@ -781,6 +786,9 @@ drive_car(
                 TFC_WHEEL_MOTOR_MIN_DUTY_CYCLE_US + 1,                  \
             TFC_NUM_CAMERA_PIXELS)
 
+#   define WHEEL_DIFFERENTIAL_PROPORTIONAL_GAIN \
+        (WHEEL_MOTOR_PROPORTIONAL_GAIN / 4)
+
 #   define PID_ERROR_THRESHOLD_IN_PIXELS    (TFC_NUM_CAMERA_PIXELS / 16)
 
     static int previous_errors[2] = {0, 0};
@@ -860,10 +868,10 @@ drive_car(
     pwm_duty_cycle_us_t right_wheel_pwm_duty_cycle_us;
 
     if (g_dip_switches_on[ACTIVE_DIFFERENTIAL_DIP_SWITCH] &&
-        ABS(error) >= PID_ERROR_THRESHOLD_IN_PIXELS &&
+        ABS(error) > PID_ERROR_THRESHOLD_IN_PIXELS &&
         wheel_motor_pwm_duty_cycle_us != TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US) {
         int offset_wheel_differential = 
-                 -WHEEL_MOTOR_PROPORTIONAL_GAIN * ABS(error);
+                 -(WHEEL_DIFFERENTIAL_PROPORTIONAL_GAIN * ABS(error));
 
         if (error < 0) {
             /*
