@@ -629,44 +629,39 @@ embedded_vprintf(
 
 
 static void
-print_uint32_hexadecimal(putchar_func_t *putchar_func_p, void *putchar_arg_p, uint32_t value,
+print_uint32_hexadecimal(
+    putchar_func_t *putchar_func_p, void *putchar_arg_p, uint32_t value,
     uint8_t padding_count)
 {
-    uint32_t   u32Mask  = 0xF0000000;
-    uint8_t    u32Shift = 32;
-    uint32_t   u32Char;
-    uint8_t    char_printed_count = 0;
-    uint8_t    first_non_zero_nibble_found = false;
+#   define MAX_NUM_NIBBLES  ((sizeof(uint32_t) * 8) / 4)
+#   define MSB_BIT_INDEX    ((sizeof(uint32_t) * 8) - 1)
+#   define MSB_NIBBLE_MASK  MULTI_BIT_MASK(MSB_BIT_INDEX, MSB_BIT_INDEX - 3)
+#   define MSB_NIBBLE_SHIFT (MSB_BIT_INDEX - 3)
+    natural_t  char_printed_count = 0;
+    uint32_t   remaining_value = value;
 
-    do {
-        u32Shift -= 4;
-        u32Char = (value & u32Mask) >> u32Shift;
-        u32Mask >>= 4;
+    for (natural_t i = 0; i < MAX_NUM_NIBBLES; i ++) {
+        natural_t nibble = 
+            GET_BIT_FIELD(remaining_value, MSB_NIBBLE_MASK, MSB_NIBBLE_SHIFT);
 
-        if (!first_non_zero_nibble_found)
-        {
-            if (u32Char == 0)
-            {
-                continue;
-            }
+        remaining_value <<= 4;
 
-            first_non_zero_nibble_found = true;
+        if (nibble == 0 && char_printed_count == 0) {
+            continue;
         }
 
-        if (u32Char >= 0xA)
-        {
-            putchar_func_p(putchar_arg_p, 'A' + (u32Char - 10));
-        }
-        else
-        {
-            putchar_func_p(putchar_arg_p, '0' + u32Char);
+        DBG_ASSERT(nibble <= 0xf, nibble, 0);
+
+        if (nibble < 0xa) {
+            putchar_func_p(putchar_arg_p, '0' + nibble);
+        } else {
+            putchar_func_p(putchar_arg_p, 'A' + (nibble - 0xa));
         }
 
         char_printed_count ++;
-    } while (u32Shift > 0);
+    }
 
-    if (char_printed_count == 0)
-    {
+    if (char_printed_count == 0) {
         putchar_func_p(putchar_arg_p, '0');
         char_printed_count ++;
     }

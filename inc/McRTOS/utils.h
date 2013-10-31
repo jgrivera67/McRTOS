@@ -25,7 +25,7 @@
                        _least_significant_bit_index)                    \
         (BIT(_most_significant_bit_index) |                             \
          ((BIT(_most_significant_bit_index) - 1) &                      \
-          (UINT32_MAX << _least_significant_bit_index)))
+          (UINT32_MAX << (_least_significant_bit_index))))
 
 #define GET_BIT_FIELD(_container, _bit_mask, _bit_shift) \
     (((_container) & (_bit_mask)) >> (_bit_shift))
