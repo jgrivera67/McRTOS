@@ -30,6 +30,11 @@ print_uint32_hexadecimal(
     uint8_t padding_count);
 
 static void
+print_uint64_hexadecimal(
+    putchar_func_t *putchar_func_p, void *putchar_arg_p, uint64_t value,
+    uint8_t padding_count);
+
+static void
 print_uint32_decimal(
     putchar_func_t *putchar_func_p, void *putchar_arg_p, uint32_t value,
     uint8_t padding_count);
@@ -568,8 +573,16 @@ embedded_vprintf(
                     }
                 }
 
-                print_uint32_hexadecimal(putchar_func_p, putchar_arg_p, va_arg(va, uint32_t), 
-                    padding_count);
+                if (c == 'p' && sizeof(void *) == sizeof(uint64_t)) {
+                    print_uint64_hexadecimal(
+                        putchar_func_p, putchar_arg_p, va_arg(va, uint64_t), 
+                        padding_count);
+
+                } else {
+                    print_uint32_hexadecimal(
+                        putchar_func_p, putchar_arg_p, va_arg(va, uint32_t), 
+                        padding_count);
+                }
                 break;
 
             case 'u':
@@ -628,34 +641,41 @@ embedded_vprintf(
 }
 
 
+/**
+ * Get the most significant 4 bits of a given value
+ */
+#define GET_MSB_HEX_DIGIT(_value) \
+        ((uint8_t)GET_BIT_FIELD(remaining_value, MSB_HEX_DIGIT_MASK, \
+                                MSB_HEX_DIGIT_SHIFT))
+
 static void
 print_uint32_hexadecimal(
     putchar_func_t *putchar_func_p, void *putchar_arg_p, uint32_t value,
     uint8_t padding_count)
 {
-#   define MAX_NUM_NIBBLES  ((sizeof(uint32_t) * 8) / 4)
-#   define MSB_BIT_INDEX    ((sizeof(uint32_t) * 8) - 1)
-#   define MSB_NIBBLE_MASK  MULTI_BIT_MASK(MSB_BIT_INDEX, MSB_BIT_INDEX - 3)
-#   define MSB_NIBBLE_SHIFT (MSB_BIT_INDEX - 3)
-    natural_t  char_printed_count = 0;
+#   define MAX_NUM_HEX_DIGITS   ((sizeof(uint32_t) * 8) / 4)
+#   define MSB_BIT_INDEX        ((sizeof(uint32_t) * 8) - 1)
+#   define MSB_HEX_DIGIT_MASK   MULTI_BIT_MASK(MSB_BIT_INDEX, MSB_BIT_INDEX - 3)
+#   define MSB_HEX_DIGIT_SHIFT  (MSB_BIT_INDEX - 3)
+
+    uint8_t    char_printed_count = 0;
     uint32_t   remaining_value = value;
 
-    for (natural_t i = 0; i < MAX_NUM_NIBBLES; i ++) {
-        natural_t nibble = 
-            GET_BIT_FIELD(remaining_value, MSB_NIBBLE_MASK, MSB_NIBBLE_SHIFT);
+    for (uint8_t i = 0; i < MAX_NUM_HEX_DIGITS; i ++) {
+        uint8_t hex_digit = GET_MSB_HEX_DIGIT(remaining_value);
 
         remaining_value <<= 4;
 
-        if (nibble == 0 && char_printed_count == 0) {
+        if (hex_digit == 0 && char_printed_count == 0) {
             continue;
         }
 
-        DBG_ASSERT(nibble <= 0xf, nibble, 0);
+        DBG_ASSERT(hex_digit <= 0xf, hex_digit, 0);
 
-        if (nibble < 0xa) {
-            putchar_func_p(putchar_arg_p, '0' + nibble);
+        if (hex_digit < 0xa) {
+            putchar_func_p(putchar_arg_p, '0' + hex_digit);
         } else {
-            putchar_func_p(putchar_arg_p, 'A' + (nibble - 0xa));
+            putchar_func_p(putchar_arg_p, 'A' + (hex_digit - 0xa));
         }
 
         char_printed_count ++;
@@ -671,6 +691,62 @@ print_uint32_hexadecimal(
         putchar_func_p(putchar_arg_p, ' ');
         char_printed_count ++;
     }
+
+#   undef MAX_NUM_HEX_DIGITS
+#   undef MSB_BIT_INDEX 
+#   undef MSB_HEX_DIGIT_MASK
+#   undef MSB_HEX_DIGIT_SHIFT
+}
+
+
+static void
+print_uint64_hexadecimal(
+    putchar_func_t *putchar_func_p, void *putchar_arg_p, uint64_t value,
+    uint8_t padding_count)
+{
+#   define MAX_NUM_HEX_DIGITS   ((sizeof(uint64_t) * 8) / 4)
+#   define MSB_BIT_INDEX        ((sizeof(uint64_t) * 8) - 1)
+#   define MSB_HEX_DIGIT_MASK   MULTI_BIT_MASK64(MSB_BIT_INDEX, MSB_BIT_INDEX - 3)
+#   define MSB_HEX_DIGIT_SHIFT  (MSB_BIT_INDEX - 3)
+
+    uint8_t    char_printed_count = 0;
+    uint64_t   remaining_value = value;
+
+    for (uint8_t i = 0; i < MAX_NUM_HEX_DIGITS; i ++) {
+        uint8_t hex_digit = GET_MSB_HEX_DIGIT(remaining_value);
+
+        remaining_value <<= 4;
+
+        if (hex_digit == 0 && char_printed_count == 0) {
+            continue;
+        }
+
+        DBG_ASSERT(hex_digit <= 0xf, hex_digit, 0);
+
+        if (hex_digit < 0xa) {
+            putchar_func_p(putchar_arg_p, '0' + hex_digit);
+        } else {
+            putchar_func_p(putchar_arg_p, 'A' + (hex_digit - 0xa));
+        }
+
+        char_printed_count ++;
+    }
+
+    if (char_printed_count == 0) {
+        putchar_func_p(putchar_arg_p, '0');
+        char_printed_count ++;
+    }
+
+    while (char_printed_count < padding_count)
+    {
+        putchar_func_p(putchar_arg_p, ' ');
+        char_printed_count ++;
+    }
+
+#   undef MAX_NUM_HEX_DIGITS
+#   undef MSB_BIT_INDEX 
+#   undef MSB_HEX_DIGIT_MASK
+#   undef MSB_HEX_DIGIT_SHIFT
 }
 
 

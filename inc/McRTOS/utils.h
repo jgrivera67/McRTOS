@@ -19,13 +19,21 @@
 #define ARRAY_SIZE(_array) \
         (sizeof(_array) / sizeof((_array)[0]))
 
-#define BIT(_bit_index)  (UINT32_C(0x1) << (_bit_index))
+#define BIT(_bit_index)     (UINT32_C(0x1) << (_bit_index))
+
+#define BIT64(_bit_index)   (UINT64_C(0x1) << (_bit_index))
 
 #define MULTI_BIT_MASK(_most_significant_bit_index,                     \
                        _least_significant_bit_index)                    \
         (BIT(_most_significant_bit_index) |                             \
          ((BIT(_most_significant_bit_index) - 1) &                      \
           (UINT32_MAX << (_least_significant_bit_index))))
+
+#define MULTI_BIT_MASK64(_most_significant_bit_index,                   \
+                       _least_significant_bit_index)                    \
+        (BIT64(_most_significant_bit_index) |                           \
+         ((BIT64(_most_significant_bit_index) - 1) &                    \
+          (UINT64_MAX << (_least_significant_bit_index))))
 
 #define GET_BIT_FIELD(_container, _bit_mask, _bit_shift) \
     (((_container) & (_bit_mask)) >> (_bit_shift))
