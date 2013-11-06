@@ -158,7 +158,7 @@ CFLAGS  = 	$(MCFLAGS) $(OPT) -gdwarf-2 -fomit-frame-pointer \
 		-Winline \
 		-fverbose-asm -Wa,-ahlms=$(<:.c=.lst) \
 		-Werror \
-		-Wstack-usage=104 \
+		-Wstack-usage=112 \
 		-Wundef \
 		$(CPPFLAGS) \
 		${COMMON_CFLAGS} ${CMD_LINE_CFLAGS}

@@ -19,7 +19,7 @@ TODO("Remove these pragmas")
 #pragma GCC diagnostic ignored "-Wunused-function"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
-#define TFC_CAMERA_SI_DELAY     50
+#define TFC_CAMERA_SI_DELAY     (TFC_CAMERA_CLK_DELAY * 2 * 18)
 #define TFC_CAMERA_CLK_DELAY    50
 
 /*
@@ -576,10 +576,11 @@ tfc_camera_read_frame(
     _OUT_ struct tfc_camera_frame *camera_frame_p)
 {
     activate_output_pin(&g_tfc_camera_si_pin);
-    delay_loop(TFC_CAMERA_SI_DELAY);
+    delay_loop(TFC_CAMERA_CLK_DELAY / 2);
     activate_output_pin(&g_tfc_camera_clk_pin);
-    delay_loop(TFC_CAMERA_CLK_DELAY);
+    delay_loop(TFC_CAMERA_CLK_DELAY / 2);
     deactivate_output_pin(&g_tfc_camera_si_pin);
+    delay_loop(TFC_CAMERA_CLK_DELAY / 2);
 
     for (int i = 0; i < TFC_NUM_CAMERA_PIXELS; i++) {
         camera_frame_p->cf_pixels[i] =
@@ -591,6 +592,13 @@ tfc_camera_read_frame(
         delay_loop(TFC_CAMERA_CLK_DELAY);
     }
 
+    /* 
+     * N+1 clock pulse
+     */
+    deactivate_output_pin(&g_tfc_camera_clk_pin);
+    delay_loop(TFC_CAMERA_CLK_DELAY);
+    activate_output_pin(&g_tfc_camera_clk_pin);
+    delay_loop(TFC_CAMERA_CLK_DELAY);
     deactivate_output_pin(&g_tfc_camera_clk_pin);
 }
 

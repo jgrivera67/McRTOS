@@ -163,7 +163,7 @@ static const struct rtos_startup_app_configuration g_rtos_app_config =
  * Macro that determines if a pixel is white.
  */
 #define IS_PIXEL_WHITE(_filtered_pixel, _white_threshold) \
-        ((_filtered_pixel) > (_white_threshold))
+        ((_filtered_pixel) >= (_white_threshold))
 
 /**
  * Number of raw camera frame buffers
@@ -494,6 +494,7 @@ camera_frame_reader_thread_f(void *arg)
 static black_spot_position_t
 find_black_spot(
     _IN_ struct tfc_camera_frame *camera_frame_p,
+    int turning_status,
     _OUT_ black_spot_position_t *black_spot_position_p)
 {
 #   define NUM_BW_CLUSTERS              (sizeof(bw_cluster_bit_map_t) * 8)
@@ -502,6 +503,7 @@ find_black_spot(
 
     typedef uint32_t bw_cluster_bit_map_t;
     
+    natural_t super_cluster_index;
     bool black_spot_found = false;
     bw_cluster_bit_map_t bw_cluster_bit_map = 0x0;
     bw_cluster_bit_map_t bw_super_cluster_bit_map = 0x0;
@@ -638,7 +640,6 @@ find_black_spot(
      * Find the super-cluster that is closest to the center of the processed
      * camera frame:
      */
-    natural_t super_cluster_index;
 #if 1
     for (natural_t i = 0; i < NUM_BW_SUPER_CLUSTERS / 2; i ++) {
         super_cluster_index = (NUM_BW_SUPER_CLUSTERS / 2) + i;
@@ -682,6 +683,7 @@ find_black_spot(
     last_super_cluster_index = super_cluster_index;
 #endif
 
+Exit:
     if (black_spot_found) {
         DBG_ASSERT(
             super_cluster_index < NUM_BW_SUPER_CLUSTERS,
@@ -689,9 +691,21 @@ find_black_spot(
 
         *black_spot_position_p =
             super_cluster_index * (BW_CLUSTER_SIZE * BW_CLUSTER_SIZE);
+    } else {
+#if 0 // ???
+        if (turning_status == -1) {
+            *black_spot_position_p = 0;
+        } else if (turning_status == 1) {
+            *black_spot_position_p = 
+                (NUM_BW_SUPER_CLUSTERS - 1)*(BW_CLUSTER_SIZE * BW_CLUSTER_SIZE);
+        } else {
+            *black_spot_position_p = BLACK_SPOT_SET_POINT;
+        }
+
+        black_spot_found = true;
+#endif
     }
  
-Exit:
     if (g_dump_camera_frames_on) {
         console_printf("\n");
         console_printf(
@@ -763,7 +777,7 @@ calculate_base_wheel_motor_pwm_duty_cycle_us(void)
 /**
  * PID controller to drive the car
  */
-static void
+static int
 drive_car(
     _IN_ black_spot_position_t black_spot_position,
     _IN_ pwm_duty_cycle_us_t base_wheel_motor_pwm_duty_cycle_us)
@@ -798,6 +812,8 @@ drive_car(
     static pwm_duty_cycle_us_t wheel_motor_pwm_duty_cycle_us =
                                     TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US;
 
+    int turning_status = 0;
+
     /*
      * Calculate PID values:
      */
@@ -814,7 +830,7 @@ drive_car(
      */
 
     int offset_steering_servo_pwm_duty_cycle = 
-             STEERING_SERVO_PROPORTIONAL_GAIN * delta_error + 
+             (STEERING_SERVO_PROPORTIONAL_GAIN / 2) * delta_error + 
              STEERING_SERVO_INTEGRAL_GAIN * error +
              STEERING_SERVO_DERIVATIVE_GAIN * derivative_term;
 
@@ -824,6 +840,12 @@ drive_car(
                                 offset_steering_servo_pwm_duty_cycle,
                                 TFC_STEERING_SERVO_MIN_DUTY_CYCLE_US,
                                 TFC_STEERING_SERVO_MAX_DUTY_CYCLE_US);
+
+    if (offset_steering_servo_pwm_duty_cycle < 0) {
+        turning_status = -1;
+    } else if (offset_steering_servo_pwm_duty_cycle > 0) {
+        turning_status = 1;
+    }
 
     /*
      * Calculate new wheel motors PWM duty cycle:
@@ -913,6 +935,8 @@ drive_car(
     tfc_wheel_motors_set(
         left_wheel_pwm_duty_cycle_us,
         right_wheel_pwm_duty_cycle_us);
+
+    return turning_status;
 }
 
 
@@ -923,6 +947,7 @@ car_driver_thread_f(void *arg)
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
     uint32_t no_black_spot_found_count = 0;
+    int turning_status = 0;
 
     FDC_ASSERT(arg == NULL, arg, cpu_id);
 
@@ -945,7 +970,7 @@ car_driver_thread_f(void *arg)
             true);
 
         bool black_spot_found =
-            find_black_spot(camera_frame_p, &black_spot_position);
+            find_black_spot(camera_frame_p, turning_status, &black_spot_position);
 
         /*
          * Return frame buffer to the frame buffer pool:
@@ -958,6 +983,7 @@ car_driver_thread_f(void *arg)
         FDC_ASSERT(write_ok, 0, 0);
 
         if (black_spot_found) {
+            turn_on_rgb_led(LED_GREEN_PIN_MASK);
             if (no_black_spot_found_count != 0) {
                 console_printf(
                     "Black spot found after %u attempts\n",
@@ -966,9 +992,10 @@ car_driver_thread_f(void *arg)
                 no_black_spot_found_count = 0;
             }
 
-            drive_car(
+            turning_status = drive_car(
                 black_spot_position, base_wheel_motor_pwm_duty_cycle_us);
         } else {
+            turn_off_rgb_led(LED_GREEN_PIN_MASK);
             if (no_black_spot_found_count == 0) {
                 console_printf(
                     "Black spot not found (white threshold %#x)\n",
