@@ -17,9 +17,15 @@
 #define TFC_NUM_CAMERA_PIXELS   128
 
 /**
- * Camera exposure time in milliseconds
+ * Camera sampling delay in milliseconds 
+ *
+ * NOTE: This delay + frame capture time must be <= 100ms, to prevent
+ * saturating the pixel capacitors, before the next frame capture.
+ * Also, this delay has to be >= 20ms, which is the steering servo response
+ * time, and you want to give time to the steering servo to fully act before
+ * capturing the next frame from the camera.
  */
-#define TFC_CAMERA_EXPOSURE_TIME_MS 50
+#define TFC_CAMERA_SAMPLING_DELAY_MS    20
 
 /**
  * Steering servo minimum duty cycle in microseconds
@@ -41,14 +47,13 @@
 
 /**
  * Steering servo off duty cycle in microseconds 
- * (wheels turned left)
  */
 #define TFC_STEERING_SERVO_OFF_DUTY_CYCLE_US    UINT32_C(0)
 
 /**
- * Steering servo "wheels straight" duty cycle in microseconds
+ * Steering servo "neutral" duty cycle in microseconds
  */
-#define TFC_STEERING_SERVO_STRAIGHT_DUTY_CYCLE_US \
+#define TFC_STEERING_SERVO_NEUTRAL_DUTY_CYCLE_US \
         TFC_STEERING_SERVO_MIDDLE_DUTY_CYCLE_US
 
 /**

@@ -151,7 +151,6 @@ static isr_function_t dummy_mcm_isr;
 static isr_function_t dummy_ftfl_isr;
 static isr_function_t dummy_pmc_isr;
 static isr_function_t dummy_llw_isr;
-static isr_function_t dummy_i2c0_isr;
 static isr_function_t dummy_i2c1_isr;
 static isr_function_t dummy_spi0_isr;
 static isr_function_t dummy_spi1_isr;
@@ -199,7 +198,7 @@ isr_function_t *const g_interrupt_vector_table[] __attribute__ ((section(".vecto
     [INT_FTFA] = dummy_ftfl_isr, /* FTFL Interrupt */
     [INT_LVD_LVW] = dummy_pmc_isr, /* PMC Interrupt */
     [INT_LLW] = dummy_llw_isr, /* Low Leakage Wake-up */
-    [INT_I2C0] = dummy_i2c0_isr, /* I2C0 interrupt */
+    [INT_I2C0] = kl25_i2c0_isr, /* I2C0 interrupt */
     [INT_I2C1] = dummy_i2c1_isr, /* I2C1 interrupt */
     [INT_SPI0] = dummy_spi0_isr, /* SPI0 Interrupt */
     [INT_SPI1] = dummy_spi1_isr, /* SPI1 Interrupt */
@@ -472,7 +471,7 @@ system_clocks_init(void)
     uint32_t reg_value;
 
     /*
-     * Enable all of the port clocks. These have to be enabled to configure
+     * Enable all of the GPIO port clocks. These have to be enabled to configure
      * pin muxing options, so most code will need all of these on anyway.
      */
     reg_value = read_32bit_mmio_register(&SIM_SCGC5);
@@ -1893,6 +1892,86 @@ read_adc_channel(
 }
 
 
+/**
+ * Wait until the current PWM cycle completes
+ */
+static void 
+kl25_tpm_wait_pwm_cycle_completion(
+    const struct tpm_device *tpm_device_p)
+{
+    struct tpm_device_var *const tpm_var_p = tpm_device_p->tpm_var_p;
+    cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
+
+    while (!tpm_var_p->tpm_pwm_cycle_completed)
+    {
+        rtos_k_condvar_wait_interrupt(&tpm_var_p->tpm_condvar);
+    }
+
+    tpm_var_p->tpm_pwm_cycle_completed = false;
+
+    rtos_k_restore_cpu_interrupts(cpu_status_register);
+}
+
+
+static void
+kl25_tpm_set_duty_cycle_internal(
+    const struct tpm_device *tpm_device_p,
+    pwm_channel_t pwm_channel,
+    pwm_duty_cycle_us_t pwm_duty_cycle_us,
+    bool wait_previous_cycle_completion)
+{
+    uint32_t reg_value;
+    struct tpm_device_var *const tpm_var_p = tpm_device_p->tpm_var_p;
+    TPM_MemMapPtr tpm_mmio_registers_p = tpm_device_p->tpm_mmio_p;
+
+    FDC_ASSERT(
+        tpm_device_p->tpm_signature == TPM_DEVICE_SIGNATURE,
+        tpm_device_p->tpm_signature, tpm_device_p);
+    FDC_ASSERT(
+        tpm_var_p->tpm_initialized, tpm_device_p, tpm_var_p);
+    FDC_ASSERT(
+        pwm_channel < PWM_MAX_NUM_CHANNELS, pwm_channel, tpm_device_p);
+
+    uint32_t pwm_period_us = UINT32_C(1000000) / tpm_device_p->tpm_overflow_freq_hz;
+
+    FDC_ASSERT(
+        pwm_duty_cycle_us <= pwm_period_us, pwm_duty_cycle_us, pwm_period_us);
+
+#ifdef DEBUG
+    reg_value = read_32bit_mmio_register(&TPM_MOD_REG(tpm_mmio_registers_p));
+    FDC_ASSERT(
+        reg_value == tpm_var_p->tpm_mod_reg_value, 
+        reg_value, tpm_var_p->tpm_mod_reg_value);
+#endif
+
+    if (wait_previous_cycle_completion) {
+        kl25_tpm_wait_pwm_cycle_completion(tpm_device_p);
+    }
+
+    /*
+     * Set CnV to duty cycle for the channel, as a fraction of tpm_mod_reg_value:
+     *
+     * new CnV value = tpm_mod_reg_value * (pwm_duty_cycle_us / pwm_period_us)
+     *
+     * NOTE: The actual CnV register is updated after a write is done on the CnV
+     * register and the TPM counter changes from MOD to zero (counter overflow).
+     * Thus there is a worst-case latency of pwm_period_us microseconds from
+     * the timet this function is called to the time the CnV change takes
+     * effect.
+     */
+
+    uint32_t tmp = tpm_var_p->tpm_mod_reg_value * pwm_duty_cycle_us;
+   
+    FDC_ASSERT(
+        tmp >= tpm_var_p->tpm_mod_reg_value || pwm_duty_cycle_us == 0,
+        tmp, tpm_var_p->tpm_mod_reg_value);
+
+    reg_value = tmp / pwm_period_us;
+    write_32bit_mmio_register(
+        &TPM_CnV_REG(tpm_mmio_registers_p, pwm_channel), reg_value);
+}
+
+
 void
 kl25_tpm_init(
     const struct tpm_device *tpm_device_p)
@@ -1912,45 +1991,27 @@ kl25_tpm_init(
     reg_value |= tpm_device_p->tpm_mmio_clock_gate_mask; 
     write_32bit_mmio_register(&SIM_SCGC6, reg_value);
 
+    struct tpm_device_var *const tpm_var_p = tpm_device_p->tpm_var_p;
+    TPM_MemMapPtr tpm_mmio_registers_p = tpm_device_p->tpm_mmio_p;
+
+    FDC_ASSERT(!tpm_var_p->tpm_initialized, tpm_device_p, tpm_var_p);
+    tpm_var_p->tpm_initialized = true;
+
     /*
      * Blow away the control registers to ensure that the counter is not running
      */ 
-
-    TPM_MemMapPtr tpm_mmio_registers_p = tpm_device_p->tpm_mmio_p;
-
     write_32bit_mmio_register(
         &TPM_SC_REG(tpm_mmio_registers_p), 0x0);
-
     write_32bit_mmio_register(
         &TPM_CONF_REG(tpm_mmio_registers_p), 0x0);
 
-   /*
-    * While the counter is disabled we can setup the prescaler
-    */
-
+    /*
+     * Setup prescaler before enabling the TPM counter
+     */
     reg_value = 0;
     SET_BIT_FIELD(
         reg_value, TPM_SC_PS_MASK, TPM_SC_PS_SHIFT,
         tpm_device_p->tpm_clock_prescale);
-
-#if 0
-    /* 
-     * Enable Interrupts for the Timer Overflow
-     */ 
-    reg_value |= TPM_SC_TOIE_MASK;
-#endif
-
-    /*
-     * Enable the TPM Counter:
-     *
-     * - CMOD = 01: LPTPM counter increments on every LPTPM counter clock.
-     * - CPWMS = 0: Up counting is selected. Also, if for channel n,
-     *   MSnB:MSnA = 1:0, the edge-aligned PWM mode (EPWM) is selected for 
-     *   that channel.
-     */ 
-    SET_BIT_FIELD(
-        reg_value, TPM_SC_CMOD_MASK, TPM_SC_CMOD_SHIFT, 0x1);
-
     write_32bit_mmio_register(
         &TPM_SC_REG(tpm_mmio_registers_p), reg_value);
 
@@ -1961,16 +2022,15 @@ kl25_tpm_init(
      * The pulse width (duty cycle) for channel n is determined by CnV.
      * MOD must be less than 0xFFFF in order to get a 100% duty cycle EPWM signal.
      */
-
-    reg_value = (tpm_device_p->tpm_clock_freq_hz /
-                    (1 << tpm_device_p->tpm_clock_prescale)) / 
-                tpm_device_p->tpm_overflow_freq_hz;
-
+    reg_value = ((tpm_device_p->tpm_clock_freq_hz /
+                    (UINT32_C(1) << tpm_device_p->tpm_clock_prescale)) / 
+                 tpm_device_p->tpm_overflow_freq_hz) - 1;
     DBG_ASSERT(
         reg_value < 0xffff, reg_value, tpm_device_p);
-
     write_32bit_mmio_register(
         &TPM_MOD_REG(tpm_mmio_registers_p), reg_value);
+
+    tpm_var_p->tpm_mod_reg_value = reg_value;
 
     /*
      * Configure PWM channels:
@@ -1982,8 +2042,8 @@ kl25_tpm_init(
             /*
              * Set the initial duty cycle for the channel
              */
-            kl25_tpm_set_duty_cycle(
-                tpm_device_p, i, tpm_device_p->tpm_initial_duty_cycle_us);
+            kl25_tpm_set_duty_cycle_internal(
+                tpm_device_p, i, tpm_device_p->tpm_initial_duty_cycle_us, false);
 
             /* 
              * Enable channel pin:
@@ -1994,6 +2054,8 @@ kl25_tpm_init(
 
             /*
              * Setup PWM channel:
+             * - MSnB:MSnA = 1:0, the edge-aligned PWM mode (EPWM) is selected
+             *   for the channel.
              */
             write_32bit_mmio_register(
                 &TPM_CnSC_REG(tpm_mmio_registers_p, i),
@@ -2001,18 +2063,43 @@ kl25_tpm_init(
         }
     }
 
-#if 0 // ???
-    /* 
-     * Register McRTOS interrupt handler
-     */
-    rtos_k_register_interrupt(
-        &tpm_device_p->tpm_rtos_interrupt_params,
-        tpm_device_p->tpm_rtos_interrupt_pp);
+    rtos_k_condvar_init(
+        tpm_device_p->tpm_condvar_name,
+        SOC_GET_CURRENT_CPU_ID(),
+        &tpm_var_p->tpm_condvar);
 
-    DBG_ASSERT(
-        *tpm_device_p->tpm_rtos_interrupt_pp != NULL, 
-        tpm_device_p->tpm_rtos_interrupt_pp, tpm_device_p);
-#endif
+    tpm_var_p->tpm_pwm_cycle_completed = false;
+
+    if (tpm_device_p->tpm_wait_pwm_cycle_completion) {
+        /* 
+         * Register McRTOS interrupt handler
+         */
+        rtos_k_register_interrupt(
+            &tpm_device_p->tpm_rtos_interrupt_params,
+            tpm_device_p->tpm_rtos_interrupt_pp);
+
+        DBG_ASSERT(
+            *tpm_device_p->tpm_rtos_interrupt_pp != NULL, 
+            tpm_device_p->tpm_rtos_interrupt_pp, tpm_device_p);
+    }
+
+    /*
+     * - Enable the TPM Counter:
+     *   - CMOD = 01: LPTPM counter increments on every LPTPM counter clock.
+     *   - CPWMS = 0: Up counting is selected. 
+     * - Enable Interrupts for the Timer Overflow if we are going to wait
+     *   for PWM cycle completions.
+     */
+
+    reg_value = read_32bit_mmio_register(&TPM_SC_REG(tpm_mmio_registers_p));
+    SET_BIT_FIELD(
+        reg_value, TPM_SC_CMOD_MASK, TPM_SC_CMOD_SHIFT, 0x1);
+    if (tpm_device_p->tpm_wait_pwm_cycle_completion) {
+        reg_value |= TPM_SC_TOIE_MASK;
+    }
+
+    write_32bit_mmio_register(
+        &TPM_SC_REG(tpm_mmio_registers_p), reg_value);
 }
 
 
@@ -2030,7 +2117,11 @@ kl25_tpm_interrupt_e_handler(
         tpm_device_p->tpm_signature, tpm_device_p);
 
     uint32_t reg_value;
+    struct tpm_device_var *const tpm_var_p = tpm_device_p->tpm_var_p;
     TPM_MemMapPtr tpm_mmio_registers_p = tpm_device_p->tpm_mmio_p;
+
+    DBG_ASSERT(
+        tpm_var_p->tpm_initialized, tpm_device_p, tpm_var_p);
 
    /*
     * Clear the overflow mask if set, by writing a logic one in it:
@@ -2040,6 +2131,9 @@ kl25_tpm_interrupt_e_handler(
         write_32bit_mmio_register(
             &TPM_SC_REG(tpm_mmio_registers_p), reg_value);
     }
+
+    tpm_var_p->tpm_pwm_cycle_completed = true;
+    rtos_k_condvar_signal(&tpm_var_p->tpm_condvar);
 }
 
 
@@ -2049,50 +2143,253 @@ kl25_tpm_set_duty_cycle(
     pwm_channel_t pwm_channel,
     pwm_duty_cycle_us_t pwm_duty_cycle_us)
 {
-    FDC_ASSERT(
-        tpm_device_p->tpm_signature == TPM_DEVICE_SIGNATURE,
-        tpm_device_p->tpm_signature, tpm_device_p);
-
-    FDC_ASSERT(
-        pwm_channel < PWM_MAX_NUM_CHANNELS, pwm_channel, tpm_device_p);
-
-    uint32_t pwm_period_us = UINT32_C(1000000) / tpm_device_p->tpm_overflow_freq_hz;
-
-    FDC_ASSERT(
-        pwm_duty_cycle_us <= pwm_period_us, pwm_duty_cycle_us, pwm_period_us);
-    
-    TPM_MemMapPtr tpm_mmio_registers_p = tpm_device_p->tpm_mmio_p;
-
-    uint32_t tpm_mod_reg_value =
-        read_32bit_mmio_register(&TPM_MOD_REG(tpm_mmio_registers_p));
-
-    DBG_ASSERT(
-        tpm_mod_reg_value <= UINT16_MAX, tpm_mod_reg_value, tpm_device_p);
-
-    /*
-     * Set CnV to duty cycle for the channel, as a fraction of tpm_mod_reg_value:
-     *
-     * new CnV value = tpm_mod_reg_value * (pwm_duty_cycle_us / pwm_period_us)
-     *
-     * NOTE: The actual CnV register is updated after a write is done on the CnV
-     * register and the TPM counter changes from MOD to zero (counter overflow).
-     * Thus there is a worst-case latency of pwm_period_us microseconds from
-     * the timet this function is called to the time the CnV change takes
-     * effect.
-     */
-
-    uint32_t tmp = tpm_mod_reg_value * pwm_duty_cycle_us;
-   
-    FDC_ASSERT(
-        tmp >= tpm_mod_reg_value || pwm_duty_cycle_us == 0,
-        tmp, tpm_mod_reg_value);
-
-    uint32_t reg_value = tmp / pwm_period_us;
-
-    write_32bit_mmio_register(
-        &TPM_CnV_REG(tpm_mmio_registers_p, pwm_channel), reg_value);
+    kl25_tpm_set_duty_cycle_internal(
+        tpm_device_p,
+        pwm_channel,
+        pwm_duty_cycle_us,
+        tpm_device_p->tpm_wait_pwm_cycle_completion);
 }
 
+#if 0 // ???
+void
+i2c_init(
+    const struct i2c_device *i2c_device_p)
+{
+    uint32_t reg_value;
+
+    FDC_ASSERT(
+        i2c_device_p->i2c_signature == I2C_DEVICE_SIGNATURE,
+        i2c_device_p->i2c_signature, i2c_device_p);
+
+    struct i2c_device_var *const i2c_var_p = i2c_device_p->i2c_var_p;
+    I2C_MemMapPtr i2c_mmio_registers_p = i2c_device_p->i2c_mmio_p;
+
+    FDC_ASSERT(!i2c_var_p->i2c_initialized, i2c_device_p, i2c_var_p);
+    FDC_ASSERT_CPU_INTERRUPTS_DISABLED();
+
+    /*
+     * Enable the Clock to the I2C Module
+     */
+    reg_value = read_32bit_mmio_register(&SIM_SCGC4);
+    reg_value |= i2c_device_p->i2c_clock_gate_mask; 
+    write_32bit_mmio_register(&SIM_SCGC6, reg_value);
+
+    /*
+     * Configure GPIO pins for I2C functions:
+     */ 
+    write_32bit_mmio_register(
+        i2c_device_p->i2c_mmio_scl_port_pcr_p,
+        i2c_device_p->i2c_pin_mux_selector_mask);
+    write_32bit_mmio_register(
+        i2c_device_p->i2c_mmio_sda_port_pcr_p,
+        i2c_device_p->i2c_pin_mux_selector_mask);
+
+    /*
+     * Set baud rate:
+     */ 
+    SET_BIT_FIELD(
+        reg_value, I2C_F_ICR_MASK, I2C_F_ICR_SHIFT, i2c_device_p->i2c_baud_rate);
+    write_8bit_mmio_register(
+        &I2C_F_REG(i2c_mmio_registers_p), reg_value);
+
+    /*
+     * Enable IIC mode and enable interrupts:
+     */
+    write_8bit_mmio_register(
+        &I2C_C1_REG(i2c_mmio_registers_p), 
+        I2C_C1_IICEN_MASK | I2C_C1_IICIE_MASK);
+
+    rtos_k_condvar_init(
+        i2c_device_p->i2c_condvar_name,
+        SOC_GET_CURRENT_CPU_ID(),
+        &i2c_channel_p->i2c_condvar);
+
+    i2c_device_p->i2c_byte_transfer_completed = false;
+
+    /* 
+     * Register McRTOS interrupt handler
+     */
+    rtos_k_register_interrupt(
+        &i2c_device_p->i2c_rtos_interrupt_params,
+        i2c_device_p->i2c_rtos_interrupt_pp);
+
+    DBG_ASSERT(
+        *i2c_device_p->i2c_rtos_interrupt_pp != NULL, 
+        i2c_device_p->i2c_rtos_interrupt_pp, i2c_device_p);
+    
+    i2c_var_p->i2c_initialized = true;
+}
+
+
+/**
+ * Wait until the current I2C byte transfer completes
+ */
+static void 
+i2c_wait_transfer_completion(
+    const struct i2c_device *i2c_device_p)
+{
+    struct i2c_device_var *i2c_var_p = i2c_device_p->i2c_var_p;
+    cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
+
+    while (!i2c_var_p->i2c_byte_transfer_completed)
+    {
+        rtos_k_condvar_wait_interrupt(&i2c_var_p->i2c_condvar);
+    }
+
+    i2c_var_p->i2c_byte_transfer_completed = false;
+
+    rtos_k_restore_cpu_interrupts(cpu_status_register);
+}
+
+static void
+i2c_start_transaction(
+    struct i2c_device *i2c_device_p,
+    uint8_t i2c_slave_addr,
+    bool first_transaction,
+    bool read_transaction)
+{
+    uint32_t reg_value;
+    I2C_MemMapPtr i2c_mmio_registers_p = i2c_device_p->i2c_mmio_p;
+
+    reg_value = read_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p));
+    if (first_transaction) {
+        reg_value |= (I2C_C1_MST_MASK | I2C_C1_TX_MASK);
+    } else {
+        reg_value |= I2C_C1_RSTA_MASK;
+    }
+
+    write_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p), reg_value);
+
+    reg_value = 0;
+    SET_BIT_FIELD(
+        reg_value, I2C_SLAVE_ADDR_MASK, I2C_SLAVE_ADDR_SHIFT, i2c_slave_addr);
+    
+    if (read_transaction) {
+        reg_value |= I2C_READ_TRANSACTION_MASK;
+    }
+
+    write_8bit_mmio_register(&I2C_D_REG(i2c_mmio_registers_p), reg_value);
+    ???
+    i2c_wait(I2C0_B);
+    i2c_get_ack(I2C0_B);
+}
+
+
+static void
+i2c_end_transaction(
+    struct i2c_device *i2c_device_p)
+{
+    uint32_t reg_value;
+    I2C_MemMapPtr i2c_mmio_registers_p = i2c_device_p->i2c_mmio_p;
+
+    reg_value = read_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p));
+    reg_value &= ~(I2C_C1_MST_MAS | I2C_C1_TX_MASK);
+    write_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p), reg_value);
+}
+
+
+void i2c_read_bytes(
+    struct i2c_device *i2c_device_p,
+    uint8_t i2c_slave_addr, uint8_t i2c_slave_reg_addr,
+    uint8_t *buffer_p, size_t num_bytes)
+{
+    uint32_t reg_value;
+    struct i2c_device_var *const i2c_var_p = i2c_device_p->i2c_var_p;
+    I2C_MemMapPtr i2c_mmio_registers_p = i2c_device_p->i2c_mmio_p;
+    DBG_ASSERT(i2c_var_p->i2c_initialized, i2c_device_p, i2c_var_p);
+
+    i2c_start_transaction(i2c_device_p, i2c_slave_addr, true, false);
+
+    i2c_wait(I2C0_B);
+    i2c_get_ack(I2C0_B);
+
+    i2c_write_byte(I2C0_B, addr);
+    i2c_wait(I2C0_B);
+    i2c_get_ack(I2C0_B);
+
+    i2c_repeated_start(I2C0_B);
+    i2c_write_byte(I2C0_B, MMA8451_I2C_ADDRESS | I2C_READ);
+    i2c_wait(I2C0_B);
+    i2c_get_ack(I2C0_B);
+
+    i2c_set_rx_mode(I2C0_B);
+
+    i2c_give_nack(I2C0_B);
+    result = i2c_read_byte(I2C0_B);
+    i2c_wait(I2C0_B);
+
+    i2c_stop(I2C0_B);
+    result = i2c_read_byte(I2C0_B);
+    pause();
+    i2c_end_transaction(i2c_device_p);
+}
+
+
+void i2c_write_bytes(
+    struct i2c_device *i2c_device_p,
+    uint8_t i2c_slave_addr, uint8_t i2c_slave_reg_addr,
+    uint8_t *buffer_p, size_t num_bytes)
+{
+    struct i2c_device_var *const i2c_var_p = i2c_device_p->i2c_var_p;
+    I2C_MemMapPtr i2c_mmio_registers_p = i2c_device_p->i2c_mmio_p;
+    DBG_ASSERT(i2c_var_p->i2c_initialized, i2c_device_p, i2c_var_p);
+    i2c_start(I2C0_B);
+
+    i2c_write_byte(I2C0_B, MMA8451_I2C_ADDRESS|I2C_WRITE);
+    i2c_wait(I2C0_B);
+    i2c_get_ack(I2C0_B);
+
+    i2c_write_byte(I2C0_B, addr);
+    i2c_wait(I2C0_B);
+    i2c_get_ack(I2C0_B);
+
+    i2c_write_byte(I2C0_B, data);
+    i2c_wait(I2C0_B);
+    i2c_get_ack(I2C0_B);
+
+    i2c_stop(I2C0_B);
+    pause();
+}
+
+void
+kl25_i2c_interrupt_e_handler(
+    struct rtos_interrupt *rtos_interrupt_p)
+{
+    uint32_t reg_value;
+
+    FDC_ASSERT_RTOS_INTERRUPT_E_HANDLER_PRECONDITIONS(rtos_interrupt_p);
+
+    const struct i2c_device *i2c_device_p =
+        (struct i2c_device *)rtos_interrupt_p->int_arg_p;
+
+    DBG_ASSERT(
+        i2c_device_p->i2c_signature == I2C_DEVICE_SIGNATURE,
+        i2c_device_p->i2c_signature, i2c_device_p);
+
+    struct i2c_device_var *const i2c_var_p = i2c_device_p->i2c_var_p;
+    I2C_MemMapPtr i2c_mmio_registers_p = i2c_device_p->i2c_mmio_p;
+
+    DBG_ASSERT(
+        !i2c_var_p->i2c_byte_transfer_completed,
+        i2c_device_p, i2c_var_p);
+
+    /*
+     * Clear the interrupt flag, by writing 1 to it:
+     */
+    write_8bit_mmio_register(
+        &I2C_S_REG(i2c_mmio_registers_p), I2C_S_IICIF_MASK); 
+    
+    i2c_var_p->i2c_byte_transfer_completed = true;
+    rtos_k_condvar_signal(&i2c_var_p->i2c_condvar);
+}
+#else
+void
+kl25_i2c_interrupt_e_handler(
+    struct rtos_interrupt *rtos_interrupt_p)
+{
+    FDC_ASSERT_RTOS_INTERRUPT_E_HANDLER_PRECONDITIONS(rtos_interrupt_p);
+}
+#endif // ???
 
 void
 assert_interrupt_source_is_set(interrupt_channel_t interrupt_channel)
@@ -2132,7 +2429,6 @@ GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_mcm_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_ftfl_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_FTFA))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_pmc_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_LVD_LVW))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_llw_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_LLW))
-GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_i2c0_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_I2C0))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_i2c1_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_I2C1))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_spi0_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_SPI0))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_spi1_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_SPI1))

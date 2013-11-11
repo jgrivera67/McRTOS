@@ -22,8 +22,10 @@ struct rtos_interrupt;  /* opaque type */
 struct tpm_device {
 #   define TPM_DEVICE_SIGNATURE  GEN_SIGNATURE('T', 'P', 'M', 'x')
     uint32_t tpm_signature;
+    struct tpm_device_var *tpm_var_p;
     const char *tpm_name_p;
     TPM_MemMapPtr tpm_mmio_p;
+    bool tpm_wait_pwm_cycle_completion;
     struct tpm_channel {
         volatile uint32_t *tpm_mmio_pcr_p;
         uint32_t tpm_mmio_CnSC_value;
@@ -37,6 +39,32 @@ struct tpm_device {
     uint32_t tpm_initial_duty_cycle_us;
     struct rtos_interrupt_registration_params tpm_rtos_interrupt_params;
     struct rtos_interrupt **tpm_rtos_interrupt_pp;
+    const char *tpm_condvar_name;
+};
+
+/**
+ * Non-const fields of a KL25 TPM device (to be placed in SRAM)
+ */
+struct tpm_device_var {
+    /**
+     * Flag indicating if kl25_tpm_init() has been called for this TPM device
+     */
+    bool tpm_initialized;
+
+    /**
+     * Flag set when a pwm cycle has completed
+     */
+    bool tpm_pwm_cycle_completed;
+
+    /**
+     * cached copy of the TPM_MOD reg value
+     */
+    uint32_t tpm_mod_reg_value;
+
+    /**
+     * Condvar to signal a thread waiting in kl25_tpm_set_duty_cycle()
+     */
+    struct rtos_condvar tpm_condvar;
 };
 
 /**
@@ -144,6 +172,45 @@ struct adc_device_var {
 };
 
 
+/**
+ * Const fields of the I2C controller device (to be placed in flash)
+ */
+struct i2c_device {
+#   define I2C_DEVICE_SIGNATURE  GEN_SIGNATURE('I', '2', 'C', 'C')
+    uint32_t i2c_signature;
+    struct i2c_device_var *i2c_var_p;
+    I2C_MemMapPtr i2c_mmio_registers_p;
+    volatile uint32_t *i2c_mmio_scl_port_pcr_p;
+    volatile uint32_t *i2c_mmio_sda_port_pcr_p;
+    uint32_t i2c_clock_gate_mask;
+    uint32_t i2c_pin_mux_selector_mask;
+    uint8_t i2c_baud_rate;
+    struct rtos_interrupt_registration_params i2c_rtos_interrupt_params;
+    struct rtos_interrupt **i2c_rtos_interrupt_pp;
+    const char *i2c_condvar_name;
+};
+
+/**
+ * Non-const fields of an I2C controller device (to be placed in SRAM)
+ */
+struct i2c_device_var {
+    /**
+     * Flag indicating if init_i2c() has been called for this I2C device
+     */
+    bool i2c_initialized;
+
+    /**
+     * Flag set when a byte transfer has completed
+     */
+    bool i2c_byte_transfer_completed;
+
+    /**
+     * Condvar to signal a thread waiting for an I2C byte transfer
+     */
+    struct rtos_condvar i2c_condvar;
+};
+
+
 void kl25_tpm_init(
     const struct tpm_device *tpm_device_p);
 
@@ -160,6 +227,8 @@ extern isr_function_t kl25_tpm0_isr;
 
 extern isr_function_t kl25_tpm1_isr;
 
+extern isr_function_t kl25_i2c0_isr;
+
 void kl25_uart_interrupt_e_handler(
     struct rtos_interrupt *rtos_interrupt_p);
 
@@ -167,6 +236,10 @@ void kl25_adc_interrupt_e_handler(
     struct rtos_interrupt *rtos_interrupt_p);
 
 void kl25_tpm_interrupt_e_handler(
+    struct rtos_interrupt *rtos_interrupt_p);
+
+void
+kl25_i2c_interrupt_e_handler(
     struct rtos_interrupt *rtos_interrupt_p);
 
 #endif /* __KL25Z_SOC_H */

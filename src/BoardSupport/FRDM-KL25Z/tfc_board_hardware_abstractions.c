@@ -19,8 +19,7 @@ TODO("Remove these pragmas")
 #pragma GCC diagnostic ignored "-Wunused-function"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
-#define TFC_CAMERA_SI_DELAY     (TFC_CAMERA_CLK_DELAY * 2 * 18)
-#define TFC_CAMERA_CLK_DELAY    50
+#define TFC_CAMERA_CLK_PULSE_DELAY  50
 
 /*
  * KL25 GPIO PORT B Pins
@@ -86,6 +85,23 @@ struct rtos_interrupt *g_rtos_interrupt_tpm0_p = NULL;
 struct rtos_interrupt *g_rtos_interrupt_tpm1_p = NULL;
 
 /**
+ * Global array of non-const structures for TPM devices for the KL25Z SoC
+ * (allocated in SRAM space)
+ */
+static struct tpm_device_var g_tpm_devices_var[] =
+{
+    [0] = {
+        .tpm_initialized = false,
+    },
+    [1] = {
+        .tpm_initialized = false,
+    },
+    [2] = {
+        .tpm_initialized = false,
+    },
+};
+
+/**
  * Global array of const structures for TPM devices for the KL25Z SoC
  * (allocated in flash space)
  */
@@ -93,8 +109,10 @@ const struct tpm_device g_tpm_devices[] =
 {
     [0] = {
         .tpm_signature = TPM_DEVICE_SIGNATURE,
+        .tpm_var_p = &g_tpm_devices_var[0],
         .tpm_name_p = "Wheel motors TPM",
         .tpm_mmio_p = TPM0_BASE_PTR,
+        .tpm_wait_pwm_cycle_completion = false,
         .tpm_channels = {
             [0] = {
                 .tpm_mmio_pcr_p = &PORTC_PCR1, /* Motor B (H-Bridge B - 1) */
@@ -153,12 +171,15 @@ const struct tpm_device g_tpm_devices[] =
         },
 
         .tpm_rtos_interrupt_pp = &g_rtos_interrupt_tpm0_p,
+        .tpm_condvar_name = "TPM0 condvar",
     },
 
     [1] = {
         .tpm_signature = TPM_DEVICE_SIGNATURE,
+        .tpm_var_p = &g_tpm_devices_var[1],
         .tpm_name_p = "Steering servo TPM",
         .tpm_mmio_p = TPM1_BASE_PTR,
+        .tpm_wait_pwm_cycle_completion = true,
         .tpm_channels = {
             [0] = {
                 .tpm_mmio_pcr_p = &PORTB_PCR0, /* Servo Channel 0 */
@@ -204,14 +225,18 @@ const struct tpm_device g_tpm_devices[] =
         },
 
         .tpm_rtos_interrupt_pp = &g_rtos_interrupt_tpm1_p,
+        .tpm_condvar_name = "TPM1 condvar",
     },
 
     [2] = {
         .tpm_signature = TPM_DEVICE_SIGNATURE,
+        .tpm_var_p = &g_tpm_devices_var[2],
         .tpm_mmio_p = TPM2_BASE_PTR,
         .tpm_mmio_clock_gate_mask = SIM_SCGC6_TPM2_MASK,
     },
 };
+
+C_ASSERT(ARRAY_SIZE(g_tpm_devices) == ARRAY_SIZE(g_tpm_devices_var));
 
 /**
  * PWM device for TFC wheel motors
@@ -477,8 +502,7 @@ tfc_steering_servo_set(
 {
     FDC_ASSERT(
         (pwm_duty_cycle_us >= TFC_STEERING_SERVO_MIN_DUTY_CYCLE_US &&
-         pwm_duty_cycle_us <= TFC_STEERING_SERVO_MAX_DUTY_CYCLE_US) 
-        ||
+         pwm_duty_cycle_us <= TFC_STEERING_SERVO_MAX_DUTY_CYCLE_US) ||
         pwm_duty_cycle_us == TFC_STEERING_SERVO_OFF_DUTY_CYCLE_US,
         pwm_duty_cycle_us, 0);
 
@@ -576,29 +600,29 @@ tfc_camera_read_frame(
     _OUT_ struct tfc_camera_frame *camera_frame_p)
 {
     activate_output_pin(&g_tfc_camera_si_pin);
-    delay_loop(TFC_CAMERA_CLK_DELAY / 2);
+    delay_loop(TFC_CAMERA_CLK_PULSE_DELAY / 2);
     activate_output_pin(&g_tfc_camera_clk_pin);
-    delay_loop(TFC_CAMERA_CLK_DELAY / 2);
+    delay_loop(TFC_CAMERA_CLK_PULSE_DELAY / 2);
     deactivate_output_pin(&g_tfc_camera_si_pin);
-    delay_loop(TFC_CAMERA_CLK_DELAY / 2);
+    delay_loop(TFC_CAMERA_CLK_PULSE_DELAY / 2);
 
     for (int i = 0; i < TFC_NUM_CAMERA_PIXELS; i++) {
         camera_frame_p->cf_pixels[i] =
             read_adc_channel(g_adc0_device_p, TFC_LINESCAN_0_ADC_CHANNEL);
 
         deactivate_output_pin(&g_tfc_camera_clk_pin);
-        delay_loop(TFC_CAMERA_CLK_DELAY);
+        delay_loop(TFC_CAMERA_CLK_PULSE_DELAY);
         activate_output_pin(&g_tfc_camera_clk_pin);
-        delay_loop(TFC_CAMERA_CLK_DELAY);
+        delay_loop(TFC_CAMERA_CLK_PULSE_DELAY);
     }
 
     /* 
      * N+1 clock pulse
      */
     deactivate_output_pin(&g_tfc_camera_clk_pin);
-    delay_loop(TFC_CAMERA_CLK_DELAY);
+    delay_loop(TFC_CAMERA_CLK_PULSE_DELAY);
     activate_output_pin(&g_tfc_camera_clk_pin);
-    delay_loop(TFC_CAMERA_CLK_DELAY);
+    delay_loop(TFC_CAMERA_CLK_PULSE_DELAY);
     deactivate_output_pin(&g_tfc_camera_clk_pin);
 }
 

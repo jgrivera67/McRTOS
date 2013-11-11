@@ -213,7 +213,7 @@ struct rtos_condvar_creation_params
     /**
      * Pointer to created condvar object returned by McRTOS
      */
-    struct rtos_condvar **const p_condvar_pp;
+    struct rtos_condvar **p_condvar_pp;
 };
 
 /**

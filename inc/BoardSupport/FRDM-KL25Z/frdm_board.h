@@ -44,6 +44,8 @@ enum {
 #define LED_COLOR_CYAN      (LED_GREEN_PIN_MASK | LED_BLUE_PIN_MASK)
 #define LED_COLOR_WHITE     (LED_RED_PIN_MASK | LED_GREEN_PIN_MASK | LED_BLUE_PIN_MASK)
 
+#define ACCELEROMETER_I2C_ADDRESS       0x1d
+
 void frdm_board_init(void);
 void frdm_board_stop(void);
 

@@ -1173,7 +1173,8 @@ check_rtos_public_kernel_service_preconditions(bool thread_callers_only)
     else
     {
         FDC_ASSERT(
-            cpu_controller_p->cpc_current_execution_context_p == NULL,
+            cpu_controller_p->cpc_current_execution_context_p ==
+            &cpu_controller_p->cpc_reset_execution_context,
             cpu_controller_p->cpc_current_execution_context_p,
             cpu_controller_p);
 

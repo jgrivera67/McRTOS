@@ -194,6 +194,13 @@ typedef void isr_function_t(void);
 C_ASSERT(sizeof(isr_function_t *) == sizeof(uint32_t));
 
 /*
+ * I2C transaction header fields
+ */ 
+#define I2C_SLAVE_ADDR_MASK         MULTI_BIT_MASK(7, 1)
+#define I2C_SLAVE_ADDR_SHIFT        1
+#define I2C_READ_TRANSACTION_MASK   BIT(0)
+
+/*
  * Opaque Types
  */
 struct pin_config_info;
@@ -202,6 +209,7 @@ struct uart_device;
 struct ssp_controller;
 struct buttons_device;
 struct adc_device;
+struct i2c_device;
 
 typedef void app_hardware_init_t(void);
 typedef void app_hardware_stop_t(void);
@@ -349,6 +357,19 @@ uint16_t ssp_transmit_receive_16bit_value(
 void ssp_transmit_receive_buffer(
         _IN_ const struct ssp_controller *ssp_controller_p,
         _IN_ const uint8_t *outgoing_buffer, uint8_t *incoming_buffer, size_t size);
+
+void i2c_init(
+    const struct i2c_device *i2c_device_p);
+
+void i2c_read_bytes(
+    struct i2c_device *i2c_device_p,
+    uint8_t i2c_slave_addr, uint8_t i2c_slave_reg_addr,
+    uint8_t *buffer_p, size_t num_bytes);
+
+void i2c_write_bytes(
+    struct i2c_device *i2c_device_p,
+    uint8_t i2c_slave_addr, uint8_t i2c_slave_reg_addr,
+    uint8_t *buffer_p, size_t num_bytes);
 
 void wait_for_interrupts(void);
 
