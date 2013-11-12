@@ -21,7 +21,6 @@ TODO("Remove these pragmas")
 #pragma GCC diagnostic ignored "-Wunused-function"
 
 #define CENTER_PIXEL_INDEX      ((TFC_NUM_CAMERA_PIXELS - 1) / 2)
-#define BLACK_SPOT_SET_POINT    CENTER_PIXEL_INDEX
 
 #define CENTER_BLACK_SPOT_WIDTH 8
 
@@ -481,15 +480,6 @@ void autonomous_car_app_init(void)
 static void
 set_wheels_straight(void) 
 {
-    /* 
-     * First, turn wheels all the way tho the right, considering that
-     * they may be currently all the way to the left. Then, turn them
-     * back to the center.
-     */
-    tfc_steering_servo_set(
-        TFC_STEERING_SERVO_MAX_DUTY_CYCLE_US);
-    tfc_steering_servo_set(
-        TFC_STEERING_SERVO_MAX_DUTY_CYCLE_US);
     tfc_steering_servo_set(
         TFC_STEERING_SERVO_NEUTRAL_DUTY_CYCLE_US);
 }
@@ -785,8 +775,11 @@ steer_wheels(
      * - error > 0 means black spot is to the right, so need to steer right
      *   by setting servo PWM duty cycle > 
      *      TFC_STEERING_SERVO_NEUTRAL_DUTY_CYCLE_US
+     *
+     * NOTE: right-most pixel index is 0 and left-most pixel index is
+     * TFC_NUM_CAMERA_PIXELS - 1.
      */
-    int error = (int)BLACK_SPOT_SET_POINT - (int)black_spot_position;
+    int error = (int)previous_black_spot_position - (int)black_spot_position;
 
     int derivative_term = error - previous_error;
     previous_error = error;
@@ -1013,7 +1006,7 @@ car_driver_thread_f(void *arg)
             }
 #else 
             driving_state = SEARCHING_GUIDE_LINE;
-            center_black_spot_position = BLACK_SPOT_SET_POINT;
+            center_black_spot_position = CENTER_PIXEL_INDEX;
             set_wheels_straight();
 #endif
             continue;
@@ -1035,6 +1028,14 @@ car_driver_thread_f(void *arg)
             } else {
                     DBG_ASSERT(!center_black_spot.bs_detected, 0, 0);
                     DBG_ASSERT(!left_black_spot.bs_detected, 0, 0);
+                    no_black_spot_found_count ++;
+                    if (no_black_spot_found_count == MAX_NO_BLACK_SPOT_FOUND_COUNT) {
+                        no_black_spot_found_count = 0;
+                        console_printf("No black spot found");
+                        tfc_wheel_motors_set(
+                            TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US,
+                            TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US);
+                    }
                     continue;
             }
 
@@ -1072,32 +1073,12 @@ car_driver_thread_f(void *arg)
             FDC_ASSERT(false, driving_state, 0);
         }
 
-        natural_t abs_delta =
-            ABS((int)center_black_spot_position -
-                (int)previous_center_black_spot_position);
+        steer_wheels(
+            center_black_spot_position,
+            previous_center_black_spot_position,
+            base_wheel_motor_pwm_duty_cycle_us);
 
-        if (abs_delta > 0 &&
-            abs_delta < TFC_NUM_CAMERA_PIXELS / 2) {
-            turn_on_rgb_led(LED_GREEN_PIN_MASK);
-            steer_wheels(
-                center_black_spot_position,
-                previous_center_black_spot_position,
-                base_wheel_motor_pwm_duty_cycle_us);
-            turn_off_rgb_led(LED_GREEN_PIN_MASK);
-        } else {
-            if (abs_delta >= TFC_NUM_CAMERA_PIXELS / 2) {
-                console_printf(
-                    "%s: skipped noise outlier (%u to %u)\n",
-                    __func__, 
-                    previous_center_black_spot_position,
-                    center_black_spot_position);
-                center_black_spot_position = BLACK_SPOT_SET_POINT;
-                set_wheels_straight();
-            } else {
-                tfc_steering_servo_set(
-                    TFC_STEERING_SERVO_NEUTRAL_DUTY_CYCLE_US);
-            }
-        }
+        turn_off_rgb_led(LED_GREEN_PIN_MASK);
     }
 
     fdc_error =
