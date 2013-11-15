@@ -482,6 +482,8 @@ void
 tfc_board_stop(void)
 {
     tfc_steering_servo_set(
+        TFC_STEERING_SERVO_NEUTRAL_DUTY_CYCLE_US);
+    tfc_steering_servo_set(
         TFC_STEERING_SERVO_OFF_DUTY_CYCLE_US);
     tfc_wheel_motors_set(
         TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US,

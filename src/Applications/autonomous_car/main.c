@@ -779,7 +779,8 @@ steer_wheels(
      * NOTE: right-most pixel index is 0 and left-most pixel index is
      * TFC_NUM_CAMERA_PIXELS - 1.
      */
-    int error = (int)previous_black_spot_position - (int)black_spot_position;
+    //int error = (int)previous_black_spot_position - (int)black_spot_position;
+    int error = (int)CENTER_PIXEL_INDEX - (int)black_spot_position;
 
     int derivative_term = error - previous_error;
     previous_error = error;
@@ -801,12 +802,14 @@ steer_wheels(
                                 TFC_STEERING_SERVO_MIN_DUTY_CYCLE_US,
                                 TFC_STEERING_SERVO_MAX_DUTY_CYCLE_US);
 
+#if 0
     console_printf("%s: %u to %u (servo offset %d servo duty cycle %u)\n", 
                    __func__,
                    previous_black_spot_position, 
                    black_spot_position, 
                    offset_steering_servo_pwm_duty_cycle,
                    steering_servo_pwm_duty_cycle_us);//???
+#endif
 
     /*
      * Calculate new wheel motors PWM duty cycle:
@@ -912,6 +915,8 @@ turn_off_car(void)
         TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US,
         TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US);
 
+    tfc_steering_servo_set(
+        TFC_STEERING_SERVO_NEUTRAL_DUTY_CYCLE_US);
     tfc_steering_servo_set(
         TFC_STEERING_SERVO_OFF_DUTY_CYCLE_US);
 }

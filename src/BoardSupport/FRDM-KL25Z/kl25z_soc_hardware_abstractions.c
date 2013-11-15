@@ -2150,7 +2150,6 @@ kl25_tpm_set_duty_cycle(
         tpm_device_p->tpm_wait_pwm_cycle_completion);
 }
 
-#if 0 // ???
 void
 i2c_init(
     const struct i2c_device *i2c_device_p)
@@ -2162,7 +2161,7 @@ i2c_init(
         i2c_device_p->i2c_signature, i2c_device_p);
 
     struct i2c_device_var *const i2c_var_p = i2c_device_p->i2c_var_p;
-    I2C_MemMapPtr i2c_mmio_registers_p = i2c_device_p->i2c_mmio_p;
+    I2C_MemMapPtr i2c_mmio_registers_p = i2c_device_p->i2c_mmio_registers_p;
 
     FDC_ASSERT(!i2c_var_p->i2c_initialized, i2c_device_p, i2c_var_p);
     FDC_ASSERT_CPU_INTERRUPTS_DISABLED();
@@ -2192,6 +2191,15 @@ i2c_init(
     write_8bit_mmio_register(
         &I2C_F_REG(i2c_mmio_registers_p), reg_value);
 
+    /* 
+     * Enable Fast NACK/ACK ???
+     */
+#if 0
+    reg_value = I2C_SMB_FACK_MASK;
+    write_8bit_mmio_register(
+        &I2C_SMB_REG(i2c_mmio_registers_p), reg_value);
+#endif
+
     /*
      * Enable IIC mode and enable interrupts:
      */
@@ -2202,9 +2210,9 @@ i2c_init(
     rtos_k_condvar_init(
         i2c_device_p->i2c_condvar_name,
         SOC_GET_CURRENT_CPU_ID(),
-        &i2c_channel_p->i2c_condvar);
+        &i2c_var_p->i2c_condvar);
 
-    i2c_device_p->i2c_byte_transfer_completed = false;
+    i2c_var_p->i2c_byte_transfer_completed = false;
 
     /* 
      * Register McRTOS interrupt handler
@@ -2224,7 +2232,7 @@ i2c_init(
 /**
  * Wait until the current I2C byte transfer completes
  */
-static void 
+static void
 i2c_wait_transfer_completion(
     const struct i2c_device *i2c_device_p)
 {
@@ -2241,23 +2249,68 @@ i2c_wait_transfer_completion(
     rtos_k_restore_cpu_interrupts(cpu_status_register);
 }
 
+
 static void
-i2c_start_transaction(
+i2c_wait_write_completion(
+    const struct i2c_device *i2c_device_p)
+{
+    uint32_t reg_value;
+    I2C_MemMapPtr i2c_mmio_registers_p = i2c_device_p->i2c_mmio_registers_p;
+
+    i2c_wait_transfer_completion(i2c_device_p);
+
+    /*
+     * Receive ACK/NAK signal from the I2C bus, and assume it is an ACK:
+     */
+    reg_value = read_8bit_mmio_register(&I2C_S_REG(i2c_mmio_registers_p));
+    FDC_ASSERT((reg_value & I2C_S_RXAK_MASK) == 0, reg_value, i2c_device_p);
+}
+
+
+static void
+i2c_wait_read_completion(
+    const struct i2c_device *i2c_device_p, bool last_read)
+{
+    uint32_t reg_value;
+    I2C_MemMapPtr i2c_mmio_registers_p = i2c_device_p->i2c_mmio_registers_p;
+
+    i2c_wait_transfer_completion(i2c_device_p);
+
+    reg_value = read_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p));
+    if (last_read) {
+        /*
+         * Send a NAK signal to the I2C bus:
+         */
+        reg_value |= I2C_C1_TXAK_MASK;
+    } else { 
+        /*
+         * Send an ACK signal to the I2C bus:
+         */
+        reg_value &= ~I2C_C1_TXAK_MASK;
+    }
+
+    write_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p), reg_value);
+}
+
+
+static void
+i2c_start_or_continue_transaction(
     struct i2c_device *i2c_device_p,
     uint8_t i2c_slave_addr,
     bool first_transaction,
     bool read_transaction)
 {
     uint32_t reg_value;
-    I2C_MemMapPtr i2c_mmio_registers_p = i2c_device_p->i2c_mmio_p;
+    I2C_MemMapPtr i2c_mmio_registers_p = i2c_device_p->i2c_mmio_registers_p;
 
     reg_value = read_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p));
     if (first_transaction) {
-        reg_value |= (I2C_C1_MST_MASK | I2C_C1_TX_MASK);
+        reg_value |= I2C_C1_MST_MASK;
     } else {
         reg_value |= I2C_C1_RSTA_MASK;
     }
 
+    reg_value |= I2C_C1_TX_MASK;
     write_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p), reg_value);
 
     reg_value = 0;
@@ -2268,95 +2321,122 @@ i2c_start_transaction(
         reg_value |= I2C_READ_TRANSACTION_MASK;
     }
 
+    DBG_ASSERT(reg_value <= UINT8_MAX, reg_value, 0);
+
     write_8bit_mmio_register(&I2C_D_REG(i2c_mmio_registers_p), reg_value);
-    ???
-    i2c_wait(I2C0_B);
-    i2c_get_ack(I2C0_B);
+
+    i2c_wait_write_completion(i2c_device_p);
+
+    if (read_transaction) {
+        reg_value = read_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p));
+        reg_value &= ~I2C_C1_TX_MASK;
+        write_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p), reg_value);
+    }
 }
 
+static void
+i2c_start_transaction(
+    struct i2c_device *i2c_device_p,
+    uint8_t i2c_slave_addr,
+    bool read_transaction)
+{
+    i2c_start_or_continue_transaction(
+        i2c_device_p,
+        i2c_slave_addr,
+        true,
+        read_transaction);
+}
+
+static void
+i2c_continue_transaction(
+    struct i2c_device *i2c_device_p,
+    uint8_t i2c_slave_addr,
+    bool read_transaction)
+{
+    i2c_start_or_continue_transaction(
+        i2c_device_p,
+        i2c_slave_addr,
+        false,
+        read_transaction);
+}
 
 static void
 i2c_end_transaction(
     struct i2c_device *i2c_device_p)
 {
     uint32_t reg_value;
-    I2C_MemMapPtr i2c_mmio_registers_p = i2c_device_p->i2c_mmio_p;
+    I2C_MemMapPtr i2c_mmio_registers_p = i2c_device_p->i2c_mmio_registers_p;
 
     reg_value = read_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p));
-    reg_value &= ~(I2C_C1_MST_MAS | I2C_C1_TX_MASK);
+    reg_value &= ~(I2C_C1_MST_MASK | I2C_C1_TX_MASK);
     write_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p), reg_value);
 }
 
+static void
+i2c_write_data_byte(
+    struct i2c_device *i2c_device_p,
+    uint8_t data_byte)
+{
+    I2C_MemMapPtr i2c_mmio_registers_p = i2c_device_p->i2c_mmio_registers_p;
 
-void i2c_read_bytes(
+    write_8bit_mmio_register(&I2C_D_REG(i2c_mmio_registers_p), data_byte);
+
+    i2c_wait_write_completion(i2c_device_p);
+}
+
+static uint8_t 
+i2c_read_data_byte(
+    struct i2c_device *i2c_device_p, bool last_read)
+{
+    uint8_t data_byte;
+    I2C_MemMapPtr i2c_mmio_registers_p = i2c_device_p->i2c_mmio_registers_p;
+
+    data_byte = read_8bit_mmio_register(&I2C_D_REG(i2c_mmio_registers_p));
+
+    i2c_wait_read_completion(i2c_device_p, last_read);
+    return data_byte;
+}
+
+void i2c_read(
     struct i2c_device *i2c_device_p,
     uint8_t i2c_slave_addr, uint8_t i2c_slave_reg_addr,
     uint8_t *buffer_p, size_t num_bytes)
 {
-    uint32_t reg_value;
     struct i2c_device_var *const i2c_var_p = i2c_device_p->i2c_var_p;
-    I2C_MemMapPtr i2c_mmio_registers_p = i2c_device_p->i2c_mmio_p;
     DBG_ASSERT(i2c_var_p->i2c_initialized, i2c_device_p, i2c_var_p);
 
-    i2c_start_transaction(i2c_device_p, i2c_slave_addr, true, false);
+    i2c_start_transaction(i2c_device_p, i2c_slave_addr, false);
+    i2c_write_data_byte(i2c_device_p, i2c_slave_reg_addr);
+    i2c_continue_transaction(i2c_device_p, i2c_slave_addr, true);
 
-    i2c_wait(I2C0_B);
-    i2c_get_ack(I2C0_B);
+    for (size_t i = 0; i < num_bytes; i ++) {
+        bool last_read = (i == num_bytes - 1);
+        buffer_p[i] = i2c_read_data_byte(i2c_device_p, last_read);
+    }
 
-    i2c_write_byte(I2C0_B, addr);
-    i2c_wait(I2C0_B);
-    i2c_get_ack(I2C0_B);
-
-    i2c_repeated_start(I2C0_B);
-    i2c_write_byte(I2C0_B, MMA8451_I2C_ADDRESS | I2C_READ);
-    i2c_wait(I2C0_B);
-    i2c_get_ack(I2C0_B);
-
-    i2c_set_rx_mode(I2C0_B);
-
-    i2c_give_nack(I2C0_B);
-    result = i2c_read_byte(I2C0_B);
-    i2c_wait(I2C0_B);
-
-    i2c_stop(I2C0_B);
-    result = i2c_read_byte(I2C0_B);
-    pause();
     i2c_end_transaction(i2c_device_p);
 }
 
 
-void i2c_write_bytes(
+void i2c_write(
     struct i2c_device *i2c_device_p,
     uint8_t i2c_slave_addr, uint8_t i2c_slave_reg_addr,
     uint8_t *buffer_p, size_t num_bytes)
 {
-    struct i2c_device_var *const i2c_var_p = i2c_device_p->i2c_var_p;
-    I2C_MemMapPtr i2c_mmio_registers_p = i2c_device_p->i2c_mmio_p;
-    DBG_ASSERT(i2c_var_p->i2c_initialized, i2c_device_p, i2c_var_p);
-    i2c_start(I2C0_B);
+    i2c_start_transaction(i2c_device_p, i2c_slave_addr, false);
+    i2c_write_data_byte(i2c_device_p, i2c_slave_reg_addr);
 
-    i2c_write_byte(I2C0_B, MMA8451_I2C_ADDRESS|I2C_WRITE);
-    i2c_wait(I2C0_B);
-    i2c_get_ack(I2C0_B);
+    for (size_t i = 0; i < num_bytes; i ++) {
+        i2c_write_data_byte(i2c_device_p,  buffer_p[i]);
+    }
 
-    i2c_write_byte(I2C0_B, addr);
-    i2c_wait(I2C0_B);
-    i2c_get_ack(I2C0_B);
-
-    i2c_write_byte(I2C0_B, data);
-    i2c_wait(I2C0_B);
-    i2c_get_ack(I2C0_B);
-
-    i2c_stop(I2C0_B);
-    pause();
+    i2c_end_transaction(i2c_device_p);
 }
 
 void
 kl25_i2c_interrupt_e_handler(
     struct rtos_interrupt *rtos_interrupt_p)
 {
-    uint32_t reg_value;
-
     FDC_ASSERT_RTOS_INTERRUPT_E_HANDLER_PRECONDITIONS(rtos_interrupt_p);
 
     const struct i2c_device *i2c_device_p =
@@ -2367,7 +2447,7 @@ kl25_i2c_interrupt_e_handler(
         i2c_device_p->i2c_signature, i2c_device_p);
 
     struct i2c_device_var *const i2c_var_p = i2c_device_p->i2c_var_p;
-    I2C_MemMapPtr i2c_mmio_registers_p = i2c_device_p->i2c_mmio_p;
+    I2C_MemMapPtr i2c_mmio_registers_p = i2c_device_p->i2c_mmio_registers_p;
 
     DBG_ASSERT(
         !i2c_var_p->i2c_byte_transfer_completed,
@@ -2382,14 +2462,7 @@ kl25_i2c_interrupt_e_handler(
     i2c_var_p->i2c_byte_transfer_completed = true;
     rtos_k_condvar_signal(&i2c_var_p->i2c_condvar);
 }
-#else
-void
-kl25_i2c_interrupt_e_handler(
-    struct rtos_interrupt *rtos_interrupt_p)
-{
-    FDC_ASSERT_RTOS_INTERRUPT_E_HANDLER_PRECONDITIONS(rtos_interrupt_p);
-}
-#endif // ???
+
 
 void
 assert_interrupt_source_is_set(interrupt_channel_t interrupt_channel)
