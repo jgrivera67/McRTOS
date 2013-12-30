@@ -25,7 +25,8 @@
 #define ACCEL_OUT_Z_MSB     0x05
 #define ACCEL_F_SETUP       0x09
 #define ACCEL_WHO_AM_I      0x0D
-#define ACCEL_CTRL_REG1    0x2A
+#define ACCEL_XYZ_DATA_CFG  0x0E
+#define ACCEL_CTRL_REG1     0x2A
 
 /**
  * Expected value for ACCEL_WHO_AM_I register
@@ -36,6 +37,16 @@
  * Bit-masks for ACCEL_CTRL_REG1 register fields
  */
 #define ACCEL_CTRL_REG1_ACTIVE_MASK BIT(0)
+#define ACCEL_CTRL_REG1_DR_MASK     MULTI_BIT_MASK(5, 3)
+#define ACCEL_CTRL_REG1_DR_SHIFT    3
+#define ACCEL_CTRL_REG1_DR_VALUE_800HZ  0x0 /* every 1.25 ms */
+#define ACCEL_CTRL_REG1_DR_VALUE_400HZ  0x1
+#define ACCEL_CTRL_REG1_DR_VALUE_200HZ  0x2
+#define ACCEL_CTRL_REG1_DR_VALUE_100HZ  0x3
+#define ACCEL_CTRL_REG1_DR_VALUE_50HZ   0x4
+#define ACCEL_CTRL_REG1_DR_VALUE_12_5HZ 0x5
+#define ACCEL_CTRL_REG1_DR_VALUE_6_25HZ 0x6
+#define ACCEL_CTRL_REG1_DR_VALUE_1_56HZ 0x7 /* every 640 ms */
 
 /* 
  * Bit-masks for ACCEL_STATUS register fields
@@ -44,5 +55,16 @@
 #define ACCEL_STATUS_ZDR_MASK   BIT(2)
 #define ACCEL_STATUS_YDR_MASK   BIT(1)
 #define ACCEL_STATUS_XDR_MASK   BIT(0)
+
+/* 
+ * Bit-masks for ACCEL_XYZ_DATA_CFG register fields
+ */
+#define ACCEL_XYZ_DATA_CFG_FS_MASK      MULTI_BIT_MASK(1, 0)
+#define ACCEL_XYZ_DATA_CFG_FS_SHIFT     0
+#define ACCEL_XYZ_DATA_CFG_FS_VALUE_2G  0x0
+#define ACCEL_XYZ_DATA_CFG_FS_VALUE_4G  0x1
+#define ACCEL_XYZ_DATA_CFG_FS_VALUE_8G  0x2
+
+#define ACCEL_XYZ_DATA_CFG_HPF_OUT_MASK BIT(4)
 
 #endif /* __MMA8451Q_ACCELEROMETER_H */

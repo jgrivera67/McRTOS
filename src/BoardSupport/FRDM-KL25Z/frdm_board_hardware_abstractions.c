@@ -254,10 +254,16 @@ accelerometer_stop(void)
  */
 void
 accelerometer_read(
-    uint16_t *x_p,
-    uint16_t *y_p,
-    uint16_t *z_p)
+    int16_t *x_p,
+    int16_t *y_p,
+    int16_t *z_p)
 {
+#   define BUILD_14_BIT_SIGNED(_msb, _lsb) \
+            (((int8_t)(_msb) << 6) | ((uint8_t)(_lsb) >> 2))
+
+#   define IN_RANGE_14_BIT_SIGNED(_num) \
+            ((_num) >= -(int16_t)BIT(13) && (_num) <= (int16_t)(BIT(13) - 1))
+
     uint8_t accel_reg_value;
     uint8_t i2c_buf[6];
 
@@ -276,7 +282,7 @@ accelerometer_read(
             (ACCEL_STATUS_XDR_MASK|
              ACCEL_STATUS_YDR_MASK|
              ACCEL_STATUS_ZDR_MASK), accel_reg_value, 0);
-#if 1
+
         i2c_read(
             g_i2c0_device_p,
             ACCELEROMETER_I2C_ADDR,
@@ -284,39 +290,14 @@ accelerometer_read(
             i2c_buf,
             sizeof i2c_buf);
 
-        *x_p = (i2c_buf[0] << 8) | i2c_buf[1];
-        *y_p = (i2c_buf[2] << 8) | i2c_buf[3];
-        *z_p = (i2c_buf[4] << 8) | i2c_buf[5];
-#else
-            i2c_read(
-                g_i2c0_device_p,
-                ACCELEROMETER_I2C_ADDR,
-                ACCEL_OUT_X_MSB,
-                i2c_buf,
-                2);
-
-            *x_p = (i2c_buf[0] << 8) | i2c_buf[1];
-
-            i2c_read(
-                g_i2c0_device_p,
-                ACCELEROMETER_I2C_ADDR,
-                ACCEL_OUT_Y_MSB,
-                i2c_buf,
-                2);
-
-            *y_p = (i2c_buf[0] << 8) | i2c_buf[1];
-
-            i2c_read(
-                g_i2c0_device_p,
-                ACCELEROMETER_I2C_ADDR,
-                ACCEL_OUT_Z_MSB,
-                i2c_buf,
-                2);
-
-            *z_p = (i2c_buf[0] << 8) | i2c_buf[1];
-#endif
-    
-        DEBUG_PRINTF("x=%#x, y=%#x, z=%#x\n", *x_p, *y_p, *z_p);
+        *x_p = BUILD_14_BIT_SIGNED(i2c_buf[0], i2c_buf[1]);
+        *y_p = BUILD_14_BIT_SIGNED(i2c_buf[2], i2c_buf[3]);
+        *z_p = BUILD_14_BIT_SIGNED(i2c_buf[4], i2c_buf[5]);
+   
+        DBG_ASSERT(IN_RANGE_14_BIT_SIGNED(*x_p), *x_p, 0);
+        DBG_ASSERT(IN_RANGE_14_BIT_SIGNED(*y_p), *y_p, 0);
+        DBG_ASSERT(IN_RANGE_14_BIT_SIGNED(*z_p), *z_p, 0);
+        DEBUG_PRINTF("x=%d, y=%d, z=%d\n", *x_p, *y_p, *z_p);
     }
 }
 

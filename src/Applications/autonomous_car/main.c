@@ -1310,9 +1310,9 @@ accelerometer_thread_f(void *arg)
     accelerometer_init();
     for ( ; ; )
     {
-        uint16_t x;
-        uint16_t y;
-        uint16_t z;
+        int16_t x;
+        int16_t y;
+        int16_t z;
 
         accelerometer_read(&x, &y, &z);
         rtos_thread_delay(ACCELEROMETER_SAMPLING_PERIOD_MS); //???

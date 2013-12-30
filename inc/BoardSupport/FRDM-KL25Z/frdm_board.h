@@ -55,8 +55,8 @@ uint32_t set_rgb_led_color(uint32_t led_color_mask);
 void accelerometer_init(void);
 void accelerometer_stop(void);
 void accelerometer_read(
-    uint16_t *x_p,
-    uint16_t *y_p,
-    uint16_t *z_p);
+    int16_t *x_p,
+    int16_t *y_p,
+    int16_t *z_p);
 
 #endif /* __FRDM_BOARD_H */
