@@ -69,13 +69,22 @@ rtos_hard_fault_exception_handler(
         _IN_ const struct rtos_execution_context *current_execution_context_p)
 {
     micro_trace_stop();
-    g_McRTOS_p->rts_app_hardware_stop_p();
 
     rtos_execution_stack_entry_t *before_exception_stack_p;
 
     struct rtos_cpu_controller *cpu_controller_p =
         &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
     struct fdc_info *fdc_info_p = &cpu_controller_p->cpc_failures_info;
+
+    fdc_info_p->fdc_handling_exception = true;
+
+    DEBUG_PRINTF(
+        "Hard fault exception caught on context %#p\n",
+        current_execution_context_p);
+
+    if (g_McRTOS_p->rts_app_hardware_init_called) {
+        g_McRTOS_p->rts_app_hardware_stop_p();
+    }
 
     /*
      * Determine what stack pointer was in use before the exception
@@ -106,6 +115,7 @@ rtos_hard_fault_exception_handler(
      */
     before_exception_stack_p[CPU_REG_PC] += sizeof(cpu_instruction_t);
 
+    fdc_info_p->fdc_handling_exception = false;
     micro_trace_restart();
 }
 

@@ -636,12 +636,13 @@ struct fdc_info
     uint32_t    fdc_signature1;
 
     /**
-     * Debug flags
+     * Flags
      */
     volatile uint32_t fdc_asserts_failures_breakpoint_on : 1;
     volatile uint32_t fdc_error_breakpoint_on : 1;
     volatile uint32_t fdc_exception_debugger_on : 1;
-    volatile uint32_t fdc_reserved_flags : 29;
+    volatile uint32_t fdc_handling_exception : 1;
+    volatile uint32_t fdc_reserved_flags : 28;
 
     /**
      * Number of failures captured since last reset. Failure data is captured only
@@ -718,6 +719,7 @@ C_ASSERT(RTOS_NUM_CONTEXT_SWITCH_TRACE_BUFFER_ENTRIES <= UINT16_MAX);
         .fdc_asserts_failures_breakpoint_on  = true,                    \
         .fdc_error_breakpoint_on = false,                               \
         .fdc_exception_debugger_on = true,                              \
+        .fdc_handling_exception = false,                                \
         .fdc_failures_count = 0,                                        \
         .fdc_unexpected_exceptions_count = 0,                           \
         .fdc_failure_cursor = 0,                                        \

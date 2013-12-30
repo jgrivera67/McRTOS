@@ -361,13 +361,16 @@ void ssp_transmit_receive_buffer(
 void i2c_init(
     const struct i2c_device *i2c_device_p);
 
+void i2c_shutdown(
+    const struct i2c_device *i2c_device_p);
+
 void i2c_read(
-    struct i2c_device *i2c_device_p,
+    const struct i2c_device *i2c_device_p,
     uint8_t i2c_slave_addr, uint8_t i2c_slave_reg_addr,
     uint8_t *buffer_p, size_t num_bytes);
 
 void i2c_write(
-    struct i2c_device *i2c_device_p,
+    const struct i2c_device *i2c_device_p,
     uint8_t i2c_slave_addr, uint8_t i2c_slave_reg_addr,
     uint8_t *buffer_p, size_t num_bytes);
 

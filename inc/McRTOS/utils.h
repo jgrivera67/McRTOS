@@ -99,10 +99,21 @@
                 set_rgb_led_color(old_color);                               \
             } while (0)
 
+#   define DEBUG_PRINT_CALLER(_msg) \
+            do {                                                            \
+                uint32_t *return_address;                                   \
+                uint32_t *call_address;                                     \
+                CAPTURE_ARM_LR_REGISTER(return_address);                    \
+                call_address = return_address - 1;                          \
+                DEBUG_PRINTF("%s called at: %#p %s\n", __func__,            \
+                             call_address, _msg);                           \
+            } while (0)
+
 #else
 #   define DEBUG_PRINTF(_fmt, ...)
 #   define DEBUG_BREAK_POINT()
 #   define DEBUG_BLINK_LED(_led_mask)
+#   define DEBUG_PRINT_CALLER(_msg)
 
 #endif
 

@@ -492,6 +492,11 @@ struct McRTOS
     volatile bool rts_stop_idle_cpu;
 
     /**
+     * Flag indicating that rts_app_hardware_init_p() has been called.
+     */
+    bool rts_app_hardware_init_called;
+
+    /**
      * Pointer to function to initialize application-specific hardware
      */
     app_hardware_init_t *rts_app_hardware_init_p;

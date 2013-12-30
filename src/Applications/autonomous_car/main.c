@@ -38,6 +38,7 @@ typedef uint32_t bw_cluster_bit_map_t;
 enum app_thread_priorities
 {
     CAMERA_FRAME_READER_THREAD_PRIORITY = RTOS_HIGHEST_THREAD_PRIORITY,
+    ACCELEROMETER_THREAD_PRIORITY = RTOS_HIGHEST_THREAD_PRIORITY,
     CAR_DRIVER_THREAD_PRIORITY = RTOS_HIGHEST_THREAD_PRIORITY + 1,
     TRIMPOT_READER_THREAD_PRIORITY = RTOS_LOWEST_THREAD_PRIORITY - 1,
     SWITCHES_AND_BUTTONS_READER_THREAD_PRIORITY = RTOS_LOWEST_THREAD_PRIORITY - 1,
@@ -72,6 +73,7 @@ static fdc_error_t car_driver_thread_f(void *arg);
 static fdc_error_t switches_and_buttons_reader_thread_f(void *arg);
 static fdc_error_t trimpot_reader_thread_f(void *arg);
 static fdc_error_t battery_monitor_thread_f(void *arg);
+static fdc_error_t accelerometer_thread_f(void *arg);
 static void toggle_dump_camera_frames(const char *cmd_line);
 
 /**
@@ -121,6 +123,15 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
         .p_function_p = battery_monitor_thread_f,
         .p_function_arg_p = NULL,
         .p_priority = BATTERY_MONITOR_THREAD_PRIORITY,
+        .p_thread_pp = NULL,
+    },
+
+    [5] =
+    {
+        .p_name_p = "accelerometer thread",
+        .p_function_p = accelerometer_thread_f,
+        .p_function_arg_p = NULL,
+        .p_priority = ACCELEROMETER_THREAD_PRIORITY,
         .p_thread_pp = NULL,
     },
 };
@@ -1272,6 +1283,39 @@ battery_monitor_thread_f(void *arg)
         }
 
         rtos_thread_delay(BATTERY_SAMPLING_PERIOD_MS);
+    }   
+
+    fdc_error = CAPTURE_FDC_ERROR(
+        "thread should not have terminated",
+        cpu_id, rtos_thread_self());
+
+    return fdc_error;
+}
+
+
+/**
+ * Accelerometer thread
+ */
+static fdc_error_t
+accelerometer_thread_f(void *arg)
+{
+#   define ACCELEROMETER_SAMPLING_PERIOD_MS  1500
+    fdc_error_t fdc_error;
+    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
+
+    FDC_ASSERT(arg == NULL, arg, cpu_id);
+
+    console_printf("Initializing accelerometer thread ...\n");
+
+    accelerometer_init();
+    for ( ; ; )
+    {
+        uint16_t x;
+        uint16_t y;
+        uint16_t z;
+
+        accelerometer_read(&x, &y, &z);
+        rtos_thread_delay(ACCELEROMETER_SAMPLING_PERIOD_MS); //???
     }   
 
     fdc_error = CAPTURE_FDC_ERROR(

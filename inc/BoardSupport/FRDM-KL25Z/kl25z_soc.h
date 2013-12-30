@@ -184,7 +184,7 @@ struct i2c_device {
     volatile uint32_t *i2c_mmio_sda_port_pcr_p;
     uint32_t i2c_clock_gate_mask;
     uint32_t i2c_pin_mux_selector_mask;
-    uint8_t i2c_baud_rate;
+    uint8_t i2c_icr_value;
     struct rtos_interrupt_registration_params i2c_rtos_interrupt_params;
     struct rtos_interrupt **i2c_rtos_interrupt_pp;
     const char *i2c_condvar_name;
@@ -202,7 +202,7 @@ struct i2c_device_var {
     /**
      * Flag set when a byte transfer has completed
      */
-    bool i2c_byte_transfer_completed;
+    volatile bool i2c_byte_transfer_completed;
 
     /**
      * Condvar to signal a thread waiting for an I2C byte transfer

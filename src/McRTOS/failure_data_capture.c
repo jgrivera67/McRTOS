@@ -226,11 +226,12 @@ capture_assert_failure(
         &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
     struct fdc_info *fdc_info_p = &cpu_controller_p->cpc_failures_info;
 
-    if (fdc_info_p->fdc_asserts_failures_breakpoint_on)
-    {
-        ARTIFICIAL_BREAK_POINT();
-    } else {
-        micro_trace_restart();
+    if (!fdc_info_p->fdc_handling_exception) {
+        if (fdc_info_p->fdc_asserts_failures_breakpoint_on) {
+            ARTIFICIAL_BREAK_POINT();
+        } else {
+            micro_trace_restart();
+        }
     }
 }
 

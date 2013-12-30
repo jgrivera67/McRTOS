@@ -44,8 +44,6 @@ enum {
 #define LED_COLOR_CYAN      (LED_GREEN_PIN_MASK | LED_BLUE_PIN_MASK)
 #define LED_COLOR_WHITE     (LED_RED_PIN_MASK | LED_GREEN_PIN_MASK | LED_BLUE_PIN_MASK)
 
-#define ACCELEROMETER_I2C_ADDRESS       0x1d
-
 void frdm_board_init(void);
 void frdm_board_stop(void);
 
@@ -53,5 +51,12 @@ void toggle_rgb_led(uint32_t led_color_mask);
 void turn_on_rgb_led(uint32_t led_color_mask);
 void turn_off_rgb_led(uint32_t led_color_mask);
 uint32_t set_rgb_led_color(uint32_t led_color_mask);
+
+void accelerometer_init(void);
+void accelerometer_stop(void);
+void accelerometer_read(
+    uint16_t *x_p,
+    uint16_t *y_p,
+    uint16_t *z_p);
 
 #endif /* __FRDM_BOARD_H */

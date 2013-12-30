@@ -207,4 +207,6 @@ void micro_trace_get_cursor(uint64_t **mtb_cursor_pp, bool *mtb_cursor_wrapped_p
 extern uint64_t __micro_trace_buffer[];
 extern uint64_t __micro_trace_buffer_end[];
 
+extern const struct i2c_device *const g_i2c0_device_p;
+
 #endif /* __KL25Z_SOC_PUBLIC_H */

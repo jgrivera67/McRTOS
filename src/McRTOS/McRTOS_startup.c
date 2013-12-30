@@ -145,6 +145,8 @@ static struct McRTOS g_McRTOS =
     .rts_stop_idle_cpu = true,
 #endif
 
+    .rts_app_hardware_init_called = false,
+
 #ifdef RTOS_USE_DRAM_FOR_APP_THREAD_STACKS
     .rts_next_free_app_thread_stack_p = 
         (struct rtos_thread_execution_stack *)RTOS_APP_THREAD_DRAM_STACKS_BASE_ADDR,
@@ -304,6 +306,8 @@ rtos_startup(
 
         g_McRTOS_p->rts_app_hardware_init_p();
 
+        g_McRTOS_p->rts_app_hardware_init_called = true;
+
 #       ifdef _BRANCH_MICRO_TRACING_
         micro_trace_init();
 #       endif
@@ -429,7 +433,10 @@ rtos_reboot(void)
 
     console_printf("\nMcRTOS rebooting ...\n");
 
-    g_McRTOS_p->rts_app_hardware_stop_p();
+    if (g_McRTOS_p->rts_app_hardware_init_called) {
+        g_McRTOS_p->rts_app_hardware_stop_p();
+    }
+
     soc_reset();
 }
 
