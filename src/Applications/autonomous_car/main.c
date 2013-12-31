@@ -38,10 +38,10 @@ typedef uint32_t bw_cluster_bit_map_t;
 enum app_thread_priorities
 {
     CAMERA_FRAME_READER_THREAD_PRIORITY = RTOS_HIGHEST_THREAD_PRIORITY,
-    ACCELEROMETER_THREAD_PRIORITY = RTOS_HIGHEST_THREAD_PRIORITY,
+    ACCELEROMETER_THREAD_PRIORITY = RTOS_HIGHEST_THREAD_PRIORITY + 1,
     CAR_DRIVER_THREAD_PRIORITY = RTOS_HIGHEST_THREAD_PRIORITY + 1,
-    TRIMPOT_READER_THREAD_PRIORITY = RTOS_LOWEST_THREAD_PRIORITY - 1,
-    SWITCHES_AND_BUTTONS_READER_THREAD_PRIORITY = RTOS_LOWEST_THREAD_PRIORITY - 1,
+    TRIMPOT_READER_THREAD_PRIORITY = RTOS_HIGHEST_THREAD_PRIORITY, //RTOS_LOWEST_THREAD_PRIORITY - 1,
+    SWITCHES_AND_BUTTONS_READER_THREAD_PRIORITY = RTOS_HIGHEST_THREAD_PRIORITY, //RTOS_LOWEST_THREAD_PRIORITY - 1,
     BATTERY_MONITOR_THREAD_PRIORITY = RTOS_LOWEST_THREAD_PRIORITY - 1,
 };
 
@@ -306,11 +306,6 @@ struct autonomous_car {
     struct rtos_circular_buffer c_captured_camera_frames_queue;
 
     /**
-     * Count of dropped camera frames
-     */
-    uint32_t c_dropped_camera_frames;
-
-    /**
      * Flag to enable/disable dumping of camera frames to the console. It can
      * be changed through a DIP switch.
      */ 
@@ -338,7 +333,6 @@ static struct autonomous_car g_car = {
     .c_turned_on_condvar_p = NULL,
     .c_camera_frame_buffer_pool_mutex_p = NULL,
     .c_captured_camera_frames_queue_mutex_p = NULL,
-    .c_dropped_camera_frames = 0,
     .c_dump_camera_frames_on = false,
     .c_last_trimpot_readings = {
         [0] = 0,
@@ -541,30 +535,24 @@ camera_frame_reader_thread_f(void *arg)
         /*
          * Get next available buffer from the frame buffer pool:
          */
-        bool read_ok;
         struct tfc_camera_frame *frame_buffer_p = NULL;
-
-        do {
-            read_ok = rtos_k_pointer_circular_buffer_read(
-                        &g_car.c_camera_frame_buffer_pool,
-                        (void **)&frame_buffer_p,
-                        false);
-
-            if (!read_ok) {
-                /*
-                 * The frame buffer pool is empty, so drop the oldest captured
-                 * frame, to use its buffer to capture the next camera frame:
-                 */
-                read_ok = rtos_k_pointer_circular_buffer_read(
-                            &g_car.c_captured_camera_frames_queue,
+        bool read_ok = rtos_k_pointer_circular_buffer_read(
+                            &g_car.c_camera_frame_buffer_pool,
                             (void **)&frame_buffer_p,
                             false);
 
-                if (read_ok) {
-                    ATOMIC_POST_INCREMENT_UINT32(&g_car.c_dropped_camera_frames);
-                }
-            }
-        } while (!read_ok);
+        if (!read_ok) {
+            /*
+             * The frame buffer pool is empty, so drop the oldest captured
+             * frame, to use its buffer to capture the next camera frame:
+             */
+            read_ok = rtos_k_pointer_circular_buffer_read(
+                        &g_car.c_captured_camera_frames_queue,
+                        (void **)&frame_buffer_p,
+                        false);
+
+            FDC_ASSERT(read_ok, 0, 0);
+        }
 
         DBG_ASSERT(frame_buffer_p != NULL, 0, 0);
 
@@ -903,12 +891,13 @@ steer_wheels(
     /*
      * Send commands to actuators:
      */
-    tfc_steering_servo_set(
-        steering_servo_pwm_duty_cycle_us);
 
     tfc_wheel_motors_set(
         left_wheel_pwm_duty_cycle_us,
         right_wheel_pwm_duty_cycle_us);
+
+    tfc_steering_servo_set(
+        steering_servo_pwm_duty_cycle_us);
 }
 
 
@@ -959,7 +948,9 @@ car_driver_thread_f(void *arg)
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
     uint32_t no_black_spot_found_count = 0;
+#if 0
     enum driving_states driving_state = SEARCHING_START_LINE;
+#endif
     struct black_spot right_black_spot;
     struct black_spot center_black_spot;
     struct black_spot left_black_spot;
@@ -974,15 +965,25 @@ car_driver_thread_f(void *arg)
         struct tfc_camera_frame *camera_frame_p;
 
         rtos_mutex_acquire(g_car.c_turned_on_mutex_p);
-        while (!g_car.c_turned_on) {
-            rtos_condvar_wait(
-                g_car.c_turned_on_condvar_p,
-                g_car.c_turned_on_mutex_p);
+        if (!g_car.c_turned_on) {
+            do {
+                rtos_condvar_wait(
+                    g_car.c_turned_on_condvar_p,
+                    g_car.c_turned_on_mutex_p);
+            } while (!g_car.c_turned_on);
+
+            previous_center_black_spot_position = CENTER_PIXEL_INDEX;
+            center_black_spot_position = CENTER_PIXEL_INDEX;
+            set_wheels_straight();
         }
         rtos_mutex_release(g_car.c_turned_on_mutex_p);
 
         pwm_duty_cycle_us_t base_wheel_motor_pwm_duty_cycle_us =
             calculate_base_wheel_motor_pwm_duty_cycle_us();
+
+        tfc_trimpot_reading_t white_threshold =
+            FILTER_TRIMPOT_READING(
+                g_car.c_last_trimpot_readings[WHITE_THRESHOLD_TRIMPOT]);
 
         /*
          * Get the next camera frame to process, or wait if there is none yet:
@@ -992,10 +993,7 @@ car_driver_thread_f(void *arg)
             (void **)&camera_frame_p,
             true);
 
-        tfc_trimpot_reading_t white_threshold =
-            FILTER_TRIMPOT_READING(
-                g_car.c_last_trimpot_readings[WHITE_THRESHOLD_TRIMPOT]);
-
+#if 0
         find_black_spots(camera_frame_p, white_threshold,
             &right_black_spot, &center_black_spot, &left_black_spot);
 
@@ -1011,7 +1009,6 @@ car_driver_thread_f(void *arg)
 
         switch (driving_state) {
         case SEARCHING_START_LINE:
-#if 0 //???
             if (right_black_spot.bs_detected && 
                 center_black_spot.bs_detected &&
                 left_black_spot.bs_detected) {
@@ -1020,11 +1017,6 @@ car_driver_thread_f(void *arg)
                 center_black_spot_position = 
                     GET_BLACK_SPOT_CENTER(&center_black_spot);
             }
-#else 
-            driving_state = SEARCHING_GUIDE_LINE;
-            center_black_spot_position = CENTER_PIXEL_INDEX;
-            set_wheels_straight();
-#endif
             continue;
 
         case SEARCHING_GUIDE_LINE:
@@ -1063,14 +1055,12 @@ car_driver_thread_f(void *arg)
                 if (center_black_spot.bs_detected) {
                     center_black_spot_position = 
                         GET_BLACK_SPOT_CENTER(&center_black_spot);
-#if 0 //???
                     if (left_black_spot.bs_detected) {
                         turn_off_car();
                         driving_state = SEARCHING_START_LINE;
                         console_printf("Finish line detected\n");
                         continue;
                     }
-#endif
                 } else {
                     DBG_ASSERT(!left_black_spot.bs_detected, 0, 0);
 
@@ -1088,13 +1078,56 @@ car_driver_thread_f(void *arg)
         default:
             FDC_ASSERT(false, driving_state, 0);
         }
+#else
+        natural_t num_frames_scanned = 0;
+        natural_t sum_center_black_spot_position = 0;
+        for ( ; ; ) {
+            find_black_spots(camera_frame_p, white_threshold,
+                &right_black_spot, &center_black_spot, &left_black_spot);
+
+            if (right_black_spot.bs_detected) {
+                if (center_black_spot.bs_detected) {
+                    sum_center_black_spot_position += 
+                        GET_BLACK_SPOT_CENTER(&center_black_spot);
+                } else {
+                    DBG_ASSERT(!left_black_spot.bs_detected, 0, 0);
+
+                    sum_center_black_spot_position += 
+                        GET_BLACK_SPOT_CENTER(&right_black_spot);
+                }
+
+                num_frames_scanned ++;
+            }
+
+            /*
+             * Return frame buffer to the frame buffer pool:
+             */
+            bool write_ok = rtos_k_pointer_circular_buffer_write(
+                                &g_car.c_camera_frame_buffer_pool,
+                                camera_frame_p,
+                                false);
+
+            FDC_ASSERT(write_ok, 0, 0);
+
+            bool read_ok = rtos_k_pointer_circular_buffer_read(
+                            &g_car.c_captured_camera_frames_queue,
+                            (void **)&camera_frame_p,
+                            false);
+            if (!read_ok) {
+                break;
+            }
+        }
+
+        if (num_frames_scanned != 0) {
+            previous_center_black_spot_position = center_black_spot_position;
+            center_black_spot_position = sum_center_black_spot_position / num_frames_scanned;
+        }
+#endif
 
         steer_wheels(
             center_black_spot_position,
             previous_center_black_spot_position,
             base_wheel_motor_pwm_duty_cycle_us);
-
-        turn_off_rgb_led(LED_GREEN_PIN_MASK);
     }
 
     fdc_error =
@@ -1299,8 +1332,12 @@ battery_monitor_thread_f(void *arg)
 static fdc_error_t
 accelerometer_thread_f(void *arg)
 {
-#   define ACCELEROMETER_SAMPLING_PERIOD_MS  1500
+#   define ACCELEROMETER_SAMPLING_PERIOD_MS  200
     fdc_error_t fdc_error;
+    int16_t x_accel[2];
+    int16_t y_accel[2];
+    int16_t z_accel[2];
+    natural_t i = 0;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
     FDC_ASSERT(arg == NULL, arg, cpu_id);
@@ -1310,13 +1347,13 @@ accelerometer_thread_f(void *arg)
     accelerometer_init();
     for ( ; ; )
     {
-        int16_t x;
-        int16_t y;
-        int16_t z;
+        bool read_ok = accelerometer_read(&x_accel[i], &y_accel[i], &z_accel[i]);
+        if (read_ok) {
+            i ^= 1;
+        }
 
-        accelerometer_read(&x, &y, &z);
-        rtos_thread_delay(ACCELEROMETER_SAMPLING_PERIOD_MS); //???
-    }   
+        rtos_thread_delay(ACCELEROMETER_SAMPLING_PERIOD_MS);
+    }
 
     fdc_error = CAPTURE_FDC_ERROR(
         "thread should not have terminated",

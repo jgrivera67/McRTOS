@@ -49,6 +49,17 @@ C_ASSERT(ARRAY_SIZE(g_frdm_rgb_led_pins) == FRDM_NUM_RGB_LED_PINS);
 
 static uint32_t g_rgb_led_current_mask = 0x0;
 
+/**
+ * FRDM board accelerometer INT1 pin
+ */
+static struct pin_config_info g_frdm_accelerometer_int1_pin =
+        PIN_COFIG_INFO_INITIALIZER(
+            FRDM_ACCELEROMETER_INT1_PIN_INDEX,
+            PORT_PCR_MUX(1),
+            false,
+            PORTA_BASE_PTR,
+            PTA_BASE_PTR);
+
 void
 frdm_board_init(void)
 {
@@ -75,7 +86,6 @@ frdm_board_stop(void)
 {
     set_rgb_led_color(LED_COLOR_BLACK);
 }
-
 
 
 static void 
@@ -163,6 +173,8 @@ accelerometer_init(void)
 
     uint8_t accel_reg_value;
 
+    configure_pin(&g_frdm_accelerometer_int1_pin, false);
+
     i2c_read(
         g_i2c0_device_p,
         ACCELEROMETER_I2C_ADDR,
@@ -201,7 +213,16 @@ accelerometer_init(void)
             accel_reg_value, 0);
     }
 
+    /*
+     * Set rate to sample acceleration every 160ms:
+     */
     accel_reg_value |= ACCEL_CTRL_REG1_ACTIVE_MASK;
+    SET_BIT_FIELD(
+        accel_reg_value,
+        ACCEL_CTRL_REG1_DR_MASK,
+        ACCEL_CTRL_REG1_DR_SHIFT,
+        ACCEL_CTRL_REG1_DR_VALUE_6_25HZ);
+
     i2c_write(
         g_i2c0_device_p,
         ACCELEROMETER_I2C_ADDR,
@@ -252,7 +273,7 @@ accelerometer_stop(void)
  * NOTE: This function cannot be called with interrupts disabled, as it calls
  * functions that block on condition variables.
  */
-void
+bool
 accelerometer_read(
     int16_t *x_p,
     int16_t *y_p,
@@ -297,7 +318,9 @@ accelerometer_read(
         DBG_ASSERT(IN_RANGE_14_BIT_SIGNED(*x_p), *x_p, 0);
         DBG_ASSERT(IN_RANGE_14_BIT_SIGNED(*y_p), *y_p, 0);
         DBG_ASSERT(IN_RANGE_14_BIT_SIGNED(*z_p), *z_p, 0);
-        DEBUG_PRINTF("x=%d, y=%d, z=%d\n", *x_p, *y_p, *z_p);
+        return true;
+    } else {
+        return false;
     }
 }
 

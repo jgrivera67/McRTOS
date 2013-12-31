@@ -17,6 +17,18 @@
 #define TFC_NUM_CAMERA_PIXELS   128
 
 /**
+ * Steering servo PWM overflow frequency in Hz
+ * (PWM period: 20 ms)
+ */
+#define TFC_STEERING_SERVO_TPM_OVERFLOW_FREQ_HZ UINT16_C(50)
+
+/**
+ * Wheel motor PWM overflow frequency in Hz
+ * (PWM period: 200 us)
+ */
+#define TFC_WHEEL_MOTOR_TPM_OVERFLOW_FREQ_HZ UINT16_C(5000)
+
+/**
  * Camera sampling delay in milliseconds 
  *
  * NOTE: This delay + frame capture time must be <= 100ms, to prevent

@@ -58,18 +58,6 @@ TODO("Remove these pragmas")
 #define TFC_POT_1_ADC_CHANNEL		12
 #define TFC_POT_0_ADC_CHANNEL		13
 
-/**
- * Steering servo PWM overflow frequency in Hz
- * (PWM period: 20 ms)
- */
-#define TFC_STEERING_SERVO_TPM_OVERFLOW_FREQ_HZ UINT16_C(50)
-
-/**
- * Wheel motor PWM overflow frequency in Hz
- * (PWM period: 200 us)
- */
-#define TFC_WHEEL_MOTOR_TPM_OVERFLOW_FREQ_HZ UINT16_C(5000)
-
 static void tfc_steering_servo_init(void);
 static void tfc_wheel_motors_init(void);
 static void tfc_camera_init(void);
@@ -482,8 +470,6 @@ void
 tfc_board_stop(void)
 {
     tfc_steering_servo_set(
-        TFC_STEERING_SERVO_NEUTRAL_DUTY_CYCLE_US);
-    tfc_steering_servo_set(
         TFC_STEERING_SERVO_OFF_DUTY_CYCLE_US);
     tfc_wheel_motors_set(
         TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US,
@@ -512,6 +498,10 @@ tfc_steering_servo_set(
         g_tfc_steering_servo_pwm_device_p,
         0,
         pwm_duty_cycle_us);
+
+    if (pwm_duty_cycle_us != TFC_STEERING_SERVO_OFF_DUTY_CYCLE_US) {
+            rtos_thread_delay(1000 / TFC_STEERING_SERVO_TPM_OVERFLOW_FREQ_HZ);
+    }
 }
 
 
