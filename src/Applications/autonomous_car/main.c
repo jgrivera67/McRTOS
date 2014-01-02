@@ -199,7 +199,7 @@ static const struct rtos_startup_app_configuration g_rtos_app_config =
 /**
  * Number of raw camera frame buffers
  */ 
-#define NUM_CAMERA_FRAMES    8
+#define NUM_CAMERA_FRAMES    2
 
 /**
  * Macro to filter a trimpot reading
@@ -244,6 +244,16 @@ C_ASSERT(
 
 #define TURN_ON_CAR_PUSH_BUTTON     0
 #define TURN_OFF_CAR_PUSH_BUTTON    1 
+
+#define THROTTLE_INCREMENT_UNIT \
+        UINT_DIV_APPROX(                                                \
+            TFC_WHEEL_MOTOR_MAX_THROTTLE, MAX_FILTERED_TRIMPOT_READING)
+
+/*
+ * Threshold of wheel motor throttle after which we need to slow down on turns
+ */
+#define SLOW_DOWN_ON_TURN_THREASHOLD \
+        (TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US + THROTTLE_INCREMENT_UNIT * 8)
 
 /**
  * State variables of the autonomous car
@@ -312,6 +322,21 @@ struct autonomous_car {
     volatile bool c_dump_camera_frames_on;
 
     /**
+     * Latest X-axis motion detection value, -1, 0 or 1
+     */
+    volatile int8_t c_x_motion_detection;
+
+    /**
+     * Latest Y-axis motion detection value, -1, 0 or 1
+     */
+    volatile int8_t c_y_motion_detection;
+
+    /**
+     * Latest Z-axis motion detection value, -1, 0 or 1
+     */
+    volatile int8_t c_z_motion_detection;
+
+    /**
      * Last trimpot readings
      */
     volatile tfc_trimpot_reading_t c_last_trimpot_readings[TFC_NUM_TRIMPOTS];
@@ -334,6 +359,9 @@ static struct autonomous_car g_car = {
     .c_camera_frame_buffer_pool_mutex_p = NULL,
     .c_captured_camera_frames_queue_mutex_p = NULL,
     .c_dump_camera_frames_on = false,
+    .c_x_motion_detection = 0,
+    .c_y_motion_detection = 0,
+    .c_z_motion_detection = 0,
     .c_last_trimpot_readings = {
         [0] = 0,
         [1] = 0,
@@ -499,8 +527,7 @@ calculate_base_wheel_motor_pwm_duty_cycle_us(void)
     natural_t base_wheel_speed_delta =
         FILTER_TRIMPOT_READING(
             g_car.c_last_trimpot_readings[BASE_WHEEL_SPEED_TRIMPOT]) *
-        UINT_DIV_APPROX(
-            TFC_WHEEL_MOTOR_MAX_SPEED_DELTA, MAX_FILTERED_TRIMPOT_READING);
+        THROTTLE_INCREMENT_UNIT;
 
     pwm_duty_cycle_us_t base_wheel_motor_pwm_duty_cycle_us =
         TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US + base_wheel_speed_delta;
@@ -581,53 +608,23 @@ camera_frame_reader_thread_f(void *arg)
 }
 
    
-static void
-find_one_black_spot(
-    bw_cluster_bit_map_t bw_cluster_bit_map,
-    natural_t *cluster_cursor_p,
-    struct black_spot *black_spot_p) 
-{
-    natural_t i = *cluster_cursor_p;
-
-    for ( ; i < NUM_BW_CLUSTERS; i ++) {
-        bw_cluster_bit_map_t cluster_bit_cursor_mask = BIT(i);
-        if ((bw_cluster_bit_map & cluster_bit_cursor_mask) == 0) {
-            black_spot_p->bs_detected = true;
-            black_spot_p->bs_position = i * BW_CLUSTER_SIZE;
-        } else {
-            if (black_spot_p->bs_detected) {
-                black_spot_p->bs_size = 
-                    (i * BW_CLUSTER_SIZE) - black_spot_p->bs_position;
-                break;
-            }
-        }
-    }
-
-    *cluster_cursor_p = i;
-}
-
-
 /**
- * Find the black spot in a camera frame. 
+ * Find the middle black spot in a camera frame. 
  * Pixel 0 is the right-most pixel
  * Pixel 'TFC_NUM_CAMERA_PIXELS - 1' is the left-most pixel.
+ *
+ * @return true if success, false otherwise
  */
-static void
-find_black_spots(
+static bool
+find_middle_black_spot(
     _IN_ struct tfc_camera_frame *camera_frame_p,
     _IN_ tfc_trimpot_reading_t white_threshold,
-    _OUT_ struct black_spot *right_black_spot_p,
-    _OUT_ struct black_spot *center_black_spot_p,
-    _OUT_ struct black_spot *left_black_spot_p)
+    _OUT_ black_spot_position_t *middle_black_spot_pos_p)
 {
     natural_t min_pixel_index = TFC_NUM_CAMERA_PIXELS;
     natural_t min_filtered_pixel = MAX_FILTERED_PIXEL_READING;
     bool black_spot_found = false;
     bw_cluster_bit_map_t bw_cluster_bit_map = 0x0;
-
-    right_black_spot_p->bs_detected = false;
-    center_black_spot_p->bs_detected = false;
-    left_black_spot_p->bs_detected = false;
 
     /* 
      * Form a bit map of "mostly" black and "mostly" white clusters of pixels:
@@ -637,7 +634,7 @@ find_black_spots(
      * 0 - "mostly" black cluster
      * 1 - "mostly" white cluster
      */
-    natural_t cluster_bit_cursor_mask = BIT(0);
+    bw_cluster_bit_map_t cluster_bit_cursor_mask = BIT(0);
     natural_t black_count = 0;
     natural_t white_count = 0;
     natural_t black_cluster_count = 0;
@@ -684,22 +681,39 @@ find_black_spots(
         black_cluster_count, NUM_BW_CLUSTERS);
 
     /*
-     * Find black spots (groups of adjacent black clusters):
+     * Find black cluster closes to the center of the camera frame:
      */
     if (black_cluster_count != 0) {
-        natural_t cluster_cursor = 0;
-        find_one_black_spot(
-            bw_cluster_bit_map, &cluster_cursor, right_black_spot_p);
-        if (cluster_cursor < NUM_BW_CLUSTERS) {
-            find_one_black_spot(
-                bw_cluster_bit_map, &cluster_cursor, center_black_spot_p);
+        natural_t bw_cluster_index = ((NUM_BW_CLUSTERS / 2) - 1);
+        cluster_bit_cursor_mask = BIT(bw_cluster_index);
+        if ((bw_cluster_bit_map & cluster_bit_cursor_mask) == 0) {
+            *middle_black_spot_pos_p =
+                (bw_cluster_index * BW_CLUSTER_SIZE) + (BW_CLUSTER_SIZE / 2);
+            return true;
         }
 
-        if (cluster_cursor < NUM_BW_CLUSTERS) {
-            find_one_black_spot(
-                bw_cluster_bit_map, &cluster_cursor, left_black_spot_p);
+        for (natural_t i = 1; i < NUM_BW_CLUSTERS / 2; i ++) {
+            bw_cluster_index = ((NUM_BW_CLUSTERS / 2) - 1) - i;
+            cluster_bit_cursor_mask = BIT(bw_cluster_index);
+            if ((bw_cluster_bit_map & cluster_bit_cursor_mask) == 0) {
+                *middle_black_spot_pos_p =
+                    (bw_cluster_index * BW_CLUSTER_SIZE) + (BW_CLUSTER_SIZE / 2);
+                return true;
+            }
+
+            bw_cluster_index = ((NUM_BW_CLUSTERS / 2) - 1) + i;
+            cluster_bit_cursor_mask = BIT(bw_cluster_index);
+            if ((bw_cluster_bit_map & cluster_bit_cursor_mask) == 0) {
+                *middle_black_spot_pos_p =
+                    (bw_cluster_index * BW_CLUSTER_SIZE) + (BW_CLUSTER_SIZE / 2);
+                return true;
+            }
         }
+
+        DBG_ASSERT(false, 0, 0);
     }
+
+    return false;
 }
 
 
@@ -735,8 +749,8 @@ calculate_new_manipulated_var_value(
 static void
 steer_wheels(
     _IN_ black_spot_position_t black_spot_position,
-    _IN_ black_spot_position_t previous_black_spot_position,
-    _IN_ pwm_duty_cycle_us_t base_wheel_motor_pwm_duty_cycle_us)
+    _IN_ pwm_duty_cycle_us_t base_wheel_motor_pwm_duty_cycle_us,
+    _INOUT_ pwm_duty_cycle_us_t *current_steering_servo_pwm_duty_cycle_us_p)
 {
 #   define STEERING_SERVO_PROPORTIONAL_GAIN \
         UINT_DIV_APPROX(                                                \
@@ -745,10 +759,10 @@ steer_wheels(
             TFC_NUM_CAMERA_PIXELS)
 
 #   define STEERING_SERVO_INTEGRAL_GAIN \
-          UINT_DIV_APPROX(STEERING_SERVO_PROPORTIONAL_GAIN, 2000)
+          UINT_DIV_APPROX(STEERING_SERVO_PROPORTIONAL_GAIN, 5000)
 
-#   define STEERING_SERVO_DERIVATIVE_GAIN \
-            (STEERING_SERVO_PROPORTIONAL_GAIN * 4)
+#   define STEERING_SERVO_DERIVATIVE_GAIN  0
+            // (STEERING_SERVO_PROPORTIONAL_GAIN * 4)
 
 #   define WHEEL_MOTOR_PROPORTIONAL_GAIN \
         UINT_DIV_APPROX(                                                \
@@ -778,7 +792,6 @@ steer_wheels(
      * NOTE: right-most pixel index is 0 and left-most pixel index is
      * TFC_NUM_CAMERA_PIXELS - 1.
      */
-    //int error = (int)previous_black_spot_position - (int)black_spot_position;
     int error = (int)CENTER_PIXEL_INDEX - (int)black_spot_position;
 
     int derivative_term = error - previous_error;
@@ -800,15 +813,6 @@ steer_wheels(
                                 offset_steering_servo_pwm_duty_cycle,
                                 TFC_STEERING_SERVO_MIN_DUTY_CYCLE_US,
                                 TFC_STEERING_SERVO_MAX_DUTY_CYCLE_US);
-
-#if 0
-    console_printf("%s: %u to %u (servo offset %d servo duty cycle %u)\n", 
-                   __func__,
-                   previous_black_spot_position, 
-                   black_spot_position, 
-                   offset_steering_servo_pwm_duty_cycle,
-                   steering_servo_pwm_duty_cycle_us);//???
-#endif
 
     /*
      * Calculate new wheel motors PWM duty cycle:
@@ -898,6 +902,8 @@ steer_wheels(
 
     tfc_steering_servo_set(
         steering_servo_pwm_duty_cycle_us);
+
+    *current_steering_servo_pwm_duty_cycle_us_p = steering_servo_pwm_duty_cycle_us;
 }
 
 
@@ -939,25 +945,14 @@ turn_on_car(void)
 static fdc_error_t
 car_driver_thread_f(void *arg)
 {
-#   define MAX_NO_BLACK_SPOT_FOUND_COUNT   16
-    enum driving_states {
-        SEARCHING_START_LINE,
-        SEARCHING_GUIDE_LINE,
-        SEARCHING_GUIDE_LINE_OR_FINISH_LINE,
-    };
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
-    uint32_t no_black_spot_found_count = 0;
-#if 0
-    enum driving_states driving_state = SEARCHING_START_LINE;
-#endif
-    struct black_spot right_black_spot;
-    struct black_spot center_black_spot;
-    struct black_spot left_black_spot;
-    black_spot_position_t center_black_spot_position;
     black_spot_position_t previous_center_black_spot_position;
+    black_spot_position_t center_black_spot_position;
+    pwm_duty_cycle_us_t current_steering_servo_pwm_duty_cycle_us;
 
     FDC_ASSERT(arg == NULL, arg, cpu_id);
+    FDC_ASSERT(!g_car.c_turned_on, 0, 0);
 
     console_printf("Initializing car driver thread ...\n");
 
@@ -972,9 +967,10 @@ car_driver_thread_f(void *arg)
                     g_car.c_turned_on_mutex_p);
             } while (!g_car.c_turned_on);
 
-            previous_center_black_spot_position = CENTER_PIXEL_INDEX;
-            center_black_spot_position = CENTER_PIXEL_INDEX;
             set_wheels_straight();
+            center_black_spot_position = CENTER_PIXEL_INDEX;
+            current_steering_servo_pwm_duty_cycle_us =
+                TFC_STEERING_SERVO_NEUTRAL_DUTY_CYCLE_US;
         }
         rtos_mutex_release(g_car.c_turned_on_mutex_p);
 
@@ -993,9 +989,12 @@ car_driver_thread_f(void *arg)
             (void **)&camera_frame_p,
             true);
 
-#if 0
-        find_black_spots(camera_frame_p, white_threshold,
-            &right_black_spot, &center_black_spot, &left_black_spot);
+        previous_center_black_spot_position = center_black_spot_position;
+        bool black_spot_found = 
+                find_middle_black_spot(
+                    camera_frame_p,
+                    white_threshold,
+                    &center_black_spot_position);
 
         /*
          * Return frame buffer to the frame buffer pool:
@@ -1007,127 +1006,31 @@ car_driver_thread_f(void *arg)
 
         FDC_ASSERT(write_ok, 0, 0);
 
-        switch (driving_state) {
-        case SEARCHING_START_LINE:
-            if (right_black_spot.bs_detected && 
-                center_black_spot.bs_detected &&
-                left_black_spot.bs_detected) {
-                driving_state = SEARCHING_GUIDE_LINE;
-                console_printf("Start line detected\n");
-                center_black_spot_position = 
-                    GET_BLACK_SPOT_CENTER(&center_black_spot);
+        if (black_spot_found) {
+            if (ABS(center_black_spot_position -
+                previous_center_black_spot_position) > TFC_NUM_CAMERA_PIXELS / 4
+                &&
+                base_wheel_motor_pwm_duty_cycle_us > SLOW_DOWN_ON_TURN_THREASHOLD) {
+                base_wheel_motor_pwm_duty_cycle_us -= THROTTLE_INCREMENT_UNIT * 2;
             }
-            continue;
-
-        case SEARCHING_GUIDE_LINE:
-            previous_center_black_spot_position = center_black_spot_position;
-            if (right_black_spot.bs_detected) {
-                if (center_black_spot.bs_detected) {
-                    center_black_spot_position = 
-                        GET_BLACK_SPOT_CENTER(&center_black_spot);
-                } else {
-                    DBG_ASSERT(!left_black_spot.bs_detected, 0, 0);
-
-                    center_black_spot_position = 
-                        GET_BLACK_SPOT_CENTER(&right_black_spot);
-                    driving_state = SEARCHING_GUIDE_LINE_OR_FINISH_LINE;
-                    console_printf("Guide line detected\n");
-                }
-            } else {
-                    DBG_ASSERT(!center_black_spot.bs_detected, 0, 0);
-                    DBG_ASSERT(!left_black_spot.bs_detected, 0, 0);
-                    no_black_spot_found_count ++;
-                    if (no_black_spot_found_count == MAX_NO_BLACK_SPOT_FOUND_COUNT) {
-                        no_black_spot_found_count = 0;
-                        console_printf("No black spot found");
-                        tfc_wheel_motors_set(
-                            TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US,
-                            TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US);
-                    }
-                    continue;
-            }
-
-            break;
-
-        case SEARCHING_GUIDE_LINE_OR_FINISH_LINE:
-            previous_center_black_spot_position = center_black_spot_position;
-            if (right_black_spot.bs_detected) {
-                if (center_black_spot.bs_detected) {
-                    center_black_spot_position = 
-                        GET_BLACK_SPOT_CENTER(&center_black_spot);
-                    if (left_black_spot.bs_detected) {
-                        turn_off_car();
-                        driving_state = SEARCHING_START_LINE;
-                        console_printf("Finish line detected\n");
-                        continue;
-                    }
-                } else {
-                    DBG_ASSERT(!left_black_spot.bs_detected, 0, 0);
-
-                    center_black_spot_position = 
-                        GET_BLACK_SPOT_CENTER(&right_black_spot);
-                }
-            } else {
-                    DBG_ASSERT(!center_black_spot.bs_detected, 0, 0);
-                    DBG_ASSERT(!left_black_spot.bs_detected, 0, 0);
-                    continue;
-            }
-            
-            break;
-
-        default:
-            FDC_ASSERT(false, driving_state, 0);
-        }
-#else
-        natural_t num_frames_scanned = 0;
-        natural_t sum_center_black_spot_position = 0;
-        for ( ; ; ) {
-            find_black_spots(camera_frame_p, white_threshold,
-                &right_black_spot, &center_black_spot, &left_black_spot);
-
-            if (right_black_spot.bs_detected) {
-                if (center_black_spot.bs_detected) {
-                    sum_center_black_spot_position += 
-                        GET_BLACK_SPOT_CENTER(&center_black_spot);
-                } else {
-                    DBG_ASSERT(!left_black_spot.bs_detected, 0, 0);
-
-                    sum_center_black_spot_position += 
-                        GET_BLACK_SPOT_CENTER(&right_black_spot);
-                }
-
-                num_frames_scanned ++;
-            }
-
-            /*
-             * Return frame buffer to the frame buffer pool:
-             */
-            bool write_ok = rtos_k_pointer_circular_buffer_write(
-                                &g_car.c_camera_frame_buffer_pool,
-                                camera_frame_p,
-                                false);
-
-            FDC_ASSERT(write_ok, 0, 0);
-
-            bool read_ok = rtos_k_pointer_circular_buffer_read(
-                            &g_car.c_captured_camera_frames_queue,
-                            (void **)&camera_frame_p,
-                            false);
-            if (!read_ok) {
-                break;
-            }
-        }
-
-        if (num_frames_scanned != 0) {
-            previous_center_black_spot_position = center_black_spot_position;
-            center_black_spot_position = sum_center_black_spot_position / num_frames_scanned;
-        }
+        } else {
+            //center_black_spot_position = CENTER_PIXEL_INDEX;
+            center_black_spot_position = 
+                (previous_center_black_spot_position + CENTER_PIXEL_INDEX) / 2;
+#if 0
+            base_wheel_motor_pwm_duty_cycle_us -=
+                (base_wheel_motor_pwm_duty_cycle_us / 16);
 #endif
+        }
+
+        if (g_car.c_x_motion_detection == -1) {
+            base_wheel_motor_pwm_duty_cycle_us += THROTTLE_INCREMENT_UNIT * 2;
+        }
 
         steer_wheels(
             center_black_spot_position,
-            previous_center_black_spot_position,
-            base_wheel_motor_pwm_duty_cycle_us);
+            base_wheel_motor_pwm_duty_cycle_us,
+            &current_steering_servo_pwm_duty_cycle_us);
     }
 
     fdc_error =
@@ -1298,7 +1201,7 @@ battery_monitor_thread_f(void *arg)
             natural_t battery_level = 
                 HOW_MANY(
                     FILTER_BATTERY_READING(battery_reading),
-                    2);
+                    4);
 
             if (battery_level > TFC_NUM_BATTERY_LEDS) {
                 battery_level = TFC_NUM_BATTERY_LEDS;
@@ -1332,12 +1235,14 @@ battery_monitor_thread_f(void *arg)
 static fdc_error_t
 accelerometer_thread_f(void *arg)
 {
-#   define ACCELEROMETER_SAMPLING_PERIOD_MS  200
+#   define ACCELEROMETER_SAMPLING_PERIOD_MS  100
     fdc_error_t fdc_error;
+#if 0
     int16_t x_accel[2];
     int16_t y_accel[2];
     int16_t z_accel[2];
     natural_t i = 0;
+#endif
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
     FDC_ASSERT(arg == NULL, arg, cpu_id);
@@ -1347,10 +1252,25 @@ accelerometer_thread_f(void *arg)
     accelerometer_init();
     for ( ; ; )
     {
-        bool read_ok = accelerometer_read(&x_accel[i], &y_accel[i], &z_accel[i]);
+#if 0
+        bool read_ok = accelerometer_read_status(&x_accel[i], &y_accel[i], &z_accel[i]);
         if (read_ok) {
             i ^= 1;
         }
+#else
+        bool read_ok = accelerometer_detect_motion(
+                        (int8_t *)&g_car.c_x_motion_detection,
+                        (int8_t *)&g_car.c_y_motion_detection,
+                        (int8_t *)&g_car.c_z_motion_detection);
+        if (read_ok) {
+#           if 0
+            console_printf("x_motion: %d, y_motion: %d, z_motion: %d\n",
+                g_car.c_x_motion_detection,
+                g_car.c_y_motion_detection,
+                g_car.c_z_motion_detection);
+#           endif
+        }
+#endif
 
         rtos_thread_delay(ACCELEROMETER_SAMPLING_PERIOD_MS);
     }

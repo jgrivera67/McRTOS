@@ -214,14 +214,56 @@ accelerometer_init(void)
     }
 
     /*
-     * Set rate to sample acceleration every 160ms:
+     * Enable motion detection for X, Y, Z axes with no latch:
+     */
+    accel_reg_value = (ACCEL_FF_MT_CFG_OAE_MASK |
+                       ACCEL_FF_MT_CFG_XEFE_MASK |
+                       ACCEL_FF_MT_CFG_YEFE_MASK |
+                       ACCEL_FF_MT_CFG_ZEFE_MASK);
+    i2c_write(
+        g_i2c0_device_p,
+        ACCELEROMETER_I2C_ADDR,
+        ACCEL_FF_MT_CFG,
+        &accel_reg_value,
+        1);
+   
+    /*
+     * Set threshold value for motion detection of > 0.125g:
+     * 0.125g/0.063g = 1.984 ~ 2.
+     */ 
+    accel_reg_value = 0;
+    SET_BIT_FIELD(
+        accel_reg_value, ACCEL_FF_MT_THS_THS_MASK, ACCEL_FF_MT_THS_THS_SHIFT,
+        2);
+    i2c_write(
+        g_i2c0_device_p,
+        ACCELEROMETER_I2C_ADDR,
+        ACCEL_FF_MT_THS,
+        &accel_reg_value,
+        1);
+    
+    /*
+     * Set the debounce counter to eliminate false readings for 100 Hz sample
+     * rate with a requirement of 100 ms timer. See table 7 of AN4070
+     */
+    accel_reg_value = 10;
+    i2c_write(
+        g_i2c0_device_p,
+        ACCELEROMETER_I2C_ADDR,
+        ACCEL_FF_MT_COUNT,
+        &accel_reg_value,
+        1);
+    
+    /*
+     * Set rate to sample acceleration every 10ms and activate 
+     * accelerometer:
      */
     accel_reg_value |= ACCEL_CTRL_REG1_ACTIVE_MASK;
     SET_BIT_FIELD(
         accel_reg_value,
         ACCEL_CTRL_REG1_DR_MASK,
         ACCEL_CTRL_REG1_DR_SHIFT,
-        ACCEL_CTRL_REG1_DR_VALUE_6_25HZ);
+        ACCEL_CTRL_REG1_DR_VALUE_100HZ);
 
     i2c_write(
         g_i2c0_device_p,
@@ -268,13 +310,13 @@ accelerometer_stop(void)
 
 
 /**
- * Read MMA8451Q accelerometer
+ * Read MMA8451Q accelerometer status
  *
  * NOTE: This function cannot be called with interrupts disabled, as it calls
  * functions that block on condition variables.
  */
 bool
-accelerometer_read(
+accelerometer_read_status(
     int16_t *x_p,
     int16_t *y_p,
     int16_t *z_p)
@@ -318,6 +360,64 @@ accelerometer_read(
         DBG_ASSERT(IN_RANGE_14_BIT_SIGNED(*x_p), *x_p, 0);
         DBG_ASSERT(IN_RANGE_14_BIT_SIGNED(*y_p), *y_p, 0);
         DBG_ASSERT(IN_RANGE_14_BIT_SIGNED(*z_p), *z_p, 0);
+        return true;
+    } else {
+        return false;
+    }
+}
+
+
+/**
+ * Read MMA8451Q accelerometer motion detection 
+ *
+ * NOTE: This function cannot be called with interrupts disabled, as it calls
+ * functions that block on condition variables.
+ */
+bool
+accelerometer_detect_motion(
+    int8_t *x_p,
+    int8_t *y_p,
+    int8_t *z_p)
+{
+    uint8_t accel_reg_value;
+
+    i2c_read(
+        g_i2c0_device_p,
+        ACCELEROMETER_I2C_ADDR,
+        ACCEL_FF_MT_SRC,
+        &accel_reg_value,
+        1);
+   
+    if ((accel_reg_value & ACCEL_FF_MT_SRC_EA_MASK) != 0) {
+        if (accel_reg_value & ACCEL_FF_MT_SRC_XHE_MASK) {
+            if (accel_reg_value & ACCEL_FF_MT_SRC_XHP_MASK) {
+                *x_p = 1;
+            } else {
+                *x_p = -1;
+            }
+        } else {
+            *x_p = 0;
+        }
+       
+        if (accel_reg_value & ACCEL_FF_MT_SRC_YHE_MASK) {
+            if (accel_reg_value & ACCEL_FF_MT_SRC_YHP_MASK) {
+                *y_p = 1;
+            } else {
+                *y_p = -1;
+            }
+        } else {
+            *y_p = 0;
+        }
+
+        if (accel_reg_value & ACCEL_FF_MT_SRC_ZHE_MASK) {
+            if (accel_reg_value & ACCEL_FF_MT_SRC_ZHP_MASK) {
+                *z_p = 1;
+            } else {
+                *z_p = -1;
+            }
+        } else {
+            *z_p = 0;
+        }
         return true;
     } else {
         return false;

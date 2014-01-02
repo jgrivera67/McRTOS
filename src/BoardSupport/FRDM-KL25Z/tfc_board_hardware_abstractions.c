@@ -499,9 +499,11 @@ tfc_steering_servo_set(
         0,
         pwm_duty_cycle_us);
 
+#if 0 // ???
     if (pwm_duty_cycle_us != TFC_STEERING_SERVO_OFF_DUTY_CYCLE_US) {
             rtos_thread_delay(1000 / TFC_STEERING_SERVO_TPM_OVERFLOW_FREQ_HZ);
     }
+#endif
 }
 
 

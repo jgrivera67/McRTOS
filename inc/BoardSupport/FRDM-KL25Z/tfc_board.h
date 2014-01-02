@@ -37,7 +37,7 @@
  * time, and you want to give time to the steering servo to fully act before
  * capturing the next frame from the camera.
  */
-#define TFC_CAMERA_SAMPLING_DELAY_MS    20
+#define TFC_CAMERA_SAMPLING_DELAY_MS    50 //20
 
 /**
  * Steering servo minimum duty cycle in microseconds
@@ -93,10 +93,9 @@
         TFC_WHEEL_MOTOR_MIDDLE_DUTY_CYCLE_US
 
 /**
- * Maximum wheel speed delta relative to wheel motor PWM duty cycle
- * for stopped wheel
+ * Maximum throttle for wheel speed 
  */
-#define TFC_WHEEL_MOTOR_MAX_SPEED_DELTA \
+#define TFC_WHEEL_MOTOR_MAX_THROTTLE \
         (TFC_WHEEL_MOTOR_MAX_DUTY_CYCLE_US -                            \
          TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US)
 

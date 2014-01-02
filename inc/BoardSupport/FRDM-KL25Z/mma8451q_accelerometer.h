@@ -24,9 +24,16 @@
 #define ACCEL_OUT_Y_MSB     0x03
 #define ACCEL_OUT_Z_MSB     0x05
 #define ACCEL_F_SETUP       0x09
+#define ACCEL_INT_SOURCE    0x0C
 #define ACCEL_WHO_AM_I      0x0D
 #define ACCEL_XYZ_DATA_CFG  0x0E
+#define ACCEL_FF_MT_CFG     0x15
+#define ACCEL_FF_MT_SRC     0x16
+#define ACCEL_FF_MT_THS     0x17
+#define ACCEL_FF_MT_COUNT   0x18
 #define ACCEL_CTRL_REG1     0x2A
+#define ACCEL_CTRL_REG4     0x2D
+#define ACCEL_CTRL_REG5     0x2E
 
 /**
  * Expected value for ACCEL_WHO_AM_I register
@@ -61,10 +68,37 @@
  */
 #define ACCEL_XYZ_DATA_CFG_FS_MASK      MULTI_BIT_MASK(1, 0)
 #define ACCEL_XYZ_DATA_CFG_FS_SHIFT     0
-#define ACCEL_XYZ_DATA_CFG_FS_VALUE_2G  0x0
-#define ACCEL_XYZ_DATA_CFG_FS_VALUE_4G  0x1
-#define ACCEL_XYZ_DATA_CFG_FS_VALUE_8G  0x2
+#define ACCEL_XYZ_DATA_CFG_FS_VALUE_2G  0x0 /* each count corresponds to 1g/4096 = 0.25mg */
+#define ACCEL_XYZ_DATA_CFG_FS_VALUE_4G  0x1 /* each count corresponds to 1g/2048 ??? */
+#define ACCEL_XYZ_DATA_CFG_FS_VALUE_8G  0x2 /* each count corresponds to 1g/1024 = 0.98mg */
 
 #define ACCEL_XYZ_DATA_CFG_HPF_OUT_MASK BIT(4)
+
+/* 
+ * Bit-masks for ACCEL_FF_MT_CFG register fields
+ */
+#define ACCEL_FF_MT_CFG_ELE_MASK     BIT(7)
+#define ACCEL_FF_MT_CFG_OAE_MASK     BIT(6)
+#define ACCEL_FF_MT_CFG_ZEFE_MASK    BIT(5)
+#define ACCEL_FF_MT_CFG_YEFE_MASK    BIT(4)
+#define ACCEL_FF_MT_CFG_XEFE_MASK    BIT(3)
+
+/* 
+ * Bit-masks for ACCEL_FF_MT_THS register fields
+ */
+#define ACCEL_FF_MT_THS_DBCNTM_MASK BIT(7)
+#define ACCEL_FF_MT_THS_THS_MASK    MULTI_BIT_MASK(6, 0)
+#define ACCEL_FF_MT_THS_THS_SHIFT   0
+
+/* 
+ * Bit-masks for ACCEL_FF_MT_SRC register fields
+ */
+#define ACCEL_FF_MT_SRC_EA_MASK  BIT(7)
+#define ACCEL_FF_MT_SRC_ZHE_MASK BIT(5)
+#define ACCEL_FF_MT_SRC_ZHP_MASK BIT(4)
+#define ACCEL_FF_MT_SRC_YHE_MASK BIT(3)
+#define ACCEL_FF_MT_SRC_YHP_MASK BIT(2)
+#define ACCEL_FF_MT_SRC_XHE_MASK BIT(1)
+#define ACCEL_FF_MT_SRC_XHP_MASK BIT(0)
 
 #endif /* __MMA8451Q_ACCELEROMETER_H */
