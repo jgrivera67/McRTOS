@@ -213,6 +213,7 @@ accelerometer_init(void)
             accel_reg_value, 0);
     }
 
+#if 0
     /*
      * Enable motion detection for X, Y, Z axes with no latch:
      */
@@ -253,7 +254,8 @@ accelerometer_init(void)
         ACCEL_FF_MT_COUNT,
         &accel_reg_value,
         1);
-    
+#endif
+
     /*
      * Set rate to sample acceleration every 10ms and activate 
      * accelerometer:

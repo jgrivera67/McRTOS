@@ -322,19 +322,19 @@ struct autonomous_car {
     volatile bool c_dump_camera_frames_on;
 
     /**
-     * Latest X-axis motion detection value, -1, 0 or 1
+     * Latest X-axis acceleration reading
      */
-    volatile int8_t c_x_motion_detection;
+    volatile int16_t c_x_acceleration;
 
     /**
-     * Latest Y-axis motion detection value, -1, 0 or 1
+     * Latest Y-axis acceleration reading
      */
-    volatile int8_t c_y_motion_detection;
+    volatile int16_t c_y_acceleration;
 
     /**
-     * Latest Z-axis motion detection value, -1, 0 or 1
+     * Latest Z-axis acceleration reading
      */
-    volatile int8_t c_z_motion_detection;
+    volatile int16_t c_z_acceleration;
 
     /**
      * Last trimpot readings
@@ -359,9 +359,9 @@ static struct autonomous_car g_car = {
     .c_camera_frame_buffer_pool_mutex_p = NULL,
     .c_captured_camera_frames_queue_mutex_p = NULL,
     .c_dump_camera_frames_on = false,
-    .c_x_motion_detection = 0,
-    .c_y_motion_detection = 0,
-    .c_z_motion_detection = 0,
+    .c_x_acceleration = 0,
+    .c_y_acceleration = 0,
+    .c_z_acceleration = 0,
     .c_last_trimpot_readings = {
         [0] = 0,
         [1] = 0,
@@ -552,10 +552,17 @@ camera_frame_reader_thread_f(void *arg)
     
     for ( ; ; ) {
         rtos_mutex_acquire(g_car.c_turned_on_mutex_p);
-        while (!g_car.c_turned_on) {
-            rtos_condvar_wait(
-                g_car.c_turned_on_condvar_p,
-                g_car.c_turned_on_mutex_p);
+        if (!g_car.c_turned_on) {
+            do {
+                rtos_condvar_wait(
+                    g_car.c_turned_on_condvar_p,
+                    g_car.c_turned_on_mutex_p);
+            } while (!g_car.c_turned_on);
+
+            /*
+             * Discard first frame, as it may be garbage:
+             */
+            tfc_camera_read_frame(NULL);
         }
         rtos_mutex_release(g_car.c_turned_on_mutex_p);
 
@@ -762,7 +769,7 @@ steer_wheels(
           UINT_DIV_APPROX(STEERING_SERVO_PROPORTIONAL_GAIN, 5000)
 
 #   define STEERING_SERVO_DERIVATIVE_GAIN  0
-            // (STEERING_SERVO_PROPORTIONAL_GAIN * 4)
+           //(STEERING_SERVO_PROPORTIONAL_GAIN / 32)
 
 #   define WHEEL_MOTOR_PROPORTIONAL_GAIN \
         UINT_DIV_APPROX(                                                \
@@ -1007,25 +1014,29 @@ car_driver_thread_f(void *arg)
         FDC_ASSERT(write_ok, 0, 0);
 
         if (black_spot_found) {
+#if 0
             if (ABS(center_black_spot_position -
-                previous_center_black_spot_position) > TFC_NUM_CAMERA_PIXELS / 4
-                &&
-                base_wheel_motor_pwm_duty_cycle_us > SLOW_DOWN_ON_TURN_THREASHOLD) {
-                base_wheel_motor_pwm_duty_cycle_us -= THROTTLE_INCREMENT_UNIT * 2;
+                previous_center_black_spot_position) > TFC_NUM_CAMERA_PIXELS / 4 &&
+                g_car.c_x_motion_detection == 0) {
+                base_wheel_motor_pwm_duty_cycle_us =
+                    TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US + THROTTLE_INCREMENT_UNIT * 6;
             }
+#endif
         } else {
             //center_black_spot_position = CENTER_PIXEL_INDEX;
             center_black_spot_position = 
                 (previous_center_black_spot_position + CENTER_PIXEL_INDEX) / 2;
 #if 0
-            base_wheel_motor_pwm_duty_cycle_us -=
-                (base_wheel_motor_pwm_duty_cycle_us / 16);
+            base_wheel_motor_pwm_duty_cycle_us =
+                TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US - THROTTLE_INCREMENT_UNIT * 2;
 #endif
         }
 
-        if (g_car.c_x_motion_detection == -1) {
-            base_wheel_motor_pwm_duty_cycle_us += THROTTLE_INCREMENT_UNIT * 2;
+//#if 0 // ???
+        if (g_car.c_x_acceleration == 0x40) {
+            base_wheel_motor_pwm_duty_cycle_us += THROTTLE_INCREMENT_UNIT;
         }
+//#endif
 
         steer_wheels(
             center_black_spot_position,
@@ -1235,14 +1246,8 @@ battery_monitor_thread_f(void *arg)
 static fdc_error_t
 accelerometer_thread_f(void *arg)
 {
-#   define ACCELEROMETER_SAMPLING_PERIOD_MS  100
+#   define ACCELEROMETER_SAMPLING_PERIOD_MS  50
     fdc_error_t fdc_error;
-#if 0
-    int16_t x_accel[2];
-    int16_t y_accel[2];
-    int16_t z_accel[2];
-    natural_t i = 0;
-#endif
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
     FDC_ASSERT(arg == NULL, arg, cpu_id);
@@ -1252,10 +1257,19 @@ accelerometer_thread_f(void *arg)
     accelerometer_init();
     for ( ; ; )
     {
-#if 0
-        bool read_ok = accelerometer_read_status(&x_accel[i], &y_accel[i], &z_accel[i]);
+#if 1
+        bool read_ok = accelerometer_read_status(
+                        (int16_t *)&g_car.c_x_acceleration,
+                        (int16_t *)&g_car.c_y_acceleration,
+                        (int16_t *)&g_car.c_z_acceleration);
+
         if (read_ok) {
-            i ^= 1;
+#           if 0
+            console_printf("x_accel: %#x, y_accel: %#x, z_accel: %#x\n",
+                g_car.c_x_acceleration & ~0x3f,
+                g_car.c_y_acceleration & ~0x3f,
+                g_car.c_z_acceleration & ~0x3f);
+#           endif
         }
 #else
         bool read_ok = accelerometer_detect_motion(

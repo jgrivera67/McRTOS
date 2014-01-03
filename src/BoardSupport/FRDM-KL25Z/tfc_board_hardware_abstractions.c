@@ -19,7 +19,8 @@ TODO("Remove these pragmas")
 #pragma GCC diagnostic ignored "-Wunused-function"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
-#define TFC_CAMERA_CLK_PULSE_DELAY  50
+#define TFC_CAMERA_CLK_PULSE_DELAY \
+        ((SOC_CPU_CLOCK_FREQ_IN_MEGA_HZ / 3) /* iterations in 1us */ * 24) // 50
 
 /*
  * KL25 GPIO PORT B Pins
@@ -601,8 +602,12 @@ tfc_camera_read_frame(
     delay_loop(TFC_CAMERA_CLK_PULSE_DELAY / 2);
 
     for (int i = 0; i < TFC_NUM_CAMERA_PIXELS; i++) {
-        camera_frame_p->cf_pixels[i] =
+        tfc_camera_raw_pixel_t raw_pixel =
             read_adc_channel(g_adc0_device_p, TFC_LINESCAN_0_ADC_CHANNEL);
+
+        if (camera_frame_p != NULL) {
+            camera_frame_p->cf_pixels[i] = raw_pixel;
+        }
 
         deactivate_output_pin(&g_tfc_camera_clk_pin);
         delay_loop(TFC_CAMERA_CLK_PULSE_DELAY);
@@ -611,13 +616,11 @@ tfc_camera_read_frame(
     }
 
     /* 
-     * N+1 clock pulse
+     * Complete N+1 clock cycle
      */
+    delay_loop(TFC_CAMERA_CLK_PULSE_DELAY / 4);
     deactivate_output_pin(&g_tfc_camera_clk_pin);
     delay_loop(TFC_CAMERA_CLK_PULSE_DELAY);
-    activate_output_pin(&g_tfc_camera_clk_pin);
-    delay_loop(TFC_CAMERA_CLK_PULSE_DELAY);
-    deactivate_output_pin(&g_tfc_camera_clk_pin);
 }
 
 
