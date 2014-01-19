@@ -31,8 +31,7 @@ $(if $(filter $(notdir $(SOURCE_DIR)), $(notdir $(CURDIR))), \
 #
 # Tools
 #
-#TOOLCHAIN   = arm-elf
-TOOLCHAIN   = arm-none-eabi
+TOOLCHAIN   ?= arm-none-eabi
 CC          = $(TOOLCHAIN)-gcc
 CPP         = $(TOOLCHAIN)-cpp
 AS          = $(TOOLCHAIN)-gcc -x assembler-with-cpp

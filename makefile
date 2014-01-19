@@ -23,8 +23,6 @@ UNIT_TESTS_DIR := unit_tests
 SCRIPTS_DIR := scripts
 DOC_DIR := doc
 
-POWERSHELL := powershell.exe -executionPolicy RemoteSigned 
-	
 RUN_BUILD_MAKEFILE := $(MAKE) --file=../$(SOURCE_DIR)/build.mk \
 			      --directory=$(OBJECT_DIR) \
 			      $(BUILD_TARGET) \
@@ -36,9 +34,6 @@ RUN_BUILD_MAKEFILE := $(MAKE) --file=../$(SOURCE_DIR)/build.mk \
 RUN_TESTS_MAKEFILE := $(MAKE) --directory=$(UNIT_TESTS_DIR) 
 
 RUN_DOC_MAKEFILE := $(MAKE) --directory=$(DOC_DIR) 
-
-RUN_2478 := ${POWERSHELL} $(SCRIPTS_DIR)/run_2478.ps1 \
-			  '$$env:bin_file_prefix'
 
 COMMON_CFLAGS = -Wall -Wstrict-prototypes -fms-extensions -Wextra -Wformat \
 	        -std=gnu99 -g3
