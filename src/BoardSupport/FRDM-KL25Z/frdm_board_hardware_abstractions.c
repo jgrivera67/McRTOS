@@ -88,7 +88,7 @@ frdm_board_stop(void)
 }
 
 
-static void 
+static void
 rgb_led_init(void)
 {
     for (int i = 0; i < FRDM_NUM_RGB_LED_PINS; i++) {

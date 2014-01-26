@@ -1,5 +1,5 @@
 #
-# McRTOS kernel module-level build makefile 
+# McRTOS kernel module-level build makefile
 #
 # Copyright (C) 2013 German Rivera
 #
@@ -9,6 +9,10 @@ ifeq "$(PLATFORM)" "LPC2478-STK"
 endif
 
 ifeq "$(PLATFORM)" "FRDM-KL25Z"
+    local_src := $(subdirectory)/McRTOS_startup_arm_cortex_m.c
+endif
+
+ifeq "$(PLATFORM)" "LM4F120-LaunchPad"
     local_src := $(subdirectory)/McRTOS_startup_arm_cortex_m.c
 endif
 

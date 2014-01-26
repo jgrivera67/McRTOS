@@ -5,8 +5,8 @@
  *
  * Copyright (C) 2013 German Rivera
  *
- * @author German Rivera 
- */ 
+ * @author German Rivera
+ */
 #ifndef _McRTOS_H
 #define _McRTOS_H
 
@@ -41,50 +41,50 @@ enum rtos_lcd_channels
 
     /*
      * Add new entries above here
-     */ 
-    RTOS_LCD_CHANNEL_NONE 
+     */
+    RTOS_LCD_CHANNEL_NONE
 };
 
 C_ASSERT(RTOS_LCD_CHANNEL_NONE == RTOS_NUM_LCD_CHANNELS);
 #endif /* LCD_SUPPORTED */
 
-/** 
+/**
  * Thread priority type (0 is the highest priority)
  */
 typedef _RANGE_(RTOS_HIGHEST_THREAD_PRIORITY, RTOS_LOWEST_THREAD_PRIORITY)
         uint8_t rtos_thread_prio_t;
 
-/** 
+/**
  * Number of application threads range type
  */
 typedef _RANGE_(0, RTOS_MAX_NUM_APP_THREADS)
         uint8_t rtos_num_app_threads_t;
 
-/** 
+/**
  * Number of application mutexes range type
  */
 typedef _RANGE_(0, RTOS_MAX_NUM_APP_MUTEXES)
         uint8_t rtos_num_app_mutexes_t;
 
-/** 
+/**
  * Number of application condvars range type
  */
 typedef _RANGE_(0, RTOS_MAX_NUM_APP_CONDVARS)
         uint8_t rtos_num_app_condvars_t;
 
-/** 
+/**
  * Number of application timers range type
  */
 typedef _RANGE_(0, RTOS_MAX_NUM_APP_TIMERS)
         uint8_t rtos_num_app_timers_t;
-        
-/** 
+
+/**
  * Number of application message channels range type
  */
 typedef _RANGE_(0, RTOS_MAX_NUM_APP_MSG_CHANNELS)
         uint8_t rtos_num_app_msg_channels_t;
 
-/** 
+/**
  * Number of application object pools range type
  */
 typedef _RANGE_(0, RTOS_MAX_NUM_APP_OBJECT_POOLS)
@@ -106,7 +106,11 @@ C_ASSERT(
 /**
  * Per CPU interrupts bit map type
  */
+#if defined(LM4F120_SOC)
+typedef uint32_t rtos_per_cpu_interrupts_bitmap_t[5];
+#else
 typedef uint32_t rtos_per_cpu_interrupts_bitmap_t;
+#endif
 
 C_ASSERT(
     sizeof(rtos_per_cpu_interrupts_bitmap_t) * 8 >= SOC_NUM_INTERRUPT_CHANNELS);
@@ -132,7 +136,7 @@ typedef void rtos_timer_function_t(struct rtos_timer *rtos_timer_p);
 /**
  * Idle thread hook function type
  */
-typedef void rtos_idle_thread_hook_function_t(void); 
+typedef void rtos_idle_thread_hook_function_t(void);
 
 /**
  * Application-specific system call function type
@@ -146,12 +150,12 @@ typedef uint32_t rtos_milliseconds_t;
 
 /**
  * Block of parameters for creating a thread
- */ 
+ */
 struct rtos_thread_creation_params
-{ 
+{
     /**
      * Pointer to thread name string for debugging purposes
-     */ 
+     */
     const char *p_name_p;
 
     /**
@@ -166,7 +170,7 @@ struct rtos_thread_creation_params
     void *p_function_arg_p;
 
     /**
-     * Thread priority 
+     * Thread priority
      */
     rtos_thread_prio_t p_priority;
 
@@ -181,33 +185,33 @@ struct rtos_thread_creation_params
      * Pointer to area to store the pointer to the created McRTOS thread object
      */
     struct rtos_thread **const p_thread_pp;
-}; 
+};
 
 /**
  * Block of parameters for creating a mutex
- */ 
+ */
 struct rtos_mutex_creation_params
-{ 
+{
     /**
      * Pointer to mutex name string for debugging purposes
-     */ 
+     */
     const char *p_name_p;
 
     /**
      * Pointer to created mutex object returned by McRTOS
      */
     struct rtos_mutex **p_mutex_pp;
-}; 
+};
 
 
 /**
  * Block of parameters for creating a condvar
- */ 
+ */
 struct rtos_condvar_creation_params
-{ 
+{
     /**
      * Pointer to condvar name string for debugging purposes
-     */ 
+     */
     const char *p_name_p;
 
     /**
@@ -218,12 +222,12 @@ struct rtos_condvar_creation_params
 
 /**
  * Block of parameters for creating a timer
- */ 
+ */
 struct rtos_timer_creation_params
-{ 
+{
     /**
      * Pointer to timer name string for debugging purposes
-     */ 
+     */
     const char *p_name_p;
 
     /**
@@ -235,16 +239,16 @@ struct rtos_timer_creation_params
      * Pointer to created timer object returned by McRTOS
      */
     struct rtos_timer **const p_timer_pp;
-}; 
+};
 
 /**
  * Block of parameters for creating a msg_channel
- */ 
+ */
 struct rtos_msg_channel_creation_params
-{ 
+{
     /**
      * Pointer to msg_channel name string for debugging purposes
-     */ 
+     */
     const char *p_name_p;
 
     /**
@@ -262,7 +266,7 @@ struct rtos_msg_channel_creation_params
      * if serialization is to be done by disabling interrupts.
      */
     struct rtos_mutex *p_mutex_p;
-    
+
     /**
      * Pointer to created msg_channel object returned by McRTOS
      */
@@ -274,7 +278,7 @@ typedef void cmd_function_t(const char *cmd_line);
 /**
  * Console command
  */
-struct rtos_console_command 
+struct rtos_console_command
 {
     const char *cmd_name_p;
     const char *cmd_description_p;
@@ -283,7 +287,7 @@ struct rtos_console_command
 
 /**
  * McRTOS per-cpu startup application configuration structure
- */ 
+ */
 struct rtos_per_cpu_startup_app_configuration
 {
     /**
@@ -295,45 +299,45 @@ struct rtos_per_cpu_startup_app_configuration
      * Number of application threads to be started on this CPU when
      * McRTOS starts running. These threads can create other threads
      * if necessary by calling rtos_create_thread().
-     */ 
+     */
     const rtos_num_app_threads_t stc_num_autostart_threads;
 
     /**
      * Pointer to array of thread creation structures, for the application
      * threads to be started on this CPU core, when McRTOS starts running.
-     */ 
+     */
     const struct rtos_thread_creation_params *const stc_autostart_threads_p;
 };
 
 /**
  * McRTOS startup application configuration structure
- */ 
+ */
 struct rtos_startup_app_configuration
 {
     /**
      * Pointer to function that initializes application-specific hardware
-     */ 
+     */
     app_hardware_init_t *const stc_app_hardware_init_p;
 
     /**
      * Pointer to function that stops application-specific hardware
-     */ 
+     */
     app_hardware_stop_t *const stc_app_hardware_stop_p;
 
     /**
      * Pointer to function that does application-specific initialization before
      * auto-start application threads are created.
-     */ 
+     */
     app_software_init_t *const stc_app_software_init_p;
 
     /**
      * Number of application-specific console commands
-     */ 
+     */
     const uint8_t stc_num_app_console_commands;
 
     /**
      * Pointer to array of application-specific console command
-     */ 
+     */
     const struct rtos_console_command *const stc_app_console_commands_p;
 
     /**
@@ -354,15 +358,15 @@ struct rtos_lcd_putchar_attributes
 
 /*
  * Application interface functions
- */ 
+ */
 
 /*
  * Function to be invoked from the Application's main() function
  * to start McRTOS.
  */
 _NEVER_RETURN_
-void 
-rtos_startup( 
+void
+rtos_startup(
     _IN_ const struct rtos_startup_app_configuration *rtos_app_config_p);
 
 _NEVER_RETURN_
@@ -387,7 +391,7 @@ rtos_create_mutex(
 fdc_error_t
 rtos_create_condvar(
     _IN_ const struct rtos_condvar_creation_params *params_p);
- 
+
 fdc_error_t
 rtos_create_timer(
     _IN_ const struct rtos_timer_creation_params *params_p);
@@ -432,7 +436,7 @@ _THREAD_CALLERS_ONLY_
 void
 rtos_mutex_acquire(
     _IN_ struct rtos_mutex *rtos_mutex_p);
- 
+
 _THREAD_CALLERS_ONLY_
 void
 rtos_mutex_release(

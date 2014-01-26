@@ -438,7 +438,7 @@ soc_hardware_init(void)
         g_console_serial_port_p,
         CONSOLE_SERIAL_PORT_BAUD_RATE,
         CONSOLE_SERIAL_PORT_MODE);
-   
+
 #   ifdef DEBUG
     uart_putchar_with_polling(g_console_serial_port_p, '\r');
     uart_putchar_with_polling(g_console_serial_port_p, '\n');

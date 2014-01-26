@@ -5,8 +5,8 @@
  *
  * Copyright (C) 2013 German Rivera
  *
- * @author German Rivera 
- */ 
+ * @author German Rivera
+ */
 #ifndef _McRTOS_CONFIG_PARAMS_H
 #define _McRTOS_CONFIG_PARAMS_H
 
@@ -54,14 +54,14 @@
         (RTOS_THREAD_STACK_NUM_ENTRIES * ARM_CPU_WORD_SIZE_IN_BYTES)
 
 /**
- * Stack overflow buffer size (in number of stack entries) for 
+ * Stack overflow buffer size (in number of stack entries) for
  * interrupt stacks
  */
 #define RTOS_THREAD_STACK_OVERFLOW_BUFFER_SIZE_IN_ENTRIES \
         (RTOS_THREAD_STACK_NUM_ENTRIES / 16)
 
 /**
- * Execution stack size for interrupts (in number of stack entries) 
+ * Execution stack size for interrupts (in number of stack entries)
  */
 #if DEFINED_ARM_CLASSIC_ARCH()
 #   define RTOS_INTERRUPT_STACK_NUM_ENTRIES    UINT32_C(128)
@@ -70,13 +70,13 @@
     /*
      * For Cortex-M there is only one interrupt stack shared among all
      * nested exceptions
-     */ 
+     */
 #   define RTOS_INTERRUPT_STACK_NUM_ENTRIES \
             (UINT32_C(96) * SOC_NUM_INTERRUPT_PRIORITIES)
 #endif
 
 /**
- * Stack overflow buffer size (in number of stack entries) for 
+ * Stack overflow buffer size (in number of stack entries) for
  * interrupt stacks
  */
 #define RTOS_INTERRUPT_STACK_OVERFLOW_BUFFER_SIZE_IN_ENTRIES \
@@ -86,18 +86,18 @@
  * Number of thread priorities supported
  */
 //#define RTOS_NUM_THREAD_PRIORITIES  ARM_CPU_WORD_SIZE_IN_BITS
-#define RTOS_NUM_THREAD_PRIORITIES  8 
+#define RTOS_NUM_THREAD_PRIORITIES  8
 
 /*
  * Maximum number of McRTOS interrupt objects in the system
  */
-#define RTOS_MAX_NUM_INTERRUPTS 8 
+#define RTOS_MAX_NUM_INTERRUPTS 8
 
 C_ASSERT(RTOS_MAX_NUM_INTERRUPTS < SOC_NUM_INTERRUPT_CHANNELS);
 
 /**
  * Time slice in number of timer ticks for each thread of the priority.
- * Threads with the same priority are scheduled in a round-robin fashion, 
+ * Threads with the same priority are scheduled in a round-robin fashion,
  * giving each thread the CPU for this number of ticks.
  */
 #define RTOS_THREAD_TIME_SLICE_IN_TICKS UINT8_C(8)
@@ -121,7 +121,15 @@ C_ASSERT(RTOS_MAX_NUM_INTERRUPTS < SOC_NUM_INTERRUPT_CHANNELS);
 /**
  * Maximum size of the fdc_info struct in bytes
  */
-#define RTOS_MAX_FDC_INFO_SIZE  UINT32_C(1*1024)
+#if defined(LPC2478_SOC)
+#   define RTOS_MAX_FDC_INFO_SIZE  UINT32_C(4*1024)
+#elif defined(KL25Z_SOC)
+#   define RTOS_MAX_FDC_INFO_SIZE  UINT32_C(1*1024)
+#elif defined(LM4F120_SOC)
+#   define RTOS_MAX_FDC_INFO_SIZE  UINT32_C(2*1024)
+#else
+#   error "No system on chip specified"
+#endif
 
 /**
  * Maximum number of failure records that can be captured

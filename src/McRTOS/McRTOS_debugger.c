@@ -137,7 +137,7 @@ rtos_run_debugger(
     bool quit;
 
     turn_on_debugger_led();
-   
+
     do {
         debug_printf("\nMcRTOS debugger> ");
         read_command_line(

@@ -5,8 +5,8 @@
  *
  * Copyright (C) 2013 German Rivera
  *
- * @author German Rivera 
- */ 
+ * @author German Rivera
+ */
 #ifndef _HARDWARE_ABSTRACTIONS_H
 #define _HARDWARE_ABSTRACTIONS_H
 
@@ -20,7 +20,7 @@
 /**
  * DRAM Page size in bytes (4KB)
  */
-#define DRAM_PAGE_SIZE  UINT32_C(4096)  
+#define DRAM_PAGE_SIZE  UINT32_C(4096)
 
 #if defined(LPC2478_SOC)
 
@@ -35,7 +35,7 @@
 
 #elif defined(LM4F120_SOC)
 
-#   error "TODO: Add #include here for LM4F120_launchpad"
+#   include "lm4f120_soc_public.h"
 
 #else
 
@@ -132,7 +132,7 @@ typedef uint32_t cpu_reset_cause_t;
 #define CPU_RESET_MACHDEP_CAUSE2_SHIFT     16
 
 #if DEFINED_ARM_CORTEX_M_ARCH()
-    /** 
+    /**
      * Interrupt channel type
      * (IRQ number of systick interrupt is -1)
      */
@@ -144,7 +144,7 @@ typedef uint32_t cpu_reset_cause_t;
      */
     typedef uint16_t cpu_instruction_t;
 #else
-    /** 
+    /**
      * Interrupt channel type
      */
     typedef _RANGE_(0, SOC_NUM_INTERRUPT_CHANNELS - 1)
@@ -156,7 +156,7 @@ typedef uint32_t cpu_reset_cause_t;
     typedef uint32_t cpu_instruction_t;
 #endif
 
-/** 
+/**
  * Interrupt priority type (0 is the highest priority)
  */
 typedef _RANGE_(0, SOC_NUM_INTERRUPT_PRIORITIES - 1)
@@ -174,13 +174,13 @@ typedef uint32_t cpu_clock_cycles_t;
 
 C_ASSERT(sizeof(cpu_clock_cycles_t) == sizeof(int32_t));
 
-/** 
+/**
  * PWM channel index type
  */
 typedef _RANGE_(0, PWM_MAX_NUM_CHANNELS - 1)
         uint8_t pwm_channel_t;
 
-/** 
+/**
  * PWM duty cycle type (in microseconds)
  */
 typedef _RANGE_(0, 1000000)
@@ -195,7 +195,7 @@ C_ASSERT(sizeof(isr_function_t *) == sizeof(uint32_t));
 
 /*
  * I2C transaction header fields
- */ 
+ */
 #define I2C_SLAVE_ADDR_MASK         MULTI_BIT_MASK(7, 1)
 #define I2C_SLAVE_ADDR_SHIFT        1
 #define I2C_READ_TRANSACTION_MASK   BIT(0)
@@ -379,11 +379,11 @@ void wait_for_interrupts(void);
 uint32_t read_32bit_mmio_register(volatile uint32_t *io_reg_p);
 
 void write_32bit_mmio_register(volatile uint32_t *io_reg_p, uint32_t value);
- 
+
 uint16_t read_16bit_mmio_register(volatile uint16_t *io_reg_p);
 
 void write_16bit_mmio_register(volatile uint16_t *io_reg_p, uint16_t value);
- 
+
 uint8_t read_8bit_mmio_register(volatile uint8_t *io_reg_p);
 
 void write_8bit_mmio_register(volatile uint8_t *io_reg_p, uint8_t value);

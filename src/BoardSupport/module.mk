@@ -2,7 +2,7 @@
 # McRTOS board support module-level build makefile 
 #
 # Copyright (C) 2013 German Rivera
-# 
+#
 
 ifeq "$(PLATFORM)" "LPC2478-STK"
     local_src := \
@@ -20,8 +20,14 @@ ifeq "$(PLATFORM)" "FRDM-KL25Z"
                  $(subdirectory)/$(PLATFORM)/tfc_board_hardware_abstractions.c
 endif
 
+ifeq "$(PLATFORM)" "LM4F120-LaunchPad"
+    local_src := \
+                 $(subdirectory)/$(PLATFORM)/lm4f120_soc_hardware_abstractions.c \
+                 $(subdirectory)/$(PLATFORM)/launchpad_board_hardware_abstractions.c
+endif
+
 local_subdirs := $(subdirectory)/$(PLATFORM)
-		 
+
 create-local-output-subdirs :=				\
 	$(shell for f in $(local_subdirs);		\
 		do					\

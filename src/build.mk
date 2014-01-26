@@ -1,8 +1,8 @@
 #
-# McRTOS application top-level build makefile 
+# McRTOS application top-level build makefile
 #
 # Copyright (C) 2013 German Rivera
-# 
+#
 # NOTE: This Makefile must be run only from the obj directory
 #
 ifndef APPLICATION
@@ -35,7 +35,7 @@ TOOLCHAIN   ?= arm-none-eabi
 CC          = $(TOOLCHAIN)-gcc
 CPP         = $(TOOLCHAIN)-cpp
 AS          = $(TOOLCHAIN)-gcc -x assembler-with-cpp
-LD          = $(TOOLCHAIN)-ld 
+LD          = $(TOOLCHAIN)-ld
 OBJCOPY     = $(TOOLCHAIN)-objcopy
 OBJDUMP     = $(TOOLCHAIN)-objdump
 AR          = $(TOOLCHAIN)-ar
@@ -50,9 +50,11 @@ endif
 
 ifeq "$(PLATFORM)" "LM4F120-LaunchPad"
     SYSTEM_ON_CHIP = LM4F120_SOC
-    CPU_ARCHITECTURE = arm_cortex_m  #armv7e-m
+    CPU_ARCHITECTURE = arm_cortex_m
     MCU  = cortex-m4
     CODETYPE = thumb
+    # To enable code generation for hard FP:
+    #EXTRA_MCFLAGS = -mfloat-abi=hard -mfpu=fpv4-sp-d16
 endif
 
 ifeq "$(PLATFORM)" "FRDM-KL25Z"
@@ -96,7 +98,7 @@ modules      := \
 # NOTE: 'programs' is populated by included
 # Applications/*/module.mk makefiles
 #
-programs     := 
+programs     :=
 
 #
 # NOTE: 'libraries' is populated by make-library invocations and if
@@ -126,20 +128,20 @@ ifeq "$(CPU_ARCHITECTURE)" "arm_cortex_m"
 endif
 
 CPPFLAGS     += $(addprefix -I ,$(include_dirs)) \
-		-D$(SYSTEM_ON_CHIP) 
+		-D$(SYSTEM_ON_CHIP)
 
 ifeq "$(BUILD_FLAVOR)" "debug"
     CPPFLAGS += -DDEBUG \
 		-D_RELIABILITY_CHECKS_ \
 		-D_BRANCH_MICRO_TRACING_ #\
 		#-D_CPU_CYCLES_MEASURE_
-    OPT = -O0 
+    OPT = -O0
 endif
 
 ifeq "$(BUILD_FLAVOR)" "reliability"
     CPPFLAGS += -D_RELIABILITY_CHECKS_ #\
 		#-D_CPU_CYCLES_MEASURE_
-    OPT = -O0 
+    OPT = -O0
 endif
 
 ifeq "$(BUILD_FLAVOR)" "performance"
@@ -148,7 +150,7 @@ ifeq "$(BUILD_FLAVOR)" "performance"
 endif
 
 # optimisation level here -O0, -O1, -O2, -Os, or -03
-MCFLAGS = 	-mcpu=$(MCU) -m$(CODETYPE)
+MCFLAGS = 	-mcpu=$(MCU) -m$(CODETYPE) $(EXTRA_MCFLAGS)
 ASFLAGS = 	$(MCFLAGS) -g -gdwarf-2 -Wa,-amhls=$(<:.s=.lst) \
 		$(CPPFLAGS)
 CFLAGS  = 	$(MCFLAGS) $(OPT) -gdwarf-2 -fomit-frame-pointer \
@@ -233,12 +235,7 @@ GEN_HEADER_DEPENDENCIES = \
 %hex: %elf
 	$(OBJCOPY) -O ihex -S $< $@
 
-.PHONY: list_predefined_macros 
+.PHONY: list_predefined_macros
 list_predefined_macros:
 	touch ~/tmp/foo.h; ${CPP} -dM ~/tmp/foo.h; rm ~/tmp/foo.h
-
-# 
-# Include the dependency files, should be the last of the makefile
-#
-#-include $(shell mkdir .dep 2>/dev/null) $(wildcard .dep/*)
 

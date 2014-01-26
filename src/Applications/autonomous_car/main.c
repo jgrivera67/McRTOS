@@ -511,7 +511,7 @@ void autonomous_car_app_init(void)
 
 
 static void
-set_wheels_straight(void) 
+set_wheels_straight(void)
 {
     tfc_steering_servo_set(
         TFC_STEERING_SERVO_NEUTRAL_DUTY_CYCLE_US);

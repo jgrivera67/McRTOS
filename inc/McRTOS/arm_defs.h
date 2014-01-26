@@ -7,8 +7,8 @@
  *
  * NOTE: Only preprocessor constructs should be used here.
  *
- * @author German Rivera 
- */ 
+ * @author German Rivera
+ */
 
 #ifndef _ARM_DEFS_H
 #define _ARM_DEFS_H
@@ -20,7 +20,7 @@
 
 #define DEFINED_ARM_CORTEX_M_ARCH() \
         (defined(__ARM_ARCH_6M__) || \
-         defined(__ARM_ARCH_7M__))
+         defined(__ARM_ARCH_7EM__))
 
 #ifndef CPPUTEST_COMPILATION
 #   if !DEFINED_ARM_CLASSIC_ARCH() && !DEFINED_ARM_CORTEX_M_ARCH()
@@ -45,7 +45,7 @@
 #   define ARM_MODE_SYS   0x1F      /* System Running in Privileged Operating Mode  */
 
 #   define ARM_MODE_MASK  0x1F
-   
+
 #   define I_BIT          0x80      /* disable IRQ when I bit is set */
 #   define F_BIT          0x40      /* disable FIQ when F bit is set */
 #   define T_BIT          0x20      /* switch to Thumb mode when T bit is set */
@@ -100,7 +100,7 @@
     /**
      * Address of the LPC2478 VIC's VICAddress register
      */
-#   define LPC2478_VIC_ADDRESS_ADDR    0xFFFFFF00 
+#   define LPC2478_VIC_ADDRESS_ADDR    0xFFFFFF00
 
     /**
      * Value of the PC when the processor executes the instruction at
@@ -147,7 +147,7 @@
 
     /**
      * Symbolic names of the CPU registers, defined in the order in which they
-     * are saved automatically by the processor, in the current stack, upon 
+     * are saved automatically by the processor, in the current stack, upon
      * exception entry.
      */
 #   define CPU_REG_R0      0x0
@@ -185,7 +185,7 @@
 
     /**
      * Values that LR can be set to, to return from an exception:
-     */ 
+     */
 #   define CPU_EXC_RETURN_TO_HANDLER_MODE          0xFFFFFFF1
 #   define CPU_EXC_RETURN_TO_THREAD_MODE_USING_MSP 0xFFFFFFF9
 #   define CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP 0xFFFFFFFD
@@ -247,12 +247,12 @@
 #   define CPU_REG_CONTROL_SPSEL_MASK   0x2
 #   define CPU_REG_CONTROL_nPRIV_MASK   0x1
 
-    /* 
+    /*
      * Cortex-M SCB ICSR register address
      */
 #   define CPU_SCB_ICSR_REGISTER_ADDR   0xE000ED04
 
-    /* 
+    /*
      * Mask for the PendSV set-pending bit in the SCB ICSR register
      */
 #   define CPU_SCB_ICSR_PENDSVSET_MASK  (0x1 << 28)
@@ -261,7 +261,7 @@
      * Number of interrupt priorities for interrupts with configurable
      * priority, with 0 being the highest priority and lower priorities
      * begin > 0.
-     * The Reset, NMI, and HardFault exceptions have fixed priorities, with 
+     * The Reset, NMI, and HardFault exceptions have fixed priorities, with
      * negative priority values, always have higher priority than any
      * other exception.
      */
@@ -392,7 +392,7 @@
 
 /**
  * Number of system calls supported:
- */ 
+ */
 #define RTOS_NUM_SYSTEM_CALLS   (__LAST_RTOS_SYSTEM_CALL + 1)
 
 /*

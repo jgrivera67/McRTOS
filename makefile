@@ -1,17 +1,17 @@
 #
-# McRTOS application top-level makefile 
+# McRTOS application top-level makefile
 #
 # Copyright (C) 2013 German Rivera
-# 
+#
 # Author: German Rivera - September, 2013
 #
 
-APPLICATION := autonomous_car
+APPLICATION ?= autonomous_car
 
 #
 # PLATFORM values: LPC2478-STK, LM4F120-LaunchPad, FRDM-KL25Z
 #
-PLATFORM := FRDM-KL25Z
+PLATFORM ?= FRDM-KL25Z
 
 #
 # BUILD_FLAVOR values: debug, reliability, performance
@@ -30,10 +30,10 @@ RUN_BUILD_MAKEFILE := $(MAKE) --file=../$(SOURCE_DIR)/build.mk \
 			      PLATFORM='$(PLATFORM)' \
 			      BUILD_FLAVOR='$(BUILD_FLAVOR)' \
 			      CMD_LINE_CFLAGS='$(CMD_LINE_CFLAGS)' \
-			      
-RUN_TESTS_MAKEFILE := $(MAKE) --directory=$(UNIT_TESTS_DIR) 
 
-RUN_DOC_MAKEFILE := $(MAKE) --directory=$(DOC_DIR) 
+RUN_TESTS_MAKEFILE := $(MAKE) --directory=$(UNIT_TESTS_DIR)
+
+RUN_DOC_MAKEFILE := $(MAKE) --directory=$(DOC_DIR)
 
 COMMON_CFLAGS = -Wall -Wstrict-prototypes -fms-extensions -Wextra -Wformat \
 	        -std=gnu99 -g3
@@ -43,11 +43,11 @@ COMMON_CFLAGS = -Wall -Wstrict-prototypes -fms-extensions -Wextra -Wformat \
 
 build: create_object_dir
 	$(RUN_BUILD_MAKEFILE) COMMON_CFLAGS='$(COMMON_CFLAGS)'
-			      
+
 rebuild: create_object_dir
 	$(RUN_BUILD_MAKEFILE) clean
 	$(RUN_BUILD_MAKEFILE) COMMON_CFLAGS='$(COMMON_CFLAGS)'
-			      
+
 create_object_dir:
 	$(shell test -d $(OBJECT_DIR) || mkdir $(OBJECT_DIR))
 
@@ -55,7 +55,7 @@ run_tests:
 	$(RUN_TESTS_MAKEFILE) COMMON_CFLAGS='$(COMMON_CFLAGS)'
 
 doc:
-	$(RUN_DOC_MAKEFILE) 
+	$(RUN_DOC_MAKEFILE)
 
 clean:
 	#$(RUN_BUILD_MAKEFILE) clean

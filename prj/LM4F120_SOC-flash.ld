@@ -1,6 +1,5 @@
 /*
- * Linker script for KL25Z SoC
- *  Default linker command file for Flash targets
+ * Linker script for LM4F120 SoC
  */
 
 /*
