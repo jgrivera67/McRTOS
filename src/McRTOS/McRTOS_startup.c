@@ -5,8 +5,8 @@
  *
  * Copyright (C) 2013 German Rivera
  *
- * @author German Rivera 
- */ 
+ * @author German Rivera
+ */
 
 #include "McRTOS.h"
 #include "McRTOS_internals.h"
@@ -34,8 +34,8 @@ enum system_thread_priorities
             .cpc_current_execution_context_p = NULL,                    \
             .cpc_current_thread_p = NULL,                               \
             .cpc_runnable_thread_priorities = 0,                        \
-            .cpc_active_internal_interrupts = 0,                        \
-            .cpc_active_external_interrupts = 0,                        \
+            .cpc_active_internal_interrupts =  { 0 },                   \
+            .cpc_active_external_interrupts = { 0 },                    \
             .cpc_nested_interrupts_count = 0,                           \
             .cpc_thread_scheduler_calls = 0,                            \
             .cpc_accumulated_thread_scheduler_overhead = 0,             \
@@ -108,7 +108,7 @@ C_ASSERT(ARRAY_SIZE(g_rtos_system_threads) <= RTOS_NUM_SYSTEM_THREADS_PER_CPU);
 
 /**
  * McRTOS global state variables
- */ 
+ */
 static struct McRTOS g_McRTOS =
 {
     .rts_signature = MCRTOS_SIGNATURE,
@@ -148,14 +148,14 @@ static struct McRTOS g_McRTOS =
     .rts_app_hardware_init_called = false,
 
 #ifdef RTOS_USE_DRAM_FOR_APP_THREAD_STACKS
-    .rts_next_free_app_thread_stack_p = 
+    .rts_next_free_app_thread_stack_p =
         (struct rtos_thread_execution_stack *)RTOS_APP_THREAD_DRAM_STACKS_BASE_ADDR,
-    
+
     .rts_app_threads_execution_stacks_p =
         (struct rtos_thread_execution_stack *)RTOS_APP_THREAD_DRAM_STACKS_BASE_ADDR,
 #else
     .rts_next_free_app_thread_stack_p = &g_McRTOS.rts_app_threads_execution_stacks[0],
-    
+
     .rts_app_threads_execution_stacks_p = g_McRTOS.rts_app_threads_execution_stacks,
 #endif
 
@@ -198,14 +198,14 @@ check_mcrtos_common_compile_time_initializations(void)
 static void
 lcd_display_greetings(void)
 {
-    static const struct lcd_char_attributes lcd_char_attributes1 = 
+    static const struct lcd_char_attributes lcd_char_attributes1 =
     {
         .lcd_dot_size = 1,
         .lcd_foreground_color = LCD_COLOR_YELLOW,
         .lcd_background_color = LCD_COLOR_BLUE,
     };
 
-    static const struct lcd_char_attributes lcd_char_attributes2 = 
+    static const struct lcd_char_attributes lcd_char_attributes2 =
     {
         .lcd_dot_size = 2,
         .lcd_foreground_color = LCD_COLOR_YELLOW,
@@ -219,7 +219,7 @@ lcd_display_greetings(void)
     lcd_printf(
         64, 64, &lcd_char_attributes2, "%s", g_McRTOS_version);
     lcd_printf(
-        0, 96, &lcd_char_attributes1, 
+        0, 96, &lcd_char_attributes1,
         "             German Rivera\n"
         "       %s\n",
         g_McRTOS_build_timestamp);
@@ -241,7 +241,7 @@ lcd_display_greetings(void)
  * @return  none
  */
 void
-rtos_startup( 
+rtos_startup(
     _IN_ const struct rtos_startup_app_configuration *rtos_app_config_p)
 {
     FDC_ASSERT_COMING_FROM_RESET();
@@ -253,7 +253,7 @@ rtos_startup(
     FDC_ASSERT_VALID_RAM_OR_ROM_POINTER(
         rtos_app_config_p->stc_app_console_commands_p, sizeof(uint32_t));
 
-    for (int i = 0; i < rtos_app_config_p->stc_num_app_console_commands; i ++) 
+    for (int i = 0; i < rtos_app_config_p->stc_num_app_console_commands; i ++)
     {
         FDC_ASSERT_VALID_RAM_OR_ROM_POINTER(
             rtos_app_config_p->stc_app_console_commands_p[i].cmd_name_p, sizeof(char));
@@ -272,7 +272,7 @@ rtos_startup(
 
 #   if DEFINED_ARM_CORTEX_M_ARCH()
     /*
-     * The Cortex-M processor enters reset with interrupts enabled, 
+     * The Cortex-M processor enters reset with interrupts enabled,
      * so we have to disable them here:
      */
     __disable_irq();
@@ -357,7 +357,7 @@ rtos_startup(
     /*
      * Create root system thread to continue system initialization in that thread:
      */
-    rtos_thread_p = 
+    rtos_thread_p =
         &(cpu_controller_p->cpc_system_threads[RTOS_ROOT_SYSTEM_THREAD]);
 
     rtos_k_thread_init(
@@ -369,15 +369,15 @@ rtos_startup(
         rtos_thread_p);
 
     FDC_ASSERT(
-        cpu_controller_p->cpc_current_execution_context_p == 
+        cpu_controller_p->cpc_current_execution_context_p ==
         &cpu_controller_p->cpc_reset_execution_context,
-        cpu_controller_p->cpc_current_execution_context_p, 
+        cpu_controller_p->cpc_current_execution_context_p,
         cpu_controller_p);
 
     cpu_controller_p->cpc_startup_completed = true;
 
     /*
-     * Reset the "longest time interrupts disabled" to 0, as this 
+     * Reset the "longest time interrupts disabled" to 0, as this
      * is boot time, and should not be taken into account.
      *
      * NOTE: We need to reset this because, board_init() called device
@@ -394,12 +394,12 @@ rtos_startup(
     RTOS_START_INTERRUPTS_DISABLED_TIME_MEASURE();
 
     /*
-     * Do a synchronous context switch, to switch from running the reset 
+     * Do a synchronous context switch, to switch from running the reset
      * handler to running the root thread:
      */
 
 #   if DEFINED_ARM_CORTEX_M_ARCH()
-    /* 
+    /*
      * Set psp to 0x0, to indicate that this is the first context switch
      */
     __set_PSP(0x0);
@@ -451,19 +451,19 @@ rtos_init_reset_execution_context(
     fdc_context_switch_trace_entry_t prefilled_trace_entry = 0;
 
     SET_BIT_FIELD(
-        prefilled_trace_entry, 
+        prefilled_trace_entry,
         FDC_CST_CONTEXT_ID_MASK,
         FDC_CST_CONTEXT_ID_SHIFT,
         0);
 
     SET_BIT_FIELD(
-        prefilled_trace_entry, 
+        prefilled_trace_entry,
         FDC_CST_CONTEXT_TYPE_MASK,
         FDC_CST_CONTEXT_TYPE_SHIFT,
         FDC_CST_RESET);
 
     SET_BIT_FIELD(
-        prefilled_trace_entry, 
+        prefilled_trace_entry,
         FDC_CST_CONTEXT_PRIORITY_MASK,
         FDC_CST_CONTEXT_PRIORITY_SHIFT,
         0);
@@ -483,7 +483,7 @@ rtos_init_reset_execution_context(
 #elif DEFINED_ARM_CORTEX_M_ARCH()
     entry_point_pc = (uintptr_t)cortex_m_reset_handler;
     stack_top_end_p = &g_cortex_m_exception_stack.es_stack[0];
-    stack_bottom_end_p = 
+    stack_bottom_end_p =
         &g_cortex_m_exception_stack.es_stack[RTOS_INTERRUPT_STACK_NUM_ENTRIES];
 #else
     #error "unsupported CPU architecture"
@@ -530,7 +530,7 @@ rtos_root_thread_f(void *arg)
         /*
          * Display McRTOS console greeting:
          */
-        if (!software_reset_happened()) 
+        if (!software_reset_happened())
         {
             console_clear();
         }
@@ -548,13 +548,13 @@ rtos_root_thread_f(void *arg)
      * we will not get interrupted yet, as we still have interrupts
      * disabled.
      */
-    initialize_tick_timer(); 
+    initialize_tick_timer();
 
     console_printf("CPU core %u: McRTOS tick timer started\n", cpu_id);
 
     /*
      * Create the other system threads for this CPU
-     */ 
+     */
     for (uint8_t i = RTOS_IDLE_SYSTEM_THREAD; i < ARRAY_SIZE(g_rtos_system_threads); i ++)
     {
         struct rtos_thread *rtos_thread_p = &cpu_controller_p->cpc_system_threads[i];
@@ -599,7 +599,7 @@ rtos_root_thread_f(void *arg)
         console_printf("CPU core %u: %s started\n", cpu_id,
             rtos_app_config_p->stc_autostart_threads_p[i].p_name_p);
     }
-    
+
     if (cpu_id == 0)
     {
 #       ifdef LCD_SUPPORTED
@@ -644,7 +644,7 @@ rtos_idle_thread_f(void *arg)
     FDC_ASSERT(arg == NULL, arg, cpu_id);
     FDC_ASSERT(cpu_controller_p->cpc_app_config_p != NULL, cpu_id, 0);
 
-    rtos_idle_thread_hook_function_t *idle_thread_hook_function_p = 
+    rtos_idle_thread_hook_function_t *idle_thread_hook_function_p =
         cpu_controller_p->cpc_app_config_p->stc_idle_thread_hook_function_p;
 
     for ( ; ; )
@@ -758,7 +758,7 @@ McRTOS_display_stats(void)
 
     console_clear();
     console_printf("McRTOS stats for CPU core %u\n\n", cpu_id);
-    
+
     uint32_t seconds =
         (cpu_controller_p->cpc_ticks_since_boot_count / 1000) * RTOS_MILLISECONDS_PER_TICK;
     uint32_t minutes = seconds / 60;
@@ -766,7 +766,7 @@ McRTOS_display_stats(void)
 
     minutes %= 60;
     seconds %= 60;
-    
+
     console_printf("Up time: %u ticks (%u hours, %u minutes, %u seconds)\n",
         cpu_controller_p->cpc_ticks_since_boot_count, hours, minutes, seconds);
 
@@ -791,7 +791,7 @@ McRTOS_display_stats(void)
         context_node_p,
         &cpu_controller_p->cpc_execution_contexts_list_anchor)
     {
-        struct rtos_execution_context *context_p = 
+        struct rtos_execution_context *context_p =
             GLIST_NODE_ENTRY(
                 context_node_p, struct rtos_execution_context, ctx_list_node);
 

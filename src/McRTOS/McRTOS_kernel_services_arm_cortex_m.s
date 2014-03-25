@@ -5,11 +5,10 @@
  *
  * Copyright (C) 2013 German Rivera
  *
- * @author German Rivera 
- */ 
+ * @author German Rivera
+ */
 
-#include "arm_defs.h"
-#include "arm_cortex_m_macros.s"
+#include "McRTOS_arm_cortex_m_macros.s"
 
 .global rtos_k_restore_execution_context
 .global rtos_k_synchronous_context_switch
@@ -51,7 +50,7 @@ rtos_k_restore_execution_context:
      * r0 == execution_context_p
      * r1 == context_switch_type
      *
-     * NOTE: We can clobber all registers in this function, since they are going 
+     * NOTE: We can clobber all registers in this function, since they are going
      * to be restored from the target context.
      */
 
@@ -84,7 +83,7 @@ rtos_k_restore_execution_context:
      * NOTE:
      * - For Cortex-M, we don't need to use the arg of
      *   rtos_stop_interrupts_disabled_time_measure()
-     * - It is assumed that earlier in the code path that lead us here, we made 
+     * - It is assumed that earlier in the code path that lead us here, we made
      *   a call to rtos_start_interrupts_disabled_time_measure() via the macro
      *   RTOS_START_INTERRUPTS_DISABLED_TIME_MEASURE().
      */
@@ -111,7 +110,7 @@ rtos_k_restore_execution_context:
      * NOTE: Above, we use "ldmia r1!" instead of "ldmia r1" because for
      * Cortex-M0+ r1 is incremented with or without the "!".
      */
-    
+
     /*
      * Update cpc_current_execution_context_p for calling CPU:
      *
@@ -119,7 +118,7 @@ rtos_k_restore_execution_context:
      */
     mov     r2, #RTOS_CTX_CPU_REGISTERS_OFFSET
     sub     r2, r0, r2
-    SET_MCRTOS_CURRENT_EXECUTION_CONTEXT r2, r1 
+    SET_MCRTOS_CURRENT_EXECUTION_CONTEXT r2, r1
 
     /*
      * Determine if the context to be restored is an interrupt or a
@@ -147,8 +146,8 @@ rtos_k_restore_execution_context:
      * TODO: instead of assuming that the interrupt vector table is
      * at address 0x0, read the VTOR register
      */
-    mov     r1, #0x0 
-    ldr     r1, [r1] 
+    mov     r1, #0x0
+    ldr     r1, [r1]
     msr     msp, r1
 
     /*
@@ -159,13 +158,13 @@ rtos_k_restore_execution_context:
     isb
     cpsie   i
     bx      lr
-   
+
 L_target_context_is_interrupt:
     /*
      * Target context is an interrupt context, so we need to restore the MSP
      * stack pointer:
      *
-     * NOTE: The caller is rtos_k_exit_interrupt() or 
+     * NOTE: The caller is rtos_k_exit_interrupt() or
      * cortex_m_hard_fault_exception_handler().
      *
      * r0 == &execution_context_p->ctx_cpu_saved_registers
@@ -186,7 +185,7 @@ L_target_context_is_interrupt:
 
 
 /**
- * Initiates a synchronous context switch, by triggering a pendSV exception. 
+ * Initiates a synchronous context switch, by triggering a pendSV exception.
  * This function is invoked from rtos_k_condvar_wait() and rtos_k_thread_yield,
  * from rtos_k_mutex_acquire() and rtos_k_condvar_wait_interrupt() if the
  * calling thread needs to be switched out, and from rtos_k_condvar_signal()
@@ -271,7 +270,7 @@ rtos_k_synchronous_context_switch:
     /*
      * Enable interrupts to take the PendSV exception:
      *
-     * NOTE: We need an ISB barrier before enabling interrupts, to ensure 
+     * NOTE: We need an ISB barrier before enabling interrupts, to ensure
      * that all instructions before this point have executed, so that we can be
      * certain that the registers saved upon PendSV exception entry have the
      * values we expect. Also, there is no danger of a race with another
@@ -285,7 +284,7 @@ rtos_k_synchronous_context_switch:
     cpsie    i
 
     /*
-     * When the thread being switched out resumes, it will 
+     * When the thread being switched out resumes, it will
      * resume here, and we need to disable interrupts again as that
      * is expected by the callers of this function:
      */
@@ -305,7 +304,7 @@ rtos_k_synchronous_context_switch:
     mov     lr, r0
 #endif /* _MEASURE_INTERRUPTS_DISABLED_TIME_ */
 
-    bx      lr 
+    bx      lr
 
 .endfunc
 

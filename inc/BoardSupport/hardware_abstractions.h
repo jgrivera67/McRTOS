@@ -44,6 +44,18 @@
 #endif /* platform-specific */
 
 /*
+ * RGB LED colors bit masks
+ */
+#define LED_COLOR_BLACK     UINT32_C(0x0)
+#define LED_COLOR_RED       LED_RED_PIN_MASK
+#define LED_COLOR_GREEN     LED_GREEN_PIN_MASK
+#define LED_COLOR_YELLOW    (LED_RED_PIN_MASK | LED_GREEN_PIN_MASK)
+#define LED_COLOR_BLUE      LED_BLUE_PIN_MASK
+#define LED_COLOR_MAGENTA   (LED_RED_PIN_MASK | LED_BLUE_PIN_MASK)
+#define LED_COLOR_CYAN      (LED_GREEN_PIN_MASK | LED_BLUE_PIN_MASK)
+#define LED_COLOR_WHITE     (LED_RED_PIN_MASK | LED_GREEN_PIN_MASK | LED_BLUE_PIN_MASK)
+
+/*
  * Pressed buttons bit masks
  */
 #define BUTTON1_PRESSED_MASK    BIT(0)
@@ -137,7 +149,7 @@ typedef uint32_t cpu_reset_cause_t;
      * (IRQ number of systick interrupt is -1)
      */
     typedef _RANGE_(-1, SOC_NUM_INTERRUPT_CHANNELS - 1)
-            int8_t interrupt_channel_t;
+            int16_t interrupt_channel_t;
 
     /**
      * CPU Instruction type
@@ -326,6 +338,18 @@ void select_input_pin_adc_channel(
 uint32_t read_adc_channel(
         _IN_ const struct adc_device *adc_device_p,
         _IN_ uint8_t adc_channel);
+
+void toggle_rgb_led(
+	_IN_ uint32_t led_color_mask);
+
+void turn_on_rgb_led(
+	_IN_ uint32_t led_color_mask);
+
+void turn_off_rgb_led(
+	_IN_ uint32_t led_color_mask);
+
+uint32_t set_rgb_led_color(
+	_IN_ uint32_t led_color_mask);
 
 void init_buttons(
         _IN_ const struct buttons_device *buttons_device_p);

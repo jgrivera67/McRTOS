@@ -5,8 +5,8 @@
  *
  * Copyright (C) 2013 German Rivera
  *
- * @author German Rivera 
- */ 
+ * @author German Rivera
+ */
 
 #include <stdint.h>
 #include "failure_data_capture.h"
@@ -30,7 +30,7 @@
     /**
      * NOTE: we cannot use console_printf() here because FAILURE_PRINTF()
      * needs to be able to always send output to serial port.
-     */ 
+     */
 #   define FAILURE_PRINTF(_fmt, ...) \
             embedded_printf(                                                \
                 (putchar_func_t *)uart_putchar_with_polling,                \
@@ -49,37 +49,37 @@ static void capture_unexpected_exception_failure(
 /**
  * Check if the CPU is running in little-endian mode
  */
-bool 
+bool
 is_cpu_little_endian(void)
-{ 
+{
     static const union
-    { 
-        uint16_t value; 
-        uint8_t bytes[2]; 
+    {
+        uint16_t value;
+        uint8_t bytes[2];
     } half_word =
-    { 
-        .value = 0x00ff 
-    }; 
+    {
+        .value = 0x00ff
+    };
 
     if (half_word.bytes[0] == 0xff)
-    { 
+    {
         /*
-         * little endian 
-         */ 
-        FDC_ASSERT(half_word.bytes[1] == 0x00, half_word.bytes[1], 0); 
-        return true; 
+         * little endian
+         */
+        FDC_ASSERT(half_word.bytes[1] == 0x00, half_word.bytes[1], 0);
+        return true;
     }
     else
-    { 
+    {
         /*
-         * big endian 
-         */ 
-        FDC_ASSERT(half_word.bytes[0] == 0x00, half_word.bytes[0], 0); 
-        FDC_ASSERT(half_word.bytes[1] == 0xff, half_word.bytes[1], 0); 
-        return false; 
-    } 
-} 
- 
+         * big endian
+         */
+        FDC_ASSERT(half_word.bytes[0] == 0x00, half_word.bytes[0], 0);
+        FDC_ASSERT(half_word.bytes[1] == 0xff, half_word.bytes[1], 0);
+        return false;
+    }
+}
+
 
 /**
  * Function that actually captures a failure data record. This function is
@@ -149,7 +149,7 @@ rtos_k_capture_failure_data(
 
     /*
      * Print failure message to serial port:
-     */ 
+     */
     {
         static bool failure_being_printed = false;
 
@@ -193,7 +193,7 @@ rtos_k_set_fdc_params(
 
 /**
  * Captures failure data for an assertion failure
- */ 
+ */
 void
 capture_assert_failure(
     const char *cond_str,
@@ -205,7 +205,7 @@ capture_assert_failure(
 
     /*
      * Capture ARM LR register on entry
-     */ 
+     */
     CAPTURE_ARM_LR_REGISTER(return_address);
 
     micro_trace_stop();
@@ -213,7 +213,7 @@ capture_assert_failure(
     /*
      * The exact location of the assertion is the place where this
      * function was invoked
-     */ 
+     */
     assert_address = return_address - 1;
 
     rtos_capture_failure_data(
@@ -250,9 +250,9 @@ capture_fdc_error(
 
     /*
      * Capture ARM LR register on entry
-     */ 
+     */
     CAPTURE_ARM_LR_REGISTER(return_address);
-    
+
     micro_trace_stop();
 
     error_address = return_address - 1;
@@ -283,7 +283,7 @@ check_isr_reset_entry_asserts(void)
 {
 #if DEFINED_ARM_CLASSIC_ARCH()
     uint32_t currentCpsr;
-    
+
     CAPTURE_ARM_CPSR_REGISTER(currentCpsr);
 
     FDC_ASSERT_EQUAL(
@@ -326,7 +326,7 @@ check_rtos_execution_context_invariants(
     FDC_ASSERT(
         rtos_execution_context_p->ctx_signature == RTOS_EXECUTION_CONTEXT_SIGNATURE,
         rtos_execution_context_p->ctx_signature, rtos_execution_context_p);
-  
+
     rtos_execution_stack_entry_t *stack_top_end_p =
         rtos_execution_context_p->ctx_execution_stack_top_end_p;
 
@@ -335,18 +335,18 @@ check_rtos_execution_context_invariants(
 
     if (rtos_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT)
     {
-        struct rtos_thread *rtos_thread_p = 
+        struct rtos_thread *rtos_thread_p =
             RTOS_EXECUTION_CONTEXT_GET_THREAD(rtos_execution_context_p);
-        
+
         FDC_ASSERT(
             rtos_thread_p->thr_signature == RTOS_THREAD_SIGNATURE,
             rtos_thread_p->thr_signature, rtos_thread_p);
-       
+
         FDC_ASSERT(
             rtos_thread_p->thr_current_priority < RTOS_NUM_THREAD_PRIORITIES &&
             rtos_thread_p->thr_current_priority <= rtos_thread_p->thr_base_priority,
             rtos_thread_p->thr_current_priority, rtos_thread_p->thr_base_priority);
-  
+
         FDC_ASSERT(
             rtos_thread_p->thr_time_slice_ticks_left <= RTOS_THREAD_TIME_SLICE_IN_TICKS,
             rtos_thread_p->thr_time_slice_ticks_left, rtos_thread_p);
@@ -379,21 +379,21 @@ check_rtos_execution_context_invariants(
             stack_top_end_p, thread_execution_stack_p->tes_stack);
 
         DBG_ASSERT(
-            stack_bottom_end_p == 
+            stack_bottom_end_p ==
                 &thread_execution_stack_p->tes_stack[RTOS_THREAD_STACK_NUM_ENTRIES],
-            stack_bottom_end_p, 
+            stack_bottom_end_p,
             &thread_execution_stack_p->tes_stack[RTOS_THREAD_STACK_NUM_ENTRIES]);
 #endif
     }
     else if (rtos_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT)
     {
-        struct rtos_interrupt *rtos_interrupt_p = 
+        struct rtos_interrupt *rtos_interrupt_p =
             RTOS_EXECUTION_CONTEXT_GET_INTERRUPT(rtos_execution_context_p);
 
         FDC_ASSERT(
             rtos_interrupt_p->int_signature == RTOS_INTERRUPT_SIGNATURE,
             rtos_interrupt_p->int_signature, rtos_interrupt_p);
-       
+
         FDC_ASSERT(
             rtos_execution_context_p->ctx_cpu_mode == RTOS_INTERRUPT_MODE,
             rtos_execution_context_p->ctx_cpu_mode, rtos_execution_context_p);
@@ -406,7 +406,7 @@ check_rtos_execution_context_invariants(
         DBG_ASSERT(
             stack_bottom_end_p ==
                 &rtos_interrupt_p->int_stack[RTOS_INTERRUPT_STACK_NUM_ENTRIES],
-            stack_bottom_end_p, 
+            stack_bottom_end_p,
             &rtos_interrupt_p->int_stack[RTOS_INTERRUPT_STACK_NUM_ENTRIES]);
 
 #       elif DEFINED_ARM_CORTEX_M_ARCH()
@@ -418,7 +418,7 @@ check_rtos_execution_context_invariants(
         DBG_ASSERT(
             stack_bottom_end_p ==
                 &g_cortex_m_exception_stack.es_stack[RTOS_INTERRUPT_STACK_NUM_ENTRIES],
-            stack_bottom_end_p, 
+            stack_bottom_end_p,
             &g_cortex_m_exception_stack.es_stack[RTOS_INTERRUPT_STACK_NUM_ENTRIES]);
 
 #       else
@@ -444,7 +444,7 @@ check_rtos_execution_context_invariants(
         DBG_ASSERT(
             stack_bottom_end_p ==
                 &g_cortex_m_exception_stack.es_stack[RTOS_INTERRUPT_STACK_NUM_ENTRIES],
-            stack_bottom_end_p, 
+            stack_bottom_end_p,
             &g_cortex_m_exception_stack.es_stack[RTOS_INTERRUPT_STACK_NUM_ENTRIES]);
 
 #       endif
@@ -474,11 +474,11 @@ check_rtos_execution_context_cpu_registers(
 
     CAPTURE_ARM_LR_REGISTER(return_address);
     caller_address = return_address - 1;
-    
+
     FDC_ASSERT(
         rtos_execution_context_p->ctx_signature == RTOS_EXECUTION_CONTEXT_SIGNATURE,
         rtos_execution_context_p->ctx_signature, rtos_execution_context_p);
-  
+
     rtos_execution_stack_entry_t *stack_top_end_p =
         rtos_execution_context_p->ctx_execution_stack_top_end_p;
 
@@ -508,7 +508,7 @@ check_rtos_execution_context_cpu_registers(
         FDC_ASSERT(
             arm_cpu_mode == ARM_MODE_USER || arm_cpu_mode == ARM_MODE_SYS,
             arm_cpu_mode, rtos_execution_context_p);
-        
+
         if (arm_cpu_mode == ARM_MODE_USER)
         {
             FDC_ASSERT(
@@ -554,7 +554,7 @@ check_rtos_execution_context_cpu_registers(
 {
     /*
      * Capture ARM LR register on entry
-     */ 
+     */
     uint32_t *return_address;
     CAPTURE_ARM_LR_REGISTER(return_address);
 
@@ -565,7 +565,7 @@ check_rtos_execution_context_cpu_registers(
     FDC_ASSERT(
         rtos_execution_context_p->ctx_signature == RTOS_EXECUTION_CONTEXT_SIGNATURE,
         rtos_execution_context_p->ctx_signature, rtos_execution_context_p);
-  
+
     rtos_execution_stack_entry_t *stack_top_end_p =
         rtos_execution_context_p->ctx_execution_stack_top_end_p;
 
@@ -658,7 +658,7 @@ check_rtos_execution_context_cpu_registers(
 /**
  * Captures a trace for a context switch and checks the preconditions for
  * moving to a new execution context
- */ 
+ */
 void
 fdc_trace_rtos_context_switch(
     _IN_ const struct rtos_execution_context *target_execution_context_p,
@@ -790,7 +790,7 @@ fdc_trace_rtos_context_switch(
 
     if (current_execution_context_p != target_execution_context_p) {
         DBG_ASSERT_RTOS_EXECUTION_CONTEXT_INVARIANTS(current_execution_context_p);
-    
+
         DBG_ASSERT(
             current_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT ||
             current_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT ||
@@ -807,7 +807,7 @@ fdc_trace_rtos_context_switch(
     /*
      * Validate Context switch assumptions:
      */
-    cpu_status_register_t actual_cpsr;                                       
+    cpu_status_register_t actual_cpsr;
     CAPTURE_ARM_CPSR_REGISTER(actual_cpsr);
 
     uint32_t actual_arm_mode = (actual_cpsr & ARM_MODE_MASK);
@@ -825,7 +825,7 @@ fdc_trace_rtos_context_switch(
 #   elif DEFINED_ARM_CORTEX_M_ARCH()
 
     cpu_status_register_t actual_primask = __get_PRIMASK();
-    
+
     cpu_status_register_t actual_ipsr = __get_IPSR();
 
     cpu_status_register_t actual_control_reg = __get_CONTROL();
@@ -856,7 +856,7 @@ fdc_trace_rtos_context_switch(
         target_execution_context_p->ctx_prefilled_trace_entry;
 
     SET_BIT_FIELD(
-        trace_entry, 
+        trace_entry,
         FDC_CST_LAST_SWITCHED_OUT_REASON_MASK,
         FDC_CST_LAST_SWITCHED_OUT_REASON_SHIFT,
         target_execution_context_p->ctx_last_switched_out_reason);
@@ -871,14 +871,14 @@ fdc_trace_rtos_context_switch(
             target_thread_p->thr_state, target_thread_p);
 
         SET_BIT_FIELD(
-            trace_entry, 
+            trace_entry,
             FDC_CST_CONTEXT_PRIORITY_MASK,
             FDC_CST_CONTEXT_PRIORITY_SHIFT,
             target_thread_p->thr_current_priority);
     }
 
     SET_BIT_FIELD(
-        trace_entry, 
+        trace_entry,
         FDC_CST_CONTEXT_SWITCH_TYPE_MASK,
         FDC_CST_CONTEXT_SWITCH_TYPE_SHIFT,
         ctx_switch_type);
@@ -888,13 +888,13 @@ fdc_trace_rtos_context_switch(
         current_execution_context_p->ctx_cpu_registers[CPU_REG_CPSR];
 
     SET_BIT_FIELD(
-        trace_entry, 
+        trace_entry,
         FDC_CST_CURRENT_CPU_MODE_MASK,
         FDC_CST_CURRENT_CPU_MODE_SHIFT,
         current_cpsr & 0xf);
 
     SET_BIT_FIELD(
-        trace_entry, 
+        trace_entry,
         FDC_CST_TARGET_CPU_MODE_MASK,
         FDC_CST_TARGET_CPU_MODE_SHIFT,
         target_cpsr & 0xf);
@@ -902,13 +902,13 @@ fdc_trace_rtos_context_switch(
 
     fdc_info_p->fdc_context_switch_trace_buffer[
         fdc_info_p->fdc_context_switch_trace_cursor] = trace_entry;
-                                                     
+
     fdc_info_p->fdc_context_switch_trace_cursor ++;
-    if (fdc_info_p->fdc_context_switch_trace_cursor ==  
-        RTOS_NUM_CONTEXT_SWITCH_TRACE_BUFFER_ENTRIES) {          
-        fdc_info_p->fdc_context_switch_trace_cursor = 0; 
-    }                                              
-                                                  
+    if (fdc_info_p->fdc_context_switch_trace_cursor ==
+        RTOS_NUM_CONTEXT_SWITCH_TRACE_BUFFER_ENTRIES) {
+        fdc_info_p->fdc_context_switch_trace_cursor = 0;
+    }
+
     fdc_info_p->fdc_context_switch_count ++;
 }
 
@@ -993,7 +993,7 @@ capture_unexpected_exception_failure(
     exception_failure->uer_location = location;
     exception_failure->uer_arg = arg;
     exception_failure->uer_cpu_status_register = cpu_status_register;
-    exception_failure->uer_execution_context_p = 
+    exception_failure->uer_execution_context_p =
         cpu_controller_p->cpc_current_execution_context_p;
 
     exception_failure->uer_seq_number =
@@ -1001,7 +1001,7 @@ capture_unexpected_exception_failure(
 
     fdc_info_p->fdc_unexpected_exceptions_cursor ++;
 
-    if (fdc_info_p->fdc_unexpected_exceptions_cursor == 
+    if (fdc_info_p->fdc_unexpected_exceptions_cursor ==
         RTOS_MAX_NUM_UNEXPECTED_EXCEPTION_RECORDS)
     {
         fdc_info_p->fdc_unexpected_exceptions_cursor = 0;
@@ -1083,7 +1083,7 @@ check_rtos_public_kernel_service_preconditions(bool thread_callers_only)
             FDC_ASSERT(
                 CPU_MODE_IS_PRIVILEGED(cpu_status_register),
                 cpu_status_register, current_context_p);
-    
+
         }
         else
         {
@@ -1236,16 +1236,18 @@ check_rtos_interrupt_entry_preconditions(
         interrupt_context_p != current_context_p,
         interrupt_context_p, current_context_p);
 
-#   if DEBUG   
+#   if DEBUG
     if (rtos_interrupt_p->int_channel < 0) {
         FDC_ASSERT(
-            (cpu_controller_p->cpc_active_internal_interrupts & 
-                BIT(-rtos_interrupt_p->int_channel)) == 0,
+            RTOS_INTR_BIT_MAP_GET_BIT(
+		cpu_controller_p->cpc_active_internal_interrupts,
+		-rtos_interrupt_p->int_channel) == 0,
             cpu_controller_p->cpc_active_internal_interrupts, cpu_controller_p);
     } else {
-        FDC_ASSERT(
-            (cpu_controller_p->cpc_active_external_interrupts & 
-                BIT(rtos_interrupt_p->int_channel)) == 0,
+	FDC_ASSERT(
+            RTOS_INTR_BIT_MAP_GET_BIT(
+		cpu_controller_p->cpc_active_external_interrupts,
+		rtos_interrupt_p->int_channel) == 0,
             cpu_controller_p->cpc_active_external_interrupts, cpu_controller_p);
     }
 #   endif
@@ -1261,7 +1263,7 @@ check_rtos_interrupt_e_handler_preconditions(
     _IN_ const struct rtos_interrupt *rtos_interrupt_p)
 {
     /*
-     * We are running in interrupt mode but interrupts are currently enabled: 
+     * We are running in interrupt mode but interrupts are currently enabled:
      */
     DBG_ASSERT_PRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED();
 
@@ -1314,14 +1316,14 @@ check_rtos_interrupt_e_handler_preconditions(
 
     DBG_ASSERT_RTOS_THREAD_INVARIANTS(current_thread_p);
 
-    struct glist_node *preemption_chain_anchor_p = 
+    struct glist_node *preemption_chain_anchor_p =
         &cpu_controller_p->cpc_preemption_chain_anchor;
 
     DBG_ASSERT(
         !GLIST_IS_EMPTY(preemption_chain_anchor_p),
         preemption_chain_anchor_p, cpu_controller_p);
 
-    struct glist_node *top_preemption_node_p = 
+    struct glist_node *top_preemption_node_p =
         GLIST_GET_FIRST(preemption_chain_anchor_p);
 
     struct rtos_execution_context *preempted_context_p =
@@ -1388,7 +1390,7 @@ check_synchronous_context_switch_preconditions(
     reg_value = __get_PRIMASK();
     FDC_ASSERT(
         (reg_value & CPU_REG_PRIMASK_PM_MASK) != 0,
-        reg_value, current_execution_context_p); 
+        reg_value, current_execution_context_p);
 
     /*
      * The caller is running in thread mode:
@@ -1396,7 +1398,7 @@ check_synchronous_context_switch_preconditions(
     reg_value = __get_IPSR();
     FDC_ASSERT(
         (reg_value & CPU_REG_IPSR_EXCEPTION_NUMBER_MASK) == 0,
-        reg_value, current_execution_context_p); 
+        reg_value, current_execution_context_p);
 
     /*
      * The caller is running in privileged mode:

@@ -5,8 +5,8 @@
  *
  * Copyright (C) 2013 German Rivera
  *
- * @author German Rivera 
- */ 
+ * @author German Rivera
+ */
 #ifndef _McRTOS_INTERNALS_H
 #define _McRTOS_INTERNALS_H
 
@@ -116,7 +116,7 @@ struct rtos_thread_execution_stack
     /**
      * Stack underflow sentinel, to be initialized to RTOS_STACK_UNDERFLOW_MARKER
      */
-    rtos_execution_stack_entry_t tes_stack_underflow_marker; 
+    rtos_execution_stack_entry_t tes_stack_underflow_marker;
 }  __attribute__ ((aligned(SOC_CACHE_LINE_SIZE_IN_BYTES)));
 
 C_ASSERT(sizeof(struct rtos_thread_execution_stack) % SOC_CACHE_LINE_SIZE_IN_BYTES == 0);
@@ -131,7 +131,7 @@ struct rtos_interrupt
 
     /**
      * Pointer to the CPU controller for the CPU core associated with this interrupt
-     * object. 
+     * object.
      *
      * NOTE: The RTOS_ENTER_ISR() assembly language macro uses this field to retrieve
      * the pointer to the current execution context.
@@ -195,7 +195,7 @@ struct rtos_interrupt
     /**
      * Stack underflow sentinel, to be initialized to RTOS_STACK_UNDERFLOW_MARKER
      */
-    rtos_execution_stack_entry_t int_stack_underflow_marker; 
+    rtos_execution_stack_entry_t int_stack_underflow_marker;
 #   endif
 
 } __attribute__ ((aligned(SOC_CACHE_LINE_SIZE_IN_BYTES)));
@@ -206,13 +206,13 @@ C_ASSERT(
     offsetof(struct rtos_interrupt, int_cpu_controller_p) == RTOS_INT_CPU_CONTROLLER_P_OFFSET);
 
 /**
- * McRTOS Per-CPU Execution Controller 
+ * McRTOS Per-CPU Execution Controller
  */
 struct rtos_cpu_controller
 {
 #   define      RTOS_CPU_CONTROLLER_SIGNATURE  GEN_SIGNATURE('C', 'P', 'U', 'C')
     uint32_t    cpc_signature;
-  
+
     /**
      * Pointer to the control block of the current execution context.
      *
@@ -282,7 +282,7 @@ struct rtos_cpu_controller
     rtos_nested_interrupts_count_t  cpc_nested_interrupts_count;
 
     /**
-     * Total number of calls to this CPU's thread scheduler 
+     * Total number of calls to this CPU's thread scheduler
      */
     uint32_t cpc_thread_scheduler_calls;
 
@@ -325,9 +325,9 @@ struct rtos_cpu_controller
     struct glist_node cpc_execution_contexts_list_anchor;
 
     /**
-     * Anchor node of the preemption chain, in which all currently preempted 
+     * Anchor node of the preemption chain, in which all currently preempted
      * execution contexts are chained together. The preemption chain behaves
-     * like a stack. Nodes are inserted and removed only at the head of the 
+     * like a stack. Nodes are inserted and removed only at the head of the
      * chain. The preemption chain represents the "Preempted by" relationship
      * between execution contexts.
      */
@@ -472,7 +472,7 @@ struct McRTOS
      *   currently active LCD channel, the output is not physically displayed in
      *   the LCD, but it is saved in the corresponding frame buffer.
      *   If more than one thread sends output to the same LCD channel, output
-     *   interference may happen among the threads, unless they use a mutex to 
+     *   interference may happen among the threads, unless they use a mutex to
      *   serialize their LCD outputs, or they write to disjoint areas of the
      *   frame buffer.
      * - Input receive on the current LCD channel is passed only to the thread
@@ -514,12 +514,12 @@ struct McRTOS
 
    /**
      * Number of application-specific console commands
-     */ 
+     */
     uint8_t rts_num_app_console_commands;
 
     /**
      * Pointer to array of application-specific console command
-     */ 
+     */
     const struct rtos_console_command *rts_app_console_commands_p;
 
     /**
@@ -532,7 +532,7 @@ struct McRTOS
      * exist in the system
      */
     struct rtos_thread rts_app_threads[RTOS_MAX_NUM_APP_THREADS];
-   
+
 #ifndef RTOS_USE_DRAM_FOR_APP_THREAD_STACKS
     /**
      * Array of execution stacks for application threads
@@ -695,7 +695,7 @@ rtos_add_runnable_thread(
 {
     DBG_ASSERT_RTOS_THREAD_INVARIANTS(thread_p);
 
-    struct glist_node *runnable_queue_anchor_p = 
+    struct glist_node *runnable_queue_anchor_p =
         &cpu_controller_p->cpc_runnable_thread_queues_anchors
                                         [thread_p->thr_current_priority];
 
@@ -756,30 +756,30 @@ rtos_remove_runnable_thread(
     struct rtos_thread *thread_p,
     rtos_thread_state_t new_thread_state)
 {
-    struct glist_node *runnable_queue_anchor_p =           
-        GLIST_NODE_GET_LIST(&thread_p->thr_list_node);    
-                                                            
+    struct glist_node *runnable_queue_anchor_p =
+        GLIST_NODE_GET_LIST(&thread_p->thr_list_node);
+
     FDC_ASSERT(
         thread_p->thr_state == RTOS_THREAD_RUNNABLE,
         thread_p->thr_state, thread_p);
 
-    rtos_thread_prio_t thread_prio =                          
-        runnable_queue_anchor_p -                              
+    rtos_thread_prio_t thread_prio =
+        runnable_queue_anchor_p -
         cpu_controller_p->cpc_runnable_thread_queues_anchors;
-                                                     
-    FDC_ASSERT(                                       
-        thread_prio < RTOS_NUM_THREAD_PRIORITIES,      
-        runnable_queue_anchor_p, cpu_controller_p);    
-                                                         
-    glist_remove_elem(&thread_p->thr_list_node);       
-                                                           
-    if (GLIST_IS_EMPTY(runnable_queue_anchor_p))            
-    {                                                        
-        cpu_controller_p->cpc_runnable_thread_priorities &= 
+
+    FDC_ASSERT(
+        thread_prio < RTOS_NUM_THREAD_PRIORITIES,
+        runnable_queue_anchor_p, cpu_controller_p);
+
+    glist_remove_elem(&thread_p->thr_list_node);
+
+    if (GLIST_IS_EMPTY(runnable_queue_anchor_p))
+    {
+        cpu_controller_p->cpc_runnable_thread_priorities &=
             ~RTOS_THREAD_PRIO_BIT_MASK(thread_prio);
     }
 
-    RTOS_THREAD_CHANGE_STATE(thread_p, new_thread_state); 
+    RTOS_THREAD_CHANGE_STATE(thread_p, new_thread_state);
 }
 
 
@@ -793,7 +793,7 @@ rtos_remove_runnable_thread(
 #ifdef _CPU_CYCLES_MEASURE_
 
 /**
- * Declare local variables used by BEGIN_CPU_CYCLES_MEASURE() and 
+ * Declare local variables used by BEGIN_CPU_CYCLES_MEASURE() and
  * END_CPU_CYCLES_MEASURE()
  */
 #define DECLARE_CPU_CYCLES_MEASURE_VARS() \
@@ -801,7 +801,7 @@ rtos_remove_runnable_thread(
         cpu_status_register_t saved_cpu_status_register_
 
 /**
- * Begin taking a time measure in CPU clock cycles 
+ * Begin taking a time measure in CPU clock cycles
  */
 #define BEGIN_CPU_CYCLES_MEASURE() \
         do {                                                                \
@@ -810,7 +810,7 @@ rtos_remove_runnable_thread(
         } while (0)
 
 /**
- * End taking a time measure in CPU clock cycles 
+ * End taking a time measure in CPU clock cycles
  */
 #define END_CPU_CYCLES_MEASURE(_measured_cycles_var_) \
         do {                                                                \
@@ -839,7 +839,7 @@ rtos_remove_runnable_thread(
 
 #else
 #define RTOS_START_INTERRUPTS_DISABLED_TIME_MEASURE()
-#define RTOS_STOP_INTERRUPTS_DISABLED_TIME_MEASURE() 
+#define RTOS_STOP_INTERRUPTS_DISABLED_TIME_MEASURE()
 
 #endif /* _MEASURE_INTERRUPTS_DISABLED_TIME_ */
 
@@ -847,14 +847,14 @@ rtos_remove_runnable_thread(
 
 #define DECLARE_CPU_CYCLES_MEASURE_VARS()
 
-#define BEGIN_CPU_CYCLES_MEASURE() 
+#define BEGIN_CPU_CYCLES_MEASURE()
 
 #define END_CPU_CYCLES_MEASURE(_measured_cycles_var_) \
-        (_measured_cycles_var_) = 0      
+        (_measured_cycles_var_) = 0
 
 #define RTOS_START_INTERRUPTS_DISABLED_TIME_MEASURE()
 
-#define RTOS_STOP_INTERRUPTS_DISABLED_TIME_MEASURE() 
+#define RTOS_STOP_INTERRUPTS_DISABLED_TIME_MEASURE()
 
 #endif /* _CPU_CYCLES_MEASURE_ */
 
@@ -897,13 +897,13 @@ rtos_preemption_chain_push_context(
     _INOUT_ struct rtos_cpu_controller *cpu_controller_p,
     _INOUT_ struct rtos_execution_context *preempted_context_p)
 {
-    struct glist_node *preemption_chain_anchor_p = 
+    struct glist_node *preemption_chain_anchor_p =
         &cpu_controller_p->cpc_preemption_chain_anchor;
 
 #ifdef _RELIABILITY_CHECKS_
     if (GLIST_IS_NOT_EMPTY(preemption_chain_anchor_p))
     {
-        struct glist_node *top_preemption_node_p = 
+        struct glist_node *top_preemption_node_p =
             GLIST_GET_FIRST(preemption_chain_anchor_p);
 
         struct rtos_execution_context *last_preempted_context_p =
@@ -963,14 +963,14 @@ static inline struct rtos_execution_context *
 rtos_preemption_chain_pop_context(
     _INOUT_ struct rtos_cpu_controller *cpu_controller_p)
 {
-    struct glist_node *preemption_chain_anchor_p = 
+    struct glist_node *preemption_chain_anchor_p =
         &cpu_controller_p->cpc_preemption_chain_anchor;
 
     FDC_ASSERT(
         GLIST_IS_NOT_EMPTY(preemption_chain_anchor_p),
         preemption_chain_anchor_p, cpu_controller_p);
 
-    struct glist_node *top_preemption_node_p = 
+    struct glist_node *top_preemption_node_p =
         GLIST_GET_FIRST(preemption_chain_anchor_p);
 
     glist_remove_elem(top_preemption_node_p);
@@ -990,7 +990,7 @@ rtos_preemption_chain_remove_context(
     _INOUT_ struct rtos_cpu_controller *cpu_controller_p,
     _INOUT_ struct rtos_execution_context *context_p)
 {
-    struct glist_node *preemption_chain_anchor_p = 
+    struct glist_node *preemption_chain_anchor_p =
         &cpu_controller_p->cpc_preemption_chain_anchor;
 
     FDC_ASSERT(

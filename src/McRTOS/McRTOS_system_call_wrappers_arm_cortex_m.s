@@ -5,11 +5,10 @@
  *
  * Copyright (C) 2013 German Rivera
  *
- * @author German Rivera 
- */ 
+ * @author German Rivera
+ */
 
-#include "arm_defs.h"
-#include "arm_cortex_m_macros.s"
+#include "McRTOS_arm_cortex_m_macros.s"
 
 .extern g_rtos_system_call_dispatch_table
 

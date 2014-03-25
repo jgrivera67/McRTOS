@@ -11,33 +11,21 @@
 
 #include "arm_defs.h"
 #include "compile_time_checks.h"
+#include "tivaware/hw_memmap.h"
+#include "tivaware/tm4c123gh6pm.h"
 #include <stdint.h>
-
-/**
- * CPU clock frequency in MHz
- */
-#define SOC_CPU_CLOCK_FREQ_IN_MEGA_HZ  UINT32_C(50)
 
 /**
  * Number of interrupt channels supported by the interrupt
  * controller
  */
 #define SOC_NUM_INTERRUPT_CHANNELS INT32_C(139)
+#include "cortex_m_nvic.h"
 
-enum cpu_core_internal_interrupt_vectors {
-  INT_Initial_Stack_Pointer    = 0,                /**< Initial stack pointer */
-  INT_Initial_Program_Counter  = 1,                /**< Initial program counter */
-  INT_NMI                      = 2,                /**< Non-maskable interrupt */
-  INT_Hard_Fault               = 3,                /**< Hard fault exception */
-  INT_SVCall                   = 11,               /**< A supervisor call exception */
-  INT_PendableSrvReq           = 14,               /**< PendSV exception - request for system level service */
-  INT_SysTick                  = 15,               /**< SysTick interrupt */
-};
-
-
-#define INT_SVCall_IRQn     VECTOR_NUMBER_TO_IRQ_NUMBER(INT_SVCall)
-#define PendableSrvReq_IRQn VECTOR_NUMBER_TO_IRQ_NUMBER(INT_PendableSrvReq)
-#define SysTick_IRQn        VECTOR_NUMBER_TO_IRQ_NUMBER(INT_SysTick)
+/**
+ * CPU clock frequency in MHz
+ */
+#define SOC_CPU_CLOCK_FREQ_IN_MEGA_HZ  UINT32_C(50)
 
 /**
  * Interrupt priority assignments (from lowest to highest)
@@ -46,26 +34,19 @@ enum cpu_core_internal_interrupt_vectors {
 #define SYSTICK_INTERRUPT_PRIORITY  (SOC_LOWEST_INTERRUPT_PRIORITY - 1)
 #define PENDSV_INTERRUPT_PRIORITY   SOC_HIGHEST_INTERRUPT_PRIORITY
 
-/**
- * IRQ number range type
- *
- * (typedef needed by the CMSIS APIs)
- */
-typedef _RANGE_(INT_SVCall_IRQn, SOC_NUM_INTERRUPT_CHANNELS - 1)
-        int8_t IRQn_Type;
-
 /*
  * include CMSIS API header after declaration of IRQn_Type
  */
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wtype-limits"
-//#pragma GCC diagnostic warning "-Wcpp"
 #pragma GCC diagnostic ignored "-Wcpp"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 
 #define __MPU_PRESENT   1
+#define __FPU_PRESENT   1
 #define __CHECK_DEVICE_DEFINES
-#include "core_cm0plus.h"
+#include "core_cm4.h"
 
 #pragma GCC diagnostic pop
 
@@ -140,6 +121,32 @@ typedef _RANGE_(INT_SVCall_IRQn, SOC_NUM_INTERRUPT_CHANNELS - 1)
 #define MICRO_TRACE_BUFFER_NUM_ENTRIES \
         (MICRO_TRACE_BUFFER_SIZE_IN_BYTES / sizeof(uint64_t))
 
+
+/**
+ * Initialize a configurable pin
+ */
+#define PIN_COFIG_INFO_INITIALIZER(                                     \
+             _gpio_port_p, _pin_bit_index, _pin_is_active_high,		\
+	     _pin_is_locked)						\
+    {                                                                   \
+        .pin_gpio_port_p = (volatile struct gpio_port *)(_gpio_port_p),	\
+        .pin_bit_index = _pin_bit_index,                                \
+        .pin_bit_mask = BIT(_pin_bit_index),                            \
+        .pin_is_active_high = (_pin_is_active_high),                    \
+        .pin_is_locked = (_pin_is_locked),				\
+    }
+
+/**
+ * Pin configuration parameters
+ */
+struct pin_config_info {
+    volatile struct gpio_port *pin_gpio_port_p;
+    uint32_t pin_bit_mask;
+    uint8_t pin_bit_index;
+    uint8_t pin_is_active_high; /* false - low, true - high */
+    uint8_t pin_is_locked;
+    uint8_t reserved;
+};
 
 void micro_trace_init(void);
 

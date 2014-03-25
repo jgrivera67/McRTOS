@@ -96,7 +96,7 @@ struct app_state_vars {
     /**
      * Push buttons state
      */
-    volatile bool c_push_buttons[LAUNCHPAD_NUM_PUSH_BUTTONS];
+    volatile bool c_push_buttons[LPAD_NUM_PUSH_BUTTONS];
 };
 
 static struct app_state_vars g_app;
@@ -165,7 +165,7 @@ buttons_reader_thread_f(void *arg)
 
     console_printf("Initializing buttons reader thread ...\n");
 
-    bool push_buttons[LAUNCHPAD_NUM_PUSH_BUTTONS];
+    bool push_buttons[LPAD_NUM_PUSH_BUTTONS];
 
     for ( ; ; ) {
         /*
@@ -173,7 +173,7 @@ buttons_reader_thread_f(void *arg)
          */
         launchpad_push_buttons_read(push_buttons);
 
-        for (natural_t i = 0; i < LAUNCHPAD_NUM_PUSH_BUTTONS; i++) {
+        for (natural_t i = 0; i < LPAD_NUM_PUSH_BUTTONS; i++) {
             if (push_buttons[i] != g_app.c_push_buttons[i]) {
                 g_app.c_push_buttons[i] = push_buttons[i];
 		DEBUG_PRINTF("Pushed button %u\n", i);

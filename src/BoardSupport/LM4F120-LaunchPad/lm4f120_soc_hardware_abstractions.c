@@ -8,7 +8,10 @@
 
 #include "hardware_abstractions.h"
 #include "lm4f120_soc.h"
+#define TARGET_IS_BLIZZARD_RA1 // ???
 #include "tivaware/rom.h"
+#define PART_TM4C123GH6PM
+#include "tivaware/pin_map.h"
 #include "tivaware/sysctl.h"
 #include "launchpad_board.h"
 #include "McRTOS_arm_cortex_m.h"
@@ -16,6 +19,9 @@
 #include "utils.h"
 #include "McRTOS_config_parameters.h"
 #include "McRTOS_kernel_services.h"
+
+#pragma GCC diagnostic ignored "-Wunused-parameter" //???
+#pragma GCC diagnostic ignored "-Wunused-variable" //???
 
 /**
  * Macro to generate dummy NVIC ISR functions
@@ -40,6 +46,7 @@
 #define UART_TRANSMIT_QUEUE_SIZE_IN_BYTES   UINT16_C(128)
 #define UART_RECEIVE_QUEUE_SIZE_IN_BYTES    UINT16_C(16)
 
+#if 0 // ???
 /**
  * Const fields of a UART device (to be placed in flash)
  */
@@ -76,7 +83,7 @@ struct uart_device_var {
     struct rtos_circular_buffer urt_transmit_queue;
     struct rtos_circular_buffer urt_receive_queue;
 };
-
+#endif // ???
 
 static cpu_reset_cause_t find_reset_cause(void);
 
@@ -334,10 +341,12 @@ soc_hardware_init(void)
         CONSOLE_SERIAL_PORT_BAUD_RATE,
         CONSOLE_SERIAL_PORT_MODE);
 #else
+    /*???
     ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
     ROM_GPIOPinConfigure(GPIO_PA0_U0RX);
     ROM_GPIOPinConfigure(GPIO_PA1_U0TX);
     ROM_GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
+    ???*/
 #endif
 
 #   ifdef DEBUG
@@ -351,7 +360,9 @@ soc_hardware_init(void)
     uart_putchar(g_console_serial_port_p, '\n');
 #   endif
 
+#if 0
     i2c_init(g_i2c0_device_p);
+#endif
     return reset_cause;
 }
 
@@ -392,6 +403,21 @@ software_reset_happened(void)
 static void
 system_clocks_init(void)
 {
+    uint32_t reg_value;
+
+    /*
+     * Enable all of the GPIO port clocks. These have to be enabled to configure
+     * pin muxing options, so most code will need all of these on anyway.
+     */
+    reg_value = read_32bit_mmio_register(&SYSCTL_RCGCGPIO_R);
+    reg_value |= (SYSCTL_RCGCGPIO_R0
+                    | SYSCTL_RCGCGPIO_R1
+                    | SYSCTL_RCGCGPIO_R2
+                    | SYSCTL_RCGCGPIO_R3
+                    | SYSCTL_RCGCGPIO_R4
+                    | SYSCTL_RCGCGPIO_R5);
+    write_32bit_mmio_register(&SYSCTL_RCGCGPIO_R, reg_value);
+
     /*
      * Set the clocking to run at 50 MHz from the PLL.
      */
@@ -404,73 +430,6 @@ static bool g_micro_trace_initialized = false;
 void
 micro_trace_init(void)
 {
-    uint32_t reg_value;
-
-    reg_value = read_32bit_mmio_register(&MTB_BASE);
-
-    FDC_ASSERT(
-        reg_value == SOC_SRAM_BASE, reg_value, SOC_SRAM_BASE);
-
-    DBG_ASSERT(
-        (uintptr_t)__micro_trace_buffer % sizeof(uint64_t) == 0 &&
-        (uintptr_t)__micro_trace_buffer == SOC_SRAM_BASE,
-        __micro_trace_buffer, SOC_SRAM_BASE);
-
-    DBG_ASSERT(
-        (uintptr_t)__micro_trace_buffer_end % sizeof(uint64_t) == 0,
-        __micro_trace_buffer_end, 0);
-
-    DBG_ASSERT(
-        __micro_trace_buffer_end - __micro_trace_buffer ==
-            MICRO_TRACE_BUFFER_NUM_ENTRIES,
-        __micro_trace_buffer, __micro_trace_buffer_end);
-
-    /*
-     * Zero-fill trace buffer:
-     */
-    for (uint64_t *entry_p = __micro_trace_buffer;
-         entry_p != __micro_trace_buffer_end; entry_p ++) {
-        *entry_p = 0x0;
-    }
-
-    /*
-     * Initialize MTB_POSITION register:
-     * - POINTER field (bits 31:3) = encoding of __micro_trace_buffer
-     * - WRAP bit = 0: No wrap has happened yet
-     *
-     * NOTE: POSITION register bits greater than or equal to 15 are RAZ/WI.
-     */
-    reg_value = 0;
-    SET_BIT_FIELD(
-        reg_value, MTB_POSITION_POINTER_MASK, MTB_POSITION_POINTER_SHIFT,
-        (uintptr_t)__micro_trace_buffer >> MTB_POSITION_POINTER_SHIFT);
-    write_32bit_mmio_register(&MTB_POSITION, reg_value);
-
-    /*
-     * Initialize MTB_FLOW register:
-     * - WATERMARK field (bits 31:3) = __micro_trace_buffer_end
-     * - AUTOHALT bit = 0
-     * - AUTOSTOP bit = 0
-     */
-    reg_value = 0;
-    SET_BIT_FIELD(
-        reg_value, MTB_FLOW_WATERMARK_MASK, MTB_FLOW_WATERMARK_SHIFT,
-        (uintptr_t)__micro_trace_buffer_end >> MTB_FLOW_WATERMARK_SHIFT);
-    write_32bit_mmio_register(&MTB_FLOW, reg_value);
-
-    /*
-     * Initialize MTB_MASTER register:
-     * - EN bit = 0: Enable micro tracing
-     * - Mask field (bits 4:0) = mask to implicitly set the trace buffer size
-     */
-    reg_value = read_32bit_mmio_register(&MTB_MASTER);
-    reg_value |= MTB_MASTER_EN_MASK;
-    SET_BIT_FIELD(
-        reg_value, MTB_MASTER_MASK_MASK, MTB_MASTER_MASK_SHIFT,
-        MTB_MASTER_MASK_VALUE);
-    write_32bit_mmio_register(&MTB_MASTER, reg_value);
-
-    g_micro_trace_initialized = true;
 }
 
 
@@ -480,13 +439,6 @@ micro_trace_stop(void)
     if (! g_micro_trace_initialized) {
         return;
     }
-
-    /*
-     * Disable micro tracing
-     */
-    uint32_t reg_value = read_32bit_mmio_register(&MTB_MASTER);
-    reg_value &= ~MTB_MASTER_EN_MASK;
-    write_32bit_mmio_register(&MTB_MASTER, reg_value);
 }
 
 
@@ -496,13 +448,6 @@ micro_trace_restart(void)
     if (! g_micro_trace_initialized) {
         return;
     }
-
-    /*
-     * Re-enable micro tracing
-     */
-    uint32_t reg_value = read_32bit_mmio_register(&MTB_MASTER);
-    reg_value |= MTB_MASTER_EN_MASK;
-    write_32bit_mmio_register(&MTB_MASTER, reg_value);
 }
 
 
@@ -514,25 +459,6 @@ micro_trace_get_cursor(uint64_t **mtb_cursor_pp, bool *mtb_cursor_wrapped_p)
         *mtb_cursor_wrapped_p = false;
         return;
     }
-
-    uint32_t reg_value = read_32bit_mmio_register(&MTB_POSITION);
-
-    uintptr_t mtb_position_pointer_field =
-        GET_BIT_FIELD(
-            reg_value, MTB_POSITION_POINTER_MASK, MTB_POSITION_POINTER_SHIFT);
-
-    if (reg_value & MTB_POSITION_WRAP_MASK) {
-        *mtb_cursor_wrapped_p = true;
-    } else {
-        *mtb_cursor_wrapped_p = false;
-    }
-
-    /*
-     * NOTE: POSITION register bits greater than or equal to 15 are RAZ/WI.
-     */
-    *mtb_cursor_pp = (uint64_t *)(
-        (uintptr_t)__micro_trace_buffer |
-        (mtb_position_pointer_field << MTB_POSITION_POINTER_SHIFT));
 }
 
 
@@ -609,108 +535,154 @@ get_cpu_clock_cycles(void)
 }
 #endif /* _CPU_CYCLES_MEASURE_ */
 
-#if 0 // ???
 /**
- * It configures a GPIO pin of the KL25 SoC
+ * It configures a GPIO pin of the LM4F120 SoC
  */
 void
 configure_pin(const struct pin_config_info *pin_info_p, bool is_output)
 {
     uint32_t reg_value;
+    volatile struct gpio_port *pin_gpio_port_p = pin_info_p->pin_gpio_port_p;
 
-    write_32bit_mmio_register(
-        &PORT_PCR_REG(pin_info_p->pin_port_base_p, pin_info_p->pin_bit_index),
-        pin_info_p->pin_pcr_value);
+    if (pin_info_p->pin_is_locked) {
+	/*
+	 * Unlock pin:
+	 */
+        write_32bit_mmio_register(
+	    &pin_gpio_port_p->reg_GPIO_O_LOCK, GPIO_LOCK_KEY);
 
-    if (is_output) {
         reg_value = read_32bit_mmio_register(
-                        &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p));
+			    &pin_gpio_port_p->reg_GPIO_O_CR);
         reg_value |= pin_info_p->pin_bit_mask;
         write_32bit_mmio_register(
-            &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p), reg_value);
+	    &pin_gpio_port_p->reg_GPIO_O_CR, reg_value);
     }
-    else
-    {
-        reg_value = read_32bit_mmio_register(
-                        &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p));
+
+    /*
+     * Set pin direction:
+     */
+    reg_value = read_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_DIR);
+    if (is_output) {
+        reg_value |= pin_info_p->pin_bit_mask;
+    } else {
         reg_value &= ~pin_info_p->pin_bit_mask;
-        write_32bit_mmio_register(
-            &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p), reg_value);
     }
+    write_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_DIR, reg_value);
+
+    /*
+     * Disable alternate function for pin:
+     */
+    reg_value = read_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_AFSEL);
+    reg_value &= ~pin_info_p->pin_bit_mask;
+    write_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_AFSEL, reg_value);
+
+    if (pin_info_p->pin_is_active_high) {
+	    /*
+	     * Select pull-down resistor
+	     */
+	    reg_value = read_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_PDR);
+	    reg_value |= pin_info_p->pin_bit_mask;
+	    write_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_PDR, reg_value);
+    } else {
+	    /*
+	     * Select pull-up resistor
+	     */
+	    reg_value = read_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_PUR);
+	    reg_value |= pin_info_p->pin_bit_mask;
+	    write_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_PUR, reg_value);
+    }
+
+    /*
+     * Disable analog mode for pin:
+     */
+    reg_value = read_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_AMSEL);
+    reg_value &= ~pin_info_p->pin_bit_mask;
+    write_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_AMSEL, reg_value);
+
+    /*
+     * Enable pin as a digital input or output signal:
+     */
+    reg_value = read_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_DEN);
+    reg_value |= pin_info_p->pin_bit_mask;
+    write_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_DEN, reg_value);
 }
 
 
 void
 activate_output_pin(const struct pin_config_info *pin_info_p)
 {
+    volatile struct gpio_port *pin_gpio_port_p = pin_info_p->pin_gpio_port_p;
+
 #   ifdef DEBUG
     uint32_t reg_value = read_32bit_mmio_register(
-                            &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p));
+                            &pin_gpio_port_p->reg_GPIO_O_DIR);
 
     FDC_ASSERT(
         reg_value & pin_info_p->pin_bit_mask,
         pin_info_p, reg_value);
 #   endif
 
+    reg_value = read_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_DATA);
     if (pin_info_p->pin_is_active_high) {
-        write_32bit_mmio_register(
-            &GPIO_PSOR_REG(pin_info_p->pin_gpio_base_p),
-            pin_info_p->pin_bit_mask);
+        reg_value |= pin_info_p->pin_bit_mask;
     } else {
-        write_32bit_mmio_register(
-            &GPIO_PCOR_REG(pin_info_p->pin_gpio_base_p),
-            pin_info_p->pin_bit_mask);
+        reg_value &= ~pin_info_p->pin_bit_mask;
     }
+    write_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_DATA, reg_value);
 }
 
 
 void
 deactivate_output_pin(const struct pin_config_info *pin_info_p)
 {
+    volatile struct gpio_port *pin_gpio_port_p = pin_info_p->pin_gpio_port_p;
+
 #   ifdef DEBUG
     uint32_t reg_value = read_32bit_mmio_register(
-                            &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p));
+                            &pin_gpio_port_p->reg_GPIO_O_DIR);
 
     FDC_ASSERT(
         reg_value & pin_info_p->pin_bit_mask,
         reg_value, pin_info_p->pin_bit_mask);
 #   endif
 
+    reg_value = read_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_DATA);
     if (pin_info_p->pin_is_active_high) {
-        write_32bit_mmio_register(
-            &GPIO_PCOR_REG(pin_info_p->pin_gpio_base_p),
-            pin_info_p->pin_bit_mask);
+        reg_value &= ~pin_info_p->pin_bit_mask;
     } else {
-        write_32bit_mmio_register(
-            &GPIO_PSOR_REG(pin_info_p->pin_gpio_base_p),
-            pin_info_p->pin_bit_mask);
+        reg_value |= pin_info_p->pin_bit_mask;
     }
+    write_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_DATA, reg_value);
 }
 
 
 void
 toggle_output_pin(const struct pin_config_info *pin_info_p)
 {
+    volatile struct gpio_port *pin_gpio_port_p = pin_info_p->pin_gpio_port_p;
+
 #   ifdef DEBUG
     uint32_t reg_value = read_32bit_mmio_register(
-                            &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p));
+                            &pin_gpio_port_p->reg_GPIO_O_DIR);
 
     FDC_ASSERT(
         reg_value & pin_info_p->pin_bit_mask,
         pin_info_p, reg_value);
 #   endif
 
-    write_32bit_mmio_register(
-        &GPIO_PTOR_REG(pin_info_p->pin_gpio_base_p),
-        pin_info_p->pin_bit_mask);
+    reg_value = read_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_DATA);
+    reg_value ^= pin_info_p->pin_bit_mask;
+    write_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_DATA, reg_value);
 }
 
 
 bool
 read_input_pin(const struct pin_config_info *pin_info_p)
 {
+    volatile struct gpio_port *pin_gpio_port_p = pin_info_p->pin_gpio_port_p;
+
     uint32_t reg_value = read_32bit_mmio_register(
-        &GPIO_PDIR_REG(pin_info_p->pin_gpio_base_p));
+			    &pin_gpio_port_p->reg_GPIO_O_DATA);
 
     return (reg_value & pin_info_p->pin_bit_mask) != 0;
 }
@@ -721,7 +693,6 @@ toggle_heartbeat_led(void)
 {
     toggle_rgb_led(LED_COLOR_BLUE);
 }
-
 
 static uint32_t g_before_debugger_led_color = LED_COLOR_BLACK;
 
@@ -738,7 +709,7 @@ turn_off_debugger_led(void)
     set_rgb_led_color(g_before_debugger_led_color);
 }
 
-
+#if 0 // ???
 void
 uart_init(
     const struct uart_device *uart_device_p,
@@ -1087,7 +1058,7 @@ uart_putchar(
     }
 #else
     DBG_ASSERT(uart_device_p == NULL, uart_device_p, 0);
-    ROM_UARTCharPut(UART0_BASE, c);
+    //???ROM_UARTCharPut(UART0_BASE, c);
 #endif
 }
 
@@ -1130,7 +1101,7 @@ uart_putchar_with_polling(
     write_8bit_mmio_register(&UART_D_REG(uart_mmio_registers_p), c);
 #else
     DBG_ASSERT(uart_device_p == NULL, uart_device_p, 0);
-    ROM_UARTCharPut(UART0_BASE, c);
+    //???ROM_UARTCharPut(UART0_BASE, c);
 #endif
 }
 
@@ -1170,7 +1141,7 @@ uart_getchar(
     return char_received;
 #else
     DBG_ASSERT(uart_device_p == NULL, uart_device_p, 0);
-    return ROM_UARTCharGet(UART0_BASE);
+    return 'A'; //???ROM_UARTCharGet(UART0_BASE);
 #endif
 }
 
@@ -1211,7 +1182,7 @@ uart_getchar_with_polling(
     return byte_received;
 #else
     DBG_ASSERT(uart_device_p == NULL, uart_device_p, 0);
-    return ROM_UARTCharGet(UART0_BASE);
+    return 'A'; ///???ROM_UARTCharGet(UART0_BASE);
 #endif
 }
 

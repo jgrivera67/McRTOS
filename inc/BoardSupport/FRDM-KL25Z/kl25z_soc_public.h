@@ -3,8 +3,8 @@
  *
  * Freescale KL25Z SOC public declarations
  *
- * @author German Rivera 
- */ 
+ * @author German Rivera
+ */
 
 #ifndef __KL25Z_SOC_PUBLIC_H
 #define __KL25Z_SOC_PUBLIC_H
@@ -15,19 +15,16 @@
 #include <stdint.h>
 
 /**
- * CPU clock frequency in MHz
- */
-#define SOC_CPU_CLOCK_FREQ_IN_MEGA_HZ  UINT32_C(48)
-
-/**
  * Number of interrupt channels supported by the interrupt
  * controller
  */
 #define SOC_NUM_INTERRUPT_CHANNELS INT32_C(32)
+#include "cortex_m_nvic.h"
 
-#define INT_SVCall_IRQn     VECTOR_NUMBER_TO_IRQ_NUMBER(INT_SVCall)
-#define PendableSrvReq_IRQn VECTOR_NUMBER_TO_IRQ_NUMBER(INT_PendableSrvReq)
-#define SysTick_IRQn        VECTOR_NUMBER_TO_IRQ_NUMBER(INT_SysTick)
+/**
+ * CPU clock frequency in MHz
+ */
+#define SOC_CPU_CLOCK_FREQ_IN_MEGA_HZ  UINT32_C(48)
 
 /**
  * Interrupt priority assignments (from lowest to highest)
@@ -41,16 +38,8 @@
 
 C_ASSERT(ADC_INTERRUPT_PRIORITY > SOC_HIGHEST_INTERRUPT_PRIORITY);
 
-/**
- * IRQ number range type
- *
- * (typedef needed by the CMSIS APIs)
- */
-typedef _RANGE_(INT_SVCall_IRQn, SOC_NUM_INTERRUPT_CHANNELS - 1)
-        int8_t IRQn_Type;
-
 /*
- * include CMSIS API header after declaration of IRQn_Type 
+ * include CMSIS API header after declaration of IRQn_Type
  */
 
 #pragma GCC diagnostic push
@@ -58,13 +47,14 @@ typedef _RANGE_(INT_SVCall_IRQn, SOC_NUM_INTERRUPT_CHANNELS - 1)
 //#pragma GCC diagnostic warning "-Wcpp"
 #pragma GCC diagnostic ignored "-Wcpp"
 
+#define __VTOR_PRESENT  1
 #define __MPU_PRESENT   1
 #define __CHECK_DEVICE_DEFINES
 #include "core_cm0plus.h"
 
 #pragma GCC diagnostic pop
 
-/** 
+/**
  * Cache line size. The KL25Z SoC does not have caches
  */
 #define SOC_CACHE_LINE_SIZE_IN_BYTES  sizeof(uint32_t)
@@ -74,14 +64,14 @@ typedef _RANGE_(INT_SVCall_IRQn, SOC_NUM_INTERRUPT_CHANNELS - 1)
  */
 #define SOC_FLASH_BASE     UINT32_C(0x00000000)
 #define SOC_FLASH_SIZE     (UINT32_C(128) * 1024)
-                                                
+
 /**
  * Static RAM Memory Ranges
  */
 #define SOC_SRAM_BASE      UINT32_C(0x1FFFF000)
 #define SOC_SRAM_SIZE      (UINT32_C(16) * 1024)
 
-/* 
+/*
  * MMIO Ranges
  */
 #define SOC_PERIPHERAL_BRIDGE_MIN_ADDR      UINT32_C(0x40000000)
@@ -133,7 +123,7 @@ typedef _RANGE_(INT_SVCall_IRQn, SOC_NUM_INTERRUPT_CHANNELS - 1)
 
 /**
  * Value for the MASK field of the MTB_MASTER register. It determines the
- * size of the micro trace circular buffer: 
+ * size of the micro trace circular buffer:
  * 2^(MASK field + 4) == 2^(6 + 4) = 1024 bytes
  */
 #define MTB_MASTER_MASK_VALUE   6
@@ -202,7 +192,7 @@ void micro_trace_restart(void);
 void micro_trace_get_cursor(uint64_t **mtb_cursor_pp, bool *mtb_cursor_wrapped_p);
 
 /*
- * Variables defined in KL25Z_SOC-flash.ld 
+ * Variables defined in KL25Z_SOC-flash.ld
  */
 extern uint64_t __micro_trace_buffer[];
 extern uint64_t __micro_trace_buffer_end[];

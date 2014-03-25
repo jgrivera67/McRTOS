@@ -5,11 +5,10 @@
  *
  * Copyright (C) 2013 German Rivera
  *
- * @author German Rivera 
- */ 
+ * @author German Rivera
+ */
 
-#include "arm_defs.h"
-#include "arm_cortex_m_macros.s"
+#include "McRTOS_arm_cortex_m_macros.s"
 
 /*
  * Imported symbols
@@ -57,7 +56,7 @@ cortex_m_pendsv_exception_handler:
      * - ..
      * - r3
      * - r12
-     * - r14 (lr) 
+     * - r14 (lr)
      * - r15 (pc)
      * - psr
      */
@@ -82,7 +81,7 @@ L_save_other_registers:
      */
     ldr r0, [r0]
 
-    /* 
+    /*
      * call cortex_m_save_other_registers(
      *          &current_execution_context_p->ctx_cpu_saved_registers,
      *          LR on exception entry)
@@ -150,7 +149,7 @@ cortex_m_hard_fault_exception_handler:
      * - ..
      * - r3
      * - r12
-     * - r14 (lr) 
+     * - r14 (lr)
      * - r15 (pc)
      * - psr
      */
@@ -159,9 +158,9 @@ cortex_m_hard_fault_exception_handler:
      * Set r2 to
      * g_McRTOS_p->rts_cpu_controllers[0].cpc_current_execution_context_p
      */
-    GET_MCRTOS_CURRENT_EXECUTION_CONTEXT r2 
+    GET_MCRTOS_CURRENT_EXECUTION_CONTEXT r2
 
-    /* 
+    /*
      * Call cortex_m_save_other_registers(
      *          &current_execution_context_p->ctx_cpu_saved_registers,
      *          lr_on_exception_entry):
@@ -189,7 +188,7 @@ cortex_m_hard_fault_exception_handler:
     mov     r4, r2  /* saved r2 to r4 */
     mov     r5, r1  /* saved r1 to r5 */
     bl      rtos_hard_fault_exception_handler
-  
+
     /*
      * Return from the exception:
      *
@@ -220,7 +219,7 @@ cortex_m_hard_fault_exception_handler:
  *
  * @pre     This routine is called with interrupts disabled.
  *
- * @param   saved_registers_p(r0): Pointer to the area of memory 
+ * @param   saved_registers_p(r0): Pointer to the area of memory
  *          where registers are to be saved.
 
  * @param   lr_on_exception_entry(r1): lr on exception entry
@@ -234,7 +233,7 @@ cortex_m_hard_fault_exception_handler:
 .func cortex_m_save_other_registers
 
 cortex_m_save_other_registers:
-    /* 
+    /*
      * Save the non-pre-saved registers so they appear in the following
      * order in memory:
      * - r4

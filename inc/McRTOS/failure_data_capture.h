@@ -5,8 +5,8 @@
  *
  * Copyright (C) 2013 German Rivera
  *
- * @author German Rivera 
- */ 
+ * @author German Rivera
+ */
 #ifndef _FAILURE_DATA_CAPTURE_H
 #define _FAILURE_DATA_CAPTURE_H
 
@@ -19,7 +19,7 @@
 
 /**
  * Compile-time assertion macros
- */ 
+ */
 
 #define C_ASSERT(_cond) \
         extern const char c_assert_dummy_decl[(_cond) ? 1 : -1]
@@ -138,7 +138,7 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
 
 #   define FDC_ASSERT_CPU_INTERRUPTS_DISABLED() \
     FDC_ASSERT(CPU_INTERRUPTS_ARE_DISABLED(__get_PRIMASK()), 0, 0)
-   
+
 #   define FDC_ASSERT_PRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED() \
     do {                                                                    \
         FDC_ASSERT(                                                         \
@@ -180,7 +180,7 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
      */
 #   define FDC_ASSERT_VALID_FUNCTION_POINTER(_func_ptr) \
            FDC_ASSERT_VALID_CODE_ADDRESS(_func_ptr, NULL)
-                
+
 #elif DEFINED_ARM_CORTEX_M_ARCH()
 #   define VALID_CODE_ADDRESS(_code_addr) \
            (BOARD_VALID_FLASH_ADDRESS(_code_addr) &&                    \
@@ -475,9 +475,9 @@ typedef uint32_t fdc_context_switch_trace_entry_t;
 
 /**
  * - For unprivileged threads, the context Id is an index in
- *   g_McRTOS_p->rts_app_threads[] 
+ *   g_McRTOS_p->rts_app_threads[]
  * - For privileged threads, the context Id is an index in
- *   g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()].cpc_system_threads[] 
+ *   g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()].cpc_system_threads[]
  * - For interrupts, the context Id is the interrupt channel
  */
 #define FDC_CST_CONTEXT_ID_MASK  MULTI_BIT_MASK(7, 0)
@@ -506,7 +506,7 @@ enum fdc_cst_context_type
 
 /**
  * Last switched out reason. Value taken from the execution context's field
- * ctx_last_switched_out_reason. 
+ * ctx_last_switched_out_reason.
  * (Value from enum rtos_execution_context_switched_out_reasons)
  */
 #define FDC_CST_LAST_SWITCHED_OUT_REASON_MASK   MULTI_BIT_MASK(19, 16)
@@ -514,7 +514,7 @@ enum fdc_cst_context_type
 
 /**
  * Context switch type. Values defined in arm_defs.h (RTOS_CSW_...)
- */ 
+ */
 #define FDC_CST_CONTEXT_SWITCH_TYPE_MASK        MULTI_BIT_MASK(23, 20)
 #define FDC_CST_CONTEXT_SWITCH_TYPE_SHIFT       20
 
@@ -536,15 +536,15 @@ enum fdc_cst_context_type
 /**
  * Captured failure data record
  */
-struct failure_record { 
+struct failure_record {
     /**
      * sequence number
      */
-    uint32_t    fr_seq_number; 
+    uint32_t    fr_seq_number;
 
     /**
      * Address in the code where the failure happened
-     */ 
+     */
     uint32_t    *fr_failure_location;
 
     /**
@@ -559,7 +559,7 @@ struct failure_record {
 
     /**
      * CPU status register
-     */ 
+     */
     uint32_t    fr_cpu_status_register;
 
     /**
@@ -568,10 +568,10 @@ struct failure_record {
     struct rtos_execution_context      *fr_execution_context_p;
 };
 
-// total size of failure_record must be at most 32 bytes 
+// total size of failure_record must be at most 32 bytes
 C_ASSERT(sizeof(struct failure_record) <= 32);
 
-/* 
+/*
  * Types of unexpected exceptions
  */
 enum unexpected_exception_types
@@ -589,15 +589,15 @@ enum unexpected_exception_types
 /**
  * Unexpected exception failure data capture record
  */
-struct unexpected_exception_record { 
+struct unexpected_exception_record {
     /**
      * sequence number
      */
-    uint32_t    uer_seq_number; 
+    uint32_t    uer_seq_number;
 
     /**
      * Type of exception (value from enum exception_types)
-     */ 
+     */
     uint8_t     uer_exception_type;
 
     /**
@@ -608,7 +608,7 @@ struct unexpected_exception_record {
 
     /**
      * Address of the instruction that caused the exception
-     */ 
+     */
     uint32_t    *uer_location;
 
     /**
@@ -623,13 +623,13 @@ struct unexpected_exception_record {
 
     /**
      * Current execution context when the failure happened
-     */ 
+     */
     struct rtos_execution_context    *uer_execution_context_p;
 };
 
 /**
  * Failure data capture information block
- */ 
+ */
 struct fdc_info
 {
 #   define      FDC_INFO_SIGNATURE  UINT32_C(0xFACEFACE)
@@ -658,12 +658,12 @@ struct fdc_info
 
     /**
      * Index of next entry to fill in fdc_failures
-     */ 
+     */
     uint8_t fdc_failure_cursor;
 
     /**
      * Index of next entry to fill in fdc_unexpected_exceptions
-     */ 
+     */
     uint8_t fdc_unexpected_exceptions_cursor;
 
     /**
@@ -671,19 +671,19 @@ struct fdc_info
      */
     uint16_t fdc_context_switch_trace_cursor;
 
-    /** 
+    /**
      * Total number of context switches, since boot
-     */ 
-    uint32_t fdc_context_switch_count; 
+     */
+    uint32_t fdc_context_switch_count;
 
     /**
      * Captured failures circular buffer
-     */ 
+     */
     struct failure_record fdc_failures[RTOS_MAX_NUM_FAILURE_RECORDS];
 
     /**
      * Unexpected exceptions failures circular buffer
-     */ 
+     */
     struct unexpected_exception_record fdc_unexpected_exceptions
                                     [RTOS_MAX_NUM_UNEXPECTED_EXCEPTION_RECORDS];
 
@@ -692,7 +692,7 @@ struct fdc_info
      */
 #   if DEFINED_ARM_CORTEX_M_ARCH()
     /*
-     * One entry before the array, to allow access to 
+     * One entry before the array, to allow access to
      * fdc_interrupt_channel_counters[-1] for the systick interrupt.
      */
     uint32_t fdc_systick_interrupt_counter;
@@ -701,7 +701,7 @@ struct fdc_info
 
     /**
      * Interrupts & task context switches trace circular buffer
-     */ 
+     */
     fdc_context_switch_trace_entry_t fdc_context_switch_trace_buffer
                                         [RTOS_NUM_CONTEXT_SWITCH_TRACE_BUFFER_ENTRIES];
 
@@ -731,7 +731,7 @@ C_ASSERT(RTOS_NUM_CONTEXT_SWITCH_TRACE_BUFFER_ENTRIES <= UINT16_MAX);
 
 #else
 
-#define FDC_INFO_INITIALIZER(_fdc_info) 
+#define FDC_INFO_INITIALIZER(_fdc_info)
 
 #endif /* _RELIABILITY_CHECKS_ */
 

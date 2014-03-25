@@ -109,11 +109,37 @@ C_ASSERT(
 #if defined(LM4F120_SOC)
 typedef uint32_t rtos_per_cpu_interrupts_bitmap_t[5];
 #else
-typedef uint32_t rtos_per_cpu_interrupts_bitmap_t;
+typedef uint32_t rtos_per_cpu_interrupts_bitmap_t[1];
 #endif
 
 C_ASSERT(
     sizeof(rtos_per_cpu_interrupts_bitmap_t) * 8 >= SOC_NUM_INTERRUPT_CHANNELS);
+
+#define RTOS_INTR_BIT_MAP_ENTRY_INDEX(_intr_channel) \
+	((_intr_channel) / sizeof(uint32_t))
+
+#define RTOS_INTR_BIT_MAP_ENTRY_MASK(_intr_channel) \
+	BIT((_intr_channel) % sizeof(uint32_t))
+
+#define RTOS_INTR_BIT_MAP_SET_BIT(_intr_bitmap_p, _intr_channel) \
+	do {								    \
+		(_intr_bitmap_p)[					    \
+			RTOS_INTR_BIT_MAP_ENTRY_INDEX(_intr_channel)]	    \
+			|= RTOS_INTR_BIT_MAP_ENTRY_MASK(_intr_channel);	    \
+	} while (0)
+
+#define RTOS_INTR_BIT_MAP_CLEAR_BIT(_intr_bitmap_p, _intr_channel) \
+	do {								    \
+		(_intr_bitmap_p)[					    \
+			RTOS_INTR_BIT_MAP_ENTRY_INDEX(_intr_channel)]	    \
+			&= ~RTOS_INTR_BIT_MAP_ENTRY_MASK(_intr_channel);    \
+	} while (0)
+
+#define RTOS_INTR_BIT_MAP_GET_BIT(_intr_bitmap_p, _intr_channel) \
+		(((_intr_bitmap_p)[					    \
+			RTOS_INTR_BIT_MAP_ENTRY_INDEX(_intr_channel)]	    \
+			& RTOS_INTR_BIT_MAP_ENTRY_MASK(_intr_channel)) ?    \
+			1 : 0)
 
 #ifdef LCD_SUPPORTED
 /**

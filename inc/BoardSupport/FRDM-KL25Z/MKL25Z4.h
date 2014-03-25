@@ -84,6 +84,7 @@
 
 /** Interrupt Number Definitions */
 typedef enum {
+#if 0
   INT_Initial_Stack_Pointer    = 0,                /**< Initial stack pointer */
   INT_Initial_Program_Counter  = 1,                /**< Initial program counter */
   INT_NMI                      = 2,                /**< Non-maskable interrupt */
@@ -100,6 +101,7 @@ typedef enum {
   INT_Reserved13               = 13,               /**< Reserved interrupt 13 */
   INT_PendableSrvReq           = 14,               /**< PendSV exception - request for system level service */
   INT_SysTick                  = 15,               /**< SysTick interrupt */
+#endif
   INT_DMA0                     = 16,               /**< DMA channel 0 transfer complete/error interrupt */
   INT_DMA1                     = 17,               /**< DMA channel 1 transfer complete/error interrupt */
   INT_DMA2                     = 18,               /**< DMA channel 2 transfer complete/error interrupt */

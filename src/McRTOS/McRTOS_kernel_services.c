@@ -6,8 +6,8 @@
  *
  * Copyright (C) 2013 German Rivera
  *
- * @author German Rivera 
- */ 
+ * @author German Rivera
+ */
 
 #include "McRTOS_kernel_services.h"
 #include "McRTOS_internals.h"
@@ -66,7 +66,7 @@ const void *const g_rtos_system_call_dispatch_table[] =
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
         RTOS_THREAD_CONDVAR_SIGNAL_SYSTEM_CALL, rtos_k_thread_condvar_signal),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
-        RTOS_CREATE_MUTEX_SYSTEM_CALL, rtos_k_create_mutex),         
+        RTOS_CREATE_MUTEX_SYSTEM_CALL, rtos_k_create_mutex),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
         RTOS_MUTEX_ACQUIRE_SYSTEM_CALL, rtos_k_mutex_acquire),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
@@ -92,14 +92,14 @@ const void *const g_rtos_system_call_dispatch_table[] =
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
         RTOS_SET_FDC_PARAMS_SYSTEM_CALL, rtos_k_set_fdc_params),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
-        RTOS_CONSOLE_PUTCHAR_SYSTEM_CALL, rtos_k_console_putchar),             
+        RTOS_CONSOLE_PUTCHAR_SYSTEM_CALL, rtos_k_console_putchar),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
         RTOS_CONSOLE_GETCHAR_SYSTEM_CALL, rtos_k_console_getchar),
 #ifdef LCD_SUPPORTED
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
-        RTOS_LCD_PUTCHAR_SYSTEM_CALL, rtos_k_lcd_putchar),             
+        RTOS_LCD_PUTCHAR_SYSTEM_CALL, rtos_k_lcd_putchar),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
-        RTOS_LCD_DRAW_TILE_SYSTEM_CALL, rtos_k_lcd_draw_tile), 
+        RTOS_LCD_DRAW_TILE_SYSTEM_CALL, rtos_k_lcd_draw_tile),
 #endif
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
         RTOS_APP_SYSTEM_CALL, rtos_k_app_system_call),
@@ -219,11 +219,11 @@ Exit:
  * Initializes a McRTOS thread
  *
  * @param   params_p: Pointer to the thread's creation parameters.
- * 
+ *
  * @param   thread_stack_p: Pointer to the thread's execution stack.
- * 
+ *
  * @param   cpu_id: CPU ID of the CPU core where this thread exists.
- * 
+ *
  * @param   thread_is_privileged: true if thread to initialize is
  *          a system thread. False otherwise.
  *
@@ -288,7 +288,7 @@ rtos_k_thread_init(
     fdc_context_switch_trace_entry_t prefilled_trace_entry = 0;
 
     SET_BIT_FIELD(
-        prefilled_trace_entry, 
+        prefilled_trace_entry,
         FDC_CST_CONTEXT_ID_MASK,
         FDC_CST_CONTEXT_ID_SHIFT,
         context_id);
@@ -298,7 +298,7 @@ rtos_k_thread_init(
         rtos_cpu_mode = RTOS_PRIVILEGED_THREAD_MODE;
 
         SET_BIT_FIELD(
-            prefilled_trace_entry, 
+            prefilled_trace_entry,
             FDC_CST_CONTEXT_TYPE_MASK,
             FDC_CST_CONTEXT_TYPE_SHIFT,
             FDC_CST_SYSTEM_THREAD);
@@ -308,7 +308,7 @@ rtos_k_thread_init(
         rtos_cpu_mode = RTOS_UNPRIVILEGED_THREAD_MODE;
 
         SET_BIT_FIELD(
-            prefilled_trace_entry, 
+            prefilled_trace_entry,
             FDC_CST_CONTEXT_TYPE_MASK,
             FDC_CST_CONTEXT_TYPE_SHIFT,
             FDC_CST_APPLICATION_THREAD);
@@ -365,7 +365,7 @@ rtos_k_thread_init(
         params_p->p_name_p,
         cpu_id,
         &rtos_thread_p->thr_condvar);
-                    
+
     /*
      * Add new thread to the corresponding runnable thread queue:
      */
@@ -476,7 +476,7 @@ rtos_k_thread_delay(rtos_milliseconds_t num_milliseconds)
  * microseconds.  For delays longer than one 1 tick period
  * (RTOS_MILLISECONDS_PER_TICK milliseconds), the millisecond delay
  * API must be used, instead of this function.
- */  
+ */
 void
 rtos_k_thread_micro_delay(_IN_ rtos_microseconds_t num_microseconds)
 {
@@ -487,7 +487,7 @@ rtos_k_thread_micro_delay(_IN_ rtos_microseconds_t num_microseconds)
         MICROSECONDS_TO_CPU_CLOCK_CYCLES(num_microseconds);
 
     FDC_ASSERT(
-        num_microseconds > 0 && 
+        num_microseconds > 0 &&
         num_microseconds < RTOS_MILLISECONDS_PER_TICK * 1000,
         num_microseconds, RTOS_MILLISECONDS_PER_TICK);
 
@@ -501,7 +501,7 @@ rtos_k_thread_micro_delay(_IN_ rtos_microseconds_t num_microseconds)
             CPU_CLOCK_CYCLES_DELTA(start_cycles, get_cpu_clock_cycles());
     } while (cycles_delta < target_cpu_cycles_delta);
 #   else
-  
+
     delay_loop(num_microseconds * (SOC_CPU_CLOCK_FREQ_IN_MEGA_HZ / 5));
 
 #   endif
@@ -846,7 +846,7 @@ rtos_k_mutex_acquire(
     FDC_ASSERT(
         rtos_mutex_p->mtx_cpu_id == cpu_id,
         rtos_mutex_p->mtx_cpu_id, cpu_id);
-   
+
     FDC_ASSERT_PRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED();
 
     /*
@@ -882,7 +882,7 @@ rtos_k_mutex_acquire(
 
             if (mutex_owner_p->thr_state == RTOS_THREAD_RUNNABLE)
             {
-                rtos_remove_runnable_thread( 
+                rtos_remove_runnable_thread(
                     cpu_controller_p, mutex_owner_p, RTOS_THREAD_BEING_REQUEUED);
 
                 rtos_add_tail_runnable_thread(
@@ -946,7 +946,7 @@ rtos_k_mutex_release_internal(
         rtos_mutex_p->mtx_cpu_id == cpu_controller_p->cpc_cpu_id,
         rtos_mutex_p->mtx_cpu_id,
         cpu_controller_p->cpc_cpu_id);
-   
+
     FDC_ASSERT(
         current_thread_p->thr_owned_mutexes_count > 0,
         current_thread_p, 0);
@@ -979,11 +979,11 @@ rtos_k_mutex_release_internal(
 
      if (GLIST_IS_NOT_EMPTY(&rtos_mutex_p->mtx_waiting_thread_queue_anchor))
      {
-        struct glist_node *first_waiter_node_p = 
+        struct glist_node *first_waiter_node_p =
             GLIST_GET_FIRST(
                 &rtos_mutex_p->mtx_waiting_thread_queue_anchor);
 
-        glist_remove_elem(first_waiter_node_p); 
+        glist_remove_elem(first_waiter_node_p);
 
         /*
          * Set new mutex owner:
@@ -1235,7 +1235,7 @@ rtos_k_condvar_wait(
      * Add current thread at the end of the condvar's waiting queue and
      * change its state from running to blocked:
      */
-    
+
     glist_add_tail_elem(
         &rtos_condvar_p->cv_waiting_thread_queue_anchor,
         &current_thread_p->thr_list_node);
@@ -1337,7 +1337,7 @@ rtos_k_condvar_wait_interrupt(
      * Add current thread at the end of the condvar's waiting queue and
      * change its state from running to blocked:
      */
-    
+
     glist_add_tail_elem(
         &rtos_condvar_p->cv_waiting_thread_queue_anchor,
         &current_thread_p->thr_list_node);
@@ -1371,7 +1371,7 @@ Exit:
 
 
 /**
- * Internal function shared between rtos_k_condvar_signal() and 
+ * Internal function shared between rtos_k_condvar_signal() and
  * rtos_k_condvar_broadcast()
  */
 static void
@@ -1414,11 +1414,11 @@ rtos_k_condvar_signal_internal(
          * If there are waiters on the condvar, remove the first waiter,
          * and add it at the end of the appropriate runnable thread queue:
          */
-        struct glist_node *first_waiter_node_p = 
+        struct glist_node *first_waiter_node_p =
             GLIST_GET_FIRST(
                 &rtos_condvar_p->cv_waiting_thread_queue_anchor);
 
-        glist_remove_elem(first_waiter_node_p); 
+        glist_remove_elem(first_waiter_node_p);
 
         struct rtos_thread *awaken_thread_p =
             RTOS_THREAD_QUEUE_NODE_GET_THREAD(first_waiter_node_p);
@@ -1439,7 +1439,7 @@ rtos_k_condvar_signal_internal(
 
     if (current_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT)
     {
-        if (waiters_awaken) 
+        if (waiters_awaken)
         {
             /*
              * Add current thread at the beginning of the corresponding runnable
@@ -1667,7 +1667,7 @@ rtos_k_timer_stop(
  *
  * @param   params_p: Pointer to the interrupt object's registration parameters.
  *
- * @param   rtos_interrupt_p: Pointer to the area where the pointer to a new 
+ * @param   rtos_interrupt_p: Pointer to the area where the pointer to a new
  *          McRTOS interrupt object is to be returned.
  *
  * @return  none
@@ -1691,7 +1691,7 @@ rtos_k_register_interrupt(
 
     FDC_ASSERT(channel < SOC_NUM_INTERRUPT_CHANNELS,
         channel, SOC_NUM_INTERRUPT_CHANNELS);
-      
+
     FDC_ASSERT(interrupt_prio < SOC_NUM_INTERRUPT_PRIORITIES,
         interrupt_prio, SOC_NUM_INTERRUPT_PRIORITIES);
 
@@ -1736,7 +1736,7 @@ rtos_k_register_interrupt(
     for (uint32_t i = 0;
          i < RTOS_INTERRUPT_STACK_OVERFLOW_BUFFER_SIZE_IN_ENTRIES; ++ i)
     {
-        interrupt_p->int_stack_overflow_buffer[i] = 
+        interrupt_p->int_stack_overflow_buffer[i] =
             RTOS_STACK_OVERFLOW_BUFFER_SIGNATURE;
     }
 
@@ -1755,19 +1755,19 @@ rtos_k_register_interrupt(
     fdc_context_switch_trace_entry_t prefilled_trace_entry = 0;
 
     SET_BIT_FIELD(
-        prefilled_trace_entry, 
+        prefilled_trace_entry,
         FDC_CST_CONTEXT_ID_MASK,
         FDC_CST_CONTEXT_ID_SHIFT,
         interrupt_p - g_McRTOS_p->rts_interrupts);
 
     SET_BIT_FIELD(
-        prefilled_trace_entry, 
+        prefilled_trace_entry,
         FDC_CST_CONTEXT_TYPE_MASK,
         FDC_CST_CONTEXT_TYPE_SHIFT,
         FDC_CST_INTERRUPT);
 
     SET_BIT_FIELD(
-        prefilled_trace_entry, 
+        prefilled_trace_entry,
         FDC_CST_CONTEXT_PRIORITY_MASK,
         FDC_CST_CONTEXT_PRIORITY_SHIFT,
         interrupt_prio);
@@ -1777,11 +1777,11 @@ rtos_k_register_interrupt(
 
 #   if DEFINED_ARM_CLASSIC_ARCH()
     stack_top_end_p = &interrupt_p->int_stack[0];
-    stack_bottom_end_p = 
+    stack_bottom_end_p =
         &interrupt_p->int_stack[RTOS_INTERRUPT_STACK_NUM_ENTRIES];
 #   elif DEFINED_ARM_CORTEX_M_ARCH()
     stack_top_end_p = &g_cortex_m_exception_stack.es_stack[0];
-    stack_bottom_end_p = 
+    stack_bottom_end_p =
         &g_cortex_m_exception_stack.es_stack[RTOS_INTERRUPT_STACK_NUM_ENTRIES];
 #   else
 #       error "CPU architrecture not supported"
@@ -1875,16 +1875,24 @@ rtos_k_enter_interrupt(
      */
     if (interrupt_channel < 0) {
         FDC_ASSERT(
-            (cpu_controller_p->cpc_active_internal_interrupts & BIT(-interrupt_channel)) == 0,
+            RTOS_INTR_BIT_MAP_GET_BIT(
+		cpu_controller_p->cpc_active_internal_interrupts,
+		-interrupt_channel) == 0,
             cpu_controller_p->cpc_active_internal_interrupts, cpu_controller_p);
 
-        cpu_controller_p->cpc_active_internal_interrupts |= BIT(-interrupt_channel);
+	RTOS_INTR_BIT_MAP_SET_BIT(
+	     cpu_controller_p->cpc_active_internal_interrupts,
+	     -interrupt_channel);
     } else {
         FDC_ASSERT(
-            (cpu_controller_p->cpc_active_external_interrupts & BIT(interrupt_channel)) == 0,
+            RTOS_INTR_BIT_MAP_GET_BIT(
+		cpu_controller_p->cpc_active_external_interrupts,
+		interrupt_channel) == 0,
             cpu_controller_p->cpc_active_external_interrupts, cpu_controller_p);
 
-        cpu_controller_p->cpc_active_external_interrupts |= BIT(interrupt_channel);
+	RTOS_INTR_BIT_MAP_SET_BIT(
+	     cpu_controller_p->cpc_active_external_interrupts,
+	     interrupt_channel);
     }
 
     struct rtos_execution_context *new_interrupt_context_p =
@@ -1974,7 +1982,7 @@ rtos_k_enter_interrupt(
         FDC_ASSERT(
             interrupted_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
             interrupted_context_p->ctx_context_type, interrupted_context_p);
-   
+
         FDC_ASSERT(
             cpu_controller_p->cpc_nested_interrupts_count < SOC_NUM_INTERRUPT_PRIORITIES,
             cpu_controller_p->cpc_nested_interrupts_count, cpu_controller_p);
@@ -2063,25 +2071,33 @@ rtos_k_exit_interrupt(void)
         current_interrupt_p->int_signature, current_interrupt_p);
 
     interrupt_channel_t interrupt_channel = current_interrupt_p->int_channel;
-    
+
     /*
      * Mark interrupt as inactive:
      */
     if (interrupt_channel < 0) {
         FDC_ASSERT(
-            cpu_controller_p->cpc_active_internal_interrupts & BIT(-interrupt_channel),
+            RTOS_INTR_BIT_MAP_GET_BIT(
+		cpu_controller_p->cpc_active_internal_interrupts,
+		-interrupt_channel) != 0,
             cpu_controller_p->cpc_active_internal_interrupts, cpu_controller_p);
 
-        cpu_controller_p->cpc_active_internal_interrupts &= ~BIT(-interrupt_channel);
+	RTOS_INTR_BIT_MAP_CLEAR_BIT(
+	     cpu_controller_p->cpc_active_internal_interrupts,
+	     -interrupt_channel);
     } else {
         FDC_ASSERT(
-            cpu_controller_p->cpc_active_external_interrupts & BIT(interrupt_channel),
+            RTOS_INTR_BIT_MAP_GET_BIT(
+		cpu_controller_p->cpc_active_external_interrupts,
+		interrupt_channel) != 0,
             cpu_controller_p->cpc_active_external_interrupts, cpu_controller_p);
 
-        cpu_controller_p->cpc_active_external_interrupts &= ~BIT(interrupt_channel);
+	RTOS_INTR_BIT_MAP_CLEAR_BIT(
+	     cpu_controller_p->cpc_active_external_interrupts,
+	     interrupt_channel);
     }
 
-    /* 
+    /*
      * Notify the interrupt controller that processing for the last interrupt
      * received by the calling CPU core has been completed, so that another
      * interrupt of the same priority or lower can be received by this CPU core:
@@ -2112,7 +2128,7 @@ rtos_k_exit_interrupt(void)
      */
     struct rtos_execution_context *preempted_context_p =
         rtos_preemption_chain_pop_context(cpu_controller_p);
-  
+
     DBG_ASSERT(
         preempted_context_p != current_context_p,
         preempted_context_p, current_context_p);
@@ -2158,7 +2174,7 @@ rtos_k_exit_interrupt(void)
              * be updated by rtos_k_restore_execution_context(), which is
              * called by rtos_thread_scheduler().
              */
-            rtos_thread_scheduler(RTOS_CSW_INTERRUPT_TO_THREAD); 
+            rtos_thread_scheduler(RTOS_CSW_INTERRUPT_TO_THREAD);
         }
         else
         {
@@ -2167,7 +2183,7 @@ rtos_k_exit_interrupt(void)
              *
              * NOTE: cpu_controller_p->cpc_current_execution_context_p will be
              * updated by rtos_k_restore_execution_context()
-             */ 
+             */
             rtos_k_restore_execution_context(
                 preempted_context_p,
                 RTOS_CSW_EXITING_EARLY_NESTED_INTERRUPT);
@@ -2188,7 +2204,7 @@ rtos_k_exit_interrupt(void)
          *
          * NOTE: cpu_controller_p->cpc_current_execution_context_p will be updated
          * by rtos_k_restore_execution_context()
-         */ 
+         */
         rtos_k_restore_execution_context(
             preempted_context_p,
             RTOS_CSW_EXITING_NESTED_INTERRUPT);
@@ -2226,7 +2242,7 @@ rtos_k_enter_system_call(
     {
         fdc_error = CAPTURE_FDC_ERROR("Invalid system call number",
                         system_call_number, current_context_p);
-        goto Exit;                        
+        goto Exit;
     }
 
     DBG_ASSERT_VALID_FUNCTION_POINTER(
@@ -2282,7 +2298,7 @@ rtos_k_app_system_call(
 
     /*
      * TODO: implement this
-     */ 
+     */
     TODO_IMPLEMENT_THIS();
 
     return fdc_error;
@@ -2346,7 +2362,7 @@ rtos_execution_context_init(
         FDC_ASSERT(
             rtos_cpu_mode == RTOS_INTERRUPT_MODE,
             rtos_cpu_mode, execution_context_p);
-    } 
+    }
     else
     {
         FDC_ASSERT(
@@ -2425,7 +2441,7 @@ rtos_execution_context_init(
         {
             execution_context_p->ctx_cpu_registers[CPU_REG_LR] =
                 (cpu_register_t)rtos_k_thread_abort;
-        
+
             /*
              * Initial value of the CPU status register for a privileged thread
              * uses System mode:
@@ -2461,7 +2477,7 @@ rtos_execution_context_init(
          * Initialize explicitly saved CPU registers, for the first time that
          * the thread is switched in:
          */
-        cpu_register_t *saved_registers_p = 
+        cpu_register_t *saved_registers_p =
             &execution_context_p->ctx_cpu_saved_registers.cpu_reg_r4;
 
         uint8_t i;
@@ -2490,7 +2506,7 @@ rtos_execution_context_init(
 
 #           if 0   // TODO enable this when SVC handler is implemented
             /*
-             * The nPRIV bit of the CONTROL register also needs to be set to 1 
+             * The nPRIV bit of the CONTROL register also needs to be set to 1
              * (unprivileged)
              */
             cpu_control_register |= CPU_REG_CONTROL_nPRIV_MASK;
@@ -2509,18 +2525,18 @@ rtos_execution_context_init(
         DBG_ASSERT(cpu_pc_register & 0x1, cpu_pc_register, 0);
 
         DEBUG_PRINTF(
-            "Created execution context \'%s\' (%#p)\n", 
+            "Created execution context \'%s\' (%#p)\n",
             execution_context_p->ctx_name_p,
             execution_context_p);
 
         /*
          * Initialize pre-saved registers in the thread's stack:
          *
-         * NOTE: Since the initial context switch is implemented by returning from an 
+         * NOTE: Since the initial context switch is implemented by returning from an
          * exception, we need to populate the thread's stack with the registers that
          * are pre-saved by the CPU, on the stack, upon exception entry:
          */
-        uint32_t *stack_pointer = 
+        uint32_t *stack_pointer =
             execution_context_p->ctx_execution_stack_bottom_end_p -
             CPU_NUM_PRE_SAVED_REGISTERS;
 
@@ -2748,7 +2764,7 @@ rtos_k_lcd_draw_tile(
                                                                             \
             check_circular_buffer_invariants(circ_buf_p, _signature);       \
         }
-        
+
 
 /**
  * Generates the function that writes an entry to a circular buffer of entries
@@ -3072,7 +3088,7 @@ rtos_k_atomic_fetch_sub_uint32(volatile uint32_t *counter_p, uint32_t value)
  *
  * @return  Highest thread priority whose bit is set in rtos_thread_prio_bitmap,
  *          if at least one bit is set in rtos_thread_prio_bitmap.
- *          If bit 31 in rtos_thread_prio_bitmap is set, this function 
+ *          If bit 31 in rtos_thread_prio_bitmap is set, this function
  *          returns 0.
  *          If bit 0 in rtos_thread_prio_bitmap is set, this function
  *          returns 31.
@@ -3087,7 +3103,7 @@ rtos_k_atomic_fetch_sub_uint32(volatile uint32_t *counter_p, uint32_t value)
 rtos_thread_prio_t
 rtos_k_find_highest_thread_priority(
     rtos_thread_prio_bitmap_t rtos_thread_prio_bitmap)
-{    
+{
     uint32_t leading_zeros_count = 0;
 
 #   if RTOS_NUM_THREAD_PRIORITIES == 32
@@ -3113,7 +3129,7 @@ rtos_k_find_highest_thread_priority(
 
     if (rtos_thread_prio_bitmap < BIT(31)) {
         leading_zeros_count += 1;
-        rtos_thread_prio_bitmap <<= 1; 
+        rtos_thread_prio_bitmap <<= 1;
         if (rtos_thread_prio_bitmap == 0) {
             leading_zeros_count = 32;
         }
@@ -3137,7 +3153,7 @@ rtos_k_find_highest_thread_priority(
 
     if (rtos_thread_prio_bitmap < BIT(15)) {
         leading_zeros_count += 1;
-        rtos_thread_prio_bitmap <<= 1; 
+        rtos_thread_prio_bitmap <<= 1;
         if (rtos_thread_prio_bitmap == 0) {
             leading_zeros_count = 16;
         }
@@ -3157,12 +3173,12 @@ rtos_k_find_highest_thread_priority(
 
     if (rtos_thread_prio_bitmap < BIT(7)) {
         leading_zeros_count += 1;
-        rtos_thread_prio_bitmap <<= 1; 
+        rtos_thread_prio_bitmap <<= 1;
         if (rtos_thread_prio_bitmap == 0) {
             leading_zeros_count = 8;
         }
     }
-#   else 
+#   else
 #       error "Invalid RTOS_NUM_THREAD_PRIORITIES"
 #   endif
 

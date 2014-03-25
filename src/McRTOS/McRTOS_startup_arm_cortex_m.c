@@ -5,8 +5,8 @@
  *
  * Copyright (C) 2013 German Rivera
  *
- * @author German Rivera 
- */  
+ * @author German Rivera
+ */
 #include "McRTOS_arm_cortex_m.h"
 #include "hardware_abstractions.h"
 #include <stdint.h>
@@ -27,7 +27,7 @@ struct rtos_interrupt *g_rtos_interrupt_systick_p = NULL;
 /**
  * Exception handlers stack shared among all nested exception handlers
  */
-struct cortex_m_exception_stack 
+struct cortex_m_exception_stack
     g_cortex_m_exception_stack __attribute__ ((section(".resetstack")));
 
 /**
@@ -36,11 +36,13 @@ struct cortex_m_exception_stack
 void
 cortex_m_reset_handler(void)
 {
-    /*
-     * Disable the Watchdog because it will cause reset unless we have
-     * refresh logic in place for the watchdog
-     */
-    write_32bit_mmio_register(&SIM_COPC, 0x0);
+#   if defined(KL25Z_SOC)
+	/*
+	 * Disable the Watchdog because it will cause reset unless we have
+	 * refresh logic in place for the watchdog
+	 */
+	write_32bit_mmio_register(&SIM_COPC, 0x0);
+#   endif
 
     copy_initialized_data_section_from_flash_to_ram();
     zero_fill_uninitialized_data_section();
@@ -59,21 +61,21 @@ cortex_m_reset_handler(void)
 
     /*
      * should never get here
-     */ 
+     */
     __BKPT(0);
 }
 
 
-/* 
+/*
  * Copy data section initializers from Flash to SRAM
- */ 
+ */
 static void
 copy_initialized_data_section_from_flash_to_ram(void)
 {
 	extern uint32_t __flash_initialized_data_start[];
 	extern uint32_t __ram_initialized_data_start[];
 	extern uint32_t __ram_initialized_data_end[];
-        
+
         uint32_t *src_word_p = __flash_initialized_data_start;
         uint32_t *dest_word_p = __ram_initialized_data_start;
 
@@ -90,7 +92,7 @@ zero_fill_uninitialized_data_section(void)
 {
         extern uint32_t __uninitialized_data_start[];
 	extern uint32_t __uninitialized_data_end[];
-        
+
         uint32_t *word_p = __uninitialized_data_start;
 
         do {
@@ -125,10 +127,12 @@ cortex_m_mpu_init(void)
 void
 cortex_m_nvic_init(void)
 {
+    uint32_t reg_value;
+
     /*
      * Check that the vector table pointer registers points to address 0x0
-     */ 
-    uint32_t reg_value = SCB_VTOR;
+     */
+    reg_value = read_32bit_mmio_register(&SCB->VTOR);
     FDC_ASSERT(reg_value == 0x0, reg_value, 0);
 
     /*
@@ -136,11 +140,13 @@ cortex_m_nvic_init(void)
      */
     cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
 
-    /* Clear any leftover pending interrupts */
-    write_32bit_mmio_register(&NVIC_ICPR, UINT32_MAX); 
+    for (IRQn_Type irq_num = 0; irq_num < SOC_NUM_INTERRUPT_CHANNELS; irq_num ++) {
+	    /* Clear any leftover pending interrupts */
+	    NVIC_ClearPendingIRQ(irq_num);
 
-    /* Clear all interrupt enable bits, mask all interrupt sources */
-    write_32bit_mmio_register(&NVIC_ICER, UINT32_MAX); 
+	    /* Clear all interrupt enable bits to disable all interrupt sources */
+	    NVIC_DisableIRQ(irq_num);
+    }
 
     /*
      * Set the priority of the PendSV exception to the highest priority, since
@@ -160,7 +166,7 @@ cortex_m_nvic_init(void)
 }
 
 
-/** 
+/**
  * Configure an ISR in the NVIC, for an external interrupt, and in the SCB
  * for internal interrupts.
  */
@@ -210,15 +216,15 @@ install_isr(
 
         /*
          * Clear any pending interrupt:
-         * 
+         *
          * NOTE: Writing 0s to other bits of SCB_ICSR has no effect
          */
         if (vector_number == INT_SysTick) {
             write_32bit_mmio_register(
-                &SCB_ICSR, SCB_ICSR_PENDSTCLR_Msk);
+                &SCB->ICSR, SCB_ICSR_PENDSTCLR_Msk);
         } else {
             write_32bit_mmio_register(
-                &SCB_ICSR, SCB_ICSR_PENDSVCLR_MASK);
+                &SCB->ICSR, SCB_ICSR_PENDSVCLR_Msk);
         }
 
         /*
@@ -246,11 +252,11 @@ install_isr(
 
 /**
  * Initializes the RTOS tick timer for the calling CPU core
- */ 
+ */
 void
 initialize_tick_timer(void)
 {
-    static const struct rtos_interrupt_registration_params rtos_interrupt_params = 
+    static const struct rtos_interrupt_registration_params rtos_interrupt_params =
     {
         .irp_name_p = "McRTOS Tick Timer Interrupt",
         .irp_isr_function_p = cortex_m_systick_isr,
@@ -268,20 +274,20 @@ initialize_tick_timer(void)
      * Initialize system tick timer to start generating interrupts:
      *
      * NOTE: We cannot use SysTick_Config() because it changes again
-     * the priority of the interrupt, which we already set in the 
+     * the priority of the interrupt, which we already set in the
      * rtos_k_register_interrupt() call above.
      */
     write_32bit_mmio_register(
-        &SYST_RVR, SYSTICK_COUNTER_RELOAD_VALUE - 1);
+        &SysTick->LOAD, SYSTICK_COUNTER_RELOAD_VALUE - 1);
 
     write_32bit_mmio_register(
-        &SYST_CVR, 0);
+        &SysTick->VAL, 0);
 
     write_32bit_mmio_register(
-        &SYST_CSR,
-        SysTick_CSR_ENABLE_MASK |
-        SysTick_CSR_TICKINT_MASK |
-        SysTick_CSR_CLKSOURCE_MASK);
+        &SysTick->CTRL,
+        SysTick_CTRL_ENABLE_Msk |
+        SysTick_CTRL_TICKINT_Msk |
+        SysTick_CTRL_CLKSOURCE_Msk);
 }
 
 
@@ -298,13 +304,13 @@ wait_for_interrupts(void)
 void cortex_m_nmi_isr(void)
 {
     TODO("Not implemented yet");
-    __BKPT(0); 
+    __BKPT(0);
 }
 
 
 void cortex_m_svc_handler(void)
 {
     TODO("Not implemented yet");
-    __BKPT(0); 
+    __BKPT(0);
 }
 

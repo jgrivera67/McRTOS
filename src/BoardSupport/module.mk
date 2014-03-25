@@ -1,5 +1,5 @@
 #
-# McRTOS board support module-level build makefile 
+# McRTOS board support module-level build makefile
 #
 # Copyright (C) 2013 German Rivera
 #
@@ -16,6 +16,7 @@ endif
 ifeq "$(PLATFORM)" "FRDM-KL25Z"
     local_src := \
                  $(subdirectory)/$(PLATFORM)/kl25z_soc_hardware_abstractions.c \
+                 $(subdirectory)/$(PLATFORM)/kl25z_interrupt_service_routines.s \
                  $(subdirectory)/$(PLATFORM)/frdm_board_hardware_abstractions.c \
                  $(subdirectory)/$(PLATFORM)/tfc_board_hardware_abstractions.c
 endif
@@ -23,6 +24,7 @@ endif
 ifeq "$(PLATFORM)" "LM4F120-LaunchPad"
     local_src := \
                  $(subdirectory)/$(PLATFORM)/lm4f120_soc_hardware_abstractions.c \
+                 $(subdirectory)/$(PLATFORM)/lm4f120_interrupt_service_routines.s \
                  $(subdirectory)/$(PLATFORM)/launchpad_board_hardware_abstractions.c
 endif
 
