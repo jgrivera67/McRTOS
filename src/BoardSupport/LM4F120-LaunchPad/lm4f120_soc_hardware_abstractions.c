@@ -8,11 +8,6 @@
 
 #include "hardware_abstractions.h"
 #include "lm4f120_soc.h"
-#define TARGET_IS_BLIZZARD_RA1 // ???
-#include "tivaware/rom.h"
-#define PART_TM4C123GH6PM
-#include "tivaware/pin_map.h"
-#include "tivaware/sysctl.h"
 #include "launchpad_board.h"
 #include "McRTOS_arm_cortex_m.h"
 #include "failure_data_capture.h"
@@ -41,12 +36,19 @@
  * port
  */
 #define CONSOLE_SERIAL_PORT_BAUD_RATE   115200
-#define CONSOLE_SERIAL_PORT_MODE        0 /* default: 8-bits, no-parity, 1 stop bit */
+#define CONSOLE_SERIAL_PORT_MODE        0   /* 8-bits, no-parity, 1 stop bit */
 
 #define UART_TRANSMIT_QUEUE_SIZE_IN_BYTES   UINT16_C(128)
 #define UART_RECEIVE_QUEUE_SIZE_IN_BYTES    UINT16_C(16)
 
-#if 0 // ???
+#define CALC_BAUD_RATE_DIVISOR_INT_PART(_cpu_clock_freq_hz, _baud_rate) \
+	((_cpu_clock_freq_hz) / (16 * (_baud_rate)))
+
+#define CALC_BAUD_RATE_DIVISOR_FRAC_PART(_cpu_clock_freq_hz, _baud_rate) \
+	UINT_DIV_APPROX(						\
+		((_cpu_clock_freq_hz) % (16 * (_baud_rate))) * 64,	\
+		16 * (_baud_rate))
+
 /**
  * Const fields of a UART device (to be placed in flash)
  */
@@ -54,16 +56,12 @@ struct uart_device {
 #   define UART_DEVICE_SIGNATURE  GEN_SIGNATURE('U', 'A', 'R', 'T')
     uint32_t urt_signature;
     struct uart_device_var *urt_var_p;
-    union {
-        UART0_MemMapPtr urt_mmio_uart0_p;
-        UART_MemMapPtr urt_mmio_uart_p;
-    };
-
-    volatile uint32_t *urt_mmio_tx_port_pcr_p;
-    volatile uint32_t *urt_mmio_rx_port_pcr_p;
-    uint32_t urt_mmio_pin_mux_selector_mask;
+    volatile struct uart *urt_mmio_uart_p;
     uint32_t urt_mmio_clock_gate_mask;
-
+    volatile struct gpio_port *urt_gpio_port_p; /* for Tx and Rx pins */
+    uint32_t urt_tx_pin_bit_index;
+    uint32_t urt_rx_pin_bit_index;
+    uint8_t urt_mux_function_selector;
     struct rtos_interrupt_registration_params urt_rtos_interrupt_params;
     struct rtos_interrupt **urt_rtos_interrupt_pp;
     const char *urt_transmit_queue_name_p;
@@ -83,7 +81,6 @@ struct uart_device_var {
     struct rtos_circular_buffer urt_transmit_queue;
     struct rtos_circular_buffer urt_receive_queue;
 };
-#endif // ???
 
 static cpu_reset_cause_t find_reset_cause(void);
 
@@ -93,17 +90,13 @@ static void system_clocks_init(void);
 static void init_cpu_clock_cycles_counter(void);
 #endif
 
-#if 0 // ???
 static void uart_stop(
     const struct uart_device *uart_device_p);
-#endif
 
 /*
  * Function prototypes for dummy VIC interrupt ISRs
  */
 static isr_function_t dummy_isr;
-
-static uint32_t g_pll_frequency_in_hz = 0;
 
 /**
  * Interrupt Vector Table
@@ -127,7 +120,7 @@ isr_function_t *const g_interrupt_vector_table[] __attribute__ ((section(".vecto
     [INT_GPIOC] = dummy_isr,          // GPIO Port C
     [INT_GPIOD] = dummy_isr,          // GPIO Port D
     [INT_GPIOE] = dummy_isr,          // GPIO Port E
-    [INT_UART0] = dummy_isr,          // UART0
+    [INT_UART0] = lm4f120_uart0_isr,  // UART0
     [INT_UART1] = dummy_isr,          // UART1
     [INT_SSI0] = dummy_isr,          // SSI0
     [INT_I2C0] = dummy_isr,          // I2C0
@@ -207,7 +200,6 @@ C_ASSERT(
     ARRAY_SIZE(g_interrupt_vector_table) ==
     CORTEX_M_IRQ_VECTOR_BASE + SOC_NUM_INTERRUPT_CHANNELS);
 
-#if 0 // ???
 /**
  * McRTOS interrupt object for the UART0 interrupts
  */
@@ -242,7 +234,7 @@ static uint8_t uart0_transmit_queue_storage[UART_TRANSMIT_QUEUE_SIZE_IN_BYTES];
 static uint8_t uart0_receive_queue_storage[UART_RECEIVE_QUEUE_SIZE_IN_BYTES];
 
 /**
- * Global array of const structures for UART devices for the KL25Z SoC
+ * Global array of const structures for UART devices for the LM4F120 SoC
  * (allocated in flash space)
  */
 static const struct uart_device g_uart_devices[] =
@@ -250,14 +242,15 @@ static const struct uart_device g_uart_devices[] =
     [0] = {
         .urt_signature = UART_DEVICE_SIGNATURE,
         .urt_var_p = &g_uart_devices_var[0],
-        .urt_mmio_uart0_p = UART0_BASE_PTR,
-        .urt_mmio_tx_port_pcr_p = &PORTA_PCR1,
-        .urt_mmio_rx_port_pcr_p = &PORTA_PCR2,
-        .urt_mmio_pin_mux_selector_mask = PORT_PCR_MUX(0x2),
-        .urt_mmio_clock_gate_mask = SIM_SCGC4_UART0_MASK,
+        .urt_mmio_uart_p = (volatile struct uart *)UART0_BASE,
+        .urt_mmio_clock_gate_mask = SYSCTL_RCGC1_UART0,
+	.urt_gpio_port_p = (volatile struct gpio_port *)GPIO_PORTA_BASE,
+	.urt_tx_pin_bit_index = LPAD_UART0_TX_PIN_INDEX,
+	.urt_rx_pin_bit_index = LPAD_UART0_RX_PIN_INDEX,
+	.urt_mux_function_selector = 0x1,
         .urt_rtos_interrupt_params = {
             .irp_name_p = "UART0 Interrupt",
-            .irp_isr_function_p = kl25_uart0_isr,
+            .irp_isr_function_p = lm4f120_uart0_isr,
             .irp_arg_p =  (void *)&g_uart_devices[0],
             .irp_channel = VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART0),
             .irp_priority = UART0_INTERRUPT_PRIORITY,
@@ -274,21 +267,19 @@ static const struct uart_device g_uart_devices[] =
     [1] = {
         .urt_signature = UART_DEVICE_SIGNATURE,
         .urt_var_p = &g_uart_devices_var[1],
-        .urt_mmio_uart_p = UART1_BASE_PTR,
-        .urt_mmio_tx_port_pcr_p = &PORTC_PCR4,
-        .urt_mmio_rx_port_pcr_p = &PORTC_PCR3,
-        .urt_mmio_pin_mux_selector_mask = PORT_PCR_MUX(0x3),
-        .urt_mmio_clock_gate_mask = SIM_SCGC4_UART1_MASK,
+        .urt_mmio_uart_p = (volatile struct uart *)UART1_BASE,
+        .urt_mmio_clock_gate_mask = SYSCTL_RCGC1_UART1,
+	.urt_gpio_port_p = (volatile struct gpio_port *)GPIO_PORTC_BASE,
+	.urt_tx_pin_bit_index = LPAD_UART1_TX_PIN_INDEX,
+	.urt_rx_pin_bit_index = LPAD_UART1_RX_PIN_INDEX,
+	.urt_mux_function_selector = 0x2,
     },
 
     [2] = {
         .urt_signature = UART_DEVICE_SIGNATURE,
         .urt_var_p = &g_uart_devices_var[2],
-        .urt_mmio_uart_p = UART2_BASE_PTR,
-        .urt_mmio_tx_port_pcr_p = &PORTD_PCR3,
-        .urt_mmio_rx_port_pcr_p = &PORTD_PCR2,
-        .urt_mmio_pin_mux_selector_mask = PORT_PCR_MUX(0x3),
-        .urt_mmio_clock_gate_mask = SIM_SCGC4_UART2_MASK,
+        .urt_mmio_uart_p = (volatile struct uart *)UART2_BASE,
+        .urt_mmio_clock_gate_mask = SYSCTL_RCGC1_UART2,
     },
 };
 
@@ -296,10 +287,6 @@ C_ASSERT(
     ARRAY_SIZE(g_uart_devices) == ARRAY_SIZE(g_uart_devices_var));
 
 const struct uart_device *const g_console_serial_port_p = &g_uart_devices[0];
-
-#else
-const struct uart_device *const g_console_serial_port_p = NULL;
-#endif
 
 /**
  * Hardware Micro trace buffer (MTB)
@@ -310,7 +297,7 @@ uint64_t __attribute__ ((section(".mtb_buf")))
 #endif
 
 /**
- *  Initializes board hardware.
+ *  Initializes SoC hardware.
  *
  *  @pre This function must be called with interrupts disabled.
  */
@@ -335,19 +322,10 @@ soc_hardware_init(void)
 
     cortex_m_nvic_init();
 
-#if 0
     uart_init(
         g_console_serial_port_p,
         CONSOLE_SERIAL_PORT_BAUD_RATE,
         CONSOLE_SERIAL_PORT_MODE);
-#else
-    /*???
-    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
-    ROM_GPIOPinConfigure(GPIO_PA0_U0RX);
-    ROM_GPIOPinConfigure(GPIO_PA1_U0TX);
-    ROM_GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
-    ???*/
-#endif
 
 #   ifdef DEBUG
     uart_putchar_with_polling(g_console_serial_port_p, '\r');
@@ -375,9 +353,7 @@ soc_reset(void)
     /*
      * Stop all peripherals:
      */
-#if 0 // ???
     uart_stop(g_console_serial_port_p);
-#endif
 
     /*
      * Trigger software reset in the SoC:
@@ -400,29 +376,59 @@ software_reset_happened(void)
 }
 
 
+/**
+ * Configure the system to get its clock from the PLL
+ */
+static void
+pll_init(void)
+{
+    /*
+     * TODO: re-write this function
+     */
+#   define SYSDIV2 4
+    // bus frequency is 400MHz/(SYSDIV2+1) = 400MHz/(4+1) = 80 MHz
+
+  // 0) configure the system to use RCC2 for advanced features
+  //    such as 400 MHz PLL and non-integer System Clock Divisor
+  SYSCTL_RCC2_R |= SYSCTL_RCC2_USERCC2;
+  // 1) bypass PLL while initializing
+  SYSCTL_RCC2_R |= SYSCTL_RCC2_BYPASS2;
+  // 2) select the crystal value and oscillator source
+  SYSCTL_RCC_R &= ~SYSCTL_RCC_XTAL_M;   // clear XTAL field
+  SYSCTL_RCC_R += SYSCTL_RCC_XTAL_16MHZ;// configure for 16 MHz crystal
+  SYSCTL_RCC2_R &= ~SYSCTL_RCC2_OSCSRC2_M;// clear oscillator source field
+  SYSCTL_RCC2_R += SYSCTL_RCC2_OSCSRC2_MO;// configure for main oscillator source
+  // 3) activate PLL by clearing PWRDN
+  SYSCTL_RCC2_R &= ~SYSCTL_RCC2_PWRDN2;
+  // 4) set the desired system divider and the system divider least significant bit
+  SYSCTL_RCC2_R |= SYSCTL_RCC2_DIV400;  // use 400 MHz PLL
+  SYSCTL_RCC2_R = (SYSCTL_RCC2_R&~0x1FC00000) // clear system clock divider field
+                  + (SYSDIV2<<22);      // configure for 80 MHz clock
+  // 5) wait for the PLL to lock by polling PLLLRIS
+  while((SYSCTL_RIS_R&SYSCTL_RIS_PLLLRIS)==0){};
+  // 6) enable use of PLL by clearing BYPASS
+  SYSCTL_RCC2_R &= ~SYSCTL_RCC2_BYPASS2;
+}
+
 static void
 system_clocks_init(void)
 {
     uint32_t reg_value;
 
+    pll_init();
+
     /*
      * Enable all of the GPIO port clocks. These have to be enabled to configure
      * pin muxing options, so most code will need all of these on anyway.
      */
-    reg_value = read_32bit_mmio_register(&SYSCTL_RCGCGPIO_R);
-    reg_value |= (SYSCTL_RCGCGPIO_R0
-                    | SYSCTL_RCGCGPIO_R1
-                    | SYSCTL_RCGCGPIO_R2
-                    | SYSCTL_RCGCGPIO_R3
-                    | SYSCTL_RCGCGPIO_R4
-                    | SYSCTL_RCGCGPIO_R5);
-    write_32bit_mmio_register(&SYSCTL_RCGCGPIO_R, reg_value);
-
-    /*
-     * Set the clocking to run at 50 MHz from the PLL.
-     */
-    ROM_SysCtlClockSet(SYSCTL_SYSDIV_4 | SYSCTL_USE_PLL | SYSCTL_XTAL_16MHZ |
-                       SYSCTL_OSC_MAIN);
+    reg_value = read_32bit_mmio_register(&SYSCTL_RCGC2_R);
+    reg_value |= (SYSCTL_RCGC2_GPIOA |
+		  SYSCTL_RCGC2_GPIOB |
+		  SYSCTL_RCGC2_GPIOC |
+		  SYSCTL_RCGC2_GPIOD |
+		  SYSCTL_RCGC2_GPIOE |
+		  SYSCTL_RCGC2_GPIOF);
+    write_32bit_mmio_register(&SYSCTL_RCGC2_R, reg_value);
 }
 
 static bool g_micro_trace_initialized = false;
@@ -544,145 +550,228 @@ configure_pin(const struct pin_config_info *pin_info_p, bool is_output)
     uint32_t reg_value;
     volatile struct gpio_port *pin_gpio_port_p = pin_info_p->pin_gpio_port_p;
 
+#   ifdef DEBUG
+    FDC_ASSERT(
+        pin_info_p->pin_bit_mask <= 0xff,
+        pin_info_p->pin_bit_mask, pin_info_p);
+#   endif
+
     if (pin_info_p->pin_is_locked) {
 	/*
 	 * Unlock pin:
 	 */
         write_32bit_mmio_register(
-	    &pin_gpio_port_p->reg_GPIO_O_LOCK, GPIO_LOCK_KEY);
+	    &pin_gpio_port_p->reg_LOCK, GPIO_LOCK_KEY);
 
         reg_value = read_32bit_mmio_register(
-			    &pin_gpio_port_p->reg_GPIO_O_CR);
+			    &pin_gpio_port_p->reg_CR);
         reg_value |= pin_info_p->pin_bit_mask;
         write_32bit_mmio_register(
-	    &pin_gpio_port_p->reg_GPIO_O_CR, reg_value);
+	    &pin_gpio_port_p->reg_CR, reg_value);
     }
 
     /*
      * Set pin direction:
      */
-    reg_value = read_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_DIR);
+    reg_value = read_32bit_mmio_register(&pin_gpio_port_p->reg_DIR);
     if (is_output) {
         reg_value |= pin_info_p->pin_bit_mask;
     } else {
         reg_value &= ~pin_info_p->pin_bit_mask;
     }
-    write_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_DIR, reg_value);
+    write_32bit_mmio_register(&pin_gpio_port_p->reg_DIR, reg_value);
 
     /*
      * Disable alternate function for pin:
      */
-    reg_value = read_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_AFSEL);
+    reg_value = read_32bit_mmio_register(&pin_gpio_port_p->reg_AFSEL);
     reg_value &= ~pin_info_p->pin_bit_mask;
-    write_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_AFSEL, reg_value);
+    write_32bit_mmio_register(&pin_gpio_port_p->reg_AFSEL, reg_value);
+    ///???
+    reg_value = read_32bit_mmio_register(&pin_gpio_port_p->reg_PCTL);
+    reg_value &= ~pin_info_p->pin_bit_mask;
+    write_32bit_mmio_register(&pin_gpio_port_p->reg_PCTL, reg_value);
+    ///???
 
-    if (pin_info_p->pin_is_active_high) {
-	    /*
-	     * Select pull-down resistor
-	     */
-	    reg_value = read_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_PDR);
+    switch (pin_info_p->pin_pull_mode) {
+    case PIN_PULL_DOWN:
+        reg_value = read_32bit_mmio_register(&pin_gpio_port_p->reg_PDR);
+        reg_value |= pin_info_p->pin_bit_mask;
+        write_32bit_mmio_register(&pin_gpio_port_p->reg_PDR, reg_value);
+	break;
+
+    case PIN_PULL_UP:
+	reg_value = read_32bit_mmio_register(&pin_gpio_port_p->reg_PUR);
+	reg_value |= pin_info_p->pin_bit_mask;
+	write_32bit_mmio_register(&pin_gpio_port_p->reg_PUR, reg_value);
+	break;
+
+    case PIN_OPEN_DRAIN:
+	reg_value = read_32bit_mmio_register(&pin_gpio_port_p->reg_ODR);
+	reg_value |= pin_info_p->pin_bit_mask;
+	write_32bit_mmio_register(&pin_gpio_port_p->reg_ODR, reg_value);
+	break;
+
+    default:
+	FDC_ASSERT(pin_info_p->pin_pull_mode == PIN_PULL_NONE,
+		   pin_info_p->pin_pull_mode, pin_info_p);
+    }
+
+    /*
+     * Set initial value of pin to "deasserted" if output pin:
+     */
+    if (is_output) {
+	volatile uint32_t *data_reg_addr =
+		&pin_gpio_port_p->reg_DATA_bits[pin_info_p->pin_bit_mask];
+
+        reg_value = read_32bit_mmio_register(data_reg_addr);
+	if (pin_info_p->pin_is_active_high) {
+	    reg_value &= ~pin_info_p->pin_bit_mask;
+        } else {
 	    reg_value |= pin_info_p->pin_bit_mask;
-	    write_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_PDR, reg_value);
-    } else {
-	    /*
-	     * Select pull-up resistor
-	     */
-	    reg_value = read_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_PUR);
-	    reg_value |= pin_info_p->pin_bit_mask;
-	    write_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_PUR, reg_value);
+	}
+	write_32bit_mmio_register(data_reg_addr, reg_value);
     }
 
     /*
      * Disable analog mode for pin:
      */
-    reg_value = read_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_AMSEL);
+    reg_value = read_32bit_mmio_register(&pin_gpio_port_p->reg_AMSEL);
     reg_value &= ~pin_info_p->pin_bit_mask;
-    write_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_AMSEL, reg_value);
+    write_32bit_mmio_register(&pin_gpio_port_p->reg_AMSEL, reg_value);
+
+#if 0
+    /*
+     * Set pin strength:
+     */
+    reg_value = read_32bit_mmio_register(&pin_gpio_port_p->reg_DR8R);
+    reg_value &= ~pin_info_p->pin_bit_mask;
+    write_32bit_mmio_register(&pin_gpio_port_p->reg_DR8R, reg_value);
+    reg_value = read_32bit_mmio_register(&pin_gpio_port_p->reg_SLR);
+    reg_value &= ~pin_info_p->pin_bit_mask;
+    write_32bit_mmio_register(&pin_gpio_port_p->reg_SLR, reg_value);
+#endif
 
     /*
      * Enable pin as a digital input or output signal:
      */
-    reg_value = read_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_DEN);
+    reg_value = read_32bit_mmio_register(&pin_gpio_port_p->reg_DEN);
     reg_value |= pin_info_p->pin_bit_mask;
-    write_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_DEN, reg_value);
+    write_32bit_mmio_register(&pin_gpio_port_p->reg_DEN, reg_value);
 }
 
 
 void
 activate_output_pin(const struct pin_config_info *pin_info_p)
 {
+    uint32_t reg_value;
     volatile struct gpio_port *pin_gpio_port_p = pin_info_p->pin_gpio_port_p;
 
 #   ifdef DEBUG
-    uint32_t reg_value = read_32bit_mmio_register(
-                            &pin_gpio_port_p->reg_GPIO_O_DIR);
+    reg_value = read_32bit_mmio_register(
+                            &pin_gpio_port_p->reg_DIR);
 
     FDC_ASSERT(
         reg_value & pin_info_p->pin_bit_mask,
         pin_info_p, reg_value);
+
+    FDC_ASSERT(
+        pin_info_p->pin_bit_mask <= 0xff,
+        pin_info_p->pin_bit_mask, pin_info_p);
 #   endif
 
-    reg_value = read_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_DATA);
     if (pin_info_p->pin_is_active_high) {
-        reg_value |= pin_info_p->pin_bit_mask;
+        reg_value = pin_info_p->pin_bit_mask;
     } else {
-        reg_value &= ~pin_info_p->pin_bit_mask;
+        reg_value = ~pin_info_p->pin_bit_mask;
     }
-    write_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_DATA, reg_value);
+
+    write_32bit_mmio_register(
+	&pin_gpio_port_p->reg_DATA_bits[pin_info_p->pin_bit_mask],
+	reg_value);
 }
 
 
 void
 deactivate_output_pin(const struct pin_config_info *pin_info_p)
 {
+    uint32_t reg_value;
     volatile struct gpio_port *pin_gpio_port_p = pin_info_p->pin_gpio_port_p;
 
 #   ifdef DEBUG
-    uint32_t reg_value = read_32bit_mmio_register(
-                            &pin_gpio_port_p->reg_GPIO_O_DIR);
+    reg_value = read_32bit_mmio_register(
+                            &pin_gpio_port_p->reg_DIR);
 
     FDC_ASSERT(
         reg_value & pin_info_p->pin_bit_mask,
         reg_value, pin_info_p->pin_bit_mask);
+
+    FDC_ASSERT(
+        pin_info_p->pin_bit_mask <= 0xff,
+        pin_info_p->pin_bit_mask, pin_info_p);
 #   endif
 
-    reg_value = read_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_DATA);
     if (pin_info_p->pin_is_active_high) {
-        reg_value &= ~pin_info_p->pin_bit_mask;
+        reg_value = ~pin_info_p->pin_bit_mask;
     } else {
-        reg_value |= pin_info_p->pin_bit_mask;
+        reg_value = pin_info_p->pin_bit_mask;
     }
-    write_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_DATA, reg_value);
+
+    write_32bit_mmio_register(
+	&pin_gpio_port_p->reg_DATA_bits[pin_info_p->pin_bit_mask],
+	reg_value);
 }
 
 
 void
 toggle_output_pin(const struct pin_config_info *pin_info_p)
 {
+    uint32_t reg_value;
     volatile struct gpio_port *pin_gpio_port_p = pin_info_p->pin_gpio_port_p;
 
 #   ifdef DEBUG
-    uint32_t reg_value = read_32bit_mmio_register(
-                            &pin_gpio_port_p->reg_GPIO_O_DIR);
+    reg_value = read_32bit_mmio_register(
+                            &pin_gpio_port_p->reg_DIR);
 
     FDC_ASSERT(
         reg_value & pin_info_p->pin_bit_mask,
         pin_info_p, reg_value);
+
+    FDC_ASSERT(
+        pin_info_p->pin_bit_mask <= 0xff,
+        pin_info_p->pin_bit_mask, pin_info_p);
 #   endif
 
-    reg_value = read_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_DATA);
+    volatile uint32_t *data_reg_addr =
+	&pin_gpio_port_p->reg_DATA_bits[pin_info_p->pin_bit_mask];
+
+    reg_value = read_32bit_mmio_register(data_reg_addr);
     reg_value ^= pin_info_p->pin_bit_mask;
-    write_32bit_mmio_register(&pin_gpio_port_p->reg_GPIO_O_DATA, reg_value);
+    write_32bit_mmio_register(data_reg_addr, reg_value);
 }
 
 
 bool
 read_input_pin(const struct pin_config_info *pin_info_p)
 {
+    uint32_t reg_value;
     volatile struct gpio_port *pin_gpio_port_p = pin_info_p->pin_gpio_port_p;
 
-    uint32_t reg_value = read_32bit_mmio_register(
-			    &pin_gpio_port_p->reg_GPIO_O_DATA);
+#   ifdef DEBUG
+    reg_value = read_32bit_mmio_register(
+                            &pin_gpio_port_p->reg_DIR);
+
+    FDC_ASSERT(
+        (reg_value & pin_info_p->pin_bit_mask) == 0,
+        pin_info_p, reg_value);
+
+    FDC_ASSERT(
+        pin_info_p->pin_bit_mask <= 0xff,
+        pin_info_p->pin_bit_mask, pin_info_p);
+#   endif
+
+    reg_value = read_32bit_mmio_register(
+			&pin_gpio_port_p->reg_DATA_bits[pin_info_p->pin_bit_mask]);
 
     return (reg_value & pin_info_p->pin_bit_mask) != 0;
 }
@@ -709,7 +798,7 @@ turn_off_debugger_led(void)
     set_rgb_led_color(g_before_debugger_led_color);
 }
 
-#if 0 // ???
+
 void
 uart_init(
     const struct uart_device *uart_device_p,
@@ -724,7 +813,8 @@ uart_init(
         uart_device_p->urt_signature, uart_device_p);
 
     struct uart_device_var *uart_var_p = uart_device_p->urt_var_p;
-    UART_MemMapPtr uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
+    volatile struct uart *uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
+    volatile struct gpio_port *uart_gpio_port_p = uart_device_p->urt_gpio_port_p;
 
     FDC_ASSERT(!uart_var_p->urt_initialized, uart_device_p, 0);
     FDC_ASSERT(mode == 0, mode, uart_device_p);
@@ -733,128 +823,81 @@ uart_init(
     /*
      * Enable clock for the UART:
      */
-    reg_value = read_32bit_mmio_register(&SIM_SCGC4);
+    reg_value = read_32bit_mmio_register(&SYSCTL_RCGC1_R);
     reg_value |= uart_device_p->urt_mmio_clock_gate_mask;
-    write_32bit_mmio_register(&SIM_SCGC4, reg_value);
+    write_32bit_mmio_register(&SYSCTL_RCGC1_R, reg_value);
 
     /*
-     * Disable UART's transmitter and receiver, while UART is being
-     * configured:
+     * Disable UART, while it is being configured:
      */
-    reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
-    reg_value &= ~(UART_C2_TE_MASK | UART_C2_RE_MASK);
-    write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
+    reg_value = read_32bit_mmio_register(&uart_mmio_registers_p->reg_CTL);
+    reg_value &= ~UART_CTL_UARTEN;
+    write_32bit_mmio_register(&uart_mmio_registers_p->reg_CTL, reg_value);
 
     /*
-     * Configure the uart for 8-bit mode, no parity (mode is 0):
+     * Set baud rate divisor integer part:
      */
-    write_8bit_mmio_register(
-        &UART_C1_REG(uart_mmio_registers_p), mode);
+    reg_value = CALC_BAUD_RATE_DIVISOR_INT_PART(
+		    CPU_CLOCK_FREQ_IN_HZ, baud_rate);
+    write_32bit_mmio_register(&uart_mmio_registers_p->reg_IBRD, reg_value);
 
     /*
-     * Enable Tx pin:
+     * Set baud rate divisor fractional part:
+     */
+    reg_value = CALC_BAUD_RATE_DIVISOR_FRAC_PART(
+		    CPU_CLOCK_FREQ_IN_HZ, baud_rate);
+    write_32bit_mmio_register(&uart_mmio_registers_p->reg_FBRD, reg_value);
+
+    /*
+     * Configure the uart for 8-bit mode, no parity, 1 stop bit:
      */
     write_32bit_mmio_register(
-        uart_device_p->urt_mmio_tx_port_pcr_p,
-        uart_device_p->urt_mmio_pin_mux_selector_mask | PORT_PCR_DSE_MASK);
+	&uart_mmio_registers_p->reg_LCRH,
+	UART_LCRH_WLEN_8);
 
     /*
-     * Enable Rx pin:
+     * Configure Tx and Rx pins:
+     * - Enable alternate function for corresponding GPIO port pins
+     * - Select UART functions for pins
+     * - Disable analog functionality for pins
+     * - Enable digital I/O for pins
      */
-    write_32bit_mmio_register(
-        uart_device_p->urt_mmio_rx_port_pcr_p,
-        uart_device_p->urt_mmio_pin_mux_selector_mask | PORT_PCR_DSE_MASK);
 
-    // Calculate the first baud rate using the lowest OSR value possible.
-    //uint32_t uart0clk = CPU_CLOCK_FREQ_IN_HZ / 2;
-    uint32_t uart0clk = g_pll_frequency_in_hz / 2;
-    uint32_t i = 4;
-    uint32_t sbr_val = uart0clk / (baud_rate * i);
-    uint32_t calculated_baud = uart0clk / (i * sbr_val);
-    uint32_t baud_diff;
+    uint32_t tx_rx_pins_bit_mask =
+	(BIT(uart_device_p->urt_tx_pin_bit_index) |
+	 BIT(uart_device_p->urt_rx_pin_bit_index));
 
-    if (calculated_baud > baud_rate)
-        baud_diff = calculated_baud - baud_rate;
-    else
-        baud_diff = baud_rate - calculated_baud;
+    reg_value = read_32bit_mmio_register(&uart_gpio_port_p->reg_AFSEL);
+    reg_value |= tx_rx_pins_bit_mask;
+    write_32bit_mmio_register(&uart_gpio_port_p->reg_AFSEL, reg_value);
 
-    uint32_t osr_val = i;
-
-    if (uart_device_p == &g_uart_devices[0])
-    {
-        UART0_MemMapPtr uart0_mmio_registers_p = uart_device_p->urt_mmio_uart0_p;
-
-        // Select the best OSR value
-        for (i = 5; i <= 32; i++)
-        {
-            uint32_t temp;
-
-            sbr_val = uart0clk / (baud_rate * i);
-            calculated_baud = uart0clk / (i * sbr_val);
-
-            if (calculated_baud > baud_rate)
-                temp = calculated_baud - baud_rate;
-            else
-                temp = baud_rate - calculated_baud;
-
-            if (temp <= baud_diff)
-            {
-                baud_diff = temp;
-                osr_val = i;
-            }
-        }
-
-        FDC_ASSERT(baud_diff < (baud_rate / 100) * 3, baud_diff, baud_rate);
-
-        // If the OSR is between 4x and 8x then both
-        // edge sampling MUST be turned on.
-        if (osr_val > 3 && osr_val < 9)
-        {
-            reg_value = read_8bit_mmio_register(&UART0_C5_REG(uart0_mmio_registers_p));
-            reg_value |= UART0_C5_BOTHEDGE_MASK;
-            write_8bit_mmio_register(&UART0_C5_REG(uart0_mmio_registers_p), reg_value);
-        }
-
-        // Setup OSR value
-        reg_value = read_8bit_mmio_register(&UART0_C4_REG(uart0_mmio_registers_p));
-        SET_BIT_FIELD(reg_value, UART0_C4_OSR_MASK, UART0_C4_OSR_SHIFT, osr_val - 1);
-        write_8bit_mmio_register(&UART0_C4_REG(uart0_mmio_registers_p), reg_value);
-
-        DBG_ASSERT(
-            (reg_value & UART0_C4_OSR_MASK) + 1 == osr_val,
-            reg_value, osr_val);
-
-        sbr_val = uart0clk / (baud_rate * osr_val);
-    }
-    else
-    {
-        /* Calculate baud settings */
-        sbr_val = uart0clk / (baud_rate * 16);
-    }
-
-     /*
-      * Set SBR high-part field in the UART's BDH register:
-      */
-    reg_value = read_8bit_mmio_register(&UART_BDH_REG(uart_mmio_registers_p));
+    reg_value = read_32bit_mmio_register(&uart_gpio_port_p->reg_PCTL);
     SET_BIT_FIELD(
-        reg_value, UART_BDH_SBR_MASK, UART_BDH_SBR_SHIFT,
-        (sbr_val & 0x1F00) >> 8);
-    write_8bit_mmio_register(
-        &UART_BDH_REG(uart_mmio_registers_p), reg_value);
+        reg_value,
+        GPIO_PCTL_PIN_MUX_MASK(uart_device_p->urt_tx_pin_bit_index),
+        GPIO_PCTL_PIN_MUX_SHIFT(uart_device_p->urt_tx_pin_bit_index),
+        uart_device_p->urt_mux_function_selector);
+    SET_BIT_FIELD(
+        reg_value,
+        GPIO_PCTL_PIN_MUX_MASK(uart_device_p->urt_rx_pin_bit_index),
+        GPIO_PCTL_PIN_MUX_SHIFT(uart_device_p->urt_rx_pin_bit_index),
+        uart_device_p->urt_mux_function_selector);
+    write_32bit_mmio_register(&uart_gpio_port_p->reg_PCTL, reg_value);
 
-     /*
-      * Set SBR low byte in the UART's BDL register:
-      */
-    write_8bit_mmio_register(
-        &UART_BDL_REG(uart_mmio_registers_p),
-        sbr_val & UART_BDL_SBR_MASK);
+    reg_value = read_32bit_mmio_register(&uart_gpio_port_p->reg_AMSEL);
+    reg_value &= ~tx_rx_pins_bit_mask;
+    write_32bit_mmio_register(&uart_gpio_port_p->reg_AMSEL, reg_value);
+
+    reg_value = read_32bit_mmio_register(&uart_gpio_port_p->reg_DEN);
+    reg_value |= tx_rx_pins_bit_mask;
+    write_32bit_mmio_register(&uart_gpio_port_p->reg_DEN, reg_value);
 
     /*
-     * Enable UART's transmitter and receiver:
+     * Enable UART:
      */
-    reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
-    reg_value |= (UART_C2_TE_MASK | UART_C2_RE_MASK);
-    write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
+    reg_value = read_32bit_mmio_register(&uart_mmio_registers_p->reg_CTL);
+    reg_value |= UART_CTL_UARTEN;
+    write_32bit_mmio_register(&uart_mmio_registers_p->reg_CTL, reg_value);
 
     /*
      * Initialize transmit queue:
@@ -899,21 +942,21 @@ uart_stop(
 {
     uint32_t reg_value;
     struct uart_device_var *uart_var_p = uart_device_p->urt_var_p;
-    UART_MemMapPtr uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
+    volatile struct uart *uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
 
     /*
-     * Disable UART's transmitter and receiver:
+     * Disable UART:
      */
-    reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
-    reg_value &= ~(UART_C2_TE_MASK | UART_C2_RE_MASK);
-    write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
+    reg_value = read_32bit_mmio_register(&uart_mmio_registers_p->reg_CTL);
+    reg_value &= ~UART_CTL_UARTEN;
+    write_32bit_mmio_register(&uart_mmio_registers_p->reg_CTL, reg_value);
 
     /*
      * Disable clock for the UART:
      */
-    reg_value = read_32bit_mmio_register(&SIM_SCGC4);
+    reg_value = read_32bit_mmio_register(&SYSCTL_RCGC1_R);
     reg_value &= ~uart_device_p->urt_mmio_clock_gate_mask;
-    write_32bit_mmio_register(&SIM_SCGC4, reg_value);
+    write_32bit_mmio_register(&SYSCTL_RCGC1_R, reg_value);
 
     uart_var_p->urt_initialized = false;
 }
@@ -922,7 +965,7 @@ uart_stop(
  * UART common interrupt handler with interrupts enabled
  */
 void
-kl25_uart_interrupt_e_handler(
+lm4f120_uart_interrupt_e_handler(
     struct rtos_interrupt *rtos_interrupt_p)
 {
     FDC_ASSERT_RTOS_INTERRUPT_E_HANDLER_PRECONDITIONS(rtos_interrupt_p);
@@ -936,89 +979,94 @@ kl25_uart_interrupt_e_handler(
 
     uint32_t reg_value;
     struct uart_device_var *const uart_var_p = uart_device_p->urt_var_p;
-    UART_MemMapPtr uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
+    volatile struct uart *uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
 
     DBG_ASSERT(
-        (UART0_MemMapPtr)uart_mmio_registers_p == UART0_BASE_PTR ||
-        uart_mmio_registers_p == UART1_BASE_PTR ||
-        uart_mmio_registers_p == UART2_BASE_PTR,
+        uart_mmio_registers_p == (volatile struct uart *)UART0_BASE ||
+        uart_mmio_registers_p == (volatile struct uart *)UART1_BASE ||
+        uart_mmio_registers_p == (volatile struct uart *)UART2_BASE,
         uart_mmio_registers_p, uart_device_p);
 
     DBG_ASSERT(
         uart_var_p->urt_initialized, uart_device_p, 0);
 
-    uint8_t s1_reg_value = read_8bit_mmio_register(&UART_S1_REG(uart_mmio_registers_p));
+    uint32_t reg_mis_value = read_32bit_mmio_register(&uart_mmio_registers_p->reg_MIS);
 
     /*
-     * There is at least one interrupt pending
-     * (interrupt status bit is asserted low)
+     * There is at least one Tx or Rx interrupt pending
      */
     FDC_ASSERT(
-        (s1_reg_value & (UART_S1_RDRF_MASK | UART_S1_TDRE_MASK)) != 0,
-        s1_reg_value, uart_device_p);
+        (reg_mis_value & (UART_MIS_RXMIS | UART_MIS_TXMIS)) != 0,
+        reg_mis_value, uart_device_p);
 
     /*
-     * "Transmit data register empty" interrupt:
+     * "Tx holding register empty" interrupt:
      */
-    if (s1_reg_value & UART_S1_TDRE_MASK) {
-        /*
-         * NOTE: This interrupt source will be cleared when
-         * the next character is transmitted
-         */
+    if (reg_mis_value & UART_MIS_TXMIS) {
+	uint8_t byte_to_transmit;
+	bool entry_read = rtos_k_byte_circular_buffer_read(
+			    &uart_var_p->urt_transmit_queue,
+			    &byte_to_transmit,
+			    false);
 
-        uint8_t byte_to_transmit;
-
-        bool entry_read = rtos_k_byte_circular_buffer_read(
-                &uart_var_p->urt_transmit_queue,
-                &byte_to_transmit,
-                false);
-
-        if (entry_read) {
-            write_8bit_mmio_register(&UART_D_REG(uart_mmio_registers_p), byte_to_transmit);
-        } else {
-            /*
-             * Disable "transmit data register empty" interrupt:
-             */
-            reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
-            reg_value &= ~UART_C2_TIE_MASK;
-            write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
-        }
+	if (entry_read) {
+	    /*
+	     * Write the next byte to transmit, to clear the interrupt source:
+	     */
+	    write_32bit_mmio_register(&uart_mmio_registers_p->reg_DR, byte_to_transmit);
+	} else {
+	    /*
+	     * Disable "Tx holding register is empty" interrupt:
+	     *
+	     * NOTE: We need to do this as the interrupt is still asserted
+	     */
+	    reg_value = read_32bit_mmio_register(&uart_mmio_registers_p->reg_IM);
+	    reg_value &= ~UART_IM_TXIM;
+	    write_32bit_mmio_register(&uart_mmio_registers_p->reg_IM, reg_value);
+	}
     }
 
     /*
-     * "Receive data register full" interrupt:
+     * "Rx holding register not empty" interrupt:
      */
-    if (s1_reg_value & UART_S1_RDRF_MASK) {
-        /*
-         * Read the first byte received to clear the interrupt source.
-         */
-        uint8_t byte_received = read_8bit_mmio_register(&UART_D_REG(uart_mmio_registers_p));
+    if (reg_mis_value & UART_MIS_RXMIS) {
+	/*
+	 * Read the next byte received, to clear the interrupt source:
+	 */
+	uint8_t byte_received = read_32bit_mmio_register(
+				    &uart_mmio_registers_p->reg_DR);
 
-        bool entry_written = rtos_k_byte_circular_buffer_write(
-                &uart_var_p->urt_receive_queue,
-                byte_received,
-                false);
+	bool entry_written = rtos_k_byte_circular_buffer_write(
+		&uart_var_p->urt_receive_queue,
+		byte_received,
+		false);
 
-        if (!entry_written) {
-            uart_var_p->urt_received_bytes_dropped ++;
-        }
+	if (!entry_written) {
+	    uart_var_p->urt_received_bytes_dropped ++;
+
+	    /*
+	     * Disable "Rx holding register not empty" interrupt:
+	     *
+	     * NOTE: We need to do this as the interrupt is still asserted
+	     */
+	    reg_value = read_32bit_mmio_register(&uart_mmio_registers_p->reg_IM);
+	    reg_value &= ~UART_IM_RXIM;
+	    write_32bit_mmio_register(&uart_mmio_registers_p->reg_IM, reg_value);
+	}
     }
 }
-#endif //???
-
 
 /**
- * Send a character over a UART serial port, blocking the caller on a condvar
- * if the UART Tx fifo is full.
+ * Enqueue a character for transmission over a UART serial port, blocking the
+ * caller on a condvar if the transmit queue is full.
  */
 void
 uart_putchar(
     _IN_ const struct uart_device *uart_device_p,
     _IN_ uint8_t c)
 {
-#if 0
     struct uart_device_var *const uart_var_p = uart_device_p->urt_var_p;
-    UART_MemMapPtr uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
+    volatile struct uart *uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
 
     DBG_ASSERT(uart_var_p->urt_initialized, uart_var_p, uart_device_p);
 
@@ -1042,24 +1090,13 @@ uart_putchar(
     }
 
     /*
-     * Enable generation of "transmit data register empty" interrupts if
-     * necessary:
-     *
-     * NOTE: if the "transmit data register" is empty there will be a
-     * pending "transmit data register empty" interrupt empty, regardless
-     * of this interrupt being enabled or not in the UART. Thus, as soon
-     * as we enable the generation of this interrupt, the interrupt will
-     * fire, if the "transmit data register" was empty.
+     * Enable generation of "Tx FIFO is at least half empty" interrupts, if necessary:
      */
-    uint32_t reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
-    if ((reg_value & UART_C2_TIE_MASK) == 0) {
-        reg_value |= UART_C2_TIE_MASK;
-        write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
+    uint32_t reg_value = read_32bit_mmio_register(&uart_mmio_registers_p->reg_IM);
+    if ((reg_value & UART_IM_TXIM) == 0) {
+        reg_value |= UART_IM_TXIM;
+        write_32bit_mmio_register(&uart_mmio_registers_p->reg_IM, reg_value);
     }
-#else
-    DBG_ASSERT(uart_device_p == NULL, uart_device_p, 0);
-    //???ROM_UARTCharPut(UART0_BASE, c);
-#endif
 }
 
 
@@ -1072,9 +1109,8 @@ uart_putchar_with_polling(
     _IN_ const struct uart_device *uart_device_p,
     _IN_ uint8_t c)
 {
-#if 0 // ???
     struct uart_device_var *const uart_var_p = uart_device_p->urt_var_p;
-    UART_MemMapPtr uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
+    volatile struct uart *uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
     uint32_t reg_value;
 
     if (!uart_var_p->urt_initialized) {
@@ -1082,27 +1118,20 @@ uart_putchar_with_polling(
     }
 
     /*
-     * Disable "transmit data register empty" interrupt:
+     * Disable "Tx holding register is empty" interrupt:
      */
-    reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
-    reg_value &= ~UART_C2_TIE_MASK;
-            write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
+    reg_value = read_32bit_mmio_register(&uart_mmio_registers_p->reg_IM);
+    reg_value &= ~UART_IM_TXIM;
+    write_32bit_mmio_register(&uart_mmio_registers_p->reg_IM, reg_value);
 
     /*
-     * Do polling until the UART's transmit buffer is empty:
+     * Do polling until the UART's transmit register becomes empty:
      */
-    for ( ; ; ) {
-        reg_value = read_8bit_mmio_register(&UART_S1_REG(uart_mmio_registers_p));
-        if ((reg_value & UART_S1_TDRE_MASK) != 0) {
-            break;
-        }
-    }
+    do {
+        reg_value = read_32bit_mmio_register(&uart_mmio_registers_p->reg_FR);
+    } while ((reg_value & UART_FR_TXFF) != 0);
 
-    write_8bit_mmio_register(&UART_D_REG(uart_mmio_registers_p), c);
-#else
-    DBG_ASSERT(uart_device_p == NULL, uart_device_p, 0);
-    //???ROM_UARTCharPut(UART0_BASE, c);
-#endif
+    write_32bit_mmio_register(&uart_mmio_registers_p->reg_DR, c);
 }
 
 
@@ -1114,9 +1143,8 @@ uint8_t
 uart_getchar(
     _IN_ const struct uart_device *uart_device_p)
 {
-#if 0 // ???
     struct uart_device_var *const uart_var_p = uart_device_p->urt_var_p;
-    UART_MemMapPtr uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
+    volatile struct uart *uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
     uint32_t reg_value;
     uint8_t char_received;
 
@@ -1126,23 +1154,21 @@ uart_getchar(
     DBG_ASSERT_PRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED();
 
     /*
-     * Enable generation of receive interrupts:
+     * Enable generation of Receive interrupts, if necessary:
      */
-    reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
-    reg_value |= UART_C2_RIE_MASK;
-    write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
+    reg_value = read_32bit_mmio_register(&uart_mmio_registers_p->reg_IM);
+    if ((reg_value & UART_IM_RXIM) == 0) {
+	reg_value |= UART_IM_RXIM;
+	write_32bit_mmio_register(&uart_mmio_registers_p->reg_IM, reg_value);
+    }
 
     bool entry_read = rtos_k_byte_circular_buffer_read(
-        &uart_var_p->urt_receive_queue,
-        &char_received,
-        true);
+			&uart_var_p->urt_receive_queue,
+			&char_received,
+			true);
 
     DBG_ASSERT(entry_read, uart_device_p, 0);
     return char_received;
-#else
-    DBG_ASSERT(uart_device_p == NULL, uart_device_p, 0);
-    return 'A'; //???ROM_UARTCharGet(UART0_BASE);
-#endif
 }
 
 /**
@@ -1153,37 +1179,29 @@ uint8_t
 uart_getchar_with_polling(
     _IN_ const struct uart_device *uart_device_p)
 {
-#if 0 // ???
     uint32_t reg_value;
     struct uart_device_var *const uart_var_p = uart_device_p->urt_var_p;
-    UART_MemMapPtr uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
+    volatile struct uart *uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
 
     FDC_ASSERT(
         uart_var_p->urt_initialized, uart_var_p, uart_device_p);
 
     /*
-     * Disable generation of receive interrupts:
+     * Disable generation of Receive interrupts:
      */
-    reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
-    reg_value &= ~UART_C2_RIE_MASK;
-    write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
+    reg_value = read_32bit_mmio_register(&uart_mmio_registers_p->reg_IM);
+    reg_value &= ~UART_IM_RXIM;
+    write_32bit_mmio_register(&uart_mmio_registers_p->reg_IM, reg_value);
 
     /*
-     * Do polling until the UART's receive buffer is not empty:
+     * Do polling until the UART's Rx holding register becomes not empty:
      */
-    for ( ; ; ) {
-        reg_value = read_8bit_mmio_register(&UART_S1_REG(uart_mmio_registers_p));
-        if ((reg_value & UART_S1_RDRF_MASK) != 0) {
-            break;
-        }
-    }
+    do {
+        reg_value = read_32bit_mmio_register(&uart_mmio_registers_p->reg_FR);
+    } while ((reg_value & UART_FR_RXFE) != 0);
 
-    uint8_t byte_received = read_8bit_mmio_register(&UART_D_REG(uart_mmio_registers_p));
+    uint8_t byte_received = read_32bit_mmio_register(&uart_mmio_registers_p->reg_DR);
     return byte_received;
-#else
-    DBG_ASSERT(uart_device_p == NULL, uart_device_p, 0);
-    return 'A'; ///???ROM_UARTCharGet(UART0_BASE);
-#endif
 }
 
 

@@ -11,79 +11,124 @@
 
 #include "lm4f120_soc_public.h"
 #include "McRTOS_kernel_services.h"
-#include "tivaware/hw_gpio.h"
 
+/**
+ * GPIO port MMIO registers
+ */
 struct gpio_port {
-	uint32_t reg_GPIO_O_DATA;
-	uint8_t reg_padding1[0x3FC];
-	uint32_t reg_GPIO_O_DIR;
-	uint32_t reg_GPIO_O_IS;
-	uint32_t reg_GPIO_O_IBE;
-	uint32_t reg_GPIO_O_IEV;
-	uint32_t reg_GPIO_O_IM;
-	uint32_t reg_GPIO_O_RIS;
-	uint32_t reg_GPIO_O_MIS;
-	uint32_t reg_GPIO_O_ICR;
-	uint32_t reg_GPIO_O_AFSEL;
-	uint8_t reg_padding2[0xDC];
-	uint32_t reg_GPIO_O_DR2R;
-	uint32_t reg_GPIO_O_DR4R;
-	uint32_t reg_GPIO_O_DR8R;
-	uint32_t reg_GPIO_O_ODR;
-	uint32_t reg_GPIO_O_PUR;
-	uint32_t reg_GPIO_O_PDR;
-	uint32_t reg_GPIO_O_SLR;
-	uint32_t reg_GPIO_O_DEN;
-	uint32_t reg_GPIO_O_LOCK;
-	uint32_t reg_GPIO_O_CR;
-	uint32_t reg_GPIO_O_AMSEL;
-	uint32_t reg_GPIO_O_PCTL;
-	uint32_t reg_GPIO_O_ADCCTL;
-	uint32_t reg_GPIO_O_DMACTL;
-	uint32_t reg_GPIO_O_SI;
-	uint32_t reg_GPIO_O_DR12R;
-	uint32_t reg_GPIO_O_WAKEPEN;
-	uint32_t reg_GPIO_O_WAKELVL;
-	uint32_t reg_GPIO_O_WAKESTAT;
-	uint8_t reg_padding3[0xA74];
-	uint32_t reg_GPIO_O_PP;
-	uint32_t reg_GPIO_O_PC;
+	uint32_t reg_DATA_bits[256];	// Bit masks for data bits
+	uint32_t reg_DIR;		// Direction
+	uint32_t reg_IS;		// Interrupt Sense
+	uint32_t reg_IBE;		// Interrupt Both Edges
+	uint32_t reg_IEV;		// Interrupt Event
+	uint32_t reg_IM;		// Interrupt Mask
+	uint32_t reg_RIS;		// Raw Interrupt Status
+	uint32_t reg_MIS;		// Masked Interrupt Status
+	uint32_t reg_ICR;		// Interrupt Clear
+	uint32_t reg_AFSEL;		// Alternate Function Select
+	uint8_t reg_padding1[0xDC];
+	uint32_t reg_DR2R;		// 2-mA Drive Select
+	uint32_t reg_DR4R;		// 4-mA Drive Select
+	uint32_t reg_DR8R;		// 8-mA Drive Select
+	uint32_t reg_ODR;		// Open Drain Select
+	uint32_t reg_PUR;		// Pull-Up Select
+	uint32_t reg_PDR;		// Pull-Down Select
+	uint32_t reg_SLR;		// Slew Rate Control Select
+	uint32_t reg_DEN;		// Digital Enable
+	uint32_t reg_LOCK;		// Lock mask
+	uint32_t reg_CR;		// Commit Register
+	uint32_t reg_AMSEL;		// Analog Mode Select
+	uint32_t reg_PCTL;		// Port Control
+	uint32_t reg_ADCCTL;		// ADC Control
+	uint32_t reg_DMACTL;		// DMA Control
+	uint32_t reg_SI;		// Select Interrupt
+	uint32_t reg_DR12R;		// 12-mA Drive Select
+	uint32_t reg_WAKEPEN;		// Wake Pin Enable
+	uint32_t reg_WAKELVL;		// Wake Level
+	uint32_t reg_WAKESTAT;		// Wake Status
 };
 
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_DATA) == GPIO_O_DATA);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_DIR) == GPIO_O_DIR);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_IS) == GPIO_O_IS);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_IBE) == GPIO_O_IBE);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_IEV) == GPIO_O_IEV);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_IM) == GPIO_O_IM);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_RIS) == GPIO_O_RIS);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_MIS) == GPIO_O_MIS);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_ICR) == GPIO_O_ICR);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_AFSEL) == GPIO_O_AFSEL);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_DR2R) == GPIO_O_DR2R);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_DR4R) == GPIO_O_DR4R);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_DR8R) == GPIO_O_DR8R);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_ODR) == GPIO_O_ODR);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_PUR) == GPIO_O_PUR);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_PDR) == GPIO_O_PDR);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_SLR) == GPIO_O_SLR);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_DEN) == GPIO_O_DEN);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_LOCK) == GPIO_O_LOCK);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_CR) == GPIO_O_CR);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_AMSEL) == GPIO_O_AMSEL);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_PCTL) == GPIO_O_PCTL);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_ADCCTL) == GPIO_O_ADCCTL);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_DMACTL) == GPIO_O_DMACTL);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_SI) == GPIO_O_SI);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_DR12R) == GPIO_O_DR12R);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_WAKEPEN) == GPIO_O_WAKEPEN);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_WAKELVL) == GPIO_O_WAKELVL);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_WAKESTAT) == GPIO_O_WAKESTAT);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_PP) == GPIO_O_PP);
-C_ASSERT(offsetof(struct gpio_port, reg_GPIO_O_PC) == GPIO_O_PC);
+C_ASSERT(offsetof(struct gpio_port, reg_DATA_bits) == 0x0);
+C_ASSERT(offsetof(struct gpio_port, reg_DIR) == 0x400);
+C_ASSERT(offsetof(struct gpio_port, reg_IS) == 0x404);
+C_ASSERT(offsetof(struct gpio_port, reg_IBE) == 0x408);
+C_ASSERT(offsetof(struct gpio_port, reg_IEV) == 0x40C);
+C_ASSERT(offsetof(struct gpio_port, reg_IM) == 0x410);
+C_ASSERT(offsetof(struct gpio_port, reg_RIS) == 0x414);
+C_ASSERT(offsetof(struct gpio_port, reg_MIS) == 0x418);
+C_ASSERT(offsetof(struct gpio_port, reg_ICR) == 0x41C);
+C_ASSERT(offsetof(struct gpio_port, reg_AFSEL) == 0x420);
+C_ASSERT(offsetof(struct gpio_port, reg_DR2R) == 0x500);
+C_ASSERT(offsetof(struct gpio_port, reg_DR4R) == 0x504);
+C_ASSERT(offsetof(struct gpio_port, reg_DR8R) == 0x508);
+C_ASSERT(offsetof(struct gpio_port, reg_ODR) == 0x50C);
+C_ASSERT(offsetof(struct gpio_port, reg_PUR) == 0x510);
+C_ASSERT(offsetof(struct gpio_port, reg_PDR) == 0x514);
+C_ASSERT(offsetof(struct gpio_port, reg_SLR) == 0x518);
+C_ASSERT(offsetof(struct gpio_port, reg_DEN) == 0x51C);
+C_ASSERT(offsetof(struct gpio_port, reg_LOCK) == 0x520);
+C_ASSERT(offsetof(struct gpio_port, reg_CR) == 0x524);
+C_ASSERT(offsetof(struct gpio_port, reg_AMSEL) == 0x528);
+C_ASSERT(offsetof(struct gpio_port, reg_PCTL) == 0x52C);
+C_ASSERT(offsetof(struct gpio_port, reg_ADCCTL) == 0x530);
+C_ASSERT(offsetof(struct gpio_port, reg_DMACTL) == 0x534);
+C_ASSERT(offsetof(struct gpio_port, reg_SI) == 0x538);
+C_ASSERT(offsetof(struct gpio_port, reg_DR12R) == 0x53C);
+C_ASSERT(offsetof(struct gpio_port, reg_WAKEPEN) == 0x540);
+C_ASSERT(offsetof(struct gpio_port, reg_WAKELVL) == 0x544);
+C_ASSERT(offsetof(struct gpio_port, reg_WAKESTAT) == 0x548);
 
-#define GPIO_PORTF_DATA_BITS_R  ((volatile uint32_t *)0x40025000)
-#define GPIO_PORTF_DATA_R       (*((volatile uint32_t *)0x400253FC))
-#define GPIO_PORTF_DIR_R        (*((volatile uint32_t *)0x40025400))
+#define GPIO_PCTL_PIN_MUX_MASK(_pin_index) \
+	MULTI_BIT_MASK(							\
+		GPIO_PCTL_PIN_MUX_SHIFT(_pin_index) + 3,		\
+		GPIO_PCTL_PIN_MUX_SHIFT(_pin_index))
+
+#define GPIO_PCTL_PIN_MUX_SHIFT(_pin_index)	((_pin_index) * 4)
+
+/**
+ * UART MMIO registers
+ */
+struct uart {
+	uint32_t reg_DR;	    // Data
+	union {
+		uint32_t reg_RSR;   // Receive Status
+		uint32_t reg_ECR;   // Error Clear
+	};
+	uint8_t reg_padding1[0x10];
+	uint32_t reg_FR;	    // Flag
+	uint8_t reg_padding2[0x4];
+	uint32_t reg_ILPR;	    // IrDA Low-Power Register
+	uint32_t reg_IBRD;          // Integer Baud-Rate Divisor
+	uint32_t reg_FBRD;          // Fractional Baud-Rate Divisor
+	uint32_t reg_LCRH;          // Line Control
+	uint32_t reg_CTL;           // Control
+	uint32_t reg_IFLS;          // Interrupt FIFO Level Select
+	uint32_t reg_IM;            // Interrupt Mask
+	uint32_t reg_RIS;           // Raw Interrupt Status
+	uint32_t reg_MIS;           // Masked Interrupt Status
+	uint32_t reg_ICR;           // Interrupt Clear
+	uint32_t reg_DMACTL;        // UART DMA Control
+};
+
+C_ASSERT(offsetof(struct uart, reg_DR) == 0x0);
+C_ASSERT(offsetof(struct uart, reg_RSR) == 0x4);
+C_ASSERT(offsetof(struct uart, reg_ECR) == 0x4);
+C_ASSERT(offsetof(struct uart, reg_FR) == 0x18);
+C_ASSERT(offsetof(struct uart, reg_ILPR) == 0x20);
+C_ASSERT(offsetof(struct uart, reg_IBRD) == 0x24);
+C_ASSERT(offsetof(struct uart, reg_FBRD) == 0x28);
+C_ASSERT(offsetof(struct uart, reg_LCRH) == 0x2C);
+C_ASSERT(offsetof(struct uart, reg_CTL) == 0x30);
+C_ASSERT(offsetof(struct uart, reg_IFLS) == 0x34);
+C_ASSERT(offsetof(struct uart, reg_IM) == 0x38);
+C_ASSERT(offsetof(struct uart, reg_RIS) == 0x3C);
+C_ASSERT(offsetof(struct uart, reg_MIS) == 0x40);
+C_ASSERT(offsetof(struct uart, reg_ICR) == 0x44);
+C_ASSERT(offsetof(struct uart, reg_DMACTL) == 0x48);
+
+void lm4f120_uart_interrupt_e_handler(
+    struct rtos_interrupt *rtos_interrupt_p);
+
+extern isr_function_t lm4f120_uart0_isr;
 
 #endif /* __LM4F120_SOC_H */

@@ -18,13 +18,13 @@
  * Generate ISR functions:
  */
 
-#if 0 // ???
 /**
  * UART0 ISR
  */
 GEN_ISR_FUNCTION lm4f120_uart0_isr, g_rtos_interrupt_uart0_p, \
                  lm4f120_uart_interrupt_e_handler
 
+#if 0 // ???
 /**
  * ADC0 ISR
  */

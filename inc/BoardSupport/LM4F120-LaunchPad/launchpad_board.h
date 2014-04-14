@@ -30,9 +30,20 @@ enum {
 };
 
 /*
+ * LM4F120 GPIO PORT A Pins
+ */
+#define LPAD_UART0_RX_PIN_INDEX		0
+#define LPAD_UART0_TX_PIN_INDEX		1
+
+/*
+ * LM4F120 GPIO PORT C Pins
+ */
+#define LPAD_UART1_RX_PIN_INDEX		4
+#define LPAD_UART1_TX_PIN_INDEX		5
+
+/*
  * LM4F120 GPIO PORT F Pins
  */
-
 #define LPAD_SW2_PIN_INDEX		0
 #define LPAD_RGB_LED_RED_PIN_INDEX	1
 #define LPAD_RGB_LED_BLUE_PIN_INDEX     2

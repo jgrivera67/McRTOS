@@ -2,7 +2,7 @@
  * @file generic_list.c
  *
  * Generic linked lists.
- * 
+ *
  * @author: German Rivera
  */
 
@@ -126,7 +126,7 @@ glist_add_tail_elem(struct glist_node *list_p, struct glist_node *elem_p)
     elem_p->ln_anchor_p = list_p;
 
 #endif /* _RELIABILITY_CHECKS_ */
-    
+
 } /* glist_add_tail_elem */
 
 

@@ -25,7 +25,7 @@
 /**
  * CPU clock frequency in MHz
  */
-#define SOC_CPU_CLOCK_FREQ_IN_MEGA_HZ  UINT32_C(50)
+#define SOC_CPU_CLOCK_FREQ_IN_MEGA_HZ  UINT32_C(80)
 
 /**
  * Interrupt priority assignments (from lowest to highest)
@@ -59,13 +59,13 @@
  * Flash Memory Range
  */
 #define SOC_FLASH_BASE     UINT32_C(0x00000000)
-#define SOC_FLASH_SIZE     (UINT32_C(128) * 1024)
+#define SOC_FLASH_SIZE     (UINT32_C(256) * 1024)
 
 /**
  * Static RAM Memory Ranges
  */
-#define SOC_SRAM_BASE      UINT32_C(0x1FFFF000)
-#define SOC_SRAM_SIZE      (UINT32_C(16) * 1024)
+#define SOC_SRAM_BASE      UINT32_C(0x20000000)
+#define SOC_SRAM_SIZE      (UINT32_C(32) * 1024)
 
 /*
  * MMIO Ranges
@@ -127,14 +127,22 @@
  */
 #define PIN_COFIG_INFO_INITIALIZER(                                     \
              _gpio_port_p, _pin_bit_index, _pin_is_active_high,		\
-	     _pin_is_locked)						\
+	     _pin_is_locked, _pin_pull_mode)				\
     {                                                                   \
         .pin_gpio_port_p = (volatile struct gpio_port *)(_gpio_port_p),	\
         .pin_bit_index = _pin_bit_index,                                \
         .pin_bit_mask = BIT(_pin_bit_index),                            \
         .pin_is_active_high = (_pin_is_active_high),                    \
         .pin_is_locked = (_pin_is_locked),				\
+        .pin_pull_mode = (_pin_pull_mode),				\
     }
+
+enum pin_pull_modes {
+    PIN_PULL_NONE = 0,
+    PIN_PULL_DOWN,
+    PIN_PULL_UP,
+    PIN_OPEN_DRAIN
+};
 
 /**
  * Pin configuration parameters
@@ -145,7 +153,7 @@ struct pin_config_info {
     uint8_t pin_bit_index;
     uint8_t pin_is_active_high; /* false - low, true - high */
     uint8_t pin_is_locked;
-    uint8_t reserved;
+    uint8_t pin_pull_mode; /*  values from enum pin_pull_modes */
 };
 
 void micro_trace_init(void);
