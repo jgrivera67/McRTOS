@@ -849,11 +849,11 @@ uart_init(
     write_32bit_mmio_register(&uart_mmio_registers_p->reg_FBRD, reg_value);
 
     /*
-     * Configure the uart for 8-bit mode, no parity, 1 stop bit:
+     * Configure the uart for 8-bit mode, no parity, 1 stop bit, FIFOs:
      */
     write_32bit_mmio_register(
 	&uart_mmio_registers_p->reg_LCRH,
-	UART_LCRH_WLEN_8);
+	UART_LCRH_WLEN_8 | UART_LCRH_FEN);
 
     /*
      * Configure Tx and Rx pins:
@@ -991,32 +991,56 @@ lm4f120_uart_interrupt_e_handler(
         uart_var_p->urt_initialized, uart_device_p, 0);
 
     uint32_t reg_mis_value = read_32bit_mmio_register(&uart_mmio_registers_p->reg_MIS);
+    uint32_t reg_fr_value = read_32bit_mmio_register(&uart_mmio_registers_p->reg_FR);
 
     /*
-     * There is at least one Tx or Rx interrupt pending
+     * Only one or more of the following UART interrupts is expected:
      */
     FDC_ASSERT(
-        (reg_mis_value & (UART_MIS_RXMIS | UART_MIS_TXMIS)) != 0,
+        (reg_mis_value &
+	 ~(UART_MIS_TXMIS | UART_MIS_RXMIS | UART_MIS_RTMIS)) == 0,
         reg_mis_value, uart_device_p);
 
-    /*
-     * "Tx holding register empty" interrupt:
-     */
-    if (reg_mis_value & UART_MIS_TXMIS) {
-	uint8_t byte_to_transmit;
-	bool entry_read = rtos_k_byte_circular_buffer_read(
-			    &uart_var_p->urt_transmit_queue,
-			    &byte_to_transmit,
-			    false);
+    if ((reg_mis_value & UART_MIS_TXMIS) != 0) {
+	/*
+	 * "Tx FIFO not full" interrupt:
+	 */
+	unsigned int bytes_transmitted_count = 0;
 
-	if (entry_read) {
+	FDC_ASSERT((reg_fr_value & UART_FR_TXFF) == 0,
+		   reg_fr_value, uart_device_p);
+
+	/*
+	 * Fill the Tx FIFO as much as possible:
+	 */
+	do {
+	    uint8_t byte_to_transmit;
+	    bool entry_read = rtos_k_byte_circular_buffer_read(
+				&uart_var_p->urt_transmit_queue,
+				&byte_to_transmit,
+				false);
+
+	    if (!entry_read) {
+		break;
+	    }
+
 	    /*
 	     * Write the next byte to transmit, to clear the interrupt source:
 	     */
-	    write_32bit_mmio_register(&uart_mmio_registers_p->reg_DR, byte_to_transmit);
-	} else {
+	    write_32bit_mmio_register(&uart_mmio_registers_p->reg_DR,
+				      byte_to_transmit);
+	    bytes_transmitted_count++;
+	    reg_fr_value = read_32bit_mmio_register(
+				&uart_mmio_registers_p->reg_FR);
+	} while ((reg_fr_value & UART_FR_TXFF) == 0);
+
+	DBG_ASSERT(
+	    bytes_transmitted_count <= UART_TX_FIFO_SIZE,
+	    bytes_transmitted_count, uart_device_p);
+
+	if (bytes_transmitted_count == 0) {
 	    /*
-	     * Disable "Tx holding register is empty" interrupt:
+	     * If nothing was transmitted, disable "Tx FIFO not full" interrupt:
 	     *
 	     * NOTE: We need to do this as the interrupt is still asserted
 	     */
@@ -1026,28 +1050,51 @@ lm4f120_uart_interrupt_e_handler(
 	}
     }
 
-    /*
-     * "Rx holding register not empty" interrupt:
-     */
-    if (reg_mis_value & UART_MIS_RXMIS) {
+    if ((reg_mis_value & (UART_MIS_RXMIS | UART_MIS_RTMIS)) != 0) {
 	/*
-	 * Read the next byte received, to clear the interrupt source:
+	 * "Rx FIFO not empty" interrupts:
 	 */
-	uint8_t byte_received = read_32bit_mmio_register(
-				    &uart_mmio_registers_p->reg_DR);
+	unsigned int bytes_received_count = 0;
 
-	bool entry_written = rtos_k_byte_circular_buffer_write(
-		&uart_var_p->urt_receive_queue,
-		byte_received,
-		false);
+	FDC_ASSERT((reg_fr_value & UART_FR_RXFE) == 0,
+		   reg_fr_value, uart_device_p);
 
-	if (!entry_written) {
-	    uart_var_p->urt_received_bytes_dropped ++;
-
+	/*
+	 * Drain the Rx FIFO as much as possible:
+	 */
+	do {
 	    /*
-	     * Disable "Rx holding register not empty" interrupt:
+	     * Read the next byte received, to clear the interrupt source:
+	     */
+	    uint8_t byte_received = read_32bit_mmio_register(
+					&uart_mmio_registers_p->reg_DR);
+
+	    bool entry_written = rtos_k_byte_circular_buffer_write(
+				    &uart_var_p->urt_receive_queue,
+				    byte_received,
+				    false);
+
+	    if (!entry_written) {
+		uart_var_p->urt_received_bytes_dropped ++;
+		break;
+	    }
+
+	    bytes_received_count++;
+	    reg_fr_value = read_32bit_mmio_register(&uart_mmio_registers_p->reg_FR);
+	} while ((reg_fr_value & UART_FR_RXFE) == 0);
+
+	DBG_ASSERT(
+	    bytes_received_count <= UART_TX_FIFO_SIZE,
+	    bytes_received_count, uart_device_p);
+
+	if (bytes_received_count == 0) {
+	    /*
+	     * If the software receive queue is full, disable the
+	     * "Rx FIFO not empty" interrupts:
 	     *
-	     * NOTE: We need to do this as the interrupt is still asserted
+	     * NOTE: We need to do this as the interrupt is still asserted.
+	     * These interrupts will be re-enabled when there is room
+	     * in the receive queue.
 	     */
 	    reg_value = read_32bit_mmio_register(&uart_mmio_registers_p->reg_IM);
 	    reg_value &= ~UART_IM_RXIM;
@@ -1058,7 +1105,8 @@ lm4f120_uart_interrupt_e_handler(
 
 /**
  * Enqueue a character for transmission over a UART serial port, blocking the
- * caller on a condvar if the transmit queue is full.
+ * caller on a condvar if the transmit queue is full. Actual transmission
+ * will happen on the next "Tx FIFO not full" interrupt
  */
 void
 uart_putchar(
@@ -1090,7 +1138,7 @@ uart_putchar(
     }
 
     /*
-     * Enable generation of "Tx FIFO is at least half empty" interrupts, if necessary:
+     * Enable generation of "Tx FIFO not full" interrupts, if necessary:
      */
     uint32_t reg_value = read_32bit_mmio_register(&uart_mmio_registers_p->reg_IM);
     if ((reg_value & UART_IM_TXIM) == 0) {
@@ -1118,7 +1166,7 @@ uart_putchar_with_polling(
     }
 
     /*
-     * Disable "Tx holding register is empty" interrupt:
+     * Disable "Tx FIFO not full" interrupt:
      */
     reg_value = read_32bit_mmio_register(&uart_mmio_registers_p->reg_IM);
     reg_value &= ~UART_IM_TXIM;
@@ -1154,11 +1202,11 @@ uart_getchar(
     DBG_ASSERT_PRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED();
 
     /*
-     * Enable generation of Receive interrupts, if necessary:
+     * Enable generation of receive interrupts, if necessary:
      */
     reg_value = read_32bit_mmio_register(&uart_mmio_registers_p->reg_IM);
     if ((reg_value & UART_IM_RXIM) == 0) {
-	reg_value |= UART_IM_RXIM;
+	reg_value |= UART_IM_RXIM | UART_IM_RTIM;
 	write_32bit_mmio_register(&uart_mmio_registers_p->reg_IM, reg_value);
     }
 
@@ -1194,7 +1242,7 @@ uart_getchar_with_polling(
     write_32bit_mmio_register(&uart_mmio_registers_p->reg_IM, reg_value);
 
     /*
-     * Do polling until the UART's Rx holding register becomes not empty:
+     * Do polling until the UART's Rx FIFO becomes not empty:
      */
     do {
         reg_value = read_32bit_mmio_register(&uart_mmio_registers_p->reg_FR);

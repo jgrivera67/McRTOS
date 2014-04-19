@@ -85,6 +85,8 @@ C_ASSERT(offsetof(struct gpio_port, reg_WAKESTAT) == 0x548);
 
 #define GPIO_PCTL_PIN_MUX_SHIFT(_pin_index)	((_pin_index) * 4)
 
+#define UART_TX_FIFO_SIZE   16
+
 /**
  * UART MMIO registers
  */
