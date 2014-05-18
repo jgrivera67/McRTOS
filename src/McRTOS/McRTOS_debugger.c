@@ -319,8 +319,11 @@ rtos_dbg_dump_debug_msg_buffer(void)
     struct fdc_info *fdc_info_p = &cpu_controller_p->cpc_failures_info;
 
     fdc_info_p->fdc_debug_msg_buffer[RTOS_DEBUG_MSG_BUFFER_SIZE - 1] = '\0';
-    debugger_printf("Debug message buffer for CPU: %u\n\n%s", cpu_id,
-		    fdc_info_p->fdc_debug_msg_buffer);
+    debugger_printf("Debug message buffer for CPU: %u\n", cpu_id);
+
+    for (char *s = fdc_info_p->fdc_debug_msg_buffer; *s != '\0'; s ++) {
+        uart_putchar_with_polling(g_console_serial_port_p, *s);
+    }
 }
 
 static void

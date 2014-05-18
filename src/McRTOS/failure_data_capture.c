@@ -1466,10 +1466,8 @@ capture_fdc_debug_printf(const char *fmt, ...)
 
     __disable_irq();
 
-#if 0
-    embedded_printf(fdc_capture_debug_putchar, fdc_info_p, "\n%u ",
+    embedded_printf(fdc_capture_debug_putchar, fdc_info_p, "%u ",
 		    fdc_info_p->fdc_debug_msg_seq_num);
-#endif
 
     va_start(va, fmt);
     embedded_vprintf(fdc_capture_debug_putchar, fdc_info_p, fmt, va);
