@@ -224,7 +224,6 @@ lcd_display_greetings(void)
         "       %s\n",
         g_McRTOS_build_timestamp);
 }
-
 #endif
 
 /**
@@ -377,10 +376,10 @@ rtos_startup(
     cpu_controller_p->cpc_startup_completed = true;
 
     /*
-     * Reset the "longest time interrupts disabled" to 0, as this
+     * Reset 'cpc_longest_time_interrupts_disabled' to 0, as this
      * is boot time, and should not be taken into account.
      *
-     * NOTE: We need to reset this because, board_init() called device
+     * NOTE: We need to reset this because soc_hardware_init() calls device
      * initialization functions which may call
      * rtos_k_disable_cpu_interrupts()/rtos_k_restore_cpu_interrupts()
      */
@@ -430,8 +429,6 @@ void
 rtos_reboot(void)
 {
     DBG_ASSERT_VALID_FUNCTION_POINTER(g_McRTOS_p->rts_app_hardware_stop_p);
-
-    console_printf("\nMcRTOS rebooting ...\n");
 
     if (g_McRTOS_p->rts_app_hardware_init_called) {
         g_McRTOS_p->rts_app_hardware_stop_p();
@@ -524,6 +521,7 @@ rtos_root_thread_f(void *arg)
 
     FDC_ASSERT(arg == NULL, arg, cpu_id);
     FDC_ASSERT(rtos_app_config_p != NULL, 0, 0);
+    debugger_printf("\n*** JGR: enter %s\n", __func__);//???
 
     if (cpu_id == 0)
     {
@@ -571,7 +569,7 @@ rtos_root_thread_f(void *arg)
     }
 
     /*
-     * Do application-specific software initializations that are to done before
+     * Do application-specific software initializations that are to be done before
      * auto-start application threads are created:
      */
     g_McRTOS_p->rts_app_software_init_p();
@@ -711,6 +709,13 @@ rtos_parse_command_line(
 
     case 's':
         McRTOS_display_stats();
+        break;
+
+    //???case CTRL_C:
+    case 'D':
+	__disable_irq();
+	rtos_run_debugger(NULL, NULL);
+	__enable_irq();
         break;
 
     default:

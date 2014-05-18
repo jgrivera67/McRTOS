@@ -156,7 +156,17 @@ cortex_m_nvic_init(void)
     install_isr(
         VECTOR_NUMBER_TO_IRQ_NUMBER(INT_PendableSrvReq),
         cortex_m_pendsv_exception_handler,
-        PENDSV_INTERRUPT_PRIORITY,
+        SOC_HIGHEST_INTERRUPT_PRIORITY,
+        SOC_GET_CURRENT_CPU_ID());
+
+    /*
+     * Set the priority of the SVC exception to the highest priority also,
+     * to ensurethe SVC excpetion handler is not interrupted.
+     */
+    install_isr(
+        VECTOR_NUMBER_TO_IRQ_NUMBER(INT_SVCall),
+        cortex_m_svc_exception_handler,
+        SOC_HIGHEST_INTERRUPT_PRIORITY,
         SOC_GET_CURRENT_CPU_ID());
 
     /*
@@ -301,16 +311,43 @@ wait_for_interrupts(void)
 }
 
 
+/*
+ * SVC exception handler. It is used to transition from unprivileged
+ * thread mode to privileged thread mode, as part of implementing system
+ * calls.
+ *
+ * void
+ * cortex_m_svc_exception_handler(void)
+ *
+ * @pre     This exception was triggered from thread mode.
+ *
+ * @param   none.
+ *
+ * @return  none
+ *
+ * NOTE: The SVC exception has the highest priority, so its handler cannot be
+ * preempted by any other interrupt with configurable priority.
+ */
+void
+cortex_m_svc_exception_handler(void)
+{
+    cpu_register_t reg_value;
+
+    /*
+     * Clear nPRIV bit in the CPU control register to stay in privileged mode
+     * upon return from the exception
+     */
+    reg_value = __get_CONTROL();
+    reg_value &= ~CPU_REG_CONTROL_nPRIV_MASK;
+    __set_CONTROL(reg_value);
+    __ISB();
+}
+
+
 void cortex_m_nmi_isr(void)
 {
     TODO("Not implemented yet");
     __BKPT(0);
 }
 
-
-void cortex_m_svc_handler(void)
-{
-    TODO("Not implemented yet");
-    __BKPT(0);
-}
 

@@ -12,6 +12,14 @@ ifeq "$(PLATFORM)" "FRDM-KL25Z"
     local_src := $(subdirectory)/McRTOS_startup_arm_cortex_m.c
 endif
 
+ifeq "$(PLATFORM)" "FRDM-K20D5"
+    local_src := $(subdirectory)/McRTOS_startup_arm_cortex_m.c
+endif
+
+ifeq "$(PLATFORM)" "FRDM-K64F"
+    local_src := $(subdirectory)/McRTOS_startup_arm_cortex_m.c
+endif
+
 ifeq "$(PLATFORM)" "LM4F120-LaunchPad"
     local_src := $(subdirectory)/McRTOS_startup_arm_cortex_m.c
 endif

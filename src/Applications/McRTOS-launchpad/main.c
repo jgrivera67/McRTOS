@@ -193,14 +193,14 @@ buttons_reader_thread_f(void *arg)
         for (natural_t i = 0; i < LPAD_NUM_PUSH_BUTTONS; i++) {
             if (push_buttons[i] != g_app.push_buttons[i]) {
 		if (push_buttons[i]) {
-		    DEBUG_PRINTF("Pushed button %u\n", i);
+		    console_printf("Pushed button %u\n", i);
 		    if (i == LPAD_SW1_BUTTON) {
 			g_app.led_color_mask = LED_COLOR_GREEN;
 		    } else if (i == LPAD_SW2_BUTTON) {
 			g_app.led_color_mask = LED_COLOR_RED;
 		    }
 		} else {
-		    DEBUG_PRINTF("Released button %u\n", i);
+		    console_printf("Released button %u\n", i);
 		}
 
                 g_app.push_buttons[i] = push_buttons[i];

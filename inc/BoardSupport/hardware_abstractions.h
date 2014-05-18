@@ -33,6 +33,14 @@
 
 #   include "kl25z_soc_public.h"
 
+#elif defined(K20D5_SOC)
+
+#   include "k20d5_soc_public.h"
+
+#elif defined(K64F_SOC)
+
+#   include "k64f_soc_public.h"
+
 #elif defined(LM4F120_SOC)
 
 #   include "lm4f120_soc_public.h"

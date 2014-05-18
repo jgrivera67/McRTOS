@@ -5,8 +5,8 @@
  *
  * Copyright (C) 2013 German Rivera
  *
- * @author German Rivera 
- */ 
+ * @author German Rivera
+ */
 #include "utils.h"
 #include "failure_data_capture.h"
 #include "hardware_abstractions.h"
@@ -14,17 +14,12 @@
 #include "McRTOS_kernel_services.h"
 #include "McRTOS_internals.h"
 #include <inttypes.h>
-#include <stdarg.h>
 
 TODO("Remove these pragmas")
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wunused-function"
 
 static void
-embedded_vprintf(
-    putchar_func_t *putchar_func_p, void *putchar_arg_p, const char *fmt, va_list va);
-
-static void 
 print_uint32_hexadecimal(
     putchar_func_t *putchar_func_p, void *putchar_arg_p, uint32_t value,
     uint8_t padding_count);
@@ -88,12 +83,12 @@ copy_memory_block(
 {
     /**
      * Number of memory words to transfer in a single ldmia/stmia pair
-     */ 
+     */
 #   define MEM_TRANSFER_BLOCK_SIZE   8
 
     /**
      * Number of memory words to transfer in a single iteration
-     */ 
+     */
 #   define COPY_ITERATION_BLOCK_SIZE (8 * MEM_TRANSFER_BLOCK_SIZE)
 
     struct CopyIterationBlock {
@@ -109,11 +104,11 @@ copy_memory_block(
         num_bytes, 0);
 
     uint32_t numWords = num_bytes / sizeof(uint32_t);
-    struct MemTransferBlock* destTransferBlock = (struct MemTransferBlock *)dest;    
+    struct MemTransferBlock* destTransferBlock = (struct MemTransferBlock *)dest;
     struct MemTransferBlock* srcTransferBlock = (struct MemTransferBlock *)src;
     uint32_t remainingWords = numWords;
     uint32_t numTransfers = remainingWords / COPY_ITERATION_BLOCK_SIZE;
-    
+
     FDC_ASSERT_VALID_RAM_POINTER(dest, sizeof(uint32_t));
     FDC_ASSERT_VALID_RAM_POINTER(
         (uint32_t *)dest + (numWords - 1), sizeof(uint32_t));
@@ -136,10 +131,10 @@ copy_memory_block(
 
     remainingWords %= COPY_ITERATION_BLOCK_SIZE;
     numTransfers = remainingWords / MEM_TRANSFER_BLOCK_SIZE;
-   
+
     DBG_ASSERT(numTransfers < 8, numTransfers, 0);
 
-    // 
+    //
     // Computed goto:
     //
     switch (numTransfers)
@@ -161,13 +156,13 @@ copy_memory_block(
     }
 
     remainingWords %= MEM_TRANSFER_BLOCK_SIZE;
-    
+
     uint32_t *dest_word_p = (uint32_t *)destTransferBlock;
     uint32_t *src_word_p = (uint32_t *)srcTransferBlock;
-    
+
     DBG_ASSERT(remainingWords < 8, remainingWords, 0);
 
-    // 
+    //
     // Computed goto:
     //
     switch (remainingWords)
@@ -209,7 +204,7 @@ check_dram_memory_block(
 {
     /**
      * Number of unrolled loop iterations
-     */ 
+     */
 #   define CHECK_DRAM_UNROLLED_ITERATIONS   8
 
     /**
@@ -278,7 +273,7 @@ check_dram_memory_block(
 
     DBG_ASSERT(remainingWords < 8, remainingWords, 0);
 
-    // 
+    //
     // Computed goto:
     //
     switch (remainingWords)
@@ -324,46 +319,17 @@ delay_loop(uint32_t times)
         ;
 }
 
-
-/**
- * Simplified printf that sends debug messages to the console. It only supports the
- * format specifiers supported by embedded_vprintf(). It disables interrupts while
- * transmitting and does polling on the serial port until all characters are
- * transmitted.
- *
- * @param fmt               format string
- *
- * @param ...               variable arguments
- *
- * @return None
- */
-void
-debug_printf(const char *fmt, ...)
-{
-    va_list va;
-
-    cpu_status_register_t old_primask = __get_PRIMASK();
-
-    __disable_irq();
-
-    va_start(va, fmt);
-
-    embedded_vprintf(
-        (putchar_func_t *)uart_putchar_with_polling,
-        (void *)g_console_serial_port_p, fmt, va);
-
-    va_end(va);
-
-    if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
-        __enable_irq();
-    }
-
-}
-
-
 /**
  * Simplified printf that send output to the console. It only supports the
- * format specifiers supported by embedded_vprintf()
+ * format specifiers supported by embedded_vprintf(). It serializes concurrent
+ * calls from multiple threads using a global mutex, and transmit characters
+ * using rtos_console_putchar(), which blocks on a condition variable if
+ * serial port output buffer is full. If the serial port output buffer is not
+ * full, it may return before all the output character are physically
+ * transmitted on the serial port. If invoked from an interrupt context,
+ * it uses rtos_k_console_putchar_with_polling() for transmission and
+ * only returns when all the output has been transmitted. In that case,
+ * no serialization is provided.
  *
  * @param fmt               format string
  *
@@ -376,30 +342,22 @@ console_printf(const char *fmt, ...)
 {
     va_list va;
     putchar_func_t *putchar_func_p;
-    cpu_status_register_t cpu_status_register;
-
-    bool caller_is_thread = rtos_k_caller_is_thread();
+    bool caller_is_thread = rtos_caller_is_thread();
 
     if (caller_is_thread) {
         putchar_func_p = rtos_console_putchar;
         rtos_mutex_acquire(&g_console_printf_mutex);
     } else {
         putchar_func_p = rtos_k_console_putchar_with_polling;
-        cpu_status_register = rtos_k_disable_cpu_interrupts();
     }
 
     va_start(va, fmt);
-
     embedded_vprintf(putchar_func_p, NULL, fmt, va);
-
     va_end(va);
 
     if (caller_is_thread) {
         rtos_mutex_release(&g_console_printf_mutex);
-    } else {
-        rtos_k_restore_cpu_interrupts(cpu_status_register);
     }
-
 }
 
 
@@ -501,7 +459,7 @@ cpputest_printf(const char *fmt, ...)
  *
  * @param putchar_func_p    character output function
  *
- * @param putchar_arg_p     Argument to be passed to putchar_func_p() on every 
+ * @param putchar_arg_p     Argument to be passed to putchar_func_p() on every
  *                          invocation
  *
  * @param fmt               format string
@@ -531,7 +489,7 @@ embedded_printf(
  *
  * @param putchar_func_p    character output function
  *
- * @param putchar_arg_p     Argument to be passed to putchar_func_p() on every 
+ * @param putchar_arg_p     Argument to be passed to putchar_func_p() on every
  *                          invocation
  *
  * @param fmt               format string
@@ -540,9 +498,9 @@ embedded_printf(
  *
  * @return None
  */
-static void
+void
 embedded_vprintf(
-    putchar_func_t *putchar_func_p, void *putchar_arg_p, const char *fmt, va_list va) 
+    putchar_func_t *putchar_func_p, void *putchar_arg_p, const char *fmt, va_list va)
 {
     const char *cursor_p = fmt;
     bool parsing_format_specifier = false;
@@ -575,12 +533,12 @@ embedded_vprintf(
 
                 if (c == 'p' && sizeof(void *) == sizeof(uint64_t)) {
                     print_uint64_hexadecimal(
-                        putchar_func_p, putchar_arg_p, va_arg(va, uint64_t), 
+                        putchar_func_p, putchar_arg_p, va_arg(va, uint64_t),
                         padding_count);
 
                 } else {
                     print_uint32_hexadecimal(
-                        putchar_func_p, putchar_arg_p, va_arg(va, uint32_t), 
+                        putchar_func_p, putchar_arg_p, va_arg(va, uint32_t),
                         padding_count);
                 }
                 break;
@@ -693,7 +651,7 @@ print_uint32_hexadecimal(
     }
 
 #   undef MAX_NUM_HEX_DIGITS
-#   undef MSB_BIT_INDEX 
+#   undef MSB_BIT_INDEX
 #   undef MSB_HEX_DIGIT_MASK
 #   undef MSB_HEX_DIGIT_SHIFT
 }
@@ -744,7 +702,7 @@ print_uint64_hexadecimal(
     }
 
 #   undef MAX_NUM_HEX_DIGITS
-#   undef MSB_BIT_INDEX 
+#   undef MSB_BIT_INDEX
 #   undef MSB_HEX_DIGIT_MASK
 #   undef MSB_HEX_DIGIT_SHIFT
 }
@@ -829,7 +787,7 @@ print_string(putchar_func_t *putchar_func_p, void *putchar_arg_p, const char *st
     while (*cursor_p != '\0')
     {
         uint8_t c = *cursor_p ++;
-    
+
         putchar_func_p(putchar_arg_p, c);
         char_printed_count ++;
         if (char_printed_count == padding_count)
@@ -859,7 +817,7 @@ read_command_line(
 
     for  ( ; ; ) {
         uint8_t c = getchar_func_p(char_io_arg_p);
-        
+
         switch (c) {
         case '\r':
             putchar_func_p(char_io_arg_p, '\r');
@@ -897,7 +855,7 @@ signature_to_string(
     uint32_t i;
 
     for (i = 0; i < sizeof(uint32_t); i++) {
-        if (IS_PRINT(signature_as_chars[i])) { 
+        if (IS_PRINT(signature_as_chars[i])) {
             str_buffer[i] = signature_as_chars[i];
         } else {
             str_buffer[i] = '.';
@@ -909,7 +867,7 @@ signature_to_string(
 }
 
 
-uint32_t 
+uint32_t
 convert_string_to_hexadecimal(
     _IN_ const char *str)
 {
@@ -917,98 +875,10 @@ convert_string_to_hexadecimal(
 }
 
 
-uint32_t 
+uint32_t
 convert_string_to_decimal(
     _IN_ const char *str)
 {
     return 0;
 }
 
-
-void
-debug_dump_r0_to_r3(
-    uint32_t r0, 
-    uint32_t r1, 
-    uint32_t r2, 
-    uint32_t r3)
-{
-    debug_printf(
-        "REGISTERS: r0: %#x, r1: %#x, r2: %#x, r3: %#x\n",
-        r0, r1, r2, r3);
-}
-
-
-struct debug_captured_registers_buffer {
-    struct rtos_execution_context *cap_execution_context_p;
-    uint32_t *cap_location_addr;
-    cpu_register_t cap_registers[CPU_NUM_PRE_SAVED_REGISTERS];
-};
-
-static struct debug_captured_registers_buffer g_debug_captured_registers_buffers[8];
-
-static uint32_t g_debug_captured_registers_buffer_cursor = 0;
-
-void
-debug_capture_registers(
-    uint32_t r0, 
-    uint32_t r1, 
-    uint32_t r2, 
-    uint32_t r3)
-{
-    /*
-     * Capture ARM LR register on entry
-     */ 
-    uint32_t *return_address;
-    CAPTURE_ARM_LR_REGISTER(return_address);
-
-    cpu_status_register_t old_primask = __get_PRIMASK();
-    __disable_irq();
-
-    struct debug_captured_registers_buffer *captured_registers_buffer_p =
-        &g_debug_captured_registers_buffers[g_debug_captured_registers_buffer_cursor];
-
-    captured_registers_buffer_p->cap_execution_context_p = 
-        RTOS_GET_CURRENT_EXECUTION_CONTEXT();
-
-    captured_registers_buffer_p->cap_location_addr = return_address - 1;
-    captured_registers_buffer_p->cap_registers[0] = r0;
-    captured_registers_buffer_p->cap_registers[1] = r1;
-    captured_registers_buffer_p->cap_registers[2] = r2;
-    captured_registers_buffer_p->cap_registers[3] = r3;
-
-    g_debug_captured_registers_buffer_cursor ++;
-    if (g_debug_captured_registers_buffer_cursor ==
-        ARRAY_SIZE(g_debug_captured_registers_buffers)) {
-        g_debug_captured_registers_buffer_cursor = 0; 
-    }
-
-    if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
-        __enable_irq();
-    }
-}
-
-
-void
-debug_dump_captured_registers(void)
-{
-    debug_printf(
-        "Registers captured buffers (next to fill %u):\n",
-        g_debug_captured_registers_buffer_cursor);
-
-    for (uint32_t i = 0; i < ARRAY_SIZE(g_debug_captured_registers_buffers); i ++) {
-        struct debug_captured_registers_buffer *captured_registers_buffer_p =
-            &g_debug_captured_registers_buffers[i];
-
-        if (captured_registers_buffer_p->cap_location_addr != NULL) {
-            debug_printf(
-                "%u: Registers captured at %#p (context: %#p): r0: %#x, r1: %#x, r2: %#x, r3: %#x\n",
-                i,
-                captured_registers_buffer_p->cap_location_addr, 
-                captured_registers_buffer_p->cap_execution_context_p,
-                captured_registers_buffer_p->cap_registers[0],
-                captured_registers_buffer_p->cap_registers[1],
-                captured_registers_buffer_p->cap_registers[2],
-                captured_registers_buffer_p->cap_registers[3]);
-        }
-    }
-}

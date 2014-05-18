@@ -1,7 +1,7 @@
 /**
- * @file McRTOS_kernel_services_armv6_m.s
+ * @file McRTOS_kernel_services_arm_cortex_m.s
  *
- * Machine-specific McRTOS kernel services for ARM Cortex-M0+ processors
+ * Machine-specific McRTOS kernel services for ARM Cortex-M processors
  *
  * Copyright (C) 2013 German Rivera
  *
@@ -151,7 +151,26 @@ rtos_k_restore_execution_context:
     msr     msp, r1
 
     /*
+     * Restore the nPRIV bit of the CONTROL register:
+     *
+     * r0 == &execution_context_p->ctx_cpu_saved_registers
+     */
+    ldr     r1, [r0, #(CPU_REG_CONTROL*ARM_CPU_WORD_SIZE_IN_BYTES)]
+    mov	    r2, #CPU_REG_CONTROL_nPRIV_MASK
+    tst	    r1, r2
+    beq	    L_return_to_thread_context
+    mrs	    r1, control
+    orr	    r1, r1, r2
+    msr	    control, r1
+
+L_return_to_thread_context:
+    /*
      * Return from exception to thread:
+     *
+     * Note that we don't need to explicitly restore the SPSEL bit of
+     * the CONTROL register. That is implicitly done by using
+     * CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP to return from the
+     * exception
      */
     ldr     r0, =CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP
     mov     lr, r0

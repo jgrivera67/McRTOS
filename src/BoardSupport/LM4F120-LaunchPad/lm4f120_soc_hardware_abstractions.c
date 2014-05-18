@@ -110,7 +110,7 @@ isr_function_t *const g_interrupt_vector_table[] __attribute__ ((section(".vecto
     [INT_Initial_Program_Counter] = cortex_m_reset_handler,
     [INT_NMI] = cortex_m_nmi_isr,
     [INT_Hard_Fault] = cortex_m_hard_fault_exception_handler,
-    [INT_SVCall] = cortex_m_svc_handler,
+    [INT_SVCall] = cortex_m_svc_exception_handler,
     [INT_PendableSrvReq] = cortex_m_pendsv_exception_handler,
     [INT_SysTick] = cortex_m_systick_isr,
 

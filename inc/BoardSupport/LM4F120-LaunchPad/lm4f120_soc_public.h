@@ -29,10 +29,13 @@
 
 /**
  * Interrupt priority assignments (from lowest to highest)
+ *
+ * NOTE: All interrupts must have priorities lower (higher value)
+ * than SOC_HIGHEST_INTERRUPT_PRIORITY, which is reserved for the
+ * PENDSV and SVC exceptions
  */
 #define UART0_INTERRUPT_PRIORITY    SOC_LOWEST_INTERRUPT_PRIORITY
 #define SYSTICK_INTERRUPT_PRIORITY  (SOC_LOWEST_INTERRUPT_PRIORITY - 1)
-#define PENDSV_INTERRUPT_PRIORITY   SOC_HIGHEST_INTERRUPT_PRIORITY
 
 /*
  * include CMSIS API header after declaration of IRQn_Type

@@ -3,8 +3,8 @@
  *
  * General utilities
  *
- * @author German Rivera 
- */ 
+ * @author German Rivera
+ */
 
 #ifndef __UTILS_H
 #define __UTILS_H
@@ -12,6 +12,7 @@
 #include <stdint.h>     // C99 int types
 #include <stdbool.h>    // bool
 #include <stddef.h>     // offsetof()
+#include <stdarg.h>
 #include "hardware_abstractions.h"
 #include "compile_time_checks.h"
 #include "failure_data_capture.h"
@@ -87,9 +88,9 @@
 
 #ifdef DEBUG
 #   define DEBUG_PRINTF(_fmt, ...) \
-            debug_printf("DBG: %s:" STRINGIFY_LITERAL(__LINE__) " " _fmt, \
-                         __func__, ##__VA_ARGS__)
-            
+            capture_fdc_debug_printf("%s:" STRINGIFY_LITERAL(__LINE__) " " _fmt, \
+				     __func__, ##__VA_ARGS__)
+
 #   define DEBUG_BREAK_POINT()  ARTIFICIAL_BREAK_POINT()
 
 #   define DEBUG_BLINK_LED(_led_mask) \
@@ -146,7 +147,7 @@
 
 /**
  * ASCII codes of common control characters
- */ 
+ */
 #define CTRL_C  UINT8_C(0x03)
 
 typedef unsigned int natural_t;
@@ -168,8 +169,6 @@ struct lcd_args;
 void console_printf_init(void);
 
 void console_clear(void);
-
-void debug_printf(const char *fmt, ...);
 
 void console_printf(const char *fmt, ...);
 
@@ -196,6 +195,10 @@ void embedded_printf(
         putchar_func_t *putchar_func_p, void *putchar_arg_p,
         const char *fmt, ...);
 
+void embedded_vprintf(
+        putchar_func_t *putchar_func_p, void *putchar_arg_p,
+        const char *fmt, va_list va);
+
 void read_command_line(
         _IN_  putchar_func_t *putchar_func_p,
         _IN_  getchar_func_t *getchar_func_p,
@@ -211,23 +214,6 @@ uint32_t convert_string_to_decimal(
 
 char * signature_to_string(
         _IN_ uint32_t signature);
-
-void
-debug_dump_r0_to_r3(
-    uint32_t r0, 
-    uint32_t r1, 
-    uint32_t r2, 
-    uint32_t r3);
-
-void
-debug_capture_registers(
-    uint32_t r0, 
-    uint32_t r1, 
-    uint32_t r2, 
-    uint32_t r3);
-
-void
-debug_dump_captured_registers(void);
 
 extern const char g_clear_console_control_string[];
 

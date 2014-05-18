@@ -5,8 +5,8 @@
  *
  * Copyright (C) 2013 German Rivera
  *
- * @author German Rivera 
- */ 
+ * @author German Rivera
+ */
 
 #include "McRTOS_internals.h"
 #include "failure_data_capture.h"
@@ -37,13 +37,13 @@ void rtos_thread_scheduler(
 
     /*
      * At least the idle thread should be runnable
-     */ 
+     */
     FDC_ASSERT(
         chosen_thread_prio < RTOS_NUM_THREAD_PRIORITIES,
         cpu_controller_p->cpc_runnable_thread_priorities,
         cpu_controller_p);
 
-    struct glist_node *chosen_thread_queue_anchor_p = 
+    struct glist_node *chosen_thread_queue_anchor_p =
         &cpu_controller_p->cpc_runnable_thread_queues_anchors
                                                     [chosen_thread_prio];
 
@@ -75,9 +75,9 @@ void rtos_thread_scheduler(
 
     struct rtos_thread *current_thread_p;
 
-    if (current_context_p->ctx_context_type == RTOS_THREAD_CONTEXT) 
+    if (current_context_p->ctx_context_type == RTOS_THREAD_CONTEXT)
     {
-        /* 
+        /*
          * This is a synchronous context switch from another thread.
          * Current thread is not in running state anymore and it is in a thread
          * queue (a runnable thread queue or a waiting thread queue depending on
@@ -119,7 +119,7 @@ void rtos_thread_scheduler(
     /*
      * Remove first thread from the chosen thread queue:
      */
-    
+
     struct glist_node *chosen_thread_node_p =
         GLIST_GET_FIRST(chosen_thread_queue_anchor_p);
 
@@ -134,19 +134,19 @@ void rtos_thread_scheduler(
      * decrement its time slice ticks left. If its time slice
      * is exhausted, we need to pick the next thread from the
      * chosen thread queue:
-     * - Add the chosen thread back to the chosen thread queue, but 
+     * - Add the chosen thread back to the chosen thread queue, but
      *   this time at the end of the queue.
      * - Remove again the first thread again from the chosen thread
      *   queue
      */
     if (chosen_thread_p == current_thread_p)
     {
-        rtos_thread_time_slice_in_ticks_t time_slice_ticks_left = 
+        rtos_thread_time_slice_in_ticks_t time_slice_ticks_left =
             current_thread_p->thr_time_slice_ticks_left;
-        
+
         FDC_ASSERT(
             time_slice_ticks_left > 0 &&
-            time_slice_ticks_left <= RTOS_THREAD_TIME_SLICE_IN_TICKS, 
+            time_slice_ticks_left <= RTOS_THREAD_TIME_SLICE_IN_TICKS,
             time_slice_ticks_left, current_thread_p);
 
         if (cpu_controller_p->cpc_pending_thread_time_slice_decrement)
@@ -173,7 +173,7 @@ void rtos_thread_scheduler(
                 {
                     rtos_add_tail_runnable_thread(
                         cpu_controller_p, current_thread_p);
-                       
+
                     chosen_thread_node_p =
                         GLIST_GET_FIRST(chosen_thread_queue_anchor_p);
 
@@ -208,7 +208,7 @@ void rtos_thread_scheduler(
             chosen_context_p->ctx_last_preempted_by_p != NULL &&
             chosen_context_p->ctx_last_preempted_by_p->ctx_context_type ==
             RTOS_THREAD_CONTEXT,
-            chosen_context_p->ctx_last_preempted_by_p, chosen_context_p); 
+            chosen_context_p->ctx_last_preempted_by_p, chosen_context_p);
 
         rtos_preemption_chain_remove_context(
             cpu_controller_p, chosen_context_p);
@@ -232,7 +232,7 @@ void rtos_thread_scheduler(
 
             current_thread_p->thr_execution_context.ctx_last_preempted_by_p =
                 &chosen_thread_p->thr_execution_context;
-    
+
             current_thread_p->thr_execution_context.ctx_preempted_counter ++;
 
             current_thread_p->thr_preempted_by_other_thread_count ++;
@@ -250,7 +250,7 @@ void rtos_thread_scheduler(
          */
         cpu_controller_p->cpc_current_thread_p = chosen_thread_p;
 
-        /*  
+        /*
          * NOTE: cpu_controller_p->cpc_current_execution_context_p
          * will be updated by rtos_k_restore_execution_context()
          */
@@ -271,7 +271,7 @@ void rtos_thread_scheduler(
 
     END_CPU_CYCLES_MEASURE(measured_cycles);
 
-    cpu_controller_p->cpc_thread_scheduler_calls ++; 
+    cpu_controller_p->cpc_thread_scheduler_calls ++;
     cpu_controller_p->cpc_accumulated_thread_scheduler_overhead += measured_cycles;
 
     DBG_ASSERT(
@@ -317,12 +317,12 @@ rtos_tick_timer_interrupt_handler(
      * Disable interrupts in the ARM core
      */
     cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
-    
+
     cpu_controller_p->cpc_ticks_since_boot_count ++;
-    
+
     if (cpu_controller_p->cpc_ticks_since_boot_count % RTOS_HEARTBEAT_TICKS == 0)
     {
-        toggle_heartbeat_led(); 
+        toggle_heartbeat_led();
     }
 
     /*
@@ -330,13 +330,13 @@ rtos_tick_timer_interrupt_handler(
      */
 
     cpu_controller_p->cpc_current_timer_wheel_spoke_index ++;
-    if (cpu_controller_p->cpc_current_timer_wheel_spoke_index == 
+    if (cpu_controller_p->cpc_current_timer_wheel_spoke_index ==
         RTOS_TIMER_WHEEL_NUM_SPOKES)
     {
-        cpu_controller_p->cpc_current_timer_wheel_spoke_index = 0; 
+        cpu_controller_p->cpc_current_timer_wheel_spoke_index = 0;
     }
 
-    struct glist_node *timer_hash_chain_anchor_p = 
+    struct glist_node *timer_hash_chain_anchor_p =
         &cpu_controller_p->cpc_timer_wheel_hash_chains_anchors[
             cpu_controller_p->cpc_current_timer_wheel_spoke_index];
 
@@ -345,7 +345,7 @@ rtos_tick_timer_interrupt_handler(
 
     GLIST_FOR_EACH_NODE_REMOVING(timer_node_p, next_p, timer_hash_chain_anchor_p)
     {
-        struct rtos_timer *rtos_timer_p = 
+        struct rtos_timer *rtos_timer_p =
             RTOS_TIMER_HASH_CHAIN_NODE_GET_TIMER(timer_node_p);
 
         DBG_ASSERT(
@@ -460,7 +460,7 @@ rtos_stop_interrupts_disabled_time_measure(
             CPU_CLOCK_CYCLES_DELTA(
                 cpu_controller_p->cpc_interrupts_disabled_start_time_stamp,
                 end_time_stamp);
-        
+
         FDC_ASSERT(
             delta_cpu_cycles >= g_McRTOS_p->rts_cpu_cycles_measure_overhead,
             delta_cpu_cycles, g_McRTOS_p->rts_cpu_cycles_measure_overhead);
@@ -480,7 +480,7 @@ rtos_stop_interrupts_disabled_time_measure(
         cpu_controller_p->cpc_latest_measurement_time_interrupts_disabled =
             delta_cpu_cycles;
     }
-    
+
 
 Exit:
     return saved_cpsr;

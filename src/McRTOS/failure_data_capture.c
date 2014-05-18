@@ -1144,11 +1144,9 @@ check_rtos_public_kernel_service_preconditions(bool thread_callers_only)
 
             FDC_ASSERT_RUNNING_THREAD_INVARIANTS(current_thread_p, cpu_controller_p);
 
-#           if 0 // TODO: Enable this check when SVC logic is implemented
             FDC_ASSERT(
                 current_context_p->ctx_cpu_mode == RTOS_PRIVILEGED_THREAD_MODE,
                 current_context_p->ctx_cpu_mode, cpu_lr_register);
-#           endif
 
             FDC_ASSERT(
                 CPU_MODE_IS_PRIVILEGED(cpu_control_register),
@@ -1242,13 +1240,15 @@ check_rtos_interrupt_entry_preconditions(
             RTOS_INTR_BIT_MAP_GET_BIT(
 		cpu_controller_p->cpc_active_internal_interrupts,
 		-rtos_interrupt_p->int_channel) == 0,
-            cpu_controller_p->cpc_active_internal_interrupts, cpu_controller_p);
+            cpu_controller_p->cpc_active_internal_interrupts,
+	    -rtos_interrupt_p->int_channel);
     } else {
 	FDC_ASSERT(
             RTOS_INTR_BIT_MAP_GET_BIT(
 		cpu_controller_p->cpc_active_external_interrupts,
 		rtos_interrupt_p->int_channel) == 0,
-            cpu_controller_p->cpc_active_external_interrupts, cpu_controller_p);
+            cpu_controller_p->cpc_active_external_interrupts,
+	    rtos_interrupt_p->int_channel);
     }
 #   endif
 }
@@ -1426,3 +1426,58 @@ check_synchronous_context_switch_preconditions(
     }
 }
 #endif
+
+static void
+fdc_capture_debug_putchar(
+    void *putchar_arg_p,
+    _IN_ uint8_t c)
+{
+    struct fdc_info *fdc_info_p = putchar_arg_p;
+    uint16_t cursor = fdc_info_p->fdc_debug_msg_cursor;
+
+    fdc_info_p->fdc_debug_msg_buffer[cursor] = c;
+    cursor ++;
+    if (cursor == RTOS_DEBUG_MSG_BUFFER_SIZE - 1) {
+	cursor = 0;
+    }
+
+    fdc_info_p->fdc_debug_msg_cursor = cursor;
+}
+
+/**
+ * Simplified printf that sends debug messages to the FDC debug message buffer.
+ * It only supports the format specifiers supported by embedded_vprintf().
+ * No serialization for concurrent calls is provided.
+ *
+ * @param fmt               format string
+ *
+ * @param ...               variable arguments
+ *
+ * @return None
+ */
+void
+capture_fdc_debug_printf(const char *fmt, ...)
+{
+    va_list va;
+    struct rtos_cpu_controller *cpu_controller_p =
+        &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
+    struct fdc_info *fdc_info_p = &cpu_controller_p->cpc_failures_info;
+    cpu_status_register_t old_primask = __get_PRIMASK();
+
+    __disable_irq();
+
+#if 0
+    embedded_printf(fdc_capture_debug_putchar, fdc_info_p, "\n%u ",
+		    fdc_info_p->fdc_debug_msg_seq_num);
+#endif
+
+    va_start(va, fmt);
+    embedded_vprintf(fdc_capture_debug_putchar, fdc_info_p, fmt, va);
+    va_end(va);
+    fdc_info_p->fdc_debug_msg_seq_num ++;
+
+    if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
+        __enable_irq();
+   }
+}
+

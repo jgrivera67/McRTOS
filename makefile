@@ -6,12 +6,13 @@
 # Author: German Rivera - September, 2013
 #
 
-APPLICATION ?= autonomous_car
+APPLICATION ?=
 
 #
-# PLATFORM values: LPC2478-STK, LM4F120-LaunchPad, FRDM-KL25Z
+# PLATFORM values: LPC2478-STK, LM4F120-LaunchPad, FRDM-KL25Z, FRDM-K20D50,
+# FRDM-K64F
 #
-PLATFORM ?= FRDM-KL25Z
+PLATFORM ?=
 
 #
 # BUILD_FLAVOR values: debug, reliability, performance
@@ -39,7 +40,7 @@ COMMON_CFLAGS = -Wall -Wstrict-prototypes -fms-extensions -Wextra -Wformat \
 	        -std=gnu99 -g3
 
 .PHONY: build create_object_dir run_tests doc \
-	clean run_2478_update_flash run_2478
+	clean
 
 build: create_object_dir
 	$(RUN_BUILD_MAKEFILE) COMMON_CFLAGS='$(COMMON_CFLAGS)'
@@ -62,10 +63,4 @@ clean:
 	$(RM) -r $(OBJECT_DIR)
 	$(RUN_TESTS_MAKEFILE) clean
 	$(RUN_DOC_MAKEFILE) clean_obj
-
-run_2478_update_flash:
-	${RUN_2478} -updateFlash
-
-run_2478:
-	${RUN_2478}
 

@@ -242,6 +242,7 @@ cortex_m_save_other_registers:
      * - msp
      * - psp
      * - lr on exception entry
+     * - control
      */
     stmia   r0!, {r4-r7}    /* Cortex-M0 only supports stm for r0-r7 */
     mov     r4, r8
@@ -253,6 +254,8 @@ cortex_m_save_other_registers:
     mrs     r5, psp
     stmia   r0!, {r4-r5}    /* saved msp, psp */
     str     r1, [r0]        /* saved lr_on_exception_entry */
+    mrs     r4, control
+    str	    r4, [r0, #ARM_CPU_WORD_SIZE_IN_BYTES]
 
     bx      lr
 

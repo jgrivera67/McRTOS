@@ -5,8 +5,8 @@
  *
  * Copyright (C) 2013 German Rivera
  *
- * @author German Rivera 
- */ 
+ * @author German Rivera
+ */
 #ifndef _McRTOS_KERNEL_SERVICES_H
 #define _McRTOS_KERNEL_SERVICES_H
 
@@ -30,13 +30,13 @@ typedef uint32_t cpu_register_t;
  */
 typedef uint32_t cpu_status_register_t;
 
-/** 
+/**
  * Time in microseconds type
  */
 typedef _RANGE_(0, (RTOS_MILLISECONDS_PER_TICK * 1000) - 1)
         uint32_t rtos_microseconds_t;
 
-/** 
+/**
  * Range type for system call numbers
  */
 typedef _RANGE_(0, RTOS_NUM_SYSTEM_CALLS - 1)
@@ -66,7 +66,7 @@ C_ASSERT(
 
 /**
  * Number of timer ticks range type
- */        
+ */
 typedef uint32_t rtos_ticks_t;
 
 /**
@@ -106,17 +106,17 @@ typedef _RANGE_(0, RTOS_THREAD_TIME_SLICE_IN_TICKS)
 
 /**
  * Deadline time in milliseconds type
- */        
+ */
 typedef uint16_t rtos_deadline_ms_t;
 
 /**
  * Block of parameters for registering an interrupt with McRTOS
- */ 
+ */
 struct rtos_interrupt_registration_params
-{ 
+{
     /**
      * Pointer to interrupt name string for debugging purposes
-     */ 
+     */
     const char *irp_name_p;
 
     /**
@@ -142,9 +142,9 @@ struct rtos_interrupt_registration_params
 
     /**
      * CPU ID of the CPU core where this interrupt is to fire.
-     */ 
+     */
     cpu_id_t irp_cpu_id;
-}; 
+};
 
 /**
  * McRTOS execution context
@@ -156,7 +156,7 @@ struct rtos_execution_context
 
     /**
      * Pointer to the symbolic name of the execution context for debugging purposes
-     */ 
+     */
     const char *ctx_name_p;
 
     /**
@@ -206,6 +206,7 @@ struct rtos_execution_context
         cpu_register_t cpu_reg_msp;
         cpu_register_t cpu_reg_psp;
         cpu_register_t cpu_reg_lr_on_exc_entry;
+        cpu_register_t cpu_reg_control;
     } ctx_cpu_saved_registers;
 
 #else
@@ -255,7 +256,7 @@ struct rtos_execution_context
 #   ifdef _CPU_CYCLES_MEASURE_
     /**
      * Time stamp (in CPU clock cycles) of the last time this context was
-     * switched-in 
+     * switched-in
      */
     cpu_clock_cycles_t ctx_last_switched_in_time_stamp;
 
@@ -278,7 +279,7 @@ struct rtos_execution_context
 
     /**
      * Pre-filled trace entry for context switch tracing
-     */ 
+     */
     fdc_context_switch_trace_entry_t ctx_prefilled_trace_entry;
 
     /**
@@ -309,7 +310,7 @@ C_ASSERT(
 
 #elif DEFINED_ARM_CORTEX_M_ARCH()
 C_ASSERT(
-    sizeof(struct cpu_saved_registers) == 
+    sizeof(struct cpu_saved_registers) ==
     CPU_NUM_SAVED_REGISTERS * sizeof(cpu_register_t));
 
 C_ASSERT(
@@ -359,6 +360,10 @@ C_ASSERT(
 C_ASSERT(
     offsetof(struct rtos_execution_context, ctx_cpu_saved_registers.cpu_reg_lr_on_exc_entry) ==
     RTOS_CTX_CPU_REGISTERS_OFFSET + CPU_REG_LR_ON_EXC_ENTRY*ARM_CPU_WORD_SIZE_IN_BYTES);
+
+C_ASSERT(
+    offsetof(struct rtos_execution_context, ctx_cpu_saved_registers.cpu_reg_control) ==
+    RTOS_CTX_CPU_REGISTERS_OFFSET + CPU_REG_CONTROL*ARM_CPU_WORD_SIZE_IN_BYTES);
 #endif
 
 /**
@@ -371,7 +376,7 @@ struct rtos_timer
 
     /**
      * Pointer to the symbolic name of the timer for debugging purposes
-     */ 
+     */
     const char *tmr_name_p;
 
     /**
@@ -402,14 +407,14 @@ C_ASSERT(sizeof(struct rtos_timer) % SOC_CACHE_LINE_SIZE_IN_BYTES == 0);
 /**
  * McRTOS mutex object
  */
-struct rtos_mutex 
+struct rtos_mutex
 {
 #   define      RTOS_MUTEX_SIGNATURE  GEN_SIGNATURE('M', 'U', 'T', 'X')
     uint32_t    mtx_signature;
 
     /**
      * Pointer to the symbolic name of the mutex for debugging purposes
-     */ 
+     */
     const char *mtx_name_p;
 
     /**
@@ -440,7 +445,7 @@ struct rtos_condvar
 
     /**
      * Pointer to the symbolic name of the condvar for debugging purposes
-     */ 
+     */
     const char *cv_name_p;
 
     /**
@@ -452,7 +457,7 @@ struct rtos_condvar
      * Flag that indicates that there is a pending wakeup from an interrupt
      * for this condvar. This flag is set when the condvar is signaled from
      * an ISR, and it is cleared by rtos_k_condvar_wait_interrupt().
-     * 
+     *
      * NOTE: Having this flag is necessary to avoid lost wakeups from
      * interrupts.
      */
@@ -488,7 +493,7 @@ struct rtos_circular_buffer
 
     /**
      * Pointer to the symbolic name of the circular buffer for debugging purposes
-     */ 
+     */
     const char *const cb_name_p;
 
     /**
@@ -638,11 +643,11 @@ struct rtos_thread
      */
     void *thr_function_arg_p;
 
-    /** 
+    /**
      * Pointer to the execution stack for the thread
      */
     struct rtos_thread_execution_stack *thr_execution_stack_p;
-    
+
     /**
      * Abort status passed in to rtos_thread_abort(), if ever called
      * by the thread
@@ -660,15 +665,15 @@ struct rtos_thread
     rtos_thread_time_slice_in_ticks_t   thr_time_slice_ticks_left;
 
     /**
-     * Base thread priority 
+     * Base thread priority
      */
     rtos_thread_prio_t thr_base_priority;
 
     /**
-     * Current thread priority 
+     * Current thread priority
      */
     rtos_thread_prio_t thr_current_priority;
-    
+
     /**
      * Deadline to run in milliseconds once it becomes runnable.
      * 0 means no deadline.
@@ -694,7 +699,7 @@ struct rtos_thread
 
     /**
      * Number of times that this thread has been preempted because it used all
-     * of its time slice 
+     * of its time slice
      */
     uint32_t thr_preempted_by_time_slice_count;
 
@@ -719,7 +724,7 @@ struct rtos_thread
         /**
          * Pointer to the the synchronization object (mutex or condvar)
          * the thread is blocked on, if any.
-         */ 
+         */
         void *thr_blocked_on_p;
 
         /**
@@ -822,7 +827,7 @@ _THREAD_CALLERS_ONLY_
 void
 rtos_k_mutex_acquire(
     _IN_ struct rtos_mutex *rtos_mutex_p);
- 
+
 _THREAD_CALLERS_ONLY_
 void
 rtos_k_mutex_release(
@@ -891,7 +896,7 @@ uint32_t
 rtos_k_atomic_fetch_sub_uint32(
     volatile uint32_t *counter_p, uint32_t value);
 
-rtos_thread_prio_t 
+rtos_thread_prio_t
 rtos_k_find_highest_thread_priority(
     rtos_thread_prio_bitmap_t rtos_thread_prio_bitmap);
 

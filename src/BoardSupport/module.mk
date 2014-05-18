@@ -17,8 +17,22 @@ ifeq "$(PLATFORM)" "FRDM-KL25Z"
     local_src := \
                  $(subdirectory)/$(PLATFORM)/kl25z_soc_hardware_abstractions.c \
                  $(subdirectory)/$(PLATFORM)/kl25z_interrupt_service_routines.s \
-                 $(subdirectory)/$(PLATFORM)/frdm_board_hardware_abstractions.c \
+                 $(subdirectory)/frdm_board_hardware_abstractions.c \
                  $(subdirectory)/$(PLATFORM)/tfc_board_hardware_abstractions.c
+endif
+
+ifeq "$(PLATFORM)" "FRDM-K20D5"
+    local_src := \
+                 $(subdirectory)/$(PLATFORM)/k20d5_soc_hardware_abstractions.c \
+                 $(subdirectory)/$(PLATFORM)/k20d5_interrupt_service_routines.s \
+                 $(subdirectory)/frdm_board_hardware_abstractions.c
+endif
+
+ifeq "$(PLATFORM)" "FRDM-K64F"
+    local_src := \
+                 $(subdirectory)/$(PLATFORM)/k64f_soc_hardware_abstractions.c \
+                 $(subdirectory)/$(PLATFORM)/k64f_interrupt_service_routines.s \
+                 $(subdirectory)/frdm_board_hardware_abstractions.c
 endif
 
 ifeq "$(PLATFORM)" "LM4F120-LaunchPad"

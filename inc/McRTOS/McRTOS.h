@@ -98,7 +98,15 @@ typedef _RANGE_(0, RTOS_MAX_NUM_APP_OBJECT_POOLS)
  * The least significant bit (bit 0) corresponds to the lowest priority
  * (priority RTOS_NUM_THREAD_PRIORITIES - 1).
  */
+#if RTOS_NUM_THREAD_PRIORITIES == 8
 typedef uint8_t rtos_thread_prio_bitmap_t;
+#elif RTOS_NUM_THREAD_PRIORITIES == 16
+typedef uint16_t rtos_thread_prio_bitmap_t;
+#elif RTOS_NUM_THREAD_PRIORITIES == 32
+typedef uint32_t rtos_thread_prio_bitmap_t;
+#else
+#error "Unsupported value for RTOS_NUM_THREAD_PRIORITIES"
+#endif
 
 C_ASSERT(
     sizeof(rtos_thread_prio_bitmap_t) * 8 == RTOS_NUM_THREAD_PRIORITIES);
@@ -444,6 +452,9 @@ rtos_thread_name(
 _THREAD_CALLERS_ONLY_
 void
 rtos_thread_yield(void);
+
+bool
+rtos_caller_is_thread(void);
 
 _THREAD_CALLERS_ONLY_
 void

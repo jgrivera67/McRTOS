@@ -141,9 +141,9 @@
 #elif DEFINED_ARM_CORTEX_M_ARCH()
 
     /**
-     * Bit mask for the SVC instruction immediate operand (lower 24 bits)
+     * Bit mask for the SVC instruction immediate operand (lower 8 bits)
      */
-#   define ARM_SVC_IMMEDIATE_OPERAND_MASK   0x00FFFFFF
+#   define ARM_SVC_IMMEDIATE_OPERAND_MASK   0xFF
 
     /**
      * Symbolic names of the CPU registers, defined in the order in which they
@@ -176,12 +176,13 @@
 #   define CPU_REG_MSP              0x8
 #   define CPU_REG_PSP              0x9
 #   define CPU_REG_LR_ON_EXC_ENTRY  0xA
+#   define CPU_REG_CONTROL	    0xB
 
     /**
      * Number of CPU registers that need to be explicitly saved in a context
      * switch, as they are not automatically saved in the stack by the CPU.
      */
-#   define CPU_NUM_SAVED_REGISTERS  (8 + 3)
+#   define CPU_NUM_SAVED_REGISTERS  (8 + 4)
 
     /**
      * Values that LR can be set to, to return from an exception:
@@ -383,12 +384,13 @@
 #define  RTOS_THREAD_NAME_SYSTEM_CALL                   0x18
 #define  RTOS_THREAD_CONDVAR_WAIT_INTERRUPT_SYSTEM_CALL 0x19
 #define  RTOS_THREAD_YIELD_SYSTEM_CALL                  0x1a
+#define  RTOS_CALLER_IS_THREAD_SYSTEM_CALL		0x1b
 
 /*
  * CAUTION: This macro needs to be updated when new system
  * calls are added.
  */
-#define __LAST_RTOS_SYSTEM_CALL  RTOS_THREAD_YIELD_SYSTEM_CALL
+#define __LAST_RTOS_SYSTEM_CALL	RTOS_CALLER_IS_THREAD_SYSTEM_CALL
 
 /**
  * Number of system calls supported:

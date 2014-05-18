@@ -50,8 +50,7 @@ volatile uint32_t g_rtos_atomic_ops_spinlock = 0x0;
 /**
  * System call dispatch table
  *
- * NOTE: This variable is accessed from the fdc_swi_instruction_handler
- * assembly language routine
+ * NOTE: This variable is accessed from assembly code
  */
 const void *const g_rtos_system_call_dispatch_table[] =
 {
@@ -111,6 +110,8 @@ const void *const g_rtos_system_call_dispatch_table[] =
         RTOS_THREAD_CONDVAR_WAIT_INTERRUPT_SYSTEM_CALL, rtos_k_thread_condvar_wait_interrupt),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
         RTOS_THREAD_YIELD_SYSTEM_CALL, rtos_k_thread_yield),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_CALLER_IS_THREAD_SYSTEM_CALL, rtos_k_caller_is_thread),
 };
 
 C_ASSERT(ARRAY_SIZE(g_rtos_system_call_dispatch_table) == RTOS_NUM_SYSTEM_CALLS);
@@ -1878,7 +1879,7 @@ rtos_k_enter_interrupt(
             RTOS_INTR_BIT_MAP_GET_BIT(
 		cpu_controller_p->cpc_active_internal_interrupts,
 		-interrupt_channel) == 0,
-            cpu_controller_p->cpc_active_internal_interrupts, cpu_controller_p);
+            cpu_controller_p->cpc_active_internal_interrupts, -interrupt_channel);
 
 	RTOS_INTR_BIT_MAP_SET_BIT(
 	     cpu_controller_p->cpc_active_internal_interrupts,
@@ -1888,7 +1889,7 @@ rtos_k_enter_interrupt(
             RTOS_INTR_BIT_MAP_GET_BIT(
 		cpu_controller_p->cpc_active_external_interrupts,
 		interrupt_channel) == 0,
-            cpu_controller_p->cpc_active_external_interrupts, cpu_controller_p);
+            cpu_controller_p->cpc_active_external_interrupts, interrupt_channel);
 
 	RTOS_INTR_BIT_MAP_SET_BIT(
 	     cpu_controller_p->cpc_active_external_interrupts,
@@ -2472,6 +2473,7 @@ rtos_execution_context_init(
     {
         cpu_status_register_t cpu_status_register = 0;
         cpu_register_t cpu_lr_register = 0;
+        cpu_register_t cpu_control_register = 0;
 
         /*
          * Initialize explicitly saved CPU registers, for the first time that
@@ -2500,17 +2502,21 @@ rtos_execution_context_init(
         cpu_status_register &= ~CPU_REG_IPSR_EXCEPTION_NUMBER_MASK;
         cpu_status_register |= CPU_REG_EPSR_THUMB_STATE_MASK;
 
+	/*
+	 * The SPSEL bit of the CONTROL register needs to be set to 1,
+	 * to select the PSP register as the stack pointer:
+	 */
+        cpu_control_register |= CPU_REG_CONTROL_SPSEL_MASK;
+
         if (rtos_cpu_mode == RTOS_UNPRIVILEGED_THREAD_MODE)
         {
             cpu_lr_register = (cpu_register_t)rtos_thread_abort;
 
-#           if 0   // TODO enable this when SVC handler is implemented
             /*
              * The nPRIV bit of the CONTROL register also needs to be set to 1
              * (unprivileged)
              */
             cpu_control_register |= CPU_REG_CONTROL_nPRIV_MASK;
-#           endif
         }
         else
         {
@@ -2554,6 +2560,9 @@ rtos_execution_context_init(
 
         execution_context_p->ctx_cpu_saved_registers.cpu_reg_lr_on_exc_entry =
             CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP;
+
+        execution_context_p->ctx_cpu_saved_registers.cpu_reg_control =
+            cpu_control_register;
     }
 
     /*
@@ -3096,14 +3105,24 @@ rtos_k_atomic_fetch_sub_uint32(volatile uint32_t *counter_p, uint32_t value)
  * @return  ARM_CPU_WORD_SIZE_IN_BITS, if no bit is set in
  *          rtos_thread_prio_bitmap.
  *
- * Since Cortex-M0+ARM does not have the CLZ instruction, we have to manually
- * emulate the behavior of CLZ. The algorithm used here was taken from section
- * 7.2.2 of the ARM System Developer's Guide book.
  */
 rtos_thread_prio_t
 rtos_k_find_highest_thread_priority(
     rtos_thread_prio_bitmap_t rtos_thread_prio_bitmap)
 {
+#if __CORTEX_M >= 0x03
+    uint32_t leading_zeros_count = __CLZ(rtos_thread_prio_bitmap);
+
+#   if RTOS_NUM_THREAD_PRIORITIES < 32
+    leading_zeros_count -= (ARM_CPU_WORD_SIZE_IN_BITS - RTOS_NUM_THREAD_PRIORITIES);
+#   endif
+
+#else
+    /*
+     * Since Cortex-M0+ does not have the CLZ instruction, we have to manually
+     * emulate the behavior of CLZ. The algorithm used here was taken from
+     * section 7.2.2 of the ARM System Developer's Guide book.
+     */
     uint32_t leading_zeros_count = 0;
 
 #   if RTOS_NUM_THREAD_PRIORITIES == 32
@@ -3181,6 +3200,8 @@ rtos_k_find_highest_thread_priority(
 #   else
 #       error "Invalid RTOS_NUM_THREAD_PRIORITIES"
 #   endif
+
+#endif /* !(__CORTEX_M >= 0x03) */
 
     return leading_zeros_count;
 }

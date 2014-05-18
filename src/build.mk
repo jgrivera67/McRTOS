@@ -64,6 +64,20 @@ ifeq "$(PLATFORM)" "FRDM-KL25Z"
     CODETYPE = thumb
 endif
 
+ifeq "$(PLATFORM)" "FRDM-K20D5"
+    SYSTEM_ON_CHIP = K20D5_SOC
+    CPU_ARCHITECTURE = arm_cortex_m
+    MCU  = cortex-m4
+    CODETYPE = thumb
+endif
+
+ifeq "$(PLATFORM)" "FRDM-K64F"
+    SYSTEM_ON_CHIP = K64F_SOC
+    CPU_ARCHITECTURE = arm_cortex_m
+    MCU  = cortex-m4
+    CODETYPE = thumb
+endif
+
 ifndef CPU_ARCHITECTURE
     $(error unsupported platform $(PLATFORM))
 endif

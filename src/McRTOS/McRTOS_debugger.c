@@ -5,12 +5,14 @@
  *
  * Copyright (C) 2013 German Rivera
  *
- * @author German Rivera 
+ * @author German Rivera
  */
+#include <stdint.h>
 #include "McRTOS_kernel_services.h"
 #include "McRTOS_internals.h"
 #include "arm_defs.h"
-#include <stdint.h>
+#include "utils.h"
+#include "failure_data_capture.h"
 
 TODO("Remove these pragmas")
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -23,24 +25,27 @@ static bool rtos_dbg_parse_command(
 
 static void rtos_dbg_display_help(void);
 
-static void 
+static void
 rtos_dbg_dump_exception_info(
     _IN_ const uint32_t *before_exception_stack_p);
 
-static void 
+static void
 rtos_dbg_dump_all_execution_contexts(void);
 
-static void 
+static void
+rtos_dbg_dump_debug_msg_buffer(void);
+
+static void
 rtos_dbg_dump_execution_context(
     _IN_ const struct rtos_execution_context *execution_context_p);
 
-static void 
+static void
 rtos_dbg_dump_memory(
     _IN_ const uint32_t *addr,
     _IN_ uint32_t num_words,
     _IN_ const char *title);
 
-static void 
+static void
 rtos_dbg_dump_memory_with_call_stack(
     _IN_ const uint32_t *addr,
     _IN_ uint32_t num_words,
@@ -54,6 +59,9 @@ rtos_dbg_dump_cpu_controller(void);
 
 static void
 debug_dump_micro_trace_buffer(void);
+
+static void
+debug_dump_captured_registers(void);
 
 /**
  * Enters McRTOS debugger from the hard fault exception handler.
@@ -117,6 +125,7 @@ rtos_hard_fault_exception_handler(
 
     fdc_info_p->fdc_handling_exception = false;
     micro_trace_restart();
+    debugger_printf("*** Exiting debugger ***\n");//???
 }
 
 
@@ -139,7 +148,7 @@ rtos_run_debugger(
     turn_on_debugger_led();
 
     do {
-        debug_printf("\nMcRTOS debugger> ");
+        debugger_printf("\nMcRTOS debugger> ");
         read_command_line(
             (putchar_func_t *)uart_putchar_with_polling,
             (getchar_func_t *)uart_getchar_with_polling,
@@ -176,15 +185,24 @@ rtos_dbg_parse_command(
             break;
 
         case 'c':
-            rtos_dbg_dump_execution_context(
-                current_execution_context_p);
+	    if (current_execution_context_p != NULL) {
+		    rtos_dbg_dump_execution_context(
+			current_execution_context_p);
+	    }
+            break;
+
+        case 'd':
+            rtos_dbg_dump_debug_msg_buffer();
             break;
 
         case 'e':
-            rtos_dbg_dump_exception_info(
-                before_exception_stack_p);
-            rtos_dbg_dump_memory_with_call_stack(
-                before_exception_stack_p, 64, "Stack before exception");
+	    if (before_exception_stack_p != NULL) {
+		    rtos_dbg_dump_exception_info(
+			before_exception_stack_p);
+		    rtos_dbg_dump_memory_with_call_stack(
+			before_exception_stack_p, 64, "Stack before exception");
+	    }
+
             break;
 
         case 'h':
@@ -209,34 +227,35 @@ rtos_dbg_parse_command(
             break;
 
         default:
-            debug_printf("Invalid command: \'%s\' (type h for help)\n", cmd_line);
+            debugger_printf("Invalid command: \'%s\' (type h for help)\n", cmd_line);
     }
 
     return quit;
 }
 
 
-static void 
+static void
 rtos_dbg_display_help(void)
 {
-    debug_printf(
+    debugger_printf(
         "McRTOS debugger commands\n"
         "\ta - dump all execution contexts\n"
         "\tc - dump current execution context\n"
+        "\td - dump debug message buffer\n"
         "\te - dump exception info\n"
         "\th - display this message\n"
         "\tp - dump CPU controller of CPU core that took the exception\n"
-        "\tq - quit McRTOS command mode\n"
+        "\tq - quit McRTOS debugger\n"
         "\tr - reset CPU\n"
         "\tt - dump context switch traces\n");
 }
 
 
-static void 
+static void
 rtos_dbg_dump_exception_info(
     _IN_ const uint32_t *before_exception_stack_p)
 {
-    debug_printf(
+    debugger_printf(
         "sp before exception: %#x\n"
         "Registers pre-saved on exception entry:\n"
         "\tr0:  %#x\n"
@@ -263,7 +282,7 @@ rtos_dbg_dump_exception_info(
 }
 
 
-static void 
+static void
 rtos_dbg_dump_all_execution_contexts(void)
 {
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
@@ -272,13 +291,13 @@ rtos_dbg_dump_all_execution_contexts(void)
 
     struct glist_node *context_node_p;
 
-    debug_printf("Execution Contexts for CPU core %u\n", cpu_id);
+    debugger_printf("Execution Contexts for CPU core %u\n", cpu_id);
 
     GLIST_FOR_EACH_NODE(
         context_node_p,
         &cpu_controller_p->cpc_execution_contexts_list_anchor)
     {
-        struct rtos_execution_context *context_p = 
+        struct rtos_execution_context *context_p =
             GLIST_NODE_ENTRY(
                 context_node_p, struct rtos_execution_context, ctx_list_node);
 
@@ -289,11 +308,22 @@ rtos_dbg_dump_all_execution_contexts(void)
         g_cortex_m_exception_stack.es_stack - 1,
         RTOS_INTERRUPT_STACK_NUM_ENTRIES + 2,
         "Stack shared by all exceptions");
-    
 }
 
+static void
+rtos_dbg_dump_debug_msg_buffer(void)
+{
+    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
+    struct rtos_cpu_controller *cpu_controller_p =
+        &g_McRTOS_p->rts_cpu_controllers[cpu_id];
+    struct fdc_info *fdc_info_p = &cpu_controller_p->cpc_failures_info;
 
-static void 
+    fdc_info_p->fdc_debug_msg_buffer[RTOS_DEBUG_MSG_BUFFER_SIZE - 1] = '\0';
+    debugger_printf("Debug message buffer for CPU: %u\n\n%s", cpu_id,
+		    fdc_info_p->fdc_debug_msg_buffer);
+}
+
+static void
 rtos_dbg_dump_execution_context(
     _IN_ const struct rtos_execution_context *execution_context_p)
 {
@@ -304,38 +334,38 @@ rtos_dbg_dump_execution_context(
            [RTOS_INTERRUPT_CONTEXT] = "RTOS_INTERRUPT_CONTEXT"
     };
 
-    debug_printf("Execution Context: %#p\n", execution_context_p);
+    debugger_printf("Execution Context: %#p\n", execution_context_p);
 
     if (execution_context_p->ctx_signature != RTOS_EXECUTION_CONTEXT_SIGNATURE) {
 
 
-        debug_printf("*** Error: Invalid signature for context %#p: %#x (%s)\n",
-            execution_context_p, 
+        debugger_printf("*** Error: Invalid signature for context %#p: %#x (%s)\n",
+            execution_context_p,
             execution_context_p->ctx_signature,
             signature_to_string(execution_context_p->ctx_signature));
     }
 
-    debug_printf("\tName: %s\n", execution_context_p->ctx_name_p);
-    debug_printf("\tType: %s\n", context_types[execution_context_p->ctx_context_type]);
+    debugger_printf("\tName: %s\n", execution_context_p->ctx_name_p);
+    debugger_printf("\tType: %s\n", context_types[execution_context_p->ctx_context_type]);
     if (execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT) {
-        struct rtos_thread *thread_p = 
+        struct rtos_thread *thread_p =
             RTOS_EXECUTION_CONTEXT_GET_THREAD(execution_context_p);
 
-        debug_printf("\tthread: %#p, state: %#x, state history: %#x\n",
+        debugger_printf("\tthread: %#p, state: %#x, state history: %#x\n",
             thread_p, thread_p->thr_state, thread_p->thr_state_history);
 
     } else if (execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT) {
-        struct rtos_interrupt *interrupt_p = 
+        struct rtos_interrupt *interrupt_p =
             RTOS_EXECUTION_CONTEXT_GET_INTERRUPT(execution_context_p);
 
-        debug_printf("\tinterrupt: %#p, IRQ channel: %d\n",
+        debugger_printf("\tinterrupt: %#p, IRQ channel: %d\n",
             interrupt_p, interrupt_p->int_channel);
     }
 
-    debug_printf("\tSaved CPU registers:\n");
+    debugger_printf("\tSaved CPU registers:\n");
 
 #if DEFINED_ARM_CLASSIC_ARCH()
-    debug_printf(
+    debugger_printf(
         "\t\tr0:   %#x\n"
         "\t\tr1:   %#x\n"
         "\t\tr2:   %#x\n"
@@ -357,7 +387,7 @@ rtos_dbg_dump_execution_context(
         execution_context_p->ctx_cpu_saved_registers[CPU_REG_R8],
         execution_context_p->ctx_cpu_saved_registers[CPU_REG_R9]);
 
-    debug_printf(
+    debugger_printf(
         "\t\tr10:  %#x\n"
         "\t\tr11:  %#x\n"
         "\t\tr12:  %#x\n"
@@ -383,7 +413,7 @@ rtos_dbg_dump_execution_context(
             (rtos_execution_stack_entry_t *)execution_context_p->ctx_cpu_saved_registers.cpu_reg_msp;
     }
 
-    debug_printf(
+    debugger_printf(
         "\t\tr0:        %#x\n"
         "\t\tr1:        %#x\n"
         "\t\tr2:        %#x\n"
@@ -405,7 +435,7 @@ rtos_dbg_dump_execution_context(
         execution_context_p->ctx_cpu_saved_registers.cpu_reg_r8,
         execution_context_p->ctx_cpu_saved_registers.cpu_reg_r9);
 
-    debug_printf(
+    debugger_printf(
         "\t\tr10:       %#x\n"
         "\t\tr11:       %#x\n"
         "\t\tr12:       %#x\n"
@@ -433,13 +463,13 @@ rtos_dbg_dump_execution_context(
 
     if (execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT) {
         if (context_stack_p < execution_context_p->ctx_execution_stack_top_end_p) {
-            debug_printf(
+            debugger_printf(
                 "*** Error: stack overflow (stack pointer: %#p, stack top limit: %#p)\n",
                 context_stack_p, execution_context_p->ctx_execution_stack_top_end_p);
         }
 
         if (context_stack_p > execution_context_p->ctx_execution_stack_bottom_end_p) {
-            debug_printf(
+            debugger_printf(
                 "*** Error: stack underflow (stack pointer: %#p, stack bottom limit: %#p)\n",
                 context_stack_p, execution_context_p->ctx_execution_stack_bottom_end_p);
         }
@@ -452,28 +482,28 @@ rtos_dbg_dump_execution_context(
 }
 
 
-static void 
+static void
 rtos_dbg_dump_memory(
     _IN_ const uint32_t *addr,
     _IN_ uint32_t num_words,
     _IN_ const char *title)
 {
-    debug_printf("%s: Memory at %#p (%u words):\n",
+    debugger_printf("%s: Memory at %#p (%u words):\n",
         title, addr, num_words);
 
     for (uint32_t i = 0; i < num_words; i ++) {
-        debug_printf("\t%3u: [%#p]: %#x\n", i, addr + i, addr[i]);
+        debugger_printf("\t%3u: [%#p]: %#x\n", i, addr + i, addr[i]);
     }
 }
 
 
-static void 
+static void
 rtos_dbg_dump_memory_with_call_stack(
     _IN_ const uint32_t *addr,
     _IN_ uint32_t num_words,
     _IN_ const char *title)
 {
-    debug_printf("%s: Memory at %#p (%u words):\n",
+    debugger_printf("%s: Memory at %#p (%u words):\n",
         title, addr, num_words);
 
     for (uint32_t i = 0; i < num_words; i ++) {
@@ -483,10 +513,10 @@ rtos_dbg_dump_memory_with_call_stack(
                  (cpu_instruction_t *)((stack_entry & ~0x1) -
                                        sizeof(cpu_instruction_t));
 
-            debug_printf("\t%3u: [%#p]: %#x (call stack entry: %#p)\n",
+            debugger_printf("\t%3u: [%#p]: %#x (call stack entry: %#p)\n",
                 i, addr + i, stack_entry, call_stack_entry);
         } else {
-            debug_printf("\t%3u: [%#p]: %#x\n", i, addr + i, stack_entry);
+            debugger_printf("\t%3u: [%#p]: %#x\n", i, addr + i, stack_entry);
         }
     }
 }
@@ -498,8 +528,8 @@ rtos_dbg_dump_context_switch_traces(void)
         &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
 
     struct fdc_info *fdc_info_p = &cpu_controller_p->cpc_failures_info;
-   
-    debug_printf(
+
+    debugger_printf(
         "Number of context switches: %u\n"
         "Next entry to fill: %u\n",
         fdc_info_p->fdc_context_switch_count,
@@ -514,19 +544,19 @@ rtos_dbg_dump_context_switch_traces(void)
     }
 
     for (uint32_t i = 0; i < num_trace_entries;  i ++) {
-        fdc_context_switch_trace_entry_t trace_entry = 
+        fdc_context_switch_trace_entry_t trace_entry =
             fdc_info_p->fdc_context_switch_trace_buffer[i];
 
-        uint32_t context_id = 
+        uint32_t context_id =
             GET_BIT_FIELD(trace_entry, FDC_CST_CONTEXT_ID_MASK, FDC_CST_CONTEXT_ID_SHIFT);
 
-        uint32_t trace_context_type = 
+        uint32_t trace_context_type =
             GET_BIT_FIELD(
                 trace_entry,
                 FDC_CST_CONTEXT_TYPE_MASK,
                 FDC_CST_CONTEXT_TYPE_SHIFT);
 
-        uint32_t trace_context_switch_type = 
+        uint32_t trace_context_switch_type =
             GET_BIT_FIELD(
                 trace_entry,
                 FDC_CST_CONTEXT_SWITCH_TYPE_MASK,
@@ -561,11 +591,11 @@ rtos_dbg_dump_context_switch_traces(void)
             break;
 
         default:
-            debug_printf("*** Error: Invalid trace entry (trace context type: %u)\n",
+            debugger_printf("*** Error: Invalid trace entry (trace context type: %u)\n",
                 trace_context_type);
         }
 
-        debug_printf(
+        debugger_printf(
             "%3u: %s (context: %#p), context switch type: %#x, "
             "last switched-out reason: %u, priority %u\n",
             i, execution_context_p->ctx_name_p, execution_context_p,
@@ -573,13 +603,13 @@ rtos_dbg_dump_context_switch_traces(void)
 
 #       if 0 // ???
         if (thread_p != NULL) {
-            debug_printf(
+            debugger_printf(
                 "\tthread: %#p, state: %#x, state history: %#x\n",
                 thread_p, thread_p->thr_state, thread_p->thr_state_history);
         }
 
         if (interrupt_p != NULL) {
-            debug_printf(
+            debugger_printf(
                 "\tinterrupt: %#p\n", interrupt_p);
 
         }
@@ -594,7 +624,7 @@ rtos_dbg_dump_cpu_controller(void)
     struct rtos_cpu_controller *cpu_controller_p =
         &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
 
-    debug_printf(
+    debugger_printf(
         "CPU controller for core %u (%#p):\n"
         "\tcpc_ticks_since_boot_count: %u\n"
         "\tcpc_current_execution_context_p: %#p\n"
@@ -630,14 +660,14 @@ debug_dump_micro_trace_buffer(void)
     if (mtb_cursor_p < __micro_trace_buffer ||
         mtb_cursor_p >= __micro_trace_buffer_end ||
         (uintptr_t)mtb_cursor_p % sizeof(uint64_t) != 0) {
-        debug_printf("*** Error: Invalid mtb_cursor_p: %#p\n", mtb_cursor_p);
+        debugger_printf("*** Error: Invalid mtb_cursor_p: %#p\n", mtb_cursor_p);
     }
 
     uint32_t next_entry_to_fill = mtb_cursor_p - __micro_trace_buffer;
 
     uint32_t num_entries;
     uint64_t *entry_p;
-   
+
     if (mtb_cursor_wrapped) {
         num_entries = MICRO_TRACE_BUFFER_NUM_ENTRIES;
         entry_p = &__micro_trace_buffer[next_entry_to_fill];
@@ -650,7 +680,7 @@ debug_dump_micro_trace_buffer(void)
      * Print control flow trace:
      */
 
-    debug_printf("Micro Trace Buffer Entries: %u\n", num_entries);
+    debugger_printf("Micro Trace Buffer Entries: %u\n", num_entries);
 
     while (num_entries != 0) {
         const char *prefix = "        ";
@@ -685,7 +715,7 @@ debug_dump_micro_trace_buffer(void)
 
         dest_addr &= ~0x1;
         if (VALID_CODE_ADDRESS(dest_addr)) {
-            if (dest_addr == 
+            if (dest_addr ==
                     GET_FUNCTION_ADDRESS(cortex_m_hard_fault_exception_handler)) {
                 dest_func_name = "cortex_m_hard_fault_exception_handler";
             } else if (dest_addr ==
@@ -707,7 +737,7 @@ debug_dump_micro_trace_buffer(void)
             }
         }
 
-        debug_printf(
+        debugger_printf(
             "\t%3u: %s %#p -> %#p %s\n",
             entry_p - __micro_trace_buffer, prefix,
             source_addr, dest_addr, dest_func_name);
@@ -720,3 +750,125 @@ debug_dump_micro_trace_buffer(void)
         }
     }
 }
+
+
+/**
+ * Simplified printf that sends debugger output to the console.
+ * It only supports the format specifiers supported by embedded_vprintf().
+ * It uses uart_putchar_with_polling() for transmitting each character.
+ * It does polling on the serial port until all characters are transmitted
+ * and no serialization for concurrent calls is provided.
+ *
+ * @param fmt               format string
+ *
+ * @param ...               variable arguments
+ *
+ * @return None
+ */
+void
+debugger_printf(const char *fmt, ...)
+{
+    va_list va;
+
+    va_start(va, fmt);
+    embedded_vprintf(
+        (putchar_func_t *)uart_putchar_with_polling,
+        (void *)g_console_serial_port_p, fmt, va);
+
+    va_end(va);
+}
+
+/*
+ * function to be invoked from assembly code
+ */
+void
+debug_dump_r0_to_r3(
+    uint32_t r0,
+    uint32_t r1,
+    uint32_t r2,
+    uint32_t r3)
+{
+    debugger_printf(
+        "REGISTERS: r0: %#x, r1: %#x, r2: %#x, r3: %#x\n",
+        r0, r1, r2, r3);
+}
+
+
+struct debug_captured_registers_buffer {
+    struct rtos_execution_context *cap_execution_context_p;
+    uint32_t *cap_location_addr;
+    cpu_register_t cap_registers[CPU_NUM_PRE_SAVED_REGISTERS];
+};
+
+static struct debug_captured_registers_buffer g_debug_captured_registers_buffers[8];
+
+static uint32_t g_debug_captured_registers_buffer_cursor = 0;
+
+/*
+ * function to be invoked from assembly code
+ */
+void
+debug_capture_registers(
+    uint32_t r0,
+    uint32_t r1,
+    uint32_t r2,
+    uint32_t r3)
+{
+    /*
+     * Capture ARM LR register on entry
+     */
+    uint32_t *return_address;
+    CAPTURE_ARM_LR_REGISTER(return_address);
+
+    cpu_status_register_t old_primask = __get_PRIMASK();
+    __disable_irq();
+
+    struct debug_captured_registers_buffer *captured_registers_buffer_p =
+        &g_debug_captured_registers_buffers[g_debug_captured_registers_buffer_cursor];
+
+    captured_registers_buffer_p->cap_execution_context_p =
+        RTOS_GET_CURRENT_EXECUTION_CONTEXT();
+
+    captured_registers_buffer_p->cap_location_addr = return_address - 1;
+    captured_registers_buffer_p->cap_registers[0] = r0;
+    captured_registers_buffer_p->cap_registers[1] = r1;
+    captured_registers_buffer_p->cap_registers[2] = r2;
+    captured_registers_buffer_p->cap_registers[3] = r3;
+
+    g_debug_captured_registers_buffer_cursor ++;
+    if (g_debug_captured_registers_buffer_cursor ==
+        ARRAY_SIZE(g_debug_captured_registers_buffers)) {
+        g_debug_captured_registers_buffer_cursor = 0;
+    }
+
+    if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
+        __enable_irq();
+    }
+}
+
+
+static void
+debug_dump_captured_registers(void)
+{
+    debugger_printf(
+        "Registers captured buffers (next to fill %u):\n",
+        g_debug_captured_registers_buffer_cursor);
+
+    for (uint32_t i = 0; i < ARRAY_SIZE(g_debug_captured_registers_buffers); i ++) {
+        struct debug_captured_registers_buffer *captured_registers_buffer_p =
+            &g_debug_captured_registers_buffers[i];
+
+        if (captured_registers_buffer_p->cap_location_addr != NULL) {
+            debugger_printf(
+                "%u: Registers captured at %#p (context: %#p): r0: %#x, r1: %#x, r2: %#x, r3: %#x\n",
+                i,
+                captured_registers_buffer_p->cap_location_addr,
+                captured_registers_buffer_p->cap_execution_context_p,
+                captured_registers_buffer_p->cap_registers[0],
+                captured_registers_buffer_p->cap_registers[1],
+                captured_registers_buffer_p->cap_registers[2],
+                captured_registers_buffer_p->cap_registers[3]);
+        }
+    }
+}
+

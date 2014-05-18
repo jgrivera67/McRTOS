@@ -5,8 +5,8 @@
  *
  * Copyright (C) 2013 German Rivera
  *
- * @author German Rivera 
- */ 
+ * @author German Rivera
+ */
 
 #include "arm_defs.h"
 
@@ -56,7 +56,7 @@ rtos_\_rtos_function_suffix_:
     /*
      * If current CPU mode is unprivileged mode, execute an swi instruction
      * to perform the system call. Otherwise, if the mode is privileged thread
-     * mode, interrupt mode or supervisor mode (caller is rtos_startup()), 
+     * mode, interrupt mode or supervisor mode (caller is rtos_startup()),
      * call the corresponding kernel service directly.
      * Otherwise, reject the system call as it is being invoked in an unexpected
      * CPU mode or with interrupts disabled.
@@ -64,7 +64,7 @@ rtos_\_rtos_function_suffix_:
     mrs     r4, cpsr
     and     r4, r4, #ARM_MODE_MASK
     teq     r4, #ARM_MODE_USER
-    beq     L_system_call_do_swi_\_rtos_function_suffix_ 
+    beq     L_system_call_do_swi_\_rtos_function_suffix_
     teq     r4, #ARM_MODE_SYS
     teqne   r4, #ARM_MODE_IRQ
     teqne   r4, #ARM_MODE_SVC
@@ -114,7 +114,7 @@ L_system_call_error_msg_\_rtos_function_suffix_:
 .endm
 
 
-/** 
+/**
  * SWI instruction exception handler
  *
  * @pre: CPU interrupts are disabled and current CPU mode is ARM_MODE_SVC
@@ -126,7 +126,7 @@ L_system_call_error_msg_\_rtos_function_suffix_:
 rtos_swi_exception_handler:
     /*
      * - r0-r3 == system call parameters
-     * - lr == address where we want to return after the exception 
+     * - lr == address where we want to return after the exception
      */
 
     /*
@@ -150,12 +150,12 @@ rtos_swi_exception_handler:
      * r0 == user mode's sp
      */
     stmdb   r0!, {r4-r12}
-    
+
     /*
      * Save SVC mode's lr and spsr on the user mode's stack:
      *
      * r0 == user mode's sp
-     * 
+     *
      * NOTES:
      * - Both the lr and spsr from SVC mode are needed so that we can return
      *   correctly from the SWI exception.
@@ -192,7 +192,7 @@ rtos_swi_exception_handler:
     /*
      * Re-enable interrupts (by turning off I_BIT and F_BIT in the cpsr), staying in
      * system mode.
-     * 
+     *
      * NOTE: This is necessary so that higher priority threads and interrupts
      * can preempt us.
      *
@@ -259,9 +259,9 @@ rtos_swi_exception_handler:
      * as it may contain the value to return from the system call
      */
 
-    mov     r4, r0 
+    mov     r4, r0
     bl      rtos_k_exit_system_call
-    mov     r0, r4 
+    mov     r0, r4
 
 L_swi_exception_handler_exit:
     /*
@@ -271,7 +271,7 @@ L_swi_exception_handler_exit:
 
     /*
      * Disable interrupts:
-     */ 
+     */
 1:
     msr    cpsr_c, #(ARM_MODE_SYS | ARM_INTERRUPTS_DISABLED_MASK)
     mrs     r1, cpsr
@@ -311,7 +311,7 @@ L_swi_exception_handler_exit:
 #ifdef MCRTOS_DYNAMIC_OBJECT_CREATION
 
 GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_CREATE_THREAD_SYSTEM_CALL, create_thread
-GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_CREATE_MUTEX_SYSTEM_CALL, create_mutex         
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_CREATE_MUTEX_SYSTEM_CALL, create_mutex
 GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_CREATE_CONDVAR_SYSTEM_CALL, create_condvar
 GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_CREATE_TIMER_SYSTEM_CALL, create_timer
 
@@ -330,7 +330,7 @@ GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_CONDVAR_BROADCAST_SYSTEM_CALL, condvar_bro
 GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_TIMER_START_SYSTEM_CALL, timer_start
 GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_TIMER_STOP_SYSTEM_CALL, timer_stop
 GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_CAPTURE_FAILURE_DATA_SYSTEM_CALL, capture_failure_data
-GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_CONSOLE_PUTCHAR_SYSTEM_CALL, console_putchar             
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_CONSOLE_PUTCHAR_SYSTEM_CALL, console_putchar
 GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_CONSOLE_GETCHAR_SYSTEM_CALL, console_getchar
 GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_LCD_PUTCHAR_SYSTEM_CALL, lcd_putchar
 GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_LCD_DRAW_TILE_SYSTEM_CALL, lcd_draw_tile

@@ -3,8 +3,8 @@
  *
  * ARM Cortex-M declarations
  *
- * @author German Rivera 
- */ 
+ * @author German Rivera
+ */
 
 #ifndef __McRTOS_ARM_CORTEX_M_H
 #define __McRTOS_ARM_CORTEX_M_H
@@ -46,7 +46,7 @@ void cortex_m_nvic_init(void);
 void cortex_m_systick_init(void);
 void cortex_m_nmi_isr(void);
 void cortex_m_hard_fault_exception_handler(void);
-void cortex_m_svc_handler(void);
+void cortex_m_svc_exception_handler(void);
 void cortex_m_pendsv_exception_handler(void);
 void cortex_m_systick_isr(void);
 void cortex_m_trigger_pendsv_exception(void);

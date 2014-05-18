@@ -29,8 +29,6 @@
  * Tick Timer frequency in Hz
  */
 #define RTOS_TICK_TIMER_FREQUENCY    UINT32_C(500)  /* 500 Hz or every 2 ms */
-//#define RTOS_TICK_TIMER_FREQUENCY    UINT32_C(1000)  /* 1 KHz or every 1 ms */
-//#define RTOS_TICK_TIMER_FREQUENCY    UINT32_C(100) /* 100 Hz or every 10 ms */
 
 /**
  * Tick timer period in milliseconds
@@ -55,7 +53,7 @@
 
 /**
  * Stack overflow buffer size (in number of stack entries) for
- * interrupt stacks
+ * thread stacks
  */
 #define RTOS_THREAD_STACK_OVERFLOW_BUFFER_SIZE_IN_ENTRIES \
         (RTOS_THREAD_STACK_NUM_ENTRIES / 16)
@@ -123,10 +121,27 @@ C_ASSERT(RTOS_MAX_NUM_INTERRUPTS < SOC_NUM_INTERRUPT_CHANNELS);
  */
 #if defined(LPC2478_SOC)
 #   define RTOS_MAX_FDC_INFO_SIZE  UINT32_C(4*1024)
-#elif defined(KL25Z_SOC)
+#elif defined(KL25Z_SOC) || defined(K20D5_SOC)
 #   define RTOS_MAX_FDC_INFO_SIZE  UINT32_C(1*1024)
+#elif defined(K64F_SOC)
+#   define RTOS_MAX_FDC_INFO_SIZE  UINT32_C(4*1024)
 #elif defined(LM4F120_SOC)
-#   define RTOS_MAX_FDC_INFO_SIZE  UINT32_C(2*1024)
+#   define RTOS_MAX_FDC_INFO_SIZE  UINT32_C(4*1024)
+#else
+#   error "No system on chip specified"
+#endif
+
+/**
+ * Size of the buffer that holds the most recent output from debug_printf()
+ */
+#if defined(LPC2478_SOC)
+#   define RTOS_DEBUG_MSG_BUFFER_SIZE  UINT16_C(1024)
+#elif defined(KL25Z_SOC) || defined(K20D5_SOC)
+#   define RTOS_DEBUG_MSG_BUFFER_SIZE  UINT16_C(256)
+#elif defined(K64F_SOC)
+#   define RTOS_DEBUG_MSG_BUFFER_SIZE  UINT16_C(1024)
+#elif defined(LM4F120_SOC)
+#   define RTOS_DEBUG_MSG_BUFFER_SIZE  UINT16_C(1024)
 #else
 #   error "No system on chip specified"
 #endif
@@ -160,7 +175,7 @@ C_ASSERT(RTOS_MAX_NUM_INTERRUPTS < SOC_NUM_INTERRUPT_CHANNELS);
 /**
  * Maximum number of application threads that can exist in the system
  */
-#define RTOS_MAX_NUM_APP_THREADS UINT8_C(6)
+#define RTOS_MAX_NUM_APP_THREADS UINT8_C(8)
 
 /*
  * If the total size of application thread stacks is larger than 25% of
