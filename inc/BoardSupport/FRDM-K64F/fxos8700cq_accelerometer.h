@@ -1,16 +1,17 @@
 /**
- * @file mma8451q_accelerometer.h
+ * @file fxos8700cq_accelerometer.h
  *
- * Freescale MMA8451Q accelerometer declarations
+ * Freescale FXOS8700CQ accelerometer declarations
  *
  * @author German Rivera
  */
-#ifndef __MMA8451Q_ACCELEROMETER_H
-#define __MMA8451Q_ACCELEROMETER_H
+#ifndef __FXOS8700CQ_ACCELEROMETER_H
+#define __FXOS8700CQ_ACCELEROMETER_H
 
 #include <stdint.h>
 #include "utils.h"
 
+// TODO: Get info from ~/embsys/tmp/KSDK_1.0.0-Beta/boards/frdmk64f120m/board.h
 /*
  * I2C slave address for the accelerometer
  */
@@ -101,4 +102,4 @@
 #define ACCEL_FF_MT_SRC_XHE_MASK BIT(1)
 #define ACCEL_FF_MT_SRC_XHP_MASK BIT(0)
 
-#endif /* __MMA8451Q_ACCELEROMETER_H */
+#endif /* __FXOS8700CQ_ACCELEROMETER_H */

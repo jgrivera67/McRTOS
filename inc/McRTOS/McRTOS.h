@@ -116,8 +116,12 @@ C_ASSERT(
  */
 #if defined(LM4F120_SOC)
 typedef uint32_t rtos_per_cpu_interrupts_bitmap_t[5];
-#else
+#elif defined(KL25Z_SOC)
 typedef uint32_t rtos_per_cpu_interrupts_bitmap_t[1];
+#elif defined(K64F_SOC)
+typedef uint32_t rtos_per_cpu_interrupts_bitmap_t[3];
+#else
+#error "SoC not supported"
 #endif
 
 C_ASSERT(

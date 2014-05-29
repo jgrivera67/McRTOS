@@ -31,10 +31,14 @@ enum cpu_core_internal_interrupt_vectors {
 };
 
 /**
-* IRQ number range type
+* IRQ number range type.
 * (typedef needed by the CMSIS APIs)
 *
-* NOTE: INT_SVCall_IRQn is negative
+* NOTE:
+* - INT_SVCall_IRQn is negative
+* - The ARMv7-M NVIC architecture supports up to
+*   496 interrupts. Actual number of IRQs can be determined from the NVIC's
+*   read-only Interrupt Controller Type Register (ICTR)
 */
 typedef _RANGE_(INT_SVCall_IRQn, SOC_NUM_INTERRUPT_CHANNELS - 1)
     int16_t IRQn_Type;

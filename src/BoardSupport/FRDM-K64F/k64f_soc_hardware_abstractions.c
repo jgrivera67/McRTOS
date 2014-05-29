@@ -1,13 +1,13 @@
 /**
- * @file kl25z_soc_hardware_abstractions.c
+ * @file k64f_soc_hardware_abstractions.c
  *
- * Hardware abstraction layer for the KL25Z SoC
+ * Hardware abstraction layer for the K64F SoC
  *
  * @author German Rivera
  */
 
 #include "hardware_abstractions.h"
-#include "kl25z_soc.h"
+#include "k64f_soc.h"
 #include "frdm_board.h"
 #include "McRTOS_arm_cortex_m.h"
 #include "failure_data_capture.h"
@@ -70,47 +70,22 @@ struct uart_device {
 #   define UART_DEVICE_SIGNATURE  GEN_SIGNATURE('U', 'A', 'R', 'T')
     uint32_t urt_signature;
     struct uart_device_var *urt_var_p;
-    union {
-        UART0_MemMapPtr urt_mmio_uart0_p;
-        UART_MemMapPtr urt_mmio_uart_p;
-    };
-
+    UART_MemMapPtr urt_mmio_uart_p;
     volatile uint32_t *urt_mmio_tx_port_pcr_p;
     volatile uint32_t *urt_mmio_rx_port_pcr_p;
     uint32_t urt_mmio_pin_mux_selector_mask;
     uint32_t urt_mmio_clock_gate_mask;
+    uint32_t urt_source_clock_freq_in_hz;
 
-    struct rtos_interrupt_registration_params urt_rtos_interrupt_params;
-    struct rtos_interrupt **urt_rtos_interrupt_pp;
+    struct rtos_interrupt_registration_params urt_rtos_interrupt_rx_tx_params;
+    struct rtos_interrupt **urt_rtos_interrupt_rx_tx_pp;
+    struct rtos_interrupt_registration_params urt_rtos_interrupt_err_params;
+    struct rtos_interrupt **urt_rtos_interrupt_err_pp;
     const char *urt_transmit_queue_name_p;
     const char *urt_receive_queue_name_p;
     uint8_t *urt_transmit_queue_storage_p;
     uint8_t *urt_receive_queue_storage_p;
 };
-
-C_ASSERT(
-    offsetof(struct UART0_MemMap, BDH) == offsetof(struct UART_MemMap, BDH));
-
-C_ASSERT(
-    offsetof(struct UART0_MemMap, BDL) == offsetof(struct UART_MemMap, BDL));
-
-C_ASSERT(
-    offsetof(struct UART0_MemMap, C1) == offsetof(struct UART_MemMap, C1));
-
-C_ASSERT(
-    offsetof(struct UART0_MemMap, C2) == offsetof(struct UART_MemMap, C2));
-
-C_ASSERT(
-    offsetof(struct UART0_MemMap, S1) == offsetof(struct UART_MemMap, S1));
-
-C_ASSERT(
-    offsetof(struct UART0_MemMap, S2) == offsetof(struct UART_MemMap, S2));
-
-C_ASSERT(
-    offsetof(struct UART0_MemMap, C3) == offsetof(struct UART_MemMap, C3));
-
-C_ASSERT(
-    offsetof(struct UART0_MemMap, D) == offsetof(struct UART_MemMap, D));
 
 /**
  * Non-const fields of a UART device (to be placed in SRAM)
@@ -132,13 +107,17 @@ static void system_clocks_init(void);
 static void init_cpu_clock_cycles_counter(void);
 #endif
 
+#if 0 // ???
 static void pll_init(void);
+#endif // ???
 
 static void uart_stop(
     const struct uart_device *uart_device_p);
 
+#if 0 // ???
 static void
-kl25_adc_calibrate(const struct adc_device *adc_device_p);
+k64f_adc_calibrate(const struct adc_device *adc_device_p);
+#endif // ???
 
 /*
  * Function prototypes for dummy VIC interrupt ISRs
@@ -147,31 +126,86 @@ static isr_function_t dummy_dma0_isr;
 static isr_function_t dummy_dma1_isr;
 static isr_function_t dummy_dma2_isr;
 static isr_function_t dummy_dma3_isr;
+static isr_function_t dummy_dma4_isr;
+static isr_function_t dummy_dma5_isr;
+static isr_function_t dummy_dma6_isr;
+static isr_function_t dummy_dma7_isr;
+static isr_function_t dummy_dma8_isr;
+static isr_function_t dummy_dma9_isr;
+static isr_function_t dummy_dma10_isr;
+static isr_function_t dummy_dma11_isr;
+static isr_function_t dummy_dma12_isr;
+static isr_function_t dummy_dma13_isr;
+static isr_function_t dummy_dma14_isr;
+static isr_function_t dummy_dma15_isr;
+static isr_function_t dummy_dma_error_isr;
 static isr_function_t dummy_mcm_isr;
-static isr_function_t dummy_ftfl_isr;
-static isr_function_t dummy_pmc_isr;
+static isr_function_t dummy_ftfe_isr;
+static isr_function_t dummy_read_collision_isr;
+static isr_function_t dummy_lvd_lvw_isr;
 static isr_function_t dummy_llw_isr;
+static isr_function_t dummy_watchdog_isr;
+static isr_function_t dummy_i2c0_isr;
 static isr_function_t dummy_i2c1_isr;
 static isr_function_t dummy_spi0_isr;
 static isr_function_t dummy_spi1_isr;
-static isr_function_t dummy_uart1_isr;
-static isr_function_t dummy_uart2_isr;
+static isr_function_t dummy_i2s0_tx_isr;
+static isr_function_t dummy_i2s0_rx_isr;
+static isr_function_t dummy_uart0_lon_isr;
+static isr_function_t dummy_uart1_rx_tx_isr;
+static isr_function_t dummy_uart1_err_isr;
+static isr_function_t dummy_uart2_rx_tx_isr;
+static isr_function_t dummy_uart2_err_isr;
+static isr_function_t dummy_uart3_rx_tx_isr;
+static isr_function_t dummy_uart3_err_isr;
 static isr_function_t dummy_cmp0_isr;
-static isr_function_t dummy_tpm2_isr;
+static isr_function_t dummy_cmp1_isr;
+static isr_function_t dummy_ftm0_isr;
+static isr_function_t dummy_ftm1_isr;
+static isr_function_t dummy_ftm2_isr;
+static isr_function_t dummy_cmt_isr;
 static isr_function_t dummy_rtc_alarm_isr;
 static isr_function_t dummy_rtc_seconds_isr;
-static isr_function_t dummy_pit_isr;
-static isr_function_t dummy_reserved_irq23_isr;
+static isr_function_t dummy_pit0_isr;
+static isr_function_t dummy_pit1_isr;
+static isr_function_t dummy_pit2_isr;
+static isr_function_t dummy_pdb0_isr;
 static isr_function_t dummy_usb_otg_isr;
+static isr_function_t dummy_usb_dcd_isr;
+static isr_function_t dummy_reserved71_isr;
 static isr_function_t dummy_dac0_isr;
-static isr_function_t dummy_tsi0_isr;
 static isr_function_t dummy_mcg_isr;
 static isr_function_t dummy_lptimer_isr;
-static isr_function_t dummy_reserved_irq29_isr;
 static isr_function_t dummy_port_a_isr;
+static isr_function_t dummy_port_b_isr;
+static isr_function_t dummy_port_c_isr;
 static isr_function_t dummy_port_d_isr;
+static isr_function_t dummy_port_e_isr;
+static isr_function_t dummy_swi_isr;
+static isr_function_t dummy_spi2_isr;
+static isr_function_t dummy_uart4_rx_tx_isr;
+static isr_function_t dummy_uart4_err_isr;
+static isr_function_t dummy_uart5_rx_tx_isr;
+static isr_function_t dummy_uart5_err_isr;
+static isr_function_t dummy_cmp2_isr;
+static isr_function_t dummy_ftm3_isr;
+static isr_function_t dummy_dac1_isr;
+static isr_function_t dummy_adc0_isr;
+static isr_function_t dummy_adc1_isr;
+static isr_function_t dummy_i2c2_isr;
+static isr_function_t dummy_can0_ored_message_buffer_isr;
+static isr_function_t dummy_can0_bus_off_isr;
+static isr_function_t dummy_can0_error_isr;
+static isr_function_t dummy_can0_tx_warning_isr;
+static isr_function_t dummy_can0_rx_warning_isr;
+static isr_function_t dummy_can0_wake_up_isr;
+static isr_function_t dummy_sdhc_isr;
+static isr_function_t dummy_enet_1588_timer_isr;
+static isr_function_t dummy_enet_transmit_isr;
+static isr_function_t dummy_enet_receive_isr;
+static isr_function_t dummy_enet_error_isr;
 
-static uint32_t g_pll_frequency_in_hz = 0;
+//???static uint32_t g_pll_frequency_in_hz = 0;
 
 /**
  * Interrupt Vector Table
@@ -190,70 +224,114 @@ isr_function_t *const g_interrupt_vector_table[] __attribute__ ((section(".vecto
     [INT_SysTick] = cortex_m_systick_isr,
 
     /* Interrupts external to the Cortex-M core*/
-    [INT_DMA0] = dummy_dma0_isr, /* DMA Channel 0 Transfer Complete and Error */
-    [INT_DMA1] = dummy_dma1_isr, /* DMA Channel 1 Transfer Complete and Error */
-    [INT_DMA2] = dummy_dma2_isr, /* DMA Channel 2 Transfer Complete and Error */
-    [INT_DMA3] = dummy_dma3_isr, /* DMA Channel 3 Transfer Complete and Error */
-    [INT_Reserved20] = dummy_mcm_isr, /* Normal Interrupt */
-    [INT_FTFA] = dummy_ftfl_isr, /* FTFL Interrupt */
-    [INT_LVD_LVW] = dummy_pmc_isr, /* PMC Interrupt */
+    [INT_DMA0] = dummy_dma0_isr, /* DMA Channel 0 Transfer Complete */
+    [INT_DMA1] = dummy_dma1_isr, /* DMA Channel 1 Transfer Complete */
+    [INT_DMA2] = dummy_dma2_isr, /* DMA Channel 2 Transfer Complete */
+    [INT_DMA3] = dummy_dma3_isr, /* DMA Channel 3 Transfer Complete */
+    [INT_DMA4] = dummy_dma4_isr, /* DMA Channel 4 Transfer Complete */
+    [INT_DMA5] = dummy_dma5_isr, /* DMA Channel 5 Transfer Complete */
+    [INT_DMA6] = dummy_dma6_isr, /* DMA Channel 6 Transfer Complete */
+    [INT_DMA7] = dummy_dma7_isr, /* DMA Channel 7 Transfer Complete */
+    [INT_DMA8] = dummy_dma8_isr, /* DMA Channel 8 Transfer Complete */
+    [INT_DMA9] = dummy_dma9_isr, /* DMA Channel 9 Transfer Complete */
+    [INT_DMA10] = dummy_dma10_isr, /* DMA Channel 10 Transfer Complete */
+    [INT_DMA11] = dummy_dma11_isr, /* DMA Channel 11 Transfer Complete */
+    [INT_DMA12] = dummy_dma12_isr, /* DMA Channel 12 Transfer Complete */
+    [INT_DMA13] = dummy_dma13_isr, /* DMA Channel 13 Transfer Complete */
+    [INT_DMA14] = dummy_dma14_isr, /* DMA Channel 14 Transfer Complete */
+    [INT_DMA15] = dummy_dma15_isr, /* DMA Channel 15 Transfer Complete */
+    [INT_DMA_Error] = dummy_dma_error_isr, /* DMA Error Interrupt */
+    [INT_MCM] = dummy_mcm_isr, /* Normal Interrupt */
+    [INT_FTFE] = dummy_ftfe_isr, /* FTFE Command Complete Interrupt */
+    [INT_Read_Collision] = dummy_read_collision_isr, /* Read Collision Interrupt */
+    [INT_LVD_LVW] = dummy_lvd_lvw_isr, /* Low Voltage Detect, Low Voltage Warning */
     [INT_LLW] = dummy_llw_isr, /* Low Leakage Wake-up */
-    [INT_I2C0] = kl25_i2c0_isr, /* I2C0 interrupt */
+    [INT_Watchdog] = dummy_watchdog_isr, /*  WDOG Interrupt */
+    [INT_I2C0] = dummy_i2c0_isr, /* I2C0 interrupt */
     [INT_I2C1] = dummy_i2c1_isr, /* I2C1 interrupt */
     [INT_SPI0] = dummy_spi0_isr, /* SPI0 Interrupt */
     [INT_SPI1] = dummy_spi1_isr, /* SPI1 Interrupt */
-    [INT_UART0] = kl25_uart0_isr,    /* UART0 Status and Error interrupt */
-    [INT_UART1] = dummy_uart1_isr, /* UART1 Status and Error interrupt */
-    [INT_UART2] = dummy_uart2_isr, /* UART2 Status and Error interrupt */
-    [INT_ADC0] = kl25_adc0_isr, /* ADC0 interrupt */
+    [INT_I2S0_Tx] = dummy_i2s0_tx_isr, /* I2S0 transmit interrupt */
+    [INT_I2S0_Rx] = dummy_i2s0_rx_isr, /* I2S0 receive interrupt */
+    [INT_UART0_LON] = dummy_uart0_lon_isr, /* UART0 LON interrupt */
+    [INT_UART0_RX_TX] = k64f_uart0_rx_tx_isr, /* UART0 Receive/Transmit interrupt */
+    [INT_UART0_ERR] = k64f_uart0_err_isr, /* UART0 Error interrupt */
+    [INT_UART1_RX_TX] = dummy_uart1_rx_tx_isr, /* UART1 Receive/Transmit interrupt */
+    [INT_UART1_ERR] = dummy_uart1_err_isr, /* UART1 Error interrupt */
+    [INT_UART2_RX_TX] = dummy_uart2_rx_tx_isr, /* UART2 Receive/Transmit interrupt */
+    [INT_UART2_ERR] = dummy_uart2_err_isr, /* UART2 Error interrupt */
+    [INT_UART3_RX_TX] = dummy_uart3_rx_tx_isr, /* UART3 Receive/Transmit interrupt */
+    [INT_UART3_ERR] = dummy_uart3_err_isr, /* UART3 Error interrupt */
+    [INT_ADC0] = dummy_adc0_isr, /* ADC0 interrupt */
     [INT_CMP0] = dummy_cmp0_isr, /* CMP0 interrupt */
-    [INT_TPM0] = kl25_tpm0_isr, /* TPM0 fault, overflow and channels interrupt */
-    [INT_TPM1] = kl25_tpm1_isr, /* TPM1 fault, overflow and channels interrupt */
-    [INT_TPM2] = dummy_tpm2_isr, /* TPM2 fault, overflow and channels interrupt */
+    [INT_CMP1] = dummy_cmp1_isr, /* CMP1 interrupt */
+    [INT_FTM0] = dummy_ftm0_isr, /* FTM0 fault, overflow and channels interrupt */
+    [INT_FTM1] = dummy_ftm1_isr, /* FTM1 fault, overflow and channels interrupt */
+    [INT_FTM2] = dummy_ftm2_isr, /* FTM2 fault, overflow and channels interrupt */
+    [INT_CMT] = dummy_cmt_isr, /* CMT interrupt */
     [INT_RTC] = dummy_rtc_alarm_isr, /* RTC Alarm interrupt */
     [INT_RTC_Seconds] = dummy_rtc_seconds_isr, /* RTC Seconds interrupt */
-    [INT_PIT] = dummy_pit_isr, /* PIT timer all channels interrupt */
-    [INT_Reserved39] = dummy_reserved_irq23_isr,
+    [INT_PIT0] = dummy_pit0_isr, /* PIT timer channel 0 interrupt */
+    [INT_PIT1] = dummy_pit1_isr, /* PIT timer channel 1 interrupt */
+    [INT_PIT2] = dummy_pit2_isr, /* PIT timer channel 2 interrupt */
+    [INT_PDB0] = dummy_pdb0_isr,  /* PDB0 Interrupt */
     [INT_USB0] = dummy_usb_otg_isr, /* USB interrupt */
+    [INT_USBDCD] = dummy_usb_dcd_isr, /* USBDCD interrupt */
+    [INT_Reserved71] = dummy_reserved71_isr, /*  Reserved interrupt 71 */
     [INT_DAC0] = dummy_dac0_isr, /* DAC0 interrupt */
-    [INT_TSI0] = dummy_tsi0_isr, /* TSI0 Interrupt */
     [INT_MCG] = dummy_mcg_isr, /* MCG Interrupt */
     [INT_LPTimer] = dummy_lptimer_isr, /* LPTimer interrupt */
-    [INT_Reserved45] = dummy_reserved_irq29_isr,
     [INT_PORTA] = dummy_port_a_isr, /* Port A interrupt */
-    [INT_PORTD] = dummy_port_d_isr /* Port D interrupt */
+    [INT_PORTB] = dummy_port_b_isr, /* Port B interrupt */
+    [INT_PORTC] = dummy_port_c_isr, /* Port C interrupt */
+    [INT_PORTD] = dummy_port_d_isr, /* Port D interrupt */
+    [INT_PORTE] = dummy_port_e_isr, /* Port E interrupt */
+    [INT_SWI] = dummy_swi_isr, /* Software interrupt */
+    [INT_SPI2] = dummy_spi2_isr, /* SPI2 Interrupt */
+    [INT_UART4_RX_TX] = dummy_uart4_rx_tx_isr, /* UART4 Receive/Transmit interrupt */
+    [INT_UART4_ERR] = dummy_uart4_err_isr, /* UART4 Error interrupt */
+    [INT_UART5_RX_TX] = dummy_uart5_rx_tx_isr, /* UART5 Receive/Transmit interrupt */
+    [INT_UART5_ERR] = dummy_uart5_err_isr, /* UART5 Error interrupt */
+    [INT_CMP2] = dummy_cmp2_isr, /* CMP2 interrupt */
+    [INT_FTM3] = dummy_ftm3_isr, /* FTM3 fault, overflow and channels interrupt */
+    [INT_DAC1] = dummy_dac1_isr, /* DAC1 interrupt */
+    [INT_ADC1] = dummy_adc1_isr, /* ADC1 interrupt */
+    [INT_I2C2] = dummy_i2c2_isr, /* I2C2 interrupt */
+    [INT_CAN0_ORed_Message_buffer] = dummy_can0_ored_message_buffer_isr, /* CAN0 OR'd message buffers interrupt */
+    [INT_CAN0_Bus_Off] = dummy_can0_bus_off_isr, /* CAN0 bus off interrupt */
+    [INT_CAN0_Error] = dummy_can0_error_isr, /* CAN0 error interrupt */
+    [INT_CAN0_Tx_Warning] = dummy_can0_tx_warning_isr, /* CAN0 Tx warning interrupt */
+    [INT_CAN0_Rx_Warning] = dummy_can0_rx_warning_isr, /* CAN0 Rx warning interrupt */
+    [INT_CAN0_Wake_Up] = dummy_can0_wake_up_isr, /* CAN0 wake up interrupt */
+    [INT_SDHC] = dummy_sdhc_isr, /* SDHC interrupt */
+    [INT_ENET_1588_Timer] = dummy_enet_1588_timer_isr, /* Ethernet MAC IEEE 1588 Timer Interrupt */
+    [INT_ENET_Transmit] = dummy_enet_transmit_isr, /* Ethernet MAC Transmit Interrupt */
+    [INT_ENET_Receive] = dummy_enet_receive_isr, /* Ethernet MAC Receive Interrupt */
+    [INT_ENET_Error] = dummy_enet_error_isr, /* Ethernet MAC Error and miscelaneous Interrupt */
 };
 
 C_ASSERT(
     ARRAY_SIZE(g_interrupt_vector_table) ==
     CORTEX_M_IRQ_VECTOR_BASE + SOC_NUM_INTERRUPT_CHANNELS);
 
+#if 0 // ???
 /**
  * SoC configuration in Flash
  */
-static const struct NV_MemMap nv_cfmconfig __attribute__ ((section(".cfmconfig"))) = {
-#if 0
-  .BACKKEY3 =
-  .BACKKEY2
-  .BACKKEY1
-  .BACKKEY0
-  .BACKKEY7
-  .BACKKEY6
-  .BACKKEY5
-  .BACKKEY4
-  .FPROT3
-  .FPROT2
-  .FPROT1
-  .FPROT0
-  .FSEC
-#endif
+static const NV_Type nv_cfmconfig __attribute__ ((section(".cfmconfig"))) = {
   .FOPT = NV_FOPT_RESET_PIN_CFG_MASK
 };
+#endif
 
 /**
- * McRTOS interrupt object for the UART0 interrupts
+ * McRTOS interrupt object for the UART0 Receive/Transmit interrupts
  */
-struct rtos_interrupt *g_rtos_interrupt_uart0_p = NULL;
+struct rtos_interrupt *g_rtos_interrupt_uart0_rx_tx_p = NULL;
+
+/**
+ * McRTOS interrupt object for the UART0 Error interrupts
+ */
+struct rtos_interrupt *g_rtos_interrupt_uart0_err_p = NULL;
 
 /**
  * Global array of non-const structures for UART devices
@@ -267,6 +345,7 @@ static struct uart_device_var g_uart_devices_var[] =
         .urt_transmit_bytes_dropped = 0,
         },
 
+#if 0 // ???
     [1] = {
         .urt_initialized = false,
         .urt_received_bytes_dropped = 0,
@@ -278,6 +357,7 @@ static struct uart_device_var g_uart_devices_var[] =
         .urt_received_bytes_dropped = 0,
         .urt_transmit_bytes_dropped = 0,
         },
+#endif
 };
 
 static uint8_t uart0_transmit_queue_storage[UART_TRANSMIT_QUEUE_SIZE_IN_BYTES];
@@ -292,27 +372,41 @@ static const struct uart_device g_uart_devices[] =
     [0] = {
         .urt_signature = UART_DEVICE_SIGNATURE,
         .urt_var_p = &g_uart_devices_var[0],
-        .urt_mmio_uart0_p = UART0_BASE_PTR,
-        .urt_mmio_tx_port_pcr_p = &PORTA_PCR1,
-        .urt_mmio_rx_port_pcr_p = &PORTA_PCR2,
-        .urt_mmio_pin_mux_selector_mask = PORT_PCR_MUX(0x2),
+        .urt_mmio_uart_p = UART0_BASE_PTR,
+        .urt_mmio_tx_port_pcr_p = &PORTB_PCR16,
+        .urt_mmio_rx_port_pcr_p = &PORTB_PCR17,
+        .urt_mmio_pin_mux_selector_mask = PORT_PCR_MUX(0x3),
         .urt_mmio_clock_gate_mask = SIM_SCGC4_UART0_MASK,
-        .urt_rtos_interrupt_params = {
-            .irp_name_p = "UART0 Interrupt",
-            .irp_isr_function_p = kl25_uart0_isr,
+	.urt_source_clock_freq_in_hz = CPU_CLOCK_FREQ_IN_HZ,
+        .urt_rtos_interrupt_rx_tx_params = {
+            .irp_name_p = "UART0 Receive/Transmit Interrupt",
+            .irp_isr_function_p = k64f_uart0_rx_tx_isr,
             .irp_arg_p =  (void *)&g_uart_devices[0],
-            .irp_channel = VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART0),
+            .irp_channel = VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART0_RX_TX),
             .irp_priority = UART0_INTERRUPT_PRIORITY,
             .irp_cpu_id = 0,
         },
 
-        .urt_rtos_interrupt_pp = &g_rtos_interrupt_uart0_p,
+        .urt_rtos_interrupt_rx_tx_pp = &g_rtos_interrupt_uart0_rx_tx_p,
+
+	.urt_rtos_interrupt_err_params = {
+            .irp_name_p = "UART0 Error Interrupt",
+            .irp_isr_function_p = k64f_uart0_err_isr,
+            .irp_arg_p =  (void *)&g_uart_devices[0],
+            .irp_channel = VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART0_ERR),
+            .irp_priority = UART0_INTERRUPT_PRIORITY,
+            .irp_cpu_id = 0,
+        },
+
+        .urt_rtos_interrupt_err_pp = &g_rtos_interrupt_uart0_err_p,
+
         .urt_transmit_queue_name_p = "UART0 transmit queue",
         .urt_receive_queue_name_p = "UART0 receive queue",
         .urt_transmit_queue_storage_p = uart0_transmit_queue_storage,
         .urt_receive_queue_storage_p = uart0_receive_queue_storage,
     },
 
+#if 0 // ???
     [1] = {
         .urt_signature = UART_DEVICE_SIGNATURE,
         .urt_var_p = &g_uart_devices_var[1],
@@ -321,6 +415,7 @@ static const struct uart_device g_uart_devices[] =
         .urt_mmio_rx_port_pcr_p = &PORTC_PCR3,
         .urt_mmio_pin_mux_selector_mask = PORT_PCR_MUX(0x3),
         .urt_mmio_clock_gate_mask = SIM_SCGC4_UART1_MASK,
+	.urt_source_clock_freq_in_hz = CPU_CLOCK_FREQ_IN_HZ,
     },
 
     [2] = {
@@ -331,7 +426,9 @@ static const struct uart_device g_uart_devices[] =
         .urt_mmio_rx_port_pcr_p = &PORTD_PCR2,
         .urt_mmio_pin_mux_selector_mask = PORT_PCR_MUX(0x3),
         .urt_mmio_clock_gate_mask = SIM_SCGC4_UART2_MASK,
+	.urt_source_clock_freq_in_hz = CPU_CLOCK_FREQ_IN_HZ / 2,
     },
+#endif
 };
 
 C_ASSERT(
@@ -339,6 +436,7 @@ C_ASSERT(
 
 const struct uart_device *const g_console_serial_port_p = &g_uart_devices[0];
 
+#if 0 // ???
 /**
  * McRTOS interrupt object for the I2C0 controller interrupts
  */
@@ -374,7 +472,7 @@ static const struct i2c_device g_i2c_devices[] = {
         .i2c_icr_value = 0x1f, /* 100KHz for bus clock of 24 MHz */
         .i2c_rtos_interrupt_params = {
             .irp_name_p = "I2C0 Interrupt",
-            .irp_isr_function_p = kl25_i2c0_isr,
+            .irp_isr_function_p = k64f_i2c0_isr,
             .irp_arg_p = (void *)&g_i2c_devices[0],
             .irp_channel = VECTOR_NUMBER_TO_IRQ_NUMBER(INT_I2C0),
             .irp_priority = I2C_INTERRUPT_PRIORITY,
@@ -399,6 +497,7 @@ static const struct i2c_device g_i2c_devices[] = {
 C_ASSERT(ARRAY_SIZE(g_i2c_devices) == ARRAY_SIZE(g_i2c_devices_var));
 
 const struct i2c_device *const g_i2c0_device_p = &g_i2c_devices[0];
+#endif // ???
 
 /**
  * Hardware Micro trace buffer (MTB)
@@ -444,13 +543,16 @@ soc_hardware_init(void)
     uart_putchar_with_polling(g_console_serial_port_p, '\n');
     DEBUG_PRINTF("UART0 initialized\n");
     DEBUG_PRINTF("Last reset cause: %#x\n", reset_cause);
-    DEBUG_PRINTF("MPU %s present\n", mpu_present ? "is" : "is not");
+    DEBUG_PRINTF("MPU %s present\n", mpu_present ? "" : "not");
 #   else
     uart_putchar(g_console_serial_port_p, '\r');
     uart_putchar(g_console_serial_port_p, '\n');
 #   endif
 
+#if 0 // ???
     i2c_init(g_i2c0_device_p);
+#endif
+
     return reset_cause;
 }
 
@@ -463,7 +565,9 @@ soc_reset(void)
     /*
      * Stop all peripherals:
      */
+#if 0 //???
     i2c_shutdown(g_i2c0_device_p);
+#endif
     uart_stop(g_console_serial_port_p);
 
     /*
@@ -543,6 +647,7 @@ system_clocks_init(void)
                     | SIM_SCGC5_PORTE_MASK);
     write_32bit_mmio_register(&SIM_SCGC5, reg_value);
 
+#if 0 //???
     /*
      * Set the system dividers:
      *
@@ -584,16 +689,17 @@ system_clocks_init(void)
         0x1);
 
     /*
-     * TPM clock:
+     * FTM clock:
      */
     SET_BIT_FIELD(
-        reg_value, SIM_SOPT2_TPMSRC_MASK, SIM_SOPT2_TPMSRC_SHIFT,
+        reg_value, SIM_SOPT2_FTMSRC_MASK, SIM_SOPT2_FTMSRC_SHIFT,
         0x1);
 
     write_32bit_mmio_register(&SIM_SOPT2, reg_value);
+#endif // ???
 }
 
-
+#if 0 // ???
 static void
 pll_init(void)
 {
@@ -720,13 +826,14 @@ pll_init(void)
 
   g_pll_frequency_in_hz = (CRYSTAL_FREQUENCY_HZ / prdiv) * vdiv; //MCGOUT equals PLL output frequency
 }
-
+#endif // ???
 
 static bool g_micro_trace_initialized = false;
 
 void
 micro_trace_init(void)
 {
+#if 0 // ???
     uint32_t reg_value;
 
     reg_value = read_32bit_mmio_register(&MTB_BASE);
@@ -792,6 +899,7 @@ micro_trace_init(void)
         reg_value, MTB_MASTER_MASK_MASK, MTB_MASTER_MASK_SHIFT,
         MTB_MASTER_MASK_VALUE);
     write_32bit_mmio_register(&MTB_MASTER, reg_value);
+#endif // ???
 
     g_micro_trace_initialized = true;
 }
@@ -804,12 +912,14 @@ micro_trace_stop(void)
         return;
     }
 
+#if 0 // ???
     /*
      * Disable micro tracing
      */
     uint32_t reg_value = read_32bit_mmio_register(&MTB_MASTER);
     reg_value &= ~MTB_MASTER_EN_MASK;
     write_32bit_mmio_register(&MTB_MASTER, reg_value);
+#endif
 }
 
 
@@ -820,12 +930,14 @@ micro_trace_restart(void)
         return;
     }
 
+#if 0 // ???
     /*
      * Re-enable micro tracing
      */
     uint32_t reg_value = read_32bit_mmio_register(&MTB_MASTER);
     reg_value |= MTB_MASTER_EN_MASK;
     write_32bit_mmio_register(&MTB_MASTER, reg_value);
+#endif
 }
 
 
@@ -838,6 +950,7 @@ micro_trace_get_cursor(uint64_t **mtb_cursor_pp, bool *mtb_cursor_wrapped_p)
         return;
     }
 
+#if 0 // ???
     uint32_t reg_value = read_32bit_mmio_register(&MTB_POSITION);
 
     uintptr_t mtb_position_pointer_field =
@@ -856,6 +969,7 @@ micro_trace_get_cursor(uint64_t **mtb_cursor_pp, bool *mtb_cursor_wrapped_p)
     *mtb_cursor_pp = (uint64_t *)(
         (uintptr_t)__micro_trace_buffer |
         (mtb_position_pointer_field << MTB_POSITION_POINTER_SHIFT));
+#endif
 }
 
 
@@ -1117,72 +1231,13 @@ uart_init(
         uart_device_p->urt_mmio_rx_port_pcr_p,
         uart_device_p->urt_mmio_pin_mux_selector_mask | PORT_PCR_DSE_MASK);
 
-    // Calculate the first baud rate using the lowest OSR value possible.
-    //uint32_t uart0clk = CPU_CLOCK_FREQ_IN_HZ / 2;
-    uint32_t uart0clk = g_pll_frequency_in_hz / 2;
-    uint32_t i = 4;
-    uint32_t sbr_val = uart0clk / (baud_rate * i);
-    uint32_t calculated_baud = uart0clk / (i * sbr_val);
-    uint32_t baud_diff;
+    /*
+    * Calculate baud rate settings:
+    */
+    uint32_t uart_clk = uart_device_p->urt_source_clock_freq_in_hz;
+    uint16_t sbr_val = uart_clk / (baud_rate * 16);
 
-    if (calculated_baud > baud_rate)
-        baud_diff = calculated_baud - baud_rate;
-    else
-        baud_diff = baud_rate - calculated_baud;
-
-    uint32_t osr_val = i;
-
-    if (uart_device_p == &g_uart_devices[0])
-    {
-        UART0_MemMapPtr uart0_mmio_registers_p = uart_device_p->urt_mmio_uart0_p;
-
-        // Select the best OSR value
-        for (i = 5; i <= 32; i++)
-        {
-            uint32_t temp;
-
-            sbr_val = uart0clk / (baud_rate * i);
-            calculated_baud = uart0clk / (i * sbr_val);
-
-            if (calculated_baud > baud_rate)
-                temp = calculated_baud - baud_rate;
-            else
-                temp = baud_rate - calculated_baud;
-
-            if (temp <= baud_diff)
-            {
-                baud_diff = temp;
-                osr_val = i;
-            }
-        }
-
-        FDC_ASSERT(baud_diff < (baud_rate / 100) * 3, baud_diff, baud_rate);
-
-        // If the OSR is between 4x and 8x then both
-        // edge sampling MUST be turned on.
-        if (osr_val > 3 && osr_val < 9)
-        {
-            reg_value = read_8bit_mmio_register(&UART0_C5_REG(uart0_mmio_registers_p));
-            reg_value |= UART0_C5_BOTHEDGE_MASK;
-            write_8bit_mmio_register(&UART0_C5_REG(uart0_mmio_registers_p), reg_value);
-        }
-
-        // Setup OSR value
-        reg_value = read_8bit_mmio_register(&UART0_C4_REG(uart0_mmio_registers_p));
-        SET_BIT_FIELD(reg_value, UART0_C4_OSR_MASK, UART0_C4_OSR_SHIFT, osr_val - 1);
-        write_8bit_mmio_register(&UART0_C4_REG(uart0_mmio_registers_p), reg_value);
-
-        DBG_ASSERT(
-            (reg_value & UART0_C4_OSR_MASK) + 1 == osr_val,
-            reg_value, osr_val);
-
-        sbr_val = uart0clk / (baud_rate * osr_val);
-    }
-    else
-    {
-        /* Calculate baud settings */
-        sbr_val = uart0clk / (baud_rate * 16);
-    }
+    FDC_ASSERT(sbr_val >= 1 && sbr_val <= 0x1FFF, uart_device_p, sbr_val);
 
      /*
       * Set SBR high-part field in the UART's BDH register:
@@ -1200,6 +1255,20 @@ uart_init(
     write_8bit_mmio_register(
         &UART_BDL_REG(uart_mmio_registers_p),
         sbr_val & UART_BDL_SBR_MASK);
+
+    /*
+     * Determine if a fractional divider is needed to fine tune closer to the
+     * desired baud rate. Each value of brfa is in 1/32 increments, hence the
+     * multiply-by-32
+     */
+    uint16_t brfa_val = (32*uart_clk / (baud_rate*16)) - 32*sbr_val;
+
+    /*
+     * Set BRFA field in the UART's C4 register:
+     */
+    reg_value = read_8bit_mmio_register(&UART_C4_REG(uart_mmio_registers_p));
+    SET_BIT_FIELD(
+        reg_value, UART_C4_BRFA_MASK, UART_C4_BRFA_SHIFT, brfa_val);
 
     /*
      * Enable UART's transmitter and receiver:
@@ -1231,15 +1300,26 @@ uart_init(
         &uart_var_p->urt_receive_queue);
 
     /*
-     * Register McRTOS interrupt handler
+     * Register McRTOS interrupt handler for UART Rx/Tx interrupt:
      */
     rtos_k_register_interrupt(
-        &uart_device_p->urt_rtos_interrupt_params,
-        uart_device_p->urt_rtos_interrupt_pp);
+        &uart_device_p->urt_rtos_interrupt_rx_tx_params,
+        uart_device_p->urt_rtos_interrupt_rx_tx_pp);
 
     DBG_ASSERT(
-        *uart_device_p->urt_rtos_interrupt_pp != NULL,
-        uart_device_p->urt_rtos_interrupt_pp, uart_device_p);
+        *uart_device_p->urt_rtos_interrupt_rx_tx_pp != NULL,
+        uart_device_p->urt_rtos_interrupt_rx_tx_pp, uart_device_p);
+
+    /*
+     * Register McRTOS interrupt handler for UART error interrupt:
+     */
+    rtos_k_register_interrupt(
+        &uart_device_p->urt_rtos_interrupt_err_params,
+        uart_device_p->urt_rtos_interrupt_err_pp);
+
+    DBG_ASSERT(
+        *uart_device_p->urt_rtos_interrupt_err_pp != NULL,
+        uart_device_p->urt_rtos_interrupt_err_pp, uart_device_p);
 
     uart_var_p->urt_initialized = true;
 }
@@ -1272,13 +1352,14 @@ uart_stop(
 
 
 /**
- * UART common interrupt handler with interrupts enabled
+ * UART Rx/Tx interrupt handler with interrupts enabled
  */
 void
-kl25_uart_interrupt_e_handler(
+k64f_uart_rx_tx_interrupt_e_handler(
     struct rtos_interrupt *rtos_interrupt_p)
 {
     FDC_ASSERT_RTOS_INTERRUPT_E_HANDLER_PRECONDITIONS(rtos_interrupt_p);
+#if 0 //???
 
     const struct uart_device *uart_device_p =
         (struct uart_device *)rtos_interrupt_p->int_arg_p;
@@ -1292,7 +1373,7 @@ kl25_uart_interrupt_e_handler(
     UART_MemMapPtr uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
 
     DBG_ASSERT(
-        (UART0_MemMapPtr)uart_mmio_registers_p == UART0_BASE_PTR ||
+        uart_mmio_registers_p == UART0_BASE_PTR ||
         uart_mmio_registers_p == UART1_BASE_PTR ||
         uart_mmio_registers_p == UART2_BASE_PTR,
         uart_mmio_registers_p, uart_device_p);
@@ -1356,6 +1437,18 @@ kl25_uart_interrupt_e_handler(
             uart_var_p->urt_received_bytes_dropped ++;
         }
     }
+#endif // ???
+}
+
+
+/**
+ * UART error interrupt handler with interrupts enabled
+ */
+void
+k64f_uart_err_interrupt_e_handler(
+    struct rtos_interrupt *rtos_interrupt_p)
+{
+    FDC_ASSERT_RTOS_INTERRUPT_E_HANDLER_PRECONDITIONS(rtos_interrupt_p);
 }
 
 
@@ -1397,7 +1490,7 @@ uart_putchar(
      * necessary:
      *
      * NOTE: if the "transmit data register" is empty there will be a
-     * pending "transmit data register empty" interrupt, regardless
+     * pending "transmit data register empty" interrupt empty, regardless
      * of this interrupt being enabled or not in the UART. Thus, as soon
      * as we enable the generation of this interrupt, the interrupt will
      * fire, if the "transmit data register" was empty.
@@ -1520,6 +1613,7 @@ uart_getchar_with_polling(
 }
 
 
+#if 0 // ???
 void
 init_adc(const struct adc_device *adc_device_p)
 {
@@ -1547,7 +1641,7 @@ init_adc(const struct adc_device *adc_device_p)
      * NOTE: For the KL25 ADC to operate properly, it must be calibrated
      * first.
      */
-    kl25_adc_calibrate(adc_device_p);
+    k64f_adc_calibrate(adc_device_p);
 
     /*
      * Configure ADC_CFG1 register:
@@ -1656,7 +1750,7 @@ init_adc(const struct adc_device *adc_device_p)
 
 
 static void
-kl25_adc_calibrate(const struct adc_device *adc_device_p)
+k64f_adc_calibrate(const struct adc_device *adc_device_p)
 {
     uint32_t reg_value;
     ADC_MemMapPtr adc_mmio_registers_p = adc_device_p->ad_mmio_registers_p;
@@ -1799,7 +1893,7 @@ kl25_adc_calibrate(const struct adc_device *adc_device_p)
  * ADC interrupt handler with interrupts enabled
  */
 void
-kl25_adc_interrupt_e_handler(
+k64f_adc_interrupt_e_handler(
     struct rtos_interrupt *rtos_interrupt_p)
 {
     uint32_t reg_value;
@@ -1957,124 +2051,124 @@ read_adc_channel(
  * Wait until the current PWM cycle completes
  */
 static void
-kl25_tpm_wait_pwm_cycle_completion(
-    const struct tpm_device *tpm_device_p)
+k64f_ftm_wait_pwm_cycle_completion(
+    const struct ftm_device *ftm_device_p)
 {
-    struct tpm_device_var *const tpm_var_p = tpm_device_p->tpm_var_p;
+    struct ftm_device_var *const ftm_var_p = ftm_device_p->ftm_var_p;
     cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
 
-    while (!tpm_var_p->tpm_pwm_cycle_completed)
+    while (!ftm_var_p->ftm_pwm_cycle_completed)
     {
-        rtos_k_condvar_wait_interrupt(&tpm_var_p->tpm_condvar);
+        rtos_k_condvar_wait_interrupt(&ftm_var_p->ftm_condvar);
     }
 
-    tpm_var_p->tpm_pwm_cycle_completed = false;
+    ftm_var_p->ftm_pwm_cycle_completed = false;
 
     rtos_k_restore_cpu_interrupts(cpu_status_register);
 }
 
 
 static void
-kl25_tpm_set_duty_cycle_internal(
-    const struct tpm_device *tpm_device_p,
+k64f_ftm_set_duty_cycle_internal(
+    const struct ftm_device *ftm_device_p,
     pwm_channel_t pwm_channel,
     pwm_duty_cycle_us_t pwm_duty_cycle_us,
     bool wait_previous_cycle_completion)
 {
     uint32_t reg_value;
-    struct tpm_device_var *const tpm_var_p = tpm_device_p->tpm_var_p;
-    TPM_MemMapPtr tpm_mmio_registers_p = tpm_device_p->tpm_mmio_p;
+    struct ftm_device_var *const ftm_var_p = ftm_device_p->ftm_var_p;
+    FTM_MemMapPtr ftm_mmio_registers_p = ftm_device_p->ftm_mmio_p;
 
     FDC_ASSERT(
-        tpm_device_p->tpm_signature == TPM_DEVICE_SIGNATURE,
-        tpm_device_p->tpm_signature, tpm_device_p);
+        ftm_device_p->ftm_signature == FTM_DEVICE_SIGNATURE,
+        ftm_device_p->ftm_signature, ftm_device_p);
     FDC_ASSERT(
-        tpm_var_p->tpm_initialized, tpm_device_p, tpm_var_p);
+        ftm_var_p->ftm_initialized, ftm_device_p, ftm_var_p);
     FDC_ASSERT(
-        pwm_channel < PWM_MAX_NUM_CHANNELS, pwm_channel, tpm_device_p);
+        pwm_channel < PWM_MAX_NUM_CHANNELS, pwm_channel, ftm_device_p);
 
-    uint32_t pwm_period_us = UINT32_C(1000000) / tpm_device_p->tpm_overflow_freq_hz;
+    uint32_t pwm_period_us = UINT32_C(1000000) / ftm_device_p->ftm_overflow_freq_hz;
 
     FDC_ASSERT(
         pwm_duty_cycle_us <= pwm_period_us, pwm_duty_cycle_us, pwm_period_us);
 
 #ifdef DEBUG
-    reg_value = read_32bit_mmio_register(&TPM_MOD_REG(tpm_mmio_registers_p));
+    reg_value = read_32bit_mmio_register(&FTM_MOD_REG(ftm_mmio_registers_p));
     FDC_ASSERT(
-        reg_value == tpm_var_p->tpm_mod_reg_value,
-        reg_value, tpm_var_p->tpm_mod_reg_value);
+        reg_value == ftm_var_p->ftm_mod_reg_value,
+        reg_value, ftm_var_p->ftm_mod_reg_value);
 #endif
 
     if (wait_previous_cycle_completion) {
-        kl25_tpm_wait_pwm_cycle_completion(tpm_device_p);
+        k64f_ftm_wait_pwm_cycle_completion(ftm_device_p);
     }
 
     /*
-     * Set CnV to duty cycle for the channel, as a fraction of tpm_mod_reg_value:
+     * Set CnV to duty cycle for the channel, as a fraction of ftm_mod_reg_value:
      *
-     * new CnV value = tpm_mod_reg_value * (pwm_duty_cycle_us / pwm_period_us)
+     * new CnV value = ftm_mod_reg_value * (pwm_duty_cycle_us / pwm_period_us)
      *
      * NOTE: The actual CnV register is updated after a write is done on the CnV
-     * register and the TPM counter changes from MOD to zero (counter overflow).
+     * register and the FTM counter changes from MOD to zero (counter overflow).
      * Thus there is a worst-case latency of pwm_period_us microseconds from
      * the timet this function is called to the time the CnV change takes
      * effect.
      */
 
-    uint32_t tmp = tpm_var_p->tpm_mod_reg_value * pwm_duty_cycle_us;
+    uint32_t tmp = ftm_var_p->ftm_mod_reg_value * pwm_duty_cycle_us;
 
     FDC_ASSERT(
-        tmp >= tpm_var_p->tpm_mod_reg_value || pwm_duty_cycle_us == 0,
-        tmp, tpm_var_p->tpm_mod_reg_value);
+        tmp >= ftm_var_p->ftm_mod_reg_value || pwm_duty_cycle_us == 0,
+        tmp, ftm_var_p->ftm_mod_reg_value);
 
     reg_value = tmp / pwm_period_us;
     write_32bit_mmio_register(
-        &TPM_CnV_REG(tpm_mmio_registers_p, pwm_channel), reg_value);
+        &FTM_CnV_REG(ftm_mmio_registers_p, pwm_channel), reg_value);
 }
 
 
 void
-kl25_tpm_init(
-    const struct tpm_device *tpm_device_p)
+k64f_ftm_init(
+    const struct ftm_device *ftm_device_p)
 {
     uint32_t reg_value;
 
     FDC_ASSERT(
-        tpm_device_p->tpm_signature == TPM_DEVICE_SIGNATURE,
-        tpm_device_p->tpm_signature, tpm_device_p);
+        ftm_device_p->ftm_signature == FTM_DEVICE_SIGNATURE,
+        ftm_device_p->ftm_signature, ftm_device_p);
 
     FDC_ASSERT_CPU_INTERRUPTS_DISABLED();
 
     /*
-     * Enable the Clock to the TPM Module
+     * Enable the Clock to the FTM Module
      */
     reg_value = read_32bit_mmio_register(&SIM_SCGC6);
-    reg_value |= tpm_device_p->tpm_mmio_clock_gate_mask;
+    reg_value |= ftm_device_p->ftm_mmio_clock_gate_mask;
     write_32bit_mmio_register(&SIM_SCGC6, reg_value);
 
-    struct tpm_device_var *const tpm_var_p = tpm_device_p->tpm_var_p;
-    TPM_MemMapPtr tpm_mmio_registers_p = tpm_device_p->tpm_mmio_p;
+    struct ftm_device_var *const ftm_var_p = ftm_device_p->ftm_var_p;
+    FTM_MemMapPtr ftm_mmio_registers_p = ftm_device_p->ftm_mmio_p;
 
-    FDC_ASSERT(!tpm_var_p->tpm_initialized, tpm_device_p, tpm_var_p);
-    tpm_var_p->tpm_initialized = true;
+    FDC_ASSERT(!ftm_var_p->ftm_initialized, ftm_device_p, ftm_var_p);
+    ftm_var_p->ftm_initialized = true;
 
     /*
      * Blow away the control registers to ensure that the counter is not running
      */
     write_32bit_mmio_register(
-        &TPM_SC_REG(tpm_mmio_registers_p), 0x0);
+        &FTM_SC_REG(ftm_mmio_registers_p), 0x0);
     write_32bit_mmio_register(
-        &TPM_CONF_REG(tpm_mmio_registers_p), 0x0);
+        &FTM_CONF_REG(ftm_mmio_registers_p), 0x0);
 
     /*
-     * Setup prescaler before enabling the TPM counter
+     * Setup prescaler before enabling the FTM counter
      */
     reg_value = 0;
     SET_BIT_FIELD(
-        reg_value, TPM_SC_PS_MASK, TPM_SC_PS_SHIFT,
-        tpm_device_p->tpm_clock_prescale);
+        reg_value, FTM_SC_PS_MASK, FTM_SC_PS_SHIFT,
+        ftm_device_p->ftm_clock_prescale);
     write_32bit_mmio_register(
-        &TPM_SC_REG(tpm_mmio_registers_p), reg_value);
+        &FTM_SC_REG(ftm_mmio_registers_p), reg_value);
 
     /*
      * Setup the MOD register to get the correct EPWM Period:
@@ -2083,35 +2177,35 @@ kl25_tpm_init(
      * The pulse width (duty cycle) for channel n is determined by CnV.
      * MOD must be less than 0xFFFF in order to get a 100% duty cycle EPWM signal.
      */
-    reg_value = ((tpm_device_p->tpm_clock_freq_hz /
-                    (UINT32_C(1) << tpm_device_p->tpm_clock_prescale)) /
-                 tpm_device_p->tpm_overflow_freq_hz) - 1;
+    reg_value = ((ftm_device_p->ftm_clock_freq_hz /
+                    (UINT32_C(1) << ftm_device_p->ftm_clock_prescale)) /
+                 ftm_device_p->ftm_overflow_freq_hz) - 1;
     DBG_ASSERT(
-        reg_value < 0xffff, reg_value, tpm_device_p);
+        reg_value < 0xffff, reg_value, ftm_device_p);
     write_32bit_mmio_register(
-        &TPM_MOD_REG(tpm_mmio_registers_p), reg_value);
+        &FTM_MOD_REG(ftm_mmio_registers_p), reg_value);
 
-    tpm_var_p->tpm_mod_reg_value = reg_value;
+    ftm_var_p->ftm_mod_reg_value = reg_value;
 
     /*
      * Configure PWM channels:
      */
     for (uint32_t i = 0;
-         i < ARRAY_SIZE(tpm_device_p->tpm_channels);
+         i < ARRAY_SIZE(ftm_device_p->ftm_channels);
          i ++) {
-        if (tpm_device_p->tpm_channels[i].tpm_mmio_pcr_p != NULL) {
+        if (ftm_device_p->ftm_channels[i].ftm_mmio_pcr_p != NULL) {
             /*
              * Set the initial duty cycle for the channel
              */
-            kl25_tpm_set_duty_cycle_internal(
-                tpm_device_p, i, tpm_device_p->tpm_initial_duty_cycle_us, false);
+            k64f_ftm_set_duty_cycle_internal(
+                ftm_device_p, i, ftm_device_p->ftm_initial_duty_cycle_us, false);
 
             /*
              * Enable channel pin:
              */
             write_32bit_mmio_register(
-                tpm_device_p->tpm_channels[i].tpm_mmio_pcr_p,
-                tpm_device_p->tpm_mmio_pin_mux_selector_mask);
+                ftm_device_p->ftm_channels[i].ftm_mmio_pcr_p,
+                ftm_device_p->ftm_mmio_pin_mux_selector_mask);
 
             /*
              * Setup PWM channel:
@@ -2119,96 +2213,96 @@ kl25_tpm_init(
              *   for the channel.
              */
             write_32bit_mmio_register(
-                &TPM_CnSC_REG(tpm_mmio_registers_p, i),
-                tpm_device_p->tpm_channels[i].tpm_mmio_CnSC_value);
+                &FTM_CnSC_REG(ftm_mmio_registers_p, i),
+                ftm_device_p->ftm_channels[i].ftm_mmio_CnSC_value);
         }
     }
 
     rtos_k_condvar_init(
-        tpm_device_p->tpm_condvar_name,
+        ftm_device_p->ftm_condvar_name,
         SOC_GET_CURRENT_CPU_ID(),
-        &tpm_var_p->tpm_condvar);
+        &ftm_var_p->ftm_condvar);
 
-    tpm_var_p->tpm_pwm_cycle_completed = false;
+    ftm_var_p->ftm_pwm_cycle_completed = false;
 
-    if (tpm_device_p->tpm_wait_pwm_cycle_completion) {
+    if (ftm_device_p->ftm_wait_pwm_cycle_completion) {
         /*
          * Register McRTOS interrupt handler
          */
         rtos_k_register_interrupt(
-            &tpm_device_p->tpm_rtos_interrupt_params,
-            tpm_device_p->tpm_rtos_interrupt_pp);
+            &ftm_device_p->ftm_rtos_interrupt_params,
+            ftm_device_p->ftm_rtos_interrupt_pp);
 
         DBG_ASSERT(
-            *tpm_device_p->tpm_rtos_interrupt_pp != NULL,
-            tpm_device_p->tpm_rtos_interrupt_pp, tpm_device_p);
+            *ftm_device_p->ftm_rtos_interrupt_pp != NULL,
+            ftm_device_p->ftm_rtos_interrupt_pp, ftm_device_p);
     }
 
     /*
-     * - Enable the TPM Counter:
-     *   - CMOD = 01: LPTPM counter increments on every LPTPM counter clock.
+     * - Enable the FTM Counter:
+     *   - CMOD = 01: LPFTM counter increments on every LPFTM counter clock.
      *   - CPWMS = 0: Up counting is selected.
      * - Enable Interrupts for the Timer Overflow if we are going to wait
      *   for PWM cycle completions.
      */
 
-    reg_value = read_32bit_mmio_register(&TPM_SC_REG(tpm_mmio_registers_p));
+    reg_value = read_32bit_mmio_register(&FTM_SC_REG(ftm_mmio_registers_p));
     SET_BIT_FIELD(
-        reg_value, TPM_SC_CMOD_MASK, TPM_SC_CMOD_SHIFT, 0x1);
-    if (tpm_device_p->tpm_wait_pwm_cycle_completion) {
-        reg_value |= TPM_SC_TOIE_MASK;
+        reg_value, FTM_SC_CMOD_MASK, FTM_SC_CMOD_SHIFT, 0x1);
+    if (ftm_device_p->ftm_wait_pwm_cycle_completion) {
+        reg_value |= FTM_SC_TOIE_MASK;
     }
 
     write_32bit_mmio_register(
-        &TPM_SC_REG(tpm_mmio_registers_p), reg_value);
+        &FTM_SC_REG(ftm_mmio_registers_p), reg_value);
 }
 
 
 void
-kl25_tpm_interrupt_e_handler(
+k64f_ftm_interrupt_e_handler(
     struct rtos_interrupt *rtos_interrupt_p)
 {
     FDC_ASSERT_RTOS_INTERRUPT_E_HANDLER_PRECONDITIONS(rtos_interrupt_p);
 
-    const struct tpm_device *tpm_device_p =
-        (struct tpm_device *)rtos_interrupt_p->int_arg_p;
+    const struct ftm_device *ftm_device_p =
+        (struct ftm_device *)rtos_interrupt_p->int_arg_p;
 
     DBG_ASSERT(
-        tpm_device_p->tpm_signature == TPM_DEVICE_SIGNATURE,
-        tpm_device_p->tpm_signature, tpm_device_p);
+        ftm_device_p->ftm_signature == FTM_DEVICE_SIGNATURE,
+        ftm_device_p->ftm_signature, ftm_device_p);
 
     uint32_t reg_value;
-    struct tpm_device_var *const tpm_var_p = tpm_device_p->tpm_var_p;
-    TPM_MemMapPtr tpm_mmio_registers_p = tpm_device_p->tpm_mmio_p;
+    struct ftm_device_var *const ftm_var_p = ftm_device_p->ftm_var_p;
+    FTM_MemMapPtr ftm_mmio_registers_p = ftm_device_p->ftm_mmio_p;
 
     DBG_ASSERT(
-        tpm_var_p->tpm_initialized, tpm_device_p, tpm_var_p);
+        ftm_var_p->ftm_initialized, ftm_device_p, ftm_var_p);
 
    /*
     * Clear the overflow mask if set, by writing a logic one in it:
     */
-    reg_value = read_32bit_mmio_register(&TPM_SC_REG(tpm_mmio_registers_p));
-    if (reg_value & TPM_SC_TOF_MASK) {
+    reg_value = read_32bit_mmio_register(&FTM_SC_REG(ftm_mmio_registers_p));
+    if (reg_value & FTM_SC_TOF_MASK) {
         write_32bit_mmio_register(
-            &TPM_SC_REG(tpm_mmio_registers_p), reg_value);
+            &FTM_SC_REG(ftm_mmio_registers_p), reg_value);
     }
 
-    tpm_var_p->tpm_pwm_cycle_completed = true;
-    rtos_k_condvar_signal(&tpm_var_p->tpm_condvar);
+    ftm_var_p->ftm_pwm_cycle_completed = true;
+    rtos_k_condvar_signal(&ftm_var_p->ftm_condvar);
 }
 
 
 void
-kl25_tpm_set_duty_cycle(
-    const struct tpm_device *tpm_device_p,
+k64f_ftm_set_duty_cycle(
+    const struct ftm_device *ftm_device_p,
     pwm_channel_t pwm_channel,
     pwm_duty_cycle_us_t pwm_duty_cycle_us)
 {
-    kl25_tpm_set_duty_cycle_internal(
-        tpm_device_p,
+    k64f_ftm_set_duty_cycle_internal(
+        ftm_device_p,
         pwm_channel,
         pwm_duty_cycle_us,
-        tpm_device_p->tpm_wait_pwm_cycle_completion);
+        ftm_device_p->ftm_wait_pwm_cycle_completion);
 }
 
 
@@ -2566,7 +2660,7 @@ void i2c_write(
 }
 
 void
-kl25_i2c_interrupt_e_handler(
+k64f_i2c_interrupt_e_handler(
     struct rtos_interrupt *rtos_interrupt_p)
 {
     FDC_ASSERT_RTOS_INTERRUPT_E_HANDLER_PRECONDITIONS(rtos_interrupt_p);
@@ -2614,6 +2708,7 @@ kl25_i2c_interrupt_e_handler(
     i2c_var_p->i2c_byte_transfer_completed = true;
     rtos_k_condvar_signal(&i2c_var_p->i2c_condvar);
 }
+#endif // ???
 
 
 void
@@ -2650,36 +2745,91 @@ GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_dma0_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_dma1_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_DMA1))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_dma2_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_DMA2))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_dma3_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_DMA3))
-GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_mcm_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_Reserved20))
-GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_ftfl_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_FTFA))
-GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_pmc_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_LVD_LVW))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_dma4_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_DMA4))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_dma5_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_DMA5))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_dma6_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_DMA6))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_dma7_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_DMA7))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_dma8_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_DMA8))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_dma9_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_DMA9))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_dma10_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_DMA10))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_dma11_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_DMA11))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_dma12_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_DMA12))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_dma13_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_DMA13))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_dma14_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_DMA14))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_dma15_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_DMA15))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_dma_error_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_DMA_Error))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_mcm_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_MCM))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_ftfe_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_FTFE))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_read_collision_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_Read_Collision))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_lvd_lvw_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_LVD_LVW))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_llw_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_LLW))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_watchdog_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_Watchdog))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_i2c1_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_I2C1))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_spi0_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_SPI0))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_spi1_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_SPI1))
-GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_uart1_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART1))
-GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_uart2_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART2))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_i2s0_tx_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_I2S0_Tx))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_i2s0_rx_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_I2S0_Rx))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_uart0_lon_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART0_LON))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_uart1_rx_tx_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART1_RX_TX))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_uart1_err_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART1_ERR))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_uart2_rx_tx_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART2_RX_TX))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_uart2_err_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART2_ERR))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_uart3_rx_tx_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART3_RX_TX))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_uart3_err_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART3_ERR))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_cmp0_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_CMP0))
-GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_tpm2_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_TPM2))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_cmp1_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_CMP1))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_ftm0_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_FTM0))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_ftm1_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_FTM1))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_ftm2_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_FTM2))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_cmt_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_CMT))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_rtc_alarm_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_RTC))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_rtc_seconds_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_RTC_Seconds))
-GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_pit_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_PIT))
-GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_reserved_irq23_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_Reserved39))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_pit0_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_PIT0))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_pit1_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_PIT1))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_pit2_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_PIT2))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_pdb0_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_PDB0))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_usb_otg_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_USB0))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_usb_dcd_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_USBDCD))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_reserved71_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_Reserved71))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_dac0_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_DAC0))
-GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_tsi0_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_TSI0))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_mcg_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_MCG))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_lptimer_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_LPTimer))
-GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_reserved_irq29_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_Reserved45))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_port_a_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_PORTA))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_port_b_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_PORTB))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_port_c_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_PORTC))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_port_d_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_PORTD))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_port_e_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_PORTE))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_swi_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_SWI))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_spi2_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_SPI2))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_uart4_rx_tx_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART4_RX_TX))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_uart4_err_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART4_ERR))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_uart5_rx_tx_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART5_RX_TX))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_uart5_err_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART5_ERR))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_cmp2_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_CMP2))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_ftm3_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_FTM3))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_dac1_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_DAC1))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_adc0_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_ADC0))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_adc1_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_ADC1))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_i2c0_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_I2C0))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_i2c2_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_I2C2))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_can0_ored_message_buffer_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_CAN0_ORed_Message_buffer))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_can0_bus_off_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_CAN0_Bus_Off))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_can0_error_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_CAN0_Error))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_can0_tx_warning_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_CAN0_Tx_Warning))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_can0_rx_warning_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_CAN0_Rx_Warning))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_can0_wake_up_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_CAN0_Wake_Up))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_sdhc_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_SDHC))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_enet_1588_timer_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_ENET_1588_Timer))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_enet_transmit_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_ENET_Transmit))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_enet_receive_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_ENET_Receive))
+GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_enet_error_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_ENET_Error))
 
 /**
  * Generate function that reads from an MMIO register of the given bit width
  */
 #define GEN_READ_MMIO_REGISTER_FUNCTION(_func_name, _reg_type, _value_type) \
     _value_type                                                         \
-    _func_name(volatile _reg_type *io_reg_p)                            \
+    _func_name(const volatile _reg_type *io_reg_p)                      \
     {                                                                   \
         FDC_ASSERT_VALID_MMIO_ADDRESS(io_reg_p);                        \
         return *io_reg_p;                                               \

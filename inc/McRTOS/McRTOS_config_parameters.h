@@ -141,7 +141,7 @@ C_ASSERT(RTOS_MAX_NUM_INTERRUPTS < SOC_NUM_INTERRUPT_CHANNELS);
 #elif defined(K64F_SOC)
 #   define RTOS_DEBUG_MSG_BUFFER_SIZE  UINT16_C(1024)
 #elif defined(LM4F120_SOC)
-#   define RTOS_DEBUG_MSG_BUFFER_SIZE  UINT16_C(1024)
+#   define RTOS_DEBUG_MSG_BUFFER_SIZE  UINT16_C(512)
 #else
 #   error "No system on chip specified"
 #endif
@@ -175,7 +175,18 @@ C_ASSERT(RTOS_MAX_NUM_INTERRUPTS < SOC_NUM_INTERRUPT_CHANNELS);
 /**
  * Maximum number of application threads that can exist in the system
  */
-#define RTOS_MAX_NUM_APP_THREADS UINT8_C(8)
+#if defined(LPC2478_SOC)
+#   define RTOS_MAX_NUM_APP_THREADS UINT8_C(16)
+#elif defined(KL25Z_SOC) || defined(K20D5_SOC)
+#   define RTOS_MAX_NUM_APP_THREADS UINT8_C(6)
+#elif defined(K64F_SOC)
+#   define RTOS_MAX_NUM_APP_THREADS UINT8_C(64)
+#elif defined(LM4F120_SOC)
+#   define RTOS_MAX_NUM_APP_THREADS UINT8_C(8)
+#else
+#   error "No system on chip specified"
+#endif
+
 
 /*
  * If the total size of application thread stacks is larger than 25% of

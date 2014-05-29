@@ -21,20 +21,20 @@ enum {
 };
 
 /*
- * KL25 GPIO PORT A Pins
+ * GPIO PORT A Pins
  */
 #define FRDM_ACCELEROMETER_INT1_PIN_INDEX   14
 #define FRDM_ACCELEROMETER_INT2_PIN_INDEX   15
 
 
 /*
- * KL25 GPIO PORT B Pins
+ * GPIO PORT B Pins
  */
 #define FRDM_RGB_LED_RED_PIN_INDEX      18
 #define FRDM_RGB_LED_GREEN_PIN_INDEX    19
 
 /*
- * KL25 GPIO PORT D Pins
+ * GPIO PORT D Pins
  */
 #define FRDM_RGB_LED_BLUE_PIN_INDEX     1
 
@@ -43,7 +43,7 @@ enum {
 #define LED_BLUE_PIN_MASK   BIT(FRDM_RGB_LED_BLUE_PIN_INDEX)
 
 /*
- * KL25 GPIO PORT E Pins
+ * GPIO PORT E Pins
  */
 #define FRDM_I2C0_SCL_PIN_INDEX      24
 #define FRDM_I2C0_SDA_PIN_INDEX      25

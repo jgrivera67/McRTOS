@@ -443,7 +443,7 @@
 /**
  * Number of CPU cores
  */
-#if defined(LPC2478_SOC) || defined(LM4F120_SOC) || defined(KL25Z_SOC)
+#if defined(LPC2478_SOC) || defined(LM4F120_SOC) || defined(KL25Z_SOC) || defined(K64F_SOC)
 
 #   define SOC_NUM_CPU_CORES   1
 #else
