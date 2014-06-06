@@ -14,8 +14,9 @@ ENTRY(cortex_m_reset_handler)
 /* Specify the memory areas */
 MEMORY
 {
-  flash_interrupts  (rx) : ORIGIN = 0x00000000, LENGTH = 0x800
-  flash_text        (rx) : ORIGIN = 0x00000800, LENGTH = 1024K - 0x800
+  flash_interrupts  (rx) : ORIGIN = 0x00000000, LENGTH = 0x400
+  flash_cfmprotrom  (rx) : ORIGIN = 0x00000400, LENGTH = 0x10
+  flash_text        (rx) : ORIGIN = 0x00000410, LENGTH = 1024K - 0x410
   sram_data         (rwx) : ORIGIN = 0x1FFF0000, LENGTH = 256K
 }
 
@@ -31,14 +32,12 @@ SECTIONS
     . = ALIGN(4);
   } >flash_interrupts
 
-/*???
   .cfmprotect :
   {
     . = ALIGN(4);
-	KEEP(*(.cfmconfig))
+	KEEP(*(.cfmconfig))	/* Flash Configuration Field (FCF) */
 	. = ALIGN(4);
   } >flash_cfmprotrom
-???*/
 
   /* The program code and other data goes into Flash */
   .text :

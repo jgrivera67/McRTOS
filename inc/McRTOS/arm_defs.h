@@ -262,13 +262,25 @@
      * Number of interrupt priorities for interrupts with configurable
      * priority, with 0 being the highest priority and lower priorities
      * begin > 0.
-     * The Reset, NMI, and HardFault exceptions have fixed priorities, with
+     * The Reset, NMI, and fault exceptions have fixed priorities, with
      * negative priority values, always have higher priority than any
      * other exception.
      */
 #   define SOC_NUM_INTERRUPT_PRIORITIES 4
 
+    /**
+     * Base interrupt vector number for external IRQs
+     */
 #   define CORTEX_M_IRQ_VECTOR_BASE     16
+
+    /**
+     * Interrupt vector numbers for Fault exceptions
+     */
+#   define INT_HARD_FAULT	    3
+#   define INT_MEMORY_MANAGEMENT    4
+#   define INT_BUS_FAULT	    5
+#   define INT_USAGE_FAULT          6
+#   define INT_DEBUG_MONITOR        12
 
     /**
      * Convert an IRQ number to an interrupt vector number (vector table index)

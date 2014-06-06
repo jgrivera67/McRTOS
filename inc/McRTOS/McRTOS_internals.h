@@ -882,8 +882,9 @@ void rtos_execution_context_init(
     _IN_  rtos_execution_stack_entry_t *stack_top_end_p,
     _IN_  rtos_execution_stack_entry_t *stack_bottom_end_p);
 
-void rtos_hard_fault_exception_handler(
-        _IN_ const struct rtos_execution_context *current_execution_context_p);
+void rtos_common_fault_exception_handler(
+        _IN_ const struct rtos_execution_context *current_execution_context_p,
+	_IN_ enum cpu_core_internal_interrupt_vectors exception_vector);
 
 void rtos_run_debugger(
         _IN_ const struct rtos_execution_context *current_execution_context_p,

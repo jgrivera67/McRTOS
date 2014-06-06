@@ -21,13 +21,17 @@
 #define SysTick_IRQn        VECTOR_NUMBER_TO_IRQ_NUMBER(INT_SysTick)
 
 enum cpu_core_internal_interrupt_vectors {
-  INT_Initial_Stack_Pointer    = 0,                /**< Initial stack pointer */
-  INT_Initial_Program_Counter  = 1,                /**< Initial program counter */
-  INT_NMI                      = 2,                /**< Non-maskable interrupt */
-  INT_Hard_Fault               = 3,                /**< Hard fault exception */
-  INT_SVCall                   = 11,               /**< A supervisor call exception */
-  INT_PendableSrvReq           = 14,               /**< PendSV exception - request for system level service */
-  INT_SysTick                  = 15,               /**< SysTick interrupt */
+  INT_Initial_Stack_Pointer    = 0,                /* Initial stack pointer */
+  INT_Initial_Program_Counter  = 1,                /* Initial program counter */
+  INT_NMI                      = 2,                /* Non-maskable interrupt */
+  INT_Hard_Fault               = INT_HARD_FAULT,
+  INT_MemoryManagement	       = INT_MEMORY_MANAGEMENT,
+  INT_BusFault                 = INT_BUS_FAULT,
+  INT_UsageFault               = INT_USAGE_FAULT,
+  INT_SVCall                   = 11,               /* A supervisor call exception */
+  INT_DebugMonitor             = INT_DEBUG_MONITOR,
+  INT_PendableSrvReq           = 14,               /* PendSV exception - request for system level service */
+  INT_SysTick                  = 15,               /* SysTick interrupt */
 };
 
 /**

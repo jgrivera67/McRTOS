@@ -239,6 +239,7 @@ typedef void app_software_init_t(void);
  * Exported functions
  */
 
+void soc_early_init(void);
 cpu_reset_cause_t soc_hardware_init(void);
 
 bool software_reset_happened(void);

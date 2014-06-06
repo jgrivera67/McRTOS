@@ -67,14 +67,16 @@ debug_dump_captured_registers(void);
  * Enters McRTOS debugger from the hard fault exception handler.
  *
  * @param   current_execution_context_p: Pointer to current execution context
+ * @param   exception_vector: Exception vector number
  *
  * @pre     interrupts are disabled
  * @pre     current_execution_context_p->ctx_cpu_saved_registers[] contains the
  *          latest non-pre-saved CPU registers of the current context
  */
 void
-rtos_hard_fault_exception_handler(
-        _IN_ const struct rtos_execution_context *current_execution_context_p)
+rtos_common_fault_exception_handler(
+        _IN_ const struct rtos_execution_context *current_execution_context_p,
+	_IN_ enum cpu_core_internal_interrupt_vectors exception_vector)
 {
     micro_trace_stop();
 
@@ -87,7 +89,8 @@ rtos_hard_fault_exception_handler(
     fdc_info_p->fdc_handling_exception = true;
 
     DEBUG_PRINTF(
-        "Hard fault exception caught on context %#p\n",
+        "Hard fault %u exception caught on context %#p\n",
+	exception_vector,
         current_execution_context_p);
 
     if (g_McRTOS_p->rts_app_hardware_init_called) {

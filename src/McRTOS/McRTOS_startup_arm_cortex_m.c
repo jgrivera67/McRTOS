@@ -36,14 +36,7 @@ struct cortex_m_exception_stack
 void
 cortex_m_reset_handler(void)
 {
-#   if defined(KL25Z_SOC)
-	/*
-	 * Disable the Watchdog because it will cause reset unless we have
-	 * refresh logic in place for the watchdog
-	 */
-	write_32bit_mmio_register(&SIM_COPC, 0x0);
-#   endif
-
+    soc_early_init();
     copy_initialized_data_section_from_flash_to_ram();
     zero_fill_uninitialized_data_section();
 

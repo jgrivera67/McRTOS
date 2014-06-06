@@ -74,6 +74,7 @@ struct uart_device {
     volatile uint32_t *urt_mmio_tx_port_pcr_p;
     volatile uint32_t *urt_mmio_rx_port_pcr_p;
     uint32_t urt_mmio_pin_mux_selector_mask;
+    volatile uint32_t *urt_mmio_clock_gate_reg_p;
     uint32_t urt_mmio_clock_gate_mask;
     uint32_t urt_source_clock_freq_in_hz;
 
@@ -101,15 +102,9 @@ struct uart_device_var {
 
 static cpu_reset_cause_t find_reset_cause(void);
 
-static void system_clocks_init(void);
-
 #ifdef _CPU_CYCLES_MEASURE_
 static void init_cpu_clock_cycles_counter(void);
 #endif
-
-#if 0 // ???
-static void pll_init(void);
-#endif // ???
 
 static void uart_stop(
     const struct uart_device *uart_device_p);
@@ -219,7 +214,11 @@ isr_function_t *const g_interrupt_vector_table[] __attribute__ ((section(".vecto
     [INT_Initial_Program_Counter] = cortex_m_reset_handler,
     [INT_NMI] = cortex_m_nmi_isr,
     [INT_Hard_Fault] = cortex_m_hard_fault_exception_handler,
+    [INT_MemoryManagement] = cortex_m_memory_management_exception_handler,
+    [INT_BusFault] = cortex_m_bus_fault_exception_handler,
+    [INT_UsageFault] = cortex_m_usage_fault_exception_handler,
     [INT_SVCall] = cortex_m_svc_exception_handler,
+    [INT_DebugMonitor] = cortex_m_debug_monitor_exception_handler,
     [INT_PendableSrvReq] = cortex_m_pendsv_exception_handler,
     [INT_SysTick] = cortex_m_systick_isr,
 
@@ -314,14 +313,27 @@ C_ASSERT(
     ARRAY_SIZE(g_interrupt_vector_table) ==
     CORTEX_M_IRQ_VECTOR_BASE + SOC_NUM_INTERRUPT_CHANNELS);
 
-#if 0 // ???
 /**
  * SoC configuration in Flash
  */
 static const NV_Type nv_cfmconfig __attribute__ ((section(".cfmconfig"))) = {
-  .FOPT = NV_FOPT_RESET_PIN_CFG_MASK
+    .BACKKEY3 = 0xff,
+    .BACKKEY2 = 0xff,
+    .BACKKEY1 = 0xff,
+    .BACKKEY0 = 0xff,
+    .BACKKEY7 = 0xff,
+    .BACKKEY6 = 0xff,
+    .BACKKEY5 = 0xff,
+    .BACKKEY4 = 0xff,
+    .FPROT3 = 0xff,
+    .FPROT2 = 0xff,
+    .FPROT1 = 0xff,
+    .FPROT0 = 0xff,
+    .FSEC = 0xfe,
+    .FOPT = 0xff,
+    .FEPROT = 0xff,
+    .FDPROT = 0xff
 };
-#endif
 
 /**
  * McRTOS interrupt object for the UART0 Receive/Transmit interrupts
@@ -376,6 +388,7 @@ static const struct uart_device g_uart_devices[] =
         .urt_mmio_tx_port_pcr_p = &PORTB_PCR16,
         .urt_mmio_rx_port_pcr_p = &PORTB_PCR17,
         .urt_mmio_pin_mux_selector_mask = PORT_PCR_MUX(0x3),
+        .urt_mmio_clock_gate_reg_p = &SIM_SCGC4,
         .urt_mmio_clock_gate_mask = SIM_SCGC4_UART0_MASK,
 	.urt_source_clock_freq_in_hz = CPU_CLOCK_FREQ_IN_HZ,
         .urt_rtos_interrupt_rx_tx_params = {
@@ -414,6 +427,7 @@ static const struct uart_device g_uart_devices[] =
         .urt_mmio_tx_port_pcr_p = &PORTC_PCR4,
         .urt_mmio_rx_port_pcr_p = &PORTC_PCR3,
         .urt_mmio_pin_mux_selector_mask = PORT_PCR_MUX(0x3),
+        .urt_mmio_clock_gate_reg_p = &SIM_SCGC4,
         .urt_mmio_clock_gate_mask = SIM_SCGC4_UART1_MASK,
 	.urt_source_clock_freq_in_hz = CPU_CLOCK_FREQ_IN_HZ,
     },
@@ -425,7 +439,44 @@ static const struct uart_device g_uart_devices[] =
         .urt_mmio_tx_port_pcr_p = &PORTD_PCR3,
         .urt_mmio_rx_port_pcr_p = &PORTD_PCR2,
         .urt_mmio_pin_mux_selector_mask = PORT_PCR_MUX(0x3),
+        .urt_mmio_clock_gate_reg_p = &SIM_SCGC4,
         .urt_mmio_clock_gate_mask = SIM_SCGC4_UART2_MASK,
+	.urt_source_clock_freq_in_hz = CPU_CLOCK_FREQ_IN_HZ / 2,
+    },
+
+    [3] = {
+        .urt_signature = UART_DEVICE_SIGNATURE,
+        .urt_var_p = &g_uart_devices_var[2],
+        .urt_mmio_uart_p = UART2_BASE_PTR,
+        .urt_mmio_tx_port_pcr_p = &PORTD_PCR3,
+        .urt_mmio_rx_port_pcr_p = &PORTD_PCR2,
+        .urt_mmio_pin_mux_selector_mask = PORT_PCR_MUX(0x3),
+        .urt_mmio_clock_gate_reg_p = &SIM_SCGC4,
+        .urt_mmio_clock_gate_mask = SIM_SCGC4_UART3_MASK,
+	.urt_source_clock_freq_in_hz = CPU_CLOCK_FREQ_IN_HZ / 2,
+    },
+
+    [4] = {
+        .urt_signature = UART_DEVICE_SIGNATURE,
+        .urt_var_p = &g_uart_devices_var[2],
+        .urt_mmio_uart_p = UART2_BASE_PTR,
+        .urt_mmio_tx_port_pcr_p = &PORTD_PCR3,
+        .urt_mmio_rx_port_pcr_p = &PORTD_PCR2,
+        .urt_mmio_pin_mux_selector_mask = PORT_PCR_MUX(0x3),
+        .urt_mmio_clock_gate_reg_p = &SIM_SCGC1,
+        .urt_mmio_clock_gate_mask = SIM_SCGC1_UART4_MASK,
+	.urt_source_clock_freq_in_hz = CPU_CLOCK_FREQ_IN_HZ / 2,
+    },
+
+    [5] = {
+        .urt_signature = UART_DEVICE_SIGNATURE,
+        .urt_var_p = &g_uart_devices_var[2],
+        .urt_mmio_uart_p = UART2_BASE_PTR,
+        .urt_mmio_tx_port_pcr_p = &PORTD_PCR3,
+        .urt_mmio_rx_port_pcr_p = &PORTD_PCR2,
+        .urt_mmio_pin_mux_selector_mask = PORT_PCR_MUX(0x3),
+        .urt_mmio_clock_gate_reg_p = &SIM_SCGC1,
+        .urt_mmio_clock_gate_mask = SIM_SCGC1_UART5_MASK,
 	.urt_source_clock_freq_in_hz = CPU_CLOCK_FREQ_IN_HZ / 2,
     },
 #endif
@@ -507,6 +558,184 @@ uint64_t __attribute__ ((section(".mtb_buf")))
     g_micro_trace_buffer[MICRO_TRACE_BUFFER_NUM_ENTRIES];
 #endif
 
+
+static void
+pll_init(void)
+{
+    uint32_t reg_value;
+
+    /*
+     * Release hold with ACKISO: Only has an effect if recovering from VLLSx.
+     * if ACKISO is set you must clear ackiso before initializing the PLL
+     * if osc enabled in low power modes - enable it first before ack
+     */
+    reg_value = read_8bit_mmio_register(&PMC_REGSC);
+    if (reg_value & PMC_REGSC_ACKISO_MASK) {
+        reg_value |= PMC_REGSC_ACKISO_MASK;
+	write_8bit_mmio_register(&PMC_REGSC, reg_value);
+    }
+
+    /* SIM->SOPT2: PLLFLLSEL=1 */
+    reg_value = read_32bit_mmio_register(&SIM_SOPT2);
+    /* Select PLL as a clock source for various peripherals */
+    reg_value |= SIM_SOPT2_PLLFLLSEL(0x01);
+    write_32bit_mmio_register(&SIM_SOPT2, reg_value);
+
+    /* SIM->SOPT1: OSC32KSEL=3 */
+    reg_value = read_32bit_mmio_register(&SIM_SOPT1);
+    /* LPO 1kHz oscillator drives 32 kHz clock for various peripherals */
+    reg_value |= SIM_SOPT1_OSC32KSEL(0x03);
+    write_32bit_mmio_register(&SIM_SOPT1, reg_value);
+
+    /* PORTA->PCR[18]: ISF=0,MUX=0 */
+    reg_value = read_32bit_mmio_register(&PORTA_PCR18);
+    reg_value &= ~(PORT_PCR_ISF_MASK | PORT_PCR_MUX(0x07));
+    write_32bit_mmio_register(&PORTA_PCR18, reg_value);
+
+    /* Switch to FBE Mode */
+    /* MCG->C2: LOCRE0=0,?=0,RANGE=2,HGO=0,EREFS=0,LP=0,IRCS=0 */
+    write_8bit_mmio_register(&MCG_C2, MCG_C2_RANGE(0x02));
+
+    /* OSC->CR: ERCLKEN=1,?=0,EREFSTEN=0,?=0,SC2P=0,SC4P=0,SC8P=0,SC16P=0 */
+    write_8bit_mmio_register(&OSC_CR, OSC_CR_ERCLKEN_MASK);
+
+    /* MCG->C7: OSCSEL=0 */
+    reg_value = read_8bit_mmio_register(&MCG_C7);
+    reg_value &= ~MCG_C7_OSCSEL_MASK;
+    write_8bit_mmio_register(&MCG_C7, reg_value);
+
+    /* MCG->C1: CLKS=2,FRDIV=5,IREFS=0,IRCLKEN=1,IREFSTEN=0 */
+    reg_value = (MCG_C1_CLKS(0x02) | MCG_C1_FRDIV(0x05) | MCG_C1_IRCLKEN_MASK);
+    write_8bit_mmio_register(&MCG_C1, reg_value);
+
+    /* MCG->C4: DMX32=0,DRST_DRS=0 */
+    reg_value = read_8bit_mmio_register(&MCG_C4);
+    reg_value &= ~(MCG_C4_DMX32_MASK | MCG_C4_DRST_DRS(0x03));
+    write_8bit_mmio_register(&MCG_C4, reg_value);
+
+    /* MCG->C5: ?=0,PLLCLKEN0=0,PLLSTEN0=0,PRDIV0=0x13 */
+    write_8bit_mmio_register(&MCG_C5, MCG_C5_PRDIV0(0x13));
+
+    /* MCG->C6: LOLIE0=0,PLLS=0,CME0=0,VDIV0=0x18 */
+    write_8bit_mmio_register(&MCG_C6, MCG_C6_VDIV0(0x18));
+
+    /* Check that the source of the FLL reference clock is the external reference clock. */
+    do {
+        reg_value = read_8bit_mmio_register(&MCG_S);
+    } while ((reg_value & MCG_S_IREFST_MASK) != 0x00U);
+
+    /* Wait until external reference clock is selected as MCG output */
+    do {
+        reg_value = read_8bit_mmio_register(&MCG_S);
+    } while((reg_value & 0x0CU) != 0x08U);
+
+    /* Switch to PBE Mode */
+    /* MCG->C6: LOLIE0=0,PLLS=1,CME0=0,VDIV0=0x18 */
+    reg_value = (MCG_C6_PLLS_MASK | MCG_C6_VDIV0(0x18));
+    write_8bit_mmio_register(&MCG_C6, reg_value);
+
+    /* Wait until external reference clock is selected as MCG output */
+    do {
+        reg_value = read_8bit_mmio_register(&MCG_S);
+    } while ((reg_value & 0x0CU) != 0x08U);
+
+    /* Wait until locked */
+    do {
+        reg_value = read_8bit_mmio_register(&MCG_S);
+    } while ((reg_value & MCG_S_LOCK0_MASK) == 0x00U);
+
+    /* Switch to PEE Mode */
+    /* MCG->C1: CLKS=0,FRDIV=5,IREFS=0,IRCLKEN=1,IREFSTEN=0 */
+    reg_value = (MCG_C1_CLKS(0x00) | MCG_C1_FRDIV(0x05) | MCG_C1_IRCLKEN_MASK);
+    write_8bit_mmio_register(&MCG_C1, reg_value);
+
+    /* Wait until output of the PLL is selected */
+    do {
+        reg_value = read_8bit_mmio_register(&MCG_S);
+    } while ((reg_value & 0x0CU) != 0x0CU);
+
+    /* Set USB input clock to 48MHz  */
+    /* SIM->CLKDIV2: USBDIV=4,USBFRAC=1 */
+    reg_value = read_32bit_mmio_register(&SIM_CLKDIV2);
+    reg_value &= ~SIM_CLKDIV2_USBDIV(0x03);
+    reg_value |= (SIM_CLKDIV2_USBDIV(0x04) |
+                  SIM_CLKDIV2_USBFRAC_MASK);
+    write_32bit_mmio_register(&SIM_CLKDIV2, reg_value);
+}
+
+
+static void
+system_clocks_init(void)
+{
+    uint32_t reg_value;
+
+    /*
+     * Enable all of the GPIO port clocks. These have to be enabled to configure
+     * pin muxing options, so most code will need all of these on anyway.
+     */
+    reg_value = read_32bit_mmio_register(&SIM_SCGC5);
+    reg_value |= (SIM_SCGC5_PORTA_MASK
+                    | SIM_SCGC5_PORTB_MASK
+                    | SIM_SCGC5_PORTC_MASK
+                    | SIM_SCGC5_PORTD_MASK
+                    | SIM_SCGC5_PORTE_MASK);
+    write_32bit_mmio_register(&SIM_SCGC5, reg_value);
+
+    /*
+     * Set the system dividers:
+     * SIM->CLKDIV1: OUTDIV1=0,OUTDIV2=1,OUTDIV3=1,OUTDIV4=4
+     */
+    reg_value = SIM_CLKDIV1_OUTDIV1(0x00) |
+	        SIM_CLKDIV1_OUTDIV2(0x01) |
+                SIM_CLKDIV1_OUTDIV3(0x02) |
+                SIM_CLKDIV1_OUTDIV4(0x04); /* Update system prescalers */
+
+    write_32bit_mmio_register(&SIM_CLKDIV1, reg_value);
+
+    /*
+     * Initialize PLL:
+     *
+     * NOTE: PLL will be the source for MCG CLKOUT so the core, system, and flash
+     * clocks are derived from it
+     */
+    pll_init();
+}
+
+
+/**
+ *  SoC-specific early initialization to be invoked at the beginning of
+ *  the Reset exception handler.
+ */
+void
+soc_early_init(void)
+{
+    uint32_t reg_value;
+
+    /*
+     * Disable the Watchdog because it will cause reset unless we have
+     * refresh logic in place for the watchdog
+     */
+    /* WDOG->UNLOCK: WDOGUNLOCK=0xC520 */
+    WDOG->UNLOCK = WDOG_UNLOCK_WDOGUNLOCK(0xC520); /* Key 1 */
+
+    /* WDOG->UNLOCK: WDOGUNLOCK=0xD928 */
+    WDOG->UNLOCK = WDOG_UNLOCK_WDOGUNLOCK(0xD928); /* Key 2 */
+
+    /*
+     * WDOG->STCTRLH: ?=0,DISTESTWDOG=0,BYTESEL=0,TESTSEL=0,TESTWDOG=0,?=0,?=1,
+     *	WAITEN=1,STOPEN=1,DBGEN=0,ALLOWUPDATE=1,WINEN=0,IRQRSTEN=0,CLKSRC=1,
+     *	WDOGEN=0
+     */
+    reg_value = WDOG_STCTRLH_BYTESEL(0x00) |
+                WDOG_STCTRLH_WAITEN_MASK |
+                WDOG_STCTRLH_STOPEN_MASK |
+                WDOG_STCTRLH_ALLOWUPDATE_MASK |
+                WDOG_STCTRLH_CLKSRC_MASK |
+                0x0100U;
+    write_16bit_mmio_register(&WDOG_STCTRLH, reg_value);
+}
+
+
 /**
  *  Initializes board hardware.
  *
@@ -538,6 +767,7 @@ soc_hardware_init(void)
         CONSOLE_SERIAL_PORT_BAUD_RATE,
         CONSOLE_SERIAL_PORT_MODE);
 
+    debugger_printf("*** JGR: %s\n", __func__); //???
 #   ifdef DEBUG
     uart_putchar_with_polling(g_console_serial_port_p, '\r');
     uart_putchar_with_polling(g_console_serial_port_p, '\n');
@@ -629,204 +859,6 @@ software_reset_happened(void)
     return ((RCM_SRS1 & RCM_SRS1_SW_MASK) != 0);
 }
 
-
-static void
-system_clocks_init(void)
-{
-    uint32_t reg_value;
-
-    /*
-     * Enable all of the GPIO port clocks. These have to be enabled to configure
-     * pin muxing options, so most code will need all of these on anyway.
-     */
-    reg_value = read_32bit_mmio_register(&SIM_SCGC5);
-    reg_value |= (SIM_SCGC5_PORTA_MASK
-                    | SIM_SCGC5_PORTB_MASK
-                    | SIM_SCGC5_PORTC_MASK
-                    | SIM_SCGC5_PORTD_MASK
-                    | SIM_SCGC5_PORTE_MASK);
-    write_32bit_mmio_register(&SIM_SCGC5, reg_value);
-
-#if 0 //???
-    /*
-     * Set the system dividers:
-     *
-     * NOTE: This is not really needed, as these are the settings at reset time.
-     */
-    write_32bit_mmio_register(
-        &SIM_CLKDIV1,
-        SIM_CLKDIV1_OUTDIV1(0) | SIM_CLKDIV1_OUTDIV4(1));
-
-    /*
-     * Initialize PLL:
-     *
-     * NOTE: PLL will be the source for MCG CLKOUT so the core, system, and flash
-     * clocks are derived from it
-     */
-    pll_init();
-
-    /*
-     * Set PLLFLLSEL to select the PLL, as the clock source for
-     * peripherals:
-     * (MCGPLLCLK clock with fixed divide by two)
-     */
-    reg_value = read_32bit_mmio_register(&SIM_SOPT2);
-    reg_value |= SIM_SOPT2_PLLFLLSEL_MASK;
-    write_32bit_mmio_register(&SIM_SOPT2, reg_value);
-
-    /*
-     * Select the clock sources for peripherals to be used:
-     * 01 =  MCGFLLCLK clock or MCGPLLCLK/2 clock
-     */
-
-    reg_value = read_32bit_mmio_register(&SIM_SOPT2);
-
-    /*
-     * UART0 transmit and receive clock:
-     */
-    SET_BIT_FIELD(
-        reg_value, SIM_SOPT2_UART0SRC_MASK, SIM_SOPT2_UART0SRC_SHIFT,
-        0x1);
-
-    /*
-     * FTM clock:
-     */
-    SET_BIT_FIELD(
-        reg_value, SIM_SOPT2_FTMSRC_MASK, SIM_SOPT2_FTMSRC_SHIFT,
-        0x1);
-
-    write_32bit_mmio_register(&SIM_SOPT2, reg_value);
-#endif // ???
-}
-
-#if 0 // ???
-static void
-pll_init(void)
-{
-  unsigned char frdiv_val;
-  unsigned char temp_reg;
-  unsigned char prdiv, vdiv;
-  short i;
-  fdc_error_t fdc_error;
-
-  // check if in FEI mode
-  if (!((((MCG_S & MCG_S_CLKST_MASK) >> MCG_S_CLKST_SHIFT) == 0x0) && // check CLKS mux has selcted FLL output
-      (MCG_S & MCG_S_IREFST_MASK) &&                                  // check FLL ref is internal ref clk
-      (!(MCG_S & MCG_S_PLLST_MASK))))                                 // check PLLS mux has selected FLL
-  {
-      fdc_error = CAPTURE_FDC_ERROR("Not in FEI mode", 0, 0);
-      fatal_error_handler(fdc_error);
-  }
-
-  // configure the MCG_C2 register
-  // the RANGE value is determined by the external frequency. Since the RANGE parameter affects the FRDIV divide value
-  // it still needs to be set correctly even if the oscillator is not being used
-
-  temp_reg = MCG_C2;
-  temp_reg &= ~(MCG_C2_RANGE0_MASK | MCG_C2_HGO0_MASK | MCG_C2_EREFS0_MASK); // clear fields before writing new values
-
-  temp_reg |= (MCG_C2_RANGE0(1) | (1 << MCG_C2_EREFS0_SHIFT));
-  MCG_C2 = temp_reg;
-
-  // determine FRDIV based on reference clock frequency
-  frdiv_val = 3;
-
-  // Select external oscillator and Reference Divider and clear IREFS to start ext osc
-  // If IRCLK is required it must be enabled outside of this driver, existing state will be maintained
-  // CLKS=2, FRDIV=frdiv_val, IREFS=0, IRCLKEN=0, IREFSTEN=0
-  temp_reg = MCG_C1;
-  temp_reg &= ~(MCG_C1_CLKS_MASK | MCG_C1_FRDIV_MASK | MCG_C1_IREFS_MASK); // Clear values in these fields
-  temp_reg |= (MCG_C1_CLKS(2) | MCG_C1_FRDIV(frdiv_val)); // Set the required CLKS and FRDIV values
-  MCG_C1 = temp_reg;
-
-  // if the external oscillator is used need to wait for OSCINIT to set
-    for (i = 0 ; i < 20000 ; i++)
-    {
-      if (MCG_S & MCG_S_OSCINIT0_MASK) break; // jump out early if OSCINIT sets before loop finishes
-    }
-
-  FDC_ASSERT(
-    (MCG_S & MCG_S_OSCINIT0_MASK) != 0, 0, 0);
-
-  // wait for Reference clock Status bit to clear
-  for (i = 0 ; i < 2000 ; i++)
-  {
-    if (!(MCG_S & MCG_S_IREFST_MASK)) break; // jump out early if IREFST clears before loop finishes
-  }
-
-  FDC_ASSERT(
-    (MCG_S & MCG_S_IREFST_MASK) == 0, 0, 0);
-
-  // Wait for clock status bits to show clock source is ext ref clk
-  for (i = 0 ; i < 2000 ; i++)
-  {
-    if (((MCG_S & MCG_S_CLKST_MASK) >> MCG_S_CLKST_SHIFT) == 0x2) break; // jump out early if CLKST shows EXT CLK slected before loop finishes
-  }
-
-  FDC_ASSERT(
-    ((MCG_S & MCG_S_CLKST_MASK) >> MCG_S_CLKST_SHIFT) == 0x2, 0, 0);
-
-  // Now in FBE
-  // It is recommended that the clock monitor is enabled when using an external clock as the clock source/reference.
-  // It is enabled here but can be removed if this is not required.
-  MCG_C6 |= MCG_C6_CME0_MASK;
-
-  // Configure PLL
-  // Configure MCG_C5
-  // If the PLL is to run in STOP mode then the PLLSTEN bit needs to be OR'ed in here or in user code.
-  temp_reg = MCG_C5;
-  temp_reg &= ~MCG_C5_PRDIV0_MASK;
-  temp_reg |= MCG_C5_PRDIV0(PLL_DIVIDER - 1);    //set PLL ref divider
-  MCG_C5 = temp_reg;
-
-  // Configure MCG_C6
-  // The PLLS bit is set to enable the PLL, MCGOUT still sourced from ext ref clk
-  // The loss of lock interrupt can be enabled by seperately OR'ing in the LOLIE bit in MCG_C6
-  temp_reg = MCG_C6; // store present C6 value
-  temp_reg &= ~MCG_C6_VDIV0_MASK; // clear VDIV settings
-  temp_reg |= MCG_C6_PLLS_MASK | MCG_C6_VDIV0(PLL_MULTIPLIER - 24); // write new VDIV and enable PLL
-  MCG_C6 = temp_reg; // update MCG_C6
-
-  // wait for PLLST status bit to set
-  for (i = 0 ; i < 2000 ; i++)
-  {
-    if (MCG_S & MCG_S_PLLST_MASK) break; // jump out early if PLLST sets before loop finishes
-  }
-
-  FDC_ASSERT(
-    (MCG_S & MCG_S_PLLST_MASK) != 0, 0, 0);
-
-  // Wait for LOCK bit to set
-  for (i = 0 ; i < 4000 ; i++)
-  {
-    if (MCG_S & MCG_S_LOCK0_MASK) break; // jump out early if LOCK sets before loop finishes
-  }
-
-  FDC_ASSERT(
-    (MCG_S & MCG_S_LOCK0_MASK) != 0, 0, 0);
-
-  // Use actual PLL settings to calculate PLL frequency
-  prdiv = ((MCG_C5 & MCG_C5_PRDIV0_MASK) + 1);
-  vdiv = ((MCG_C6 & MCG_C6_VDIV0_MASK) + 24);
-
-  // now in PBE
-
-  MCG_C1 &= ~MCG_C1_CLKS_MASK; // clear CLKS to switch CLKS mux to select PLL as MCG_OUT
-
-  // Wait for clock status bits to update
-  for (i = 0 ; i < 2000 ; i++)
-  {
-    if (((MCG_S & MCG_S_CLKST_MASK) >> MCG_S_CLKST_SHIFT) == 0x3) break; // jump out early if CLKST = 3 before loop finishes
-  }
-
-  FDC_ASSERT(
-    ((MCG_S & MCG_S_CLKST_MASK) >> MCG_S_CLKST_SHIFT) == 0x3, 0, 0);
-
-  // Now in PEE
-
-  g_pll_frequency_in_hz = (CRYSTAL_FREQUENCY_HZ / prdiv) * vdiv; //MCGOUT equals PLL output frequency
-}
-#endif // ???
 
 static bool g_micro_trace_initialized = false;
 
@@ -1359,7 +1391,6 @@ k64f_uart_rx_tx_interrupt_e_handler(
     struct rtos_interrupt *rtos_interrupt_p)
 {
     FDC_ASSERT_RTOS_INTERRUPT_E_HANDLER_PRECONDITIONS(rtos_interrupt_p);
-#if 0 //???
 
     const struct uart_device *uart_device_p =
         (struct uart_device *)rtos_interrupt_p->int_arg_p;
@@ -1437,7 +1468,6 @@ k64f_uart_rx_tx_interrupt_e_handler(
             uart_var_p->urt_received_bytes_dropped ++;
         }
     }
-#endif // ???
 }
 
 

@@ -409,6 +409,21 @@ uint64_t __attribute__ ((section(".mtb_buf")))
 #endif
 
 /**
+ *  SoC-specifc early initialization to be invoked at the beginning of
+ *  the Reset exception handler
+ */
+void
+soc_early_init(void)
+{
+	/*
+	 * Disable the Watchdog because it will cause reset unless we have
+	 * refresh logic in place for the watchdog
+	 */
+	write_32bit_mmio_register(&SIM_COPC, 0x0);
+}
+
+
+/**
  *  Initializes board hardware.
  *
  *  @pre This function must be called with interrupts disabled.

@@ -20,11 +20,15 @@
  */
 .global cortex_m_pendsv_exception_handler
 .global cortex_m_hard_fault_exception_handler
+.global cortex_m_memory_management_exception_handler
+.global cortex_m_bus_fault_exception_handler
+.global cortex_m_usage_fault_exception_handler
+.global cortex_m_debug_monitor_exception_handler
 .global cortex_m_save_other_registers
 
 .text
 .thumb
-//.syntax unified
+.syntax unified
 
 /*
  * PendSV exception handler. It is used for synchronous context switch.
@@ -121,11 +125,29 @@ L_save_other_registers:
 .endfunc
 
 
-/*
- * Hard fault exception handler.
+/**
+ * Macro that generates a fault exception handler
  *
- * void
- * cortex_m_hard_fault_exception_handler(void)
+ * @param   _exception_vector_: Exception vector number
+ *
+ * @param   _exception_handler_func_: Exception handler function name
+ *
+ * INPUT REGISTERS:
+ * N/A
+ *
+ * OUTPUT REGISTERS:
+ * N/A
+ *
+ * CLOBBERED REGISTERS:
+ * N/A
+ */
+.macro GEN_FAULT_EXCEPTION_HANDLER_FUNCTION _exception_handler_func_, \
+					    _exception_vector_
+
+/**
+ * Fault exception handler for exception \_exception_vector_.
+ *
+ * void \_exception_handler_func_(void)
  *
  * @pre     This exception has higher priority than all interrupts.
  *          So no nested exceptions caused by interrupts are expected here.
@@ -134,10 +156,12 @@ L_save_other_registers:
  *
  * @return  none
  */
-.thumb_func
-.func cortex_m_hard_fault_exception_handler
+.global \_exception_handler_func_
 
-cortex_m_hard_fault_exception_handler:
+.thumb_func
+.func \_exception_handler_func_
+
+\_exception_handler_func_:
     cpsid   i
     isb
 
@@ -187,12 +211,13 @@ cortex_m_hard_fault_exception_handler:
     mov     r0, r2
     mov     r4, r2  /* saved r2 to r4 */
     mov     r5, r1  /* saved r1 to r5 */
-    bl      rtos_hard_fault_exception_handler
+    mov	    r1, #\_exception_vector_
+    bl      rtos_common_fault_exception_handler
 
     /*
      * Return from the exception:
      *
-     * NOTE: rtos_hard_fault_exception_handler() only returns here if
+     * NOTE: rtos_common_fault_exception_handler() only returns here if
      * fdc_exception_debugger_on is set.
      *
      * r4 == current_execution_context_p
@@ -207,6 +232,24 @@ cortex_m_hard_fault_exception_handler:
     bkpt    #0
 
 .endfunc
+
+.endm
+
+
+GEN_FAULT_EXCEPTION_HANDLER_FUNCTION cortex_m_hard_fault_exception_handler, \
+				     INT_HARD_FAULT
+
+GEN_FAULT_EXCEPTION_HANDLER_FUNCTION cortex_m_memory_management_exception_handler, \
+				     INT_MEMORY_MANAGEMENT
+
+GEN_FAULT_EXCEPTION_HANDLER_FUNCTION cortex_m_bus_fault_exception_handler, \
+				     INT_BUS_FAULT
+
+GEN_FAULT_EXCEPTION_HANDLER_FUNCTION cortex_m_usage_fault_exception_handler, \
+				     INT_USAGE_FAULT
+
+GEN_FAULT_EXCEPTION_HANDLER_FUNCTION cortex_m_debug_monitor_exception_handler, \
+				     INT_DEBUG_MONITOR
 
 
 /**
