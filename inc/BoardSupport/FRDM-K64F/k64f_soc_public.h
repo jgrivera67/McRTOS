@@ -50,9 +50,13 @@ C_ASSERT(ADC_INTERRUPT_PRIORITY > SOC_HIGHEST_INTERRUPT_PRIORITY);
 #pragma GCC diagnostic ignored "-Wcpp"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
-#define __VTOR_PRESENT  1
-#define __MPU_PRESENT   1
-#define __FPU_PRESENT	0
+#ifdef __CORTEX_M
+#error "core_cm4.h should not be included before here"
+#endif
+
+/*
+ * NOTE: CMSIS paramtetric #defines were done in MK64F12.h
+ */
 #define __CHECK_DEVICE_DEFINES
 #include "core_cm4.h"
 

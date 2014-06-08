@@ -64,11 +64,26 @@ C_ASSERT(
 #define UART_RECEIVE_QUEUE_SIZE_IN_BYTES    UINT16_C(16)
 
 /**
+ * Const fields of a MPU device
+ */
+struct mpu_device {
+#   define MPU_DEVICE_SIGNATURE  GEN_SIGNATURE('M', 'P', 'U', ' ')
+    uint32_t signature;
+    volatile MPU_Type *mmio_regs_p;
+    struct mpu_device_var *var_p;
+};
+
+struct mpu_device_var {
+    uint8_t num_regions;
+};
+
+/**
  * Const fields of a UART device (to be placed in flash)
  */
 struct uart_device {
 #   define UART_DEVICE_SIGNATURE  GEN_SIGNATURE('U', 'A', 'R', 'T')
     uint32_t urt_signature;
+    const char *urt_name;
     struct uart_device_var *urt_var_p;
     UART_MemMapPtr urt_mmio_uart_p;
     volatile uint32_t *urt_mmio_tx_port_pcr_p;
@@ -97,6 +112,8 @@ struct uart_device_var {
     uint32_t urt_transmit_bytes_dropped;
     struct rtos_circular_buffer urt_transmit_queue;
     struct rtos_circular_buffer urt_receive_queue;
+    uint8_t urt_tx_fifo_size;
+    uint8_t urt_rx_fifo_size;
 };
 
 
@@ -335,6 +352,14 @@ static const NV_Type nv_cfmconfig __attribute__ ((section(".cfmconfig"))) = {
     .FDPROT = 0xff
 };
 
+static struct mpu_device_var g_mpu_var;
+
+static const struct mpu_device g_mpu = {
+	 .signature = MPU_DEVICE_SIGNATURE,
+	.mmio_regs_p = (volatile MPU_Type *)MPU_BASE,
+        .var_p = &g_mpu_var,
+};
+
 /**
  * McRTOS interrupt object for the UART0 Receive/Transmit interrupts
  */
@@ -383,6 +408,7 @@ static const struct uart_device g_uart_devices[] =
 {
     [0] = {
         .urt_signature = UART_DEVICE_SIGNATURE,
+	.urt_name = "UART0",
         .urt_var_p = &g_uart_devices_var[0],
         .urt_mmio_uart_p = UART0_BASE_PTR,
         .urt_mmio_tx_port_pcr_p = &PORTB_PCR16,
@@ -422,6 +448,7 @@ static const struct uart_device g_uart_devices[] =
 #if 0 // ???
     [1] = {
         .urt_signature = UART_DEVICE_SIGNATURE,
+	.urt_name = "UART1",
         .urt_var_p = &g_uart_devices_var[1],
         .urt_mmio_uart_p = UART1_BASE_PTR,
         .urt_mmio_tx_port_pcr_p = &PORTC_PCR4,
@@ -434,6 +461,7 @@ static const struct uart_device g_uart_devices[] =
 
     [2] = {
         .urt_signature = UART_DEVICE_SIGNATURE,
+	.urt_name = "UART2",
         .urt_var_p = &g_uart_devices_var[2],
         .urt_mmio_uart_p = UART2_BASE_PTR,
         .urt_mmio_tx_port_pcr_p = &PORTD_PCR3,
@@ -446,7 +474,8 @@ static const struct uart_device g_uart_devices[] =
 
     [3] = {
         .urt_signature = UART_DEVICE_SIGNATURE,
-        .urt_var_p = &g_uart_devices_var[2],
+	.urt_name = "UART3",
+        .urt_var_p = &g_uart_devices_var[3],
         .urt_mmio_uart_p = UART2_BASE_PTR,
         .urt_mmio_tx_port_pcr_p = &PORTD_PCR3,
         .urt_mmio_rx_port_pcr_p = &PORTD_PCR2,
@@ -458,7 +487,8 @@ static const struct uart_device g_uart_devices[] =
 
     [4] = {
         .urt_signature = UART_DEVICE_SIGNATURE,
-        .urt_var_p = &g_uart_devices_var[2],
+	.urt_name = "UART4",
+        .urt_var_p = &g_uart_devices_var[4],
         .urt_mmio_uart_p = UART2_BASE_PTR,
         .urt_mmio_tx_port_pcr_p = &PORTD_PCR3,
         .urt_mmio_rx_port_pcr_p = &PORTD_PCR2,
@@ -470,7 +500,8 @@ static const struct uart_device g_uart_devices[] =
 
     [5] = {
         .urt_signature = UART_DEVICE_SIGNATURE,
-        .urt_var_p = &g_uart_devices_var[2],
+	.urt_name = "UART5",
+        .urt_var_p = &g_uart_devices_var[5],
         .urt_mmio_uart_p = UART2_BASE_PTR,
         .urt_mmio_tx_port_pcr_p = &PORTD_PCR3,
         .urt_mmio_rx_port_pcr_p = &PORTD_PCR2,
@@ -736,6 +767,19 @@ soc_early_init(void)
 }
 
 
+static void
+k64f_mpu_init(void) {
+    static const uint8_t num_mpu_regions_table[] = { 8, 12, 16 };
+    uint32_t reg_value;
+    uint8_t nrgd_field;
+
+    reg_value = read_32bit_mmio_register(&MPU_CESR_REG(g_mpu.mmio_regs_p));
+    nrgd_field = GET_BIT_FIELD(reg_value, MPU_CESR_NRGD_MASK, MPU_CESR_NRGD_SHIFT);
+    FDC_ASSERT(nrgd_field <= 0x2, nrgd_field, 0);
+
+    g_mpu.var_p->num_regions = num_mpu_regions_table[nrgd_field];
+}
+
 /**
  *  Initializes board hardware.
  *
@@ -760,6 +804,10 @@ soc_hardware_init(void)
 
     bool mpu_present = cortex_m_mpu_init();
 
+    if (!mpu_present) {
+	k64f_mpu_init();
+    }
+
     cortex_m_nvic_init();
 
     uart_init(
@@ -767,13 +815,18 @@ soc_hardware_init(void)
         CONSOLE_SERIAL_PORT_BAUD_RATE,
         CONSOLE_SERIAL_PORT_MODE);
 
-    debugger_printf("*** JGR: %s\n", __func__); //???
+    DEBUG_PRINTF("%s initialized (Tx FIFO size: %u, Rx FIFO size: %u)\n",
+		 g_console_serial_port_p->urt_name,
+		 g_console_serial_port_p->urt_var_p->urt_tx_fifo_size,
+		 g_console_serial_port_p->urt_var_p->urt_rx_fifo_size);
+
+    DEBUG_PRINTF("Last reset cause: %#x\n", reset_cause);
+    DEBUG_PRINTF("Cortex-M MPU %s present\n", mpu_present ? "" : "not");
+    DEBUG_PRINTF("K64F MPU regions: %u\n", g_mpu.var_p->num_regions);
+
 #   ifdef DEBUG
     uart_putchar_with_polling(g_console_serial_port_p, '\r');
     uart_putchar_with_polling(g_console_serial_port_p, '\n');
-    DEBUG_PRINTF("UART0 initialized\n");
-    DEBUG_PRINTF("Last reset cause: %#x\n", reset_cause);
-    DEBUG_PRINTF("MPU %s present\n", mpu_present ? "" : "not");
 #   else
     uart_putchar(g_console_serial_port_p, '\r');
     uart_putchar(g_console_serial_port_p, '\n');
@@ -1244,10 +1297,53 @@ uart_init(
     write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
 
     /*
-     * Configure the uart for 8-bit mode, no parity (mode is 0):
+     * Configure the uart for 8-bit mode, no parity, 1 stop bit (mode is 0):
      */
     write_8bit_mmio_register(
         &UART_C1_REG(uart_mmio_registers_p), mode);
+
+    /*
+     * Get Tx FIFO size
+     */
+    reg_value = read_8bit_mmio_register(&UART_PFIFO_REG(uart_mmio_registers_p));
+    uint8_t fifo_size_field = GET_BIT_FIELD(reg_value,
+					    UART_PFIFO_TXFIFOSIZE_MASK,
+					    UART_PFIFO_TXFIFOSIZE_SHIFT);
+    if (fifo_size_field == 0x0) {
+        uart_var_p->urt_tx_fifo_size = 1;
+    } else {
+        uart_var_p->urt_tx_fifo_size = 1 << (fifo_size_field + 1);
+    }
+
+    /*
+     * Get Rx FIFO size:
+     */
+    fifo_size_field = GET_BIT_FIELD(reg_value,
+				    UART_PFIFO_RXFIFOSIZE_MASK,
+				    UART_PFIFO_RXFIFOSIZE_SHIFT);
+    if (fifo_size_field == 0x0) {
+        uart_var_p->urt_rx_fifo_size = 1;
+    } else {
+        uart_var_p->urt_rx_fifo_size = 1 << (fifo_size_field + 1);
+    }
+
+    /*
+     * Configure Tx and RX FIFOs:
+     * - Tx FIFO water mark = 0 (genarate interrupt when Tx FIFO is empty)
+     * - Rx FIFO water mark = 1 (genarate interrupt when Rx FIFO is not empty)
+     * - Enable Tx and Rx FIFOs
+     * - Flush Tx and Rx FIFOs
+     */
+    write_8bit_mmio_register(
+        &UART_TWFIFO_REG(uart_mmio_registers_p), 0);
+    write_8bit_mmio_register(
+        &UART_RWFIFO_REG(uart_mmio_registers_p), 1);
+    write_8bit_mmio_register(
+        &UART_PFIFO_REG(uart_mmio_registers_p),
+	UART_PFIFO_TXFE_MASK | UART_PFIFO_RXFE_MASK);
+    write_8bit_mmio_register(
+        &UART_CFIFO_REG(uart_mmio_registers_p),
+	UART_CFIFO_TXFLUSH_MASK | UART_CFIFO_RXFLUSH_MASK);
 
     /*
      * Enable Tx pin:
@@ -1430,17 +1526,46 @@ k64f_uart_rx_tx_interrupt_e_handler(
          * NOTE: This interrupt source will be cleared when
          * the next character is transmitted
          */
+	bool sw_transmit_queue_empty = false;
 
-        uint8_t byte_to_transmit;
+	/*
+	 * Disable interrupts, to prevent higher priority interrupts to write
+	 * data to the UART (i.e., printf's)
+	 */
+        cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
 
-        bool entry_read = rtos_k_byte_circular_buffer_read(
-                &uart_var_p->urt_transmit_queue,
-                &byte_to_transmit,
-                false);
+	/*
+	 * Fill the Tx FIFO as much as possible:
+	 */
+	for ( ; ; ) {
+            uint8_t byte_to_transmit;
+            bool entry_read = rtos_k_byte_circular_buffer_read(
+                                &uart_var_p->urt_transmit_queue,
+                                &byte_to_transmit,
+                                false);
 
-        if (entry_read) {
-            write_8bit_mmio_register(&UART_D_REG(uart_mmio_registers_p), byte_to_transmit);
-        } else {
+            if (!entry_read) {
+		sw_transmit_queue_empty = true;
+	        break;
+	    }
+
+	    write_8bit_mmio_register(&UART_D_REG(uart_mmio_registers_p),
+				     byte_to_transmit);
+
+	    uint8_t tx_fifo_length =
+		    read_8bit_mmio_register(&UART_TCFIFO_REG(uart_mmio_registers_p));
+	    if (tx_fifo_length == uart_var_p->urt_tx_fifo_size) {
+		break;
+	    }
+
+	    DBG_ASSERT(
+	        tx_fifo_length < uart_var_p->urt_tx_fifo_size,
+	        tx_fifo_length, uart_var_p->urt_tx_fifo_size);
+        }
+
+	rtos_k_restore_cpu_interrupts(cpu_status_register);
+
+	if (sw_transmit_queue_empty) {
             /*
              * Disable "transmit data register empty" interrupt:
              */
@@ -1454,19 +1579,50 @@ k64f_uart_rx_tx_interrupt_e_handler(
      * "Receive data register full" interrupt:
      */
     if (s1_reg_value & UART_S1_RDRF_MASK) {
-        /*
-         * Read the first byte received to clear the interrupt source.
-         */
-        uint8_t byte_received = read_8bit_mmio_register(&UART_D_REG(uart_mmio_registers_p));
+	bool sw_recv_queue_full = false;
 
-        bool entry_written = rtos_k_byte_circular_buffer_write(
+	/*
+	 * Drain the Rx FIFO as much as possible:
+	 */
+	for ( ; ; ) {
+            uint8_t byte_received =
+		    read_8bit_mmio_register(&UART_D_REG(uart_mmio_registers_p));
+
+	    bool entry_written = rtos_k_byte_circular_buffer_write(
                 &uart_var_p->urt_receive_queue,
                 byte_received,
                 false);
 
-        if (!entry_written) {
-            uart_var_p->urt_received_bytes_dropped ++;
-        }
+            if (!entry_written) {
+                uart_var_p->urt_received_bytes_dropped ++;
+		sw_recv_queue_full = true;
+		break;
+            }
+
+	    uint8_t rx_fifo_length =
+		    read_8bit_mmio_register(&UART_TCFIFO_REG(uart_mmio_registers_p));
+	    if (rx_fifo_length == 0) {
+		break;
+	    }
+
+	    DBG_ASSERT(
+	        rx_fifo_length <= uart_var_p->urt_rx_fifo_size,
+	        rx_fifo_length, uart_var_p->urt_rx_fifo_size);
+	}
+
+	if (sw_recv_queue_full) {
+	    /*
+	     * If the software receive queue is full, disable the
+	     * "Rx FIFO not empty" interrupts:
+	     *
+	     * NOTE: We need to do this as the interrupt is still asserted.
+	     * These interrupts will be re-enabled when there is room
+	     * in the receive queue.
+	     */
+	    reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
+	    reg_value &= ~UART_C2_RIE_MASK;
+            write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
+	}
     }
 }
 

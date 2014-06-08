@@ -94,12 +94,13 @@ zero_fill_uninitialized_data_section(void)
 }
 
 /**
- * Initializes the Memory Protection Unit (MPU) if available.
+ * Initializes the Cortex-M Memory Protection Unit (MPU) if available.
  * It returns true if MPU is present
  */
 bool
 cortex_m_mpu_init(void)
 {
+#if __MPU_PRESENT == 1
     uint32_t reg_value =
         read_32bit_mmio_register((volatile uint32_t *)&MPU->TYPE);
 
@@ -111,6 +112,9 @@ cortex_m_mpu_init(void)
         num_data_regions, 0);
 
     return (num_data_regions != 0x0);
+#else
+    return false;
+#endif
 }
 
 

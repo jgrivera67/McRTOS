@@ -110,9 +110,10 @@ rtos_common_fault_exception_handler(
                     current_execution_context_p->ctx_cpu_saved_registers.cpu_reg_msp;
     }
 
-    capture_unexpected_hard_fault(
+    capture_unexpected_fault(
             (void *)before_exception_stack_p[CPU_REG_PC], 0,
-            before_exception_stack_p[CPU_REG_PSR]);
+            before_exception_stack_p[CPU_REG_PSR],
+	    exception_vector);
 
     if (fdc_info_p->fdc_exception_debugger_on) {
         rtos_run_debugger(current_execution_context_p, before_exception_stack_p);

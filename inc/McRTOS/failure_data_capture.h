@@ -583,6 +583,10 @@ enum unexpected_exception_types
     UET_PREFETCH_ABORT =            0x3
 #elif DEFINED_ARM_CORTEX_M_ARCH()
     UET_HARD_FAULT =                0x1,
+    UET_MEMORY_MANAGEMENT_FAULT =   0x2,
+    UET_BUS_FAULT =		    0x3,
+    UET_USAGE_FAULT =		    0x4,
+    UET_DEBUG_MONITOR_FAULT =	    0x5,
 #endif
 };
 
@@ -760,8 +764,9 @@ void capture_assert_failure(
         uintptr_t arg2);
 
 #if DEFINED_ARM_CORTEX_M_ARCH()
-void capture_unexpected_hard_fault(
-    void *location, uintptr_t arg, uint32_t psr);
+void capture_unexpected_fault(
+    void *location, uintptr_t arg, uint32_t psr,
+    enum cpu_core_internal_interrupt_vectors exception_vector);
 #endif
 
 fdc_error_t capture_fdc_error(

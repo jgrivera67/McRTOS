@@ -940,11 +940,34 @@ void capture_unexpected_prefetch_abort(
 
 #elif DEFINED_ARM_CORTEX_M_ARCH()
 
-void capture_unexpected_hard_fault(
-    void *location, uintptr_t arg, uint32_t psr)
+void capture_unexpected_fault(
+    void *location, uintptr_t arg, uint32_t psr,
+    enum cpu_core_internal_interrupt_vectors exception_vector)
 {
+    enum unexpected_exception_types exception_type;
+
+    switch (exception_vector) {
+    case INT_Hard_Fault:
+	    exception_type = UET_HARD_FAULT;
+	    break;
+    case INT_MemoryManagement:
+	    exception_type = UET_HARD_FAULT;
+	    break;
+    case INT_BusFault:
+	    exception_type = UET_BUS_FAULT;
+	    break;
+    case INT_UsageFault:
+	    exception_type = UET_USAGE_FAULT;
+	    break;
+    case INT_DebugMonitor:
+	    exception_type = UET_DEBUG_MONITOR_FAULT;
+	    break;
+    default:
+	    exception_type = UET_INVALID_EXCEPTION_TYPE;
+    }
+
     capture_unexpected_exception_failure(
-        UET_HARD_FAULT, location, arg, psr);
+        exception_type, location, arg, psr);
 }
 
 #else
@@ -966,7 +989,11 @@ capture_unexpected_exception_failure(
       [UET_PREFETCH_ABORT] =        "Prefetch Abort"
 
 #   elif DEFINED_ARM_CORTEX_M_ARCH()
-      [UET_HARD_FAULT] = "Hard Fault"
+      [UET_HARD_FAULT] = "Hard Fault",
+      [UET_MEMORY_MANAGEMENT_FAULT] = "Memory Management Fault",
+      [UET_BUS_FAULT] = "Bus Fault",
+      [UET_USAGE_FAULT] = "Usage Fault",
+      [UET_DEBUG_MONITOR_FAULT] = "Debug Monitor Fault",
 
 #else
 #   error "CPU architecture not supported"

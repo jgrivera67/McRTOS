@@ -228,7 +228,7 @@ typedef enum IRQn {
 /*!
  * @}
  */ /* end of group Interrupt_vector_numbers */
-
+#endif /* #if 0 */
 
 /* ----------------------------------------------------------------------------
    -- Cortex M4 Core Configuration
@@ -243,6 +243,8 @@ typedef enum IRQn {
 #define __NVIC_PRIO_BITS               4         /**< Number of priority bits implemented in the NVIC */
 #define __Vendor_SysTickConfig         0         /**< Vendor specific implementation of SysTickConfig is defined */
 #define __FPU_PRESENT                  1         /**< Defines if an FPU is present or not */
+
+#if 0 /* McRTOS */
 
 #include "core_cm4.h"                  /* Core Peripheral Access Layer */
 #include "system_MK64F12.h"            /* Device specific configuration file */
@@ -8525,7 +8527,6 @@ typedef struct {
  * @}
  */ /* end of group MCM_Peripheral_Access_Layer */
 
-#if 0 /* McRTOS */
 /* ----------------------------------------------------------------------------
    -- MPU Peripheral Access Layer
    ---------------------------------------------------------------------------- */
@@ -8840,7 +8841,6 @@ typedef struct {
  * @}
  */ /* end of group MPU_Peripheral_Access_Layer */
 
-#endif /*  #if 0 */
 
 /* ----------------------------------------------------------------------------
    -- NV Peripheral Access Layer
