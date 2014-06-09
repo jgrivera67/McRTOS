@@ -282,7 +282,10 @@ rtos_dbg_dump_exception_info(
 
     debug_dump_captured_registers();
 
-    //???debug_dump_micro_trace_buffer();
+#if defined(KL25Z_SOC)
+    /* TODO: Make this generic */
+    debug_dump_micro_trace_buffer();
+#endif
 }
 
 

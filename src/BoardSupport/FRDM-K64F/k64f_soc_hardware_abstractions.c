@@ -1746,7 +1746,7 @@ k64f_uart_rx_tx_interrupt_e_handler(
             }
 
 	    uint8_t rx_fifo_length =
-		    read_8bit_mmio_register(&UART_TCFIFO_REG(uart_mmio_registers_p));
+		    read_8bit_mmio_register(&UART_RCFIFO_REG(uart_mmio_registers_p));
 	    if (rx_fifo_length == 0) {
 		break;
 	    }
