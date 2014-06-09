@@ -15,6 +15,9 @@
 #include "McRTOS_config_parameters.h"
 #include "McRTOS_kernel_services.h"
 
+#pragma GCC diagnostic ignored "-Wunused-local-typedefs"
+#pragma GCC diagnostic ignored "-Wunused-parameter" // ???
+
 /**
  * Crystal frequency in HZ
  */
@@ -74,6 +77,7 @@ struct mpu_device {
 };
 
 struct mpu_device_var {
+    bool initialized;
     uint8_t num_regions;
 };
 
@@ -352,7 +356,10 @@ static const NV_Type nv_cfmconfig __attribute__ ((section(".cfmconfig"))) = {
     .FDPROT = 0xff
 };
 
-static struct mpu_device_var g_mpu_var;
+static struct mpu_device_var g_mpu_var = {
+    .initialized = false,
+    .num_regions = 0,
+};
 
 static const struct mpu_device g_mpu = {
 	 .signature = MPU_DEVICE_SIGNATURE,
@@ -766,18 +773,157 @@ soc_early_init(void)
     write_16bit_mmio_register(&WDOG_STCTRLH, reg_value);
 }
 
+static void
+k64f_set_mpu_region(
+    struct mpu_device_var *mpu_var_p,
+    volatile MPU_Type *mpu_regs_p,
+    cpu_id_t cpu_id,
+    bool privileged,
+    uint8_t region_index,
+    uint32_t start_addr,
+    uint32_t end_addr,
+    uint32_t permissions)
+{
+    struct permissions_bit_field {
+	uint32_t mask;
+	uint32_t shift;
+    };
+
+    static const struct permissions_bit_field privileged_permissions_fields[] = {
+        [0] = {
+	    .mask = MPU_WORD_M0SM_MASK,
+	    .shift = MPU_WORD_M0SM_SHIFT
+	},
+    };
+
+    static const struct permissions_bit_field unprivileged_permissions_fields[] = {
+        [0] = {
+	    .mask = MPU_WORD_M0UM_MASK,
+	    .shift = MPU_WORD_M0UM_SHIFT
+	},
+    };
+
+    C_ASSERT2(permissions_fields_same_size,
+	      ARRAY_SIZE(privileged_permissions_fields) ==
+	      ARRAY_SIZE(unprivileged_permissions_fields));
+
+    uint32_t reg_value;
+
+    FDC_ASSERT(cpu_id < ARRAY_SIZE(privileged_permissions_fields),
+ 	       cpu_id, ARRAY_SIZE(privileged_permissions_fields));
+
+    FDC_ASSERT(region_index < mpu_var_p->num_regions,
+ 	       region_index, mpu_var_p->num_regions);
+
+    write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][0], start_addr);
+    write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][1], end_addr);
+
+    reg_value = read_32bit_mmio_register(&mpu_regs_p->WORD[region_index][2]);
+    if (privileged) {
+        SET_BIT_FIELD(reg_value,
+    		      privileged_permissions_fields[cpu_id].mask,
+		      privileged_permissions_fields[cpu_id].shift,
+		      permissions);
+    } else {
+        SET_BIT_FIELD(reg_value,
+    		      unprivileged_permissions_fields[cpu_id].mask,
+		      unprivileged_permissions_fields[cpu_id].shift,
+		      permissions);
+    }
+
+    write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][2], reg_value);
+    write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][3], MPU_WORD_VLD_MASK);
+}
+
 
 static void
 k64f_mpu_init(void) {
+    C_ASSERT2(soc_flash_base_aligned, SOC_FLASH_BASE % 32 == 0);
+    C_ASSERT2(soc_sram_base_aligned, SOC_SRAM_BASE % 32 == 0);
+    C_ASSERT2(soc_mmio_base1_aligned, SOC_PERIPHERAL_BRIDGE_MIN_ADDR % 32 == 0);
+    C_ASSERT2(soc_mmio_base2_aligned, SOC_PRIVATE_PERIPHERALS_MIN_ADDR % 32 == 0);
+
     static const uint8_t num_mpu_regions_table[] = { 8, 12, 16 };
     uint32_t reg_value;
-    uint8_t nrgd_field;
 
-    reg_value = read_32bit_mmio_register(&MPU_CESR_REG(g_mpu.mmio_regs_p));
-    nrgd_field = GET_BIT_FIELD(reg_value, MPU_CESR_NRGD_MASK, MPU_CESR_NRGD_SHIFT);
+    FDC_ASSERT(
+        g_mpu.signature == MPU_DEVICE_SIGNATURE,
+        g_mpu.signature, 0);
+
+    struct mpu_device_var *mpu_var_p = g_mpu.var_p;
+    FDC_ASSERT(!mpu_var_p->initialized, mpu_var_p, 0);
+
+    volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
+
+    reg_value = read_32bit_mmio_register(&mpu_regs_p->CESR);
+    uint8_t nrgd_field = GET_BIT_FIELD(reg_value, MPU_CESR_NRGD_MASK,
+				       MPU_CESR_NRGD_SHIFT);
     FDC_ASSERT(nrgd_field <= 0x2, nrgd_field, 0);
 
-    g_mpu.var_p->num_regions = num_mpu_regions_table[nrgd_field];
+    mpu_var_p->num_regions = num_mpu_regions_table[nrgd_field];
+
+    /*
+     * Disable MPU to configure it:
+     */
+    reg_value &= ~MPU_CESR_VLD_MASK;
+    write_32bit_mmio_register(&mpu_regs_p->CESR, reg_value);
+
+    for (cpu_id_t cpu_id = 0; cpu_id < SOC_NUM_CPU_CORES; cpu_id ++) {
+	/*
+	 * Define MPU regions used when running in CPU privileged mode:
+	 *
+	 * NOTE: Region 0 is defined by default as the whole address space.
+	 * Only its permissions can be changed.
+	 */
+
+	/* Make region 0 unaccessible: */
+        write_32bit_mmio_register(&mpu_regs_p->RGDAAC[0], 0);
+
+	/* region 1 is code in flash (permissions: r-x): */
+	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, true, 1,
+			    SOC_FLASH_BASE,
+			    SOC_FLASH_BASE + SOC_FLASH_SIZE - 1,
+			    0x1); /* r-x */
+
+	/* region 2 is data in SRAM (permissions: rw-): */
+	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, true, 2,
+			    SOC_SRAM_BASE,
+			    SOC_SRAM_BASE + SOC_SRAM_SIZE - 1,
+			    0x2); /* rw- */
+
+	/* region 3 is MMIO space (permissions: rw-): */
+	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, true, 3,
+			    SOC_PERIPHERAL_BRIDGE_MIN_ADDR,
+			    SOC_PERIPHERAL_BRIDGE_MAX_ADDR,
+			    0x2); /* rw- */
+
+	/* region 4 is MMIO space (permissions: rw-): */
+	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, true, 4,
+			    SOC_PRIVATE_PERIPHERALS_MIN_ADDR,
+			    SOC_PRIVATE_PERIPHERALS_MAX_ADDR,
+			    0x2); /* rw- */
+
+	/*
+	 * Define MPU regions used when running in CPU unprivileged mode:
+	 */
+
+	/* region 5 is code in flash (permissions: r-x): */
+	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, false, 5,
+			    SOC_FLASH_BASE,
+			    SOC_FLASH_BASE + SOC_FLASH_SIZE - 1,
+			    0x5); /* binary 101 =  r-x */
+
+	/* region 6 is data in SRAM (permissions: rw-): */
+	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, false, 6,
+			    SOC_SRAM_BASE,
+			    SOC_SRAM_BASE + SOC_SRAM_SIZE - 1,
+			    0x6); /* binary 110 = rw- */
+    }
+
+    /*
+     * Enable MPU:
+     */
+    write_32bit_mmio_register(&mpu_regs_p->CESR, MPU_CESR_VLD_MASK);
 }
 
 /**

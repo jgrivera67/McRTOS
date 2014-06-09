@@ -951,7 +951,7 @@ void capture_unexpected_fault(
 	    exception_type = UET_HARD_FAULT;
 	    break;
     case INT_MemoryManagement:
-	    exception_type = UET_HARD_FAULT;
+	    exception_type = UET_MEMORY_MANAGEMENT_FAULT;
 	    break;
     case INT_BusFault:
 	    exception_type = UET_BUS_FAULT;

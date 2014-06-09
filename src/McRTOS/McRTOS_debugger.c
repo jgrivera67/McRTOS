@@ -282,7 +282,7 @@ rtos_dbg_dump_exception_info(
 
     debug_dump_captured_registers();
 
-    debug_dump_micro_trace_buffer();
+    //???debug_dump_micro_trace_buffer();
 }
 
 
