@@ -101,7 +101,7 @@ struct rtos_thread_execution_stack
      * Stack overflow buffer, to be initialized to RTOS_STACK_OVERFLOW_BUFFER_SIGNATURE
      */
     rtos_execution_stack_entry_t tes_stack_overflow_buffer
-        [RTOS_THREAD_STACK_OVERFLOW_BUFFER_SIZE_IN_ENTRIES];
+        [RTOS_STACK_OVERFLOW_BUFFER_SIZE_IN_ENTRIES];
 
     /**
      * Stack overflow sentinel, to be initialized to RTOS_STACK_OVERFLOW_MARKER
@@ -117,8 +117,9 @@ struct rtos_thread_execution_stack
      * Stack underflow sentinel, to be initialized to RTOS_STACK_UNDERFLOW_MARKER
      */
     rtos_execution_stack_entry_t tes_stack_underflow_marker;
-}  __attribute__ ((aligned(SOC_CACHE_LINE_SIZE_IN_BYTES)));
+}  __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT)));
 
+C_ASSERT(sizeof(struct rtos_thread_execution_stack) % SOC_MPU_REGION_ALIGNMENT == 0);
 C_ASSERT(sizeof(struct rtos_thread_execution_stack) % SOC_CACHE_LINE_SIZE_IN_BYTES == 0);
 
 /**
@@ -180,7 +181,7 @@ struct rtos_interrupt
      * Stack overflow buffer, to be initialized to RTOS_STACK_OVERFLOW_BUFFER_SIGNATURE
      */
     rtos_execution_stack_entry_t int_stack_overflow_buffer
-        [RTOS_INTERRUPT_STACK_OVERFLOW_BUFFER_SIZE_IN_ENTRIES];
+        [RTOS_STACK_OVERFLOW_BUFFER_SIZE_IN_ENTRIES];
 
     /**
      * Stack overflow sentinel, to be initialized to RTOS_STACK_OVERFLOW_MARKER
@@ -354,10 +355,11 @@ struct rtos_cpu_controller
     struct glist_node cpc_timer_wheel_hash_chains_anchors[RTOS_TIMER_WHEEL_NUM_SPOKES];
 
     /**
-     * Array of execution stacks for system threads
+     * Pointer to the array of execution stacks for system threads
+     * (Execution stacks for application threads can be in DRAM or SRAM,
+     *  depending on how much memory they use)
      */
-    struct rtos_thread_execution_stack cpc_system_threads_execution_stacks
-                                            [RTOS_NUM_SYSTEM_THREADS_PER_CPU];
+    struct rtos_thread_execution_stack *cpc_system_threads_execution_stacks_p;
 
 } __attribute__ ((aligned(SOC_CACHE_LINE_SIZE_IN_BYTES)));
 
@@ -533,14 +535,6 @@ struct McRTOS
      */
     struct rtos_thread rts_app_threads[RTOS_MAX_NUM_APP_THREADS];
 
-#ifndef RTOS_USE_DRAM_FOR_APP_THREAD_STACKS
-    /**
-     * Array of execution stacks for application threads
-     */
-    struct rtos_thread_execution_stack rts_app_threads_execution_stacks
-                                            [RTOS_MAX_NUM_APP_THREADS];
-#endif
-
     /**
      * Array of McRTOS timer objects that can exist in the system
      */
@@ -574,7 +568,9 @@ struct McRTOS
      * Command line buffer used by the McRTOS console and the McRTOS debugger
      */
     char rts_command_line_buffer[RTOS_COMMAND_LINE_BUFFER_SIZE];
-};
+}  __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT)));
+
+C_ASSERT(sizeof(struct McRTOS) % SOC_MPU_REGION_ALIGNMENT == 0);
 
 C_ASSERT(
     sizeof(struct McRTOS) - offsetof(struct McRTOS, rts_app_threads) <=

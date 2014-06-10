@@ -649,6 +649,16 @@ struct rtos_thread
     struct rtos_thread_execution_stack *thr_execution_stack_p;
 
     /**
+     * Pointer to the beginning of the global data accessible from the thread
+     */
+    void *thr_global_data_p;
+
+    /**
+     * Pointer to the end of the global data accessible from the thread
+     */
+    void *thr_global_end_data_p;
+
+    /**
      * Abort status passed in to rtos_thread_abort(), if ever called
      * by the thread
      */
@@ -686,6 +696,12 @@ struct rtos_thread
      */
     rtos_lcd_channels_t thr_lcd_channel;
 #   endif
+
+    /**
+     * Flag that indicates if the thread is privileged (true) or unprivileged
+     * (false)
+     */
+    uint8_t thr_privileged;
 
     /**
      * Thread state history

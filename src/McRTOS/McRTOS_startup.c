@@ -57,6 +57,8 @@ enum system_thread_priorities
                 GLIST_NODE_INITIALIZER(                                 \
                     g_McRTOS.rts_cpu_controllers[_cpu_id].              \
                         cpc_preemption_chain_anchor),                   \
+	    .cpc_system_threads_execution_stacks_p =			\
+		g_rtos_system_threads_execution_stacks[_cpu_id],	\
         }
 
 
@@ -84,6 +86,8 @@ static const struct rtos_thread_creation_params g_rtos_system_threads[] =
         .p_name_p = "McRTOS root thread",
         .p_function_p = rtos_root_thread_f,
         .p_function_arg_p = NULL,
+        .p_global_data_p = NULL,
+        .p_global_end_data_p = NULL,
         .p_priority = RTOS_ROOT_THREAD_PRIORITY,
 #       ifdef LCD_SUPPORTED
         .p_lcd_channel = RTOS_LCD_CHANNEL_NONE,
@@ -96,6 +100,8 @@ static const struct rtos_thread_creation_params g_rtos_system_threads[] =
         .p_name_p = "McRTOS idle thread",
         .p_function_p = rtos_idle_thread_f,
         .p_function_arg_p = NULL,
+        .p_global_data_p = NULL,
+        .p_global_end_data_p = NULL,
         .p_priority = RTOS_IDLE_THREAD_PRIORITY,
 #       ifdef LCD_SUPPORTED
         .p_lcd_channel = RTOS_LCD_CHANNEL_NONE,
@@ -105,6 +111,20 @@ static const struct rtos_thread_creation_params g_rtos_system_threads[] =
 };
 
 C_ASSERT(ARRAY_SIZE(g_rtos_system_threads) <= RTOS_NUM_SYSTEM_THREADS_PER_CPU);
+
+/**
+* Array of execution stacks for system threads for each CPU core
+*/
+struct rtos_thread_execution_stack g_rtos_system_threads_execution_stacks
+				    [SOC_NUM_CPU_CORES][RTOS_NUM_SYSTEM_THREADS_PER_CPU];
+
+#ifndef RTOS_USE_DRAM_FOR_APP_THREAD_STACKS
+/**
+* Array of execution stacks for application threads
+*/
+struct rtos_thread_execution_stack g_rtos_app_threads_execution_stacks
+				    [RTOS_MAX_NUM_APP_THREADS];
+#endif
 
 /**
  * McRTOS global state variables
@@ -154,9 +174,9 @@ static struct McRTOS g_McRTOS =
     .rts_app_threads_execution_stacks_p =
         (struct rtos_thread_execution_stack *)RTOS_APP_THREAD_DRAM_STACKS_BASE_ADDR,
 #else
-    .rts_next_free_app_thread_stack_p = &g_McRTOS.rts_app_threads_execution_stacks[0],
+    .rts_next_free_app_thread_stack_p = &g_rtos_app_threads_execution_stacks[0],
 
-    .rts_app_threads_execution_stacks_p = g_McRTOS.rts_app_threads_execution_stacks,
+    .rts_app_threads_execution_stacks_p = g_rtos_app_threads_execution_stacks,
 #endif
 
     RTOS_CPU_CONTROLLER_INITIALIZER(0),
@@ -361,7 +381,7 @@ rtos_startup(
 
     rtos_k_thread_init(
         &g_rtos_system_threads[RTOS_ROOT_SYSTEM_THREAD],
-        &cpu_controller_p->cpc_system_threads_execution_stacks[RTOS_ROOT_SYSTEM_THREAD],
+        &cpu_controller_p->cpc_system_threads_execution_stacks_p[RTOS_ROOT_SYSTEM_THREAD],
         cpu_id,
         true,
         RTOS_ROOT_SYSTEM_THREAD,
@@ -558,7 +578,7 @@ rtos_root_thread_f(void *arg)
         struct rtos_thread *rtos_thread_p = &cpu_controller_p->cpc_system_threads[i];
         rtos_k_thread_init(
             &g_rtos_system_threads[i],
-            &cpu_controller_p->cpc_system_threads_execution_stacks[i],
+            &cpu_controller_p->cpc_system_threads_execution_stacks_p[i],
             cpu_id,
             true,
             i,

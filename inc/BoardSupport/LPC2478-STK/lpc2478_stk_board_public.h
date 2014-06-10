@@ -5,8 +5,8 @@
  *
  * Copyright (C) 2013 German Rivera
  *
- * @author German Rivera 
- */ 
+ * @author German Rivera
+ */
 #ifndef _LPC2478_STK_BOARD_PUBLIC_H
 #define _LPC2478_STK_BOARD_PUBLIC_H
 
@@ -31,7 +31,7 @@
  */
 #define SOC_NUM_INTERRUPT_PRIORITIES   UINT32_C(16)
 
-/** 
+/**
  * Cache line size. The LPC2478 does not have caches
  */
 #define SOC_CACHE_LINE_SIZE_IN_BYTES  sizeof(uint32_t)
@@ -41,7 +41,7 @@
  */
 #define SOC_FLASH_BASE     UINT32_C(0x00000000)
 #define SOC_FLASH_SIZE     UINT32_C(0x0007E000)          /* 512 KB */
-                                                
+
 /**
  * Static RAM Memory Ranges
  */
@@ -54,7 +54,7 @@
 #define SOC_USB_SRAM_BASE       UINT32_C(0x7FD00000)
 #define SOC_USB_SRAM_SIZE       UINT32_C(0x00004000)     /* 16 KB */
 
-/* 
+/*
  * MMIO Ranges
  */
 #define SOC_FAST_GPIO_MIN_ADDR          UINT32_C(0x3FFFC000)
@@ -106,7 +106,7 @@
           (uintptr_t)(_addr) < BOARD_SDRAM_BASE + BOARD_SDRAM_SIZE))
 
 /**
- * LCD Frame buffer size in bytes (one 4K page) 
+ * LCD Frame buffer size in bytes (one 4K page)
  */
 #define LCD_FRAME_BUFFER_SIZE   (1 * DRAM_PAGE_SIZE)
 
@@ -119,7 +119,7 @@ C_ASSERT(LCD_FRAME_BUFFER_SIZE % sizeof(uint64_t) == 0);
 #define RTOS_APP_THREAD_STACK_DRAM_POOL_SIZE   (UINT32_C(256) * DRAM_PAGE_SIZE)
 
 /**
- * Size in bytes of the DRAM area reserved for Ethernet 
+ * Size in bytes of the DRAM area reserved for Ethernet
  * data fragment buffers (12288 4K pages or 48MB)
  */
 #define ETHERNET_DATA_FRAGMENT_BUFFER_POOL_SIZE (UINT32_C(12288) * DRAM_PAGE_SIZE)
@@ -151,7 +151,7 @@ struct pin_config_info {
 
     /*
      * The following fields is only meaningful if pin_function is PINSEL_PRIMARY
-     */ 
+     */
     uint8_t pin_is_active_high;         /*  false - low, true - high */
     uint16_t reserved2;
 };
@@ -162,7 +162,7 @@ struct pin_config_info {
 struct sdram_map
 {
     /**
-     * LCD frame buffer. It has to be dword aligned. 
+     * LCD frame buffer. It has to be dword aligned.
      */
     uint64_t sdr_lcd_frame_buffer[LCD_FRAME_BUFFER_SIZE / sizeof(uint64_t)];
 

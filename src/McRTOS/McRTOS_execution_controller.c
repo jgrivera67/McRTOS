@@ -286,6 +286,16 @@ void rtos_thread_scheduler(
     chosen_context_p->ctx_last_switched_in_time_stamp = get_cpu_clock_cycles();
 #   endif
 
+    mpu_set_thread_stack_region(SOC_GET_CURRENT_CPU_ID(),
+				chosen_thread_p->thr_privileged,
+				chosen_thread_p->thr_execution_stack_p,
+			        chosen_thread_p->thr_execution_stack_p + 1);
+
+    mpu_set_thread_data_region(SOC_GET_CURRENT_CPU_ID(),
+			       chosen_thread_p->thr_privileged,
+			       chosen_thread_p->thr_global_data_p,
+			       chosen_thread_p->thr_global_end_data_p);
+
     rtos_k_restore_execution_context(chosen_context_p, ctx_switch_type);
 
     /*

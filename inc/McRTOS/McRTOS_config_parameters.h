@@ -53,10 +53,9 @@
 
 /**
  * Stack overflow buffer size (in number of stack entries) for
- * thread stacks
+ * thread and interrupt stacks
  */
-#define RTOS_THREAD_STACK_OVERFLOW_BUFFER_SIZE_IN_ENTRIES \
-        (RTOS_THREAD_STACK_NUM_ENTRIES / 16)
+#define RTOS_STACK_OVERFLOW_BUFFER_SIZE_IN_ENTRIES 6
 
 /**
  * Execution stack size for interrupts (in number of stack entries)
@@ -71,14 +70,8 @@
      */
 #   define RTOS_INTERRUPT_STACK_NUM_ENTRIES \
             (UINT32_C(96) * SOC_NUM_INTERRUPT_PRIORITIES)
-#endif
 
-/**
- * Stack overflow buffer size (in number of stack entries) for
- * interrupt stacks
- */
-#define RTOS_INTERRUPT_STACK_OVERFLOW_BUFFER_SIZE_IN_ENTRIES \
-        (RTOS_INTERRUPT_STACK_NUM_ENTRIES / 16)
+#endif
 
 /**
  * Number of thread priorities supported

@@ -37,6 +37,33 @@ static fdc_error_t led_flashing_thread_f(void *arg);
 static fdc_error_t accelerometer_thread_f(void *arg);
 #endif
 
+struct app_state_vars {
+    /**
+     * Current LED color mask
+     */
+    volatile uint32_t led_color_mask;
+
+    /**
+     * Latest X-axis acceleration reading
+     */
+    volatile int16_t x_acceleration;
+
+    /**
+     * Latest Y-axis acceleration reading
+     */
+    volatile int16_t y_acceleration;
+
+    /**
+     * Latest Z-axis acceleration reading
+     */
+    volatile int16_t z_acceleration;
+} __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT)));
+
+C_ASSERT(sizeof(struct app_state_vars) % SOC_MPU_REGION_ALIGNMENT == 0);
+
+static struct app_state_vars g_app;
+
+
 /**
  * Array of application threads for CPU core 0
  */
@@ -47,6 +74,8 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
 	.p_name_p = "LED flashing thread",
         .p_function_p = led_flashing_thread_f,
         .p_function_arg_p = NULL,
+	.p_global_data_p = &g_app,
+	.p_global_end_data_p = &g_app + 1,
         .p_priority = LED_FLASHING_THREAD_PRIORITY,
         .p_thread_pp = NULL,
     },
@@ -57,6 +86,7 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
         .p_name_p = "accelerometer thread",
         .p_function_p = accelerometer_thread_f,
         .p_function_arg_p = NULL,
+	.p_global_data_p = &g_app,
         .p_priority = ACCELEROMETER_THREAD_PRIORITY,
         .p_thread_pp = NULL,
     },
@@ -104,29 +134,6 @@ static const struct rtos_startup_app_configuration g_rtos_app_config =
     },
 };
 
-struct app_state_vars {
-    /**
-     * Current LED color mask
-     */
-    volatile uint32_t led_color_mask;
-
-    /**
-     * Latest X-axis acceleration reading
-     */
-    volatile int16_t x_acceleration;
-
-    /**
-     * Latest Y-axis acceleration reading
-     */
-    volatile int16_t y_acceleration;
-
-    /**
-     * Latest Z-axis acceleration reading
-     */
-    volatile int16_t z_acceleration;
-};
-
-static struct app_state_vars g_app;
 
 /**
  * Application's main()

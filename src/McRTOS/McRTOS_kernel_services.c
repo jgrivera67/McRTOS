@@ -266,6 +266,8 @@ rtos_k_thread_init(
     rtos_thread_p->thr_signature = RTOS_THREAD_SIGNATURE;
     rtos_thread_p->thr_function_p = params_p->p_function_p;
     rtos_thread_p->thr_function_arg_p = params_p->p_function_arg_p;
+    rtos_thread_p->thr_global_data_p = params_p->p_global_data_p;
+    rtos_thread_p->thr_global_end_data_p = params_p->p_global_end_data_p;
 
 #   ifdef LCD_SUPPORTED
     rtos_thread_p->thr_lcd_channel = params_p->p_lcd_channel;
@@ -276,6 +278,7 @@ rtos_k_thread_init(
     rtos_thread_p->thr_current_priority = thread_prio;
     rtos_thread_p->thr_state = RTOS_THREAD_CREATED;
     rtos_thread_p->thr_time_slice_ticks_left = RTOS_THREAD_TIME_SLICE_IN_TICKS;
+    rtos_thread_p->thr_privileged = thread_is_privileged;
     rtos_thread_p->thr_state_history = 0x0;
     rtos_thread_p->thr_priority_history = thread_prio;
     rtos_thread_p->thr_preempted_by_time_slice_count = 0;
@@ -320,7 +323,7 @@ rtos_k_thread_init(
      */
 
     for (uint32_t i = 0;
-         i < RTOS_THREAD_STACK_OVERFLOW_BUFFER_SIZE_IN_ENTRIES; ++ i)
+         i < RTOS_STACK_OVERFLOW_BUFFER_SIZE_IN_ENTRIES; ++ i)
     {
         thread_stack_p->tes_stack_overflow_buffer[i] =
             RTOS_STACK_OVERFLOW_BUFFER_SIGNATURE;
@@ -1735,7 +1738,7 @@ rtos_k_register_interrupt(
      */
 
     for (uint32_t i = 0;
-         i < RTOS_INTERRUPT_STACK_OVERFLOW_BUFFER_SIZE_IN_ENTRIES; ++ i)
+         i < RTOS_STACK_OVERFLOW_BUFFER_SIZE_IN_ENTRIES; ++ i)
     {
         interrupt_p->int_stack_overflow_buffer[i] =
             RTOS_STACK_OVERFLOW_BUFFER_SIGNATURE;

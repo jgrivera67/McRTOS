@@ -208,6 +208,17 @@ struct rtos_thread_creation_params
     void *p_function_arg_p;
 
     /**
+     * Pointer to block of global variables accessible from the thread
+     */
+    void *p_global_data_p;
+
+    /**
+     * Pointer to the end of the block of global variables accessible from the
+     * thread
+     */
+    void *p_global_end_data_p;
+
+    /**
      * Thread priority
      */
     rtos_thread_prio_t p_priority;
