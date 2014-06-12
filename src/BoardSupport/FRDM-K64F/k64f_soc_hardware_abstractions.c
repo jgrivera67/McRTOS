@@ -67,6 +67,11 @@ C_ASSERT(
 #define UART_RECEIVE_QUEUE_SIZE_IN_BYTES    UINT16_C(16)
 
 /**
+ * MPU region index for the first data region for threads
+ */
+#define FIRST_MPU_DATA_REGION_FOR_THREADS   (RTOS_NUM_GLOBAL_MPU_REGIONS + 1)
+
+/**
  * Const fields of a MPU device
  */
 struct mpu_device {
@@ -778,11 +783,11 @@ k64f_set_mpu_region(
     struct mpu_device_var *mpu_var_p,
     volatile MPU_Type *mpu_regs_p,
     cpu_id_t cpu_id,
-    bool privileged,
     uint8_t region_index,
     void *start_addr,
     void *end_addr,
-    uint32_t permissions)
+    uint32_t privileged_permissions,
+    uint32_t unprivileged_permissions)
 {
     struct permissions_bit_field {
 	uint32_t mask;
@@ -803,7 +808,7 @@ k64f_set_mpu_region(
 	},
     };
 
-    C_ASSERT2(permissions_fields_same_size,
+    C_ASSERT2(assert_permissions_fields_same_size,
 	      ARRAY_SIZE(privileged_permissions_fields) ==
 	      ARRAY_SIZE(unprivileged_permissions_fields));
 
@@ -824,21 +829,15 @@ k64f_set_mpu_region(
     write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][1], (uintptr_t)end_addr);
 
     reg_value = read_32bit_mmio_register(&mpu_regs_p->WORD[region_index][2]);
-    if (privileged) {
-        SET_BIT_FIELD(reg_value,
-    		      privileged_permissions_fields[cpu_id].mask,
-		      privileged_permissions_fields[cpu_id].shift,
-		      permissions);
-    } else {
-        SET_BIT_FIELD(reg_value,
-    		      unprivileged_permissions_fields[cpu_id].mask,
-		      unprivileged_permissions_fields[cpu_id].shift,
-		      permissions);
-	SET_BIT_FIELD(reg_value,
-    		      privileged_permissions_fields[cpu_id].mask,
-		      privileged_permissions_fields[cpu_id].shift,
-		      0x3); /*  same permissions as the unprivileged ones */
-    }
+    SET_BIT_FIELD(reg_value,
+		  privileged_permissions_fields[cpu_id].mask,
+		  privileged_permissions_fields[cpu_id].shift,
+		  privileged_permissions);
+
+    SET_BIT_FIELD(reg_value,
+		  unprivileged_permissions_fields[cpu_id].mask,
+		  unprivileged_permissions_fields[cpu_id].shift,
+		  unprivileged_permissions);
 
     write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][2], reg_value);
     write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][3], MPU_WORD_VLD_MASK);
@@ -847,10 +846,11 @@ k64f_set_mpu_region(
 
 static void
 k64f_mpu_init(void) {
-    C_ASSERT2(soc_flash_base_aligned, SOC_FLASH_BASE % 32 == 0);
-    C_ASSERT2(soc_sram_base_aligned, SOC_SRAM_BASE % 32 == 0);
-    C_ASSERT2(soc_mmio_base1_aligned, SOC_PERIPHERAL_BRIDGE_MIN_ADDR % 32 == 0);
-    C_ASSERT2(soc_mmio_base2_aligned, SOC_PRIVATE_PERIPHERALS_MIN_ADDR % 32 == 0);
+    C_ASSERT2(assert_soc_flash_base_aligned, SOC_FLASH_BASE % 32 == 0);
+    C_ASSERT2(assert_soc_sram_base_aligned, SOC_SRAM_BASE % 32 == 0);
+    C_ASSERT2(assert_soc_mmio_base1_aligned, SOC_PERIPHERAL_BRIDGE_MIN_ADDR % 32 == 0);
+    C_ASSERT2(assert_soc_mmio_base2_aligned, SOC_PRIVATE_PERIPHERALS_MIN_ADDR % 32 == 0);
+    C_ASSERT2(assert_enough_mpu_regions, RTOS_NUM_GLOBAL_MPU_REGIONS == 5);
 
     static const uint8_t num_mpu_regions_table[] = { 8, 12, 16 };
     uint32_t reg_value;
@@ -871,6 +871,9 @@ k64f_mpu_init(void) {
 
     mpu_var_p->num_regions = num_mpu_regions_table[nrgd_field];
 
+    FDC_ASSERT(mpu_var_p->num_regions >= RTOS_NUM_MPU_REGIONS,
+	       mpu_var_p->num_regions, RTOS_NUM_MPU_REGIONS);
+
     /*
      * Disable MPU to configure it:
      */
@@ -879,7 +882,7 @@ k64f_mpu_init(void) {
 
     for (cpu_id_t cpu_id = 0; cpu_id < SOC_NUM_CPU_CORES; cpu_id ++) {
 	/*
-	 * Define MPU regions used when running in CPU privileged mode:
+	 * Define global MPU regions:
 	 *
 	 * NOTE: Region 0 is defined by default as the whole address space.
 	 * Only its permissions can be changed.
@@ -888,55 +891,41 @@ k64f_mpu_init(void) {
 	/* Make region 0 unaccessible: */
         write_32bit_mmio_register(&mpu_regs_p->RGDAAC[0], 0);
 
-	/* region 1 is code in flash (permissions: r-x): */
-	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, true, 1,
+	/* region 1 is code in flash: */
+	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, 1,
 			    (void *)SOC_FLASH_BASE,
 			    (void *)(SOC_FLASH_BASE + SOC_FLASH_SIZE - 1),
-			    0x1); /* r-x */
+			    0x1,  /* privileged r-x */
+			    0x5); /* unprivileged r-x */
 
-	/* region 2 is McRTOS global data in SRAM (permissions: rw-): */
-	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, true, 2,
+
+	/* region 2 is McRTOS global data in SRAM: */
+	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, 2,
 			    g_McRTOS_p,
 			    g_McRTOS_p + 1,
-			    0x2); /* rw- */
+			    0x2,  /* privileged rw- */
+			    0x0); /* unprivileged --- */
 
-	/* region 3 is MMIO space (permissions: rw-): */
-	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, true, 3,
+	/* region 3 is MMIO space: */
+	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, 3,
 			    (void *)SOC_PERIPHERAL_BRIDGE_MIN_ADDR,
 			    (void *)SOC_PERIPHERAL_BRIDGE_MAX_ADDR,
-			    0x2); /* rw- */
+			    0x2,  /* privileged rw- */
+			    0x0); /* unprivileged --- */
 
-	/* region 4 is MMIO space (permissions: rw-): */
-	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, true, 4,
+	/* region 4 is MMIO space: */
+	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, 4,
 			    (void *)SOC_PRIVATE_PERIPHERALS_MIN_ADDR,
 			    (void *)SOC_PRIVATE_PERIPHERALS_MAX_ADDR,
-			    0x2); /* rw- */
+			    0x2,  /* privileged rw- */
+			    0x0); /* unprivileged --- */
 
-	/* region 5 is shared stack for interrupts and exceptions in SRAM (permissions: rw-): */
-	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, true, 5,
+	/* region 5 is shared stack for interrupts and exceptions in SRAM: */
+	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, 5,
 			    &g_cortex_m_exception_stack,
 			    &g_cortex_m_exception_stack + 1,
-			    0x2); /* rw- */
-
-	/*
-	 * Define MPU regions used when running in CPU unprivileged mode:
-	 *
-	 * TODO: Restrict executable code tprevent executing mcRTOS code
-	 * from unprivileged mode
-	 */
-
-	/* region 6 is code in flash (permissions: r-x): */
-	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, false, 6,
-			    (void *)SOC_FLASH_BASE,
-			    (void *)(SOC_FLASH_BASE + SOC_FLASH_SIZE - 1),
-			    0x5); /* binary 101 =  r-x */
-
-	/*
-	 * NOTE:  The following regions are reserved arte set at thread context
-	 * switch time:
-	 * - region 7 is the stack of the current thread
-	 * - region 8 is the private global data for the current thread
-	 */
+			    0x2,  /* privileged rw- */
+			    0x0); /* unprivileged --- */
     }
 
     /*
@@ -947,15 +936,15 @@ k64f_mpu_init(void) {
 }
 
 
-static void
+static inline void
 mpu_set_rw_region(
     cpu_id_t cpu_id,
     bool privileged,
     uint8_t region_index,
-    void *start_addr,
-    void *end_addr)
+    struct mpu_region_range *region)
 {
-    uint32_t permissions;
+    uint32_t privileged_permissions;
+    uint32_t unprivileged_permissions;
 
     DBG_ASSERT(
         g_mpu.signature == MPU_DEVICE_SIGNATURE,
@@ -967,14 +956,17 @@ mpu_set_rw_region(
     volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
 
     if (privileged) {
-	permissions = 0x2; /* supervisor permissions: binary: 10 = rw- */
+	privileged_permissions = 0x2;	/* rw- */
+	unprivileged_permissions = 0x0; /* --- */
     } else {
-	permissions = 0x6; /* user permissions: binary 110 =  rw- */
+	privileged_permissions = 0x2;	/* rw- */
+	unprivileged_permissions = 0x6; /* rw- */
     }
 
-    if (start_addr != NULL) {
-	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, privileged,
-			    region_index, start_addr, end_addr, permissions);
+    if (region->start_addr != NULL) {
+	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, region_index,
+			    region->start_addr, region->end_addr,
+			    privileged_permissions, unprivileged_permissions);
     } else {
 	/*
 	 * Set region as invalid
@@ -984,33 +976,25 @@ mpu_set_rw_region(
     }
 }
 
-/*
- * This function is to be invoked as part of a thread context switch
- */
-void
-mpu_set_thread_stack_region(
-    cpu_id_t cpu_id,
-    bool privileged,
-    void *start_addr,
-    void *end_addr)
-{
-    /* region 7 is the stack of the current thread */
-    mpu_set_rw_region(cpu_id, privileged, 7, start_addr, end_addr);
-}
-
 
 /*
  * This function is to be invoked as part of a thread context switch
  */
 void
-mpu_set_thread_data_region(
+mpu_set_thread_rw_regions(
     cpu_id_t cpu_id,
     bool privileged,
-    void *start_addr,
-    void *end_addr)
+    struct mpu_region_range regions[])
 {
-    /* region 8 is the global data accessible from the current thread */
-    mpu_set_rw_region(cpu_id, privileged, 8, start_addr, end_addr);
+    C_ASSERT2(assert_num_data_regions, RTOS_NUM_THREAD_MPU_DATA_REGIONS == 3);
+
+    /*
+     * Set all the r/w regions for the current thread, including the stack region:
+     */
+    mpu_set_rw_region(cpu_id, privileged, RTOS_NUM_GLOBAL_MPU_REGIONS + 1, &regions[0]);
+    mpu_set_rw_region(cpu_id, privileged, RTOS_NUM_GLOBAL_MPU_REGIONS + 2, &regions[1]);
+    mpu_set_rw_region(cpu_id, privileged, RTOS_NUM_GLOBAL_MPU_REGIONS + 3, &regions[2]);
+    mpu_set_rw_region(cpu_id, privileged, RTOS_NUM_GLOBAL_MPU_REGIONS + 4, &regions[3]);
 }
 
 

@@ -649,14 +649,11 @@ struct rtos_thread
     struct rtos_thread_execution_stack *thr_execution_stack_p;
 
     /**
-     * Pointer to the beginning of the global data accessible from the thread
+     * MPU r/w regions accessible from the thread, including one region
+     * for the thread's stack
      */
-    void *thr_global_data_p;
-
-    /**
-     * Pointer to the end of the global data accessible from the thread
-     */
-    void *thr_global_end_data_p;
+    struct mpu_region_range
+	    thr_mpu_rw_regions[RTOS_NUM_THREAD_MPU_DATA_REGIONS + 1];
 
     /**
      * Abort status passed in to rtos_thread_abort(), if ever called

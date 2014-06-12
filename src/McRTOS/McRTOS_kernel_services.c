@@ -266,8 +266,14 @@ rtos_k_thread_init(
     rtos_thread_p->thr_signature = RTOS_THREAD_SIGNATURE;
     rtos_thread_p->thr_function_p = params_p->p_function_p;
     rtos_thread_p->thr_function_arg_p = params_p->p_function_arg_p;
-    rtos_thread_p->thr_global_data_p = params_p->p_global_data_p;
-    rtos_thread_p->thr_global_end_data_p = params_p->p_global_end_data_p;
+    for (uint8_t i = 0; i < RTOS_NUM_THREAD_MPU_DATA_REGIONS; ++i) {
+	rtos_thread_p->thr_mpu_rw_regions[i] = params_p->p_mpu_data_regions[i];
+    }
+
+    rtos_thread_p->thr_mpu_rw_regions[RTOS_NUM_THREAD_MPU_DATA_REGIONS].start_addr =
+	rtos_thread_p->thr_execution_stack_p;
+    rtos_thread_p->thr_mpu_rw_regions[RTOS_NUM_THREAD_MPU_DATA_REGIONS].end_addr =
+	rtos_thread_p->thr_execution_stack_p + 1;
 
 #   ifdef LCD_SUPPORTED
     rtos_thread_p->thr_lcd_channel = params_p->p_lcd_channel;

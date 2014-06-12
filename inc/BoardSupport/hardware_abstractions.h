@@ -247,17 +247,15 @@ bool software_reset_happened(void);
 _NEVER_RETURN_
 void soc_reset(void);
 
-void mpu_set_thread_stack_region(
-    cpu_id_t cpu_id,
-    bool privileged,
-    void *start_addr,
-    void *end_addr);
+struct mpu_region_range {
+    void *start_addr;
+    void *end_addr;
+};
 
-void mpu_set_thread_data_region(
+void mpu_set_thread_rw_regions(
     cpu_id_t cpu_id,
     bool privileged,
-    void *start_addr,
-    void *end_addr);
+    struct mpu_region_range regions[]);
 
 void install_isr(
     interrupt_channel_t channel,

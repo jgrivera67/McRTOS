@@ -86,13 +86,17 @@ static const struct rtos_thread_creation_params g_rtos_system_threads[] =
         .p_name_p = "McRTOS root thread",
         .p_function_p = rtos_root_thread_f,
         .p_function_arg_p = NULL,
-        .p_global_data_p = NULL,
-        .p_global_end_data_p = NULL,
         .p_priority = RTOS_ROOT_THREAD_PRIORITY,
 #       ifdef LCD_SUPPORTED
         .p_lcd_channel = RTOS_LCD_CHANNEL_NONE,
 #       endif
         .p_thread_pp = NULL,
+	.p_mpu_data_regions =
+	{
+	    RTOS_DEFINE_MPU_DATA_REGION(0, NULL, NULL),
+	    RTOS_DEFINE_MPU_DATA_REGION(1, NULL, NULL),
+	    RTOS_DEFINE_MPU_DATA_REGION(2, NULL, NULL),
+	},
     },
 
     [RTOS_IDLE_SYSTEM_THREAD] =
@@ -100,13 +104,17 @@ static const struct rtos_thread_creation_params g_rtos_system_threads[] =
         .p_name_p = "McRTOS idle thread",
         .p_function_p = rtos_idle_thread_f,
         .p_function_arg_p = NULL,
-        .p_global_data_p = NULL,
-        .p_global_end_data_p = NULL,
         .p_priority = RTOS_IDLE_THREAD_PRIORITY,
 #       ifdef LCD_SUPPORTED
         .p_lcd_channel = RTOS_LCD_CHANNEL_NONE,
 #       endif
         .p_thread_pp = NULL,
+	.p_mpu_data_regions =
+	{
+	    RTOS_DEFINE_MPU_DATA_REGION(0, NULL, NULL),
+	    RTOS_DEFINE_MPU_DATA_REGION(1, NULL, NULL),
+	    RTOS_DEFINE_MPU_DATA_REGION(2, NULL, NULL),
+	},
     },
 };
 
