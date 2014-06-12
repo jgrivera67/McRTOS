@@ -1808,6 +1808,15 @@ k64f_uart_rx_tx_interrupt_e_handler(
      * "Rx FIFO not empty" interrupt:
      */
     if (s1_reg_value & UART_S1_RDRF_MASK) {
+#if 0 //???
+	/*
+	 * Disable UART's receiver:
+	 */
+	reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
+	reg_value &= ~UART_C2_RE_MASK;
+	write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
+#endif
+
         uint_fast8_t rx_fifo_length =
 		    read_8bit_mmio_register(&UART_RCFIFO_REG(uart_mmio_registers_p));
 
@@ -1839,6 +1848,20 @@ k64f_uart_rx_tx_interrupt_e_handler(
 	write_8bit_mmio_register(
 	    &UART_CFIFO_REG(uart_mmio_registers_p),
 	    UART_CFIFO_RXFLUSH_MASK);
+
+	rx_fifo_length =
+	    read_8bit_mmio_register(&UART_RCFIFO_REG(uart_mmio_registers_p));
+
+	DBG_ASSERT(rx_fifo_length == 0, 0, 0);
+
+#if 0 //???
+	/*
+	 * Enable UART's receiver:
+	 */
+	reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
+	reg_value |= UART_C2_RE_MASK;
+	write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
+#endif
     }
 }
 
