@@ -757,11 +757,12 @@ soc_early_init(void)
     /*
      * Disable the Watchdog because it will cause reset unless we have
      * refresh logic in place for the watchdog
+     *
+     * NOTE: First, we need to unlock the Watchdog, and to do so, two
+     * writes must be done on the 'WDOG->UNLOCK' register without using
+     * I/O accessors, due to strict timing requirements.
      */
-    /* WDOG->UNLOCK: WDOGUNLOCK=0xC520 */
     WDOG->UNLOCK = WDOG_UNLOCK_WDOGUNLOCK(0xC520); /* Key 1 */
-
-    /* WDOG->UNLOCK: WDOGUNLOCK=0xD928 */
     WDOG->UNLOCK = WDOG_UNLOCK_WDOGUNLOCK(0xD928); /* Key 2 */
 
     /*
@@ -850,7 +851,9 @@ k64f_mpu_init(void) {
     C_ASSERT2(assert_soc_sram_base_aligned, SOC_SRAM_BASE % 32 == 0);
     C_ASSERT2(assert_soc_mmio_base1_aligned, SOC_PERIPHERAL_BRIDGE_MIN_ADDR % 32 == 0);
     C_ASSERT2(assert_soc_mmio_base2_aligned, SOC_PRIVATE_PERIPHERALS_MIN_ADDR % 32 == 0);
-    C_ASSERT2(assert_enough_mpu_regions, RTOS_NUM_GLOBAL_MPU_REGIONS == 5);
+    C_ASSERT2(assert_enough_mpu_regions, RTOS_NUM_GLOBAL_MPU_REGIONS == 6);
+    extern uint32_t __flash_text_start[];
+    extern uint32_t __flash_text_end[];
 
     static const uint8_t num_mpu_regions_table[] = { 8, 12, 16 };
     uint32_t reg_value;
@@ -891,37 +894,50 @@ k64f_mpu_init(void) {
 	/* Make region 0 unaccessible: */
         write_32bit_mmio_register(&mpu_regs_p->RGDAAC[0], 0);
 
-	/* region 1 is code in flash: */
+	/*
+	 * region 1 is interrupt vector table in flash:
+	 *
+	 * NOTE: privileged permissions should be r--, but there is no
+	 * way to encode that, without also having unprivileged r--
+	 */
 	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, 1,
-			    (void *)SOC_FLASH_BASE,
-			    (void *)(SOC_FLASH_BASE + SOC_FLASH_SIZE - 1),
+			    (void *)g_interrupt_vector_table,
+			    (void *)(g_interrupt_vector_table +
+				     ARRAY_SIZE(g_interrupt_vector_table) - 1),
+			    0x1,  /* privileged r-x */
+			    0x0); /* unprivileged --- */
+
+	/* region 2 is code in flash: */
+	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, 2,
+			    (void *)__flash_text_start,
+			    (void *)__flash_text_end,
 			    0x1,  /* privileged r-x */
 			    0x5); /* unprivileged r-x */
 
 
-	/* region 2 is McRTOS global data in SRAM: */
-	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, 2,
+	/* region 3 is McRTOS global data in SRAM: */
+	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, 3,
 			    g_McRTOS_p,
 			    g_McRTOS_p + 1,
 			    0x2,  /* privileged rw- */
 			    0x0); /* unprivileged --- */
 
-	/* region 3 is MMIO space: */
-	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, 3,
+	/* region 4 is MMIO space: */
+	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, 4,
 			    (void *)SOC_PERIPHERAL_BRIDGE_MIN_ADDR,
 			    (void *)SOC_PERIPHERAL_BRIDGE_MAX_ADDR,
 			    0x2,  /* privileged rw- */
 			    0x0); /* unprivileged --- */
 
-	/* region 4 is MMIO space: */
-	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, 4,
+	/* region 5 is MMIO space: */
+	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, 5,
 			    (void *)SOC_PRIVATE_PERIPHERALS_MIN_ADDR,
 			    (void *)SOC_PRIVATE_PERIPHERALS_MAX_ADDR,
 			    0x2,  /* privileged rw- */
 			    0x0); /* unprivileged --- */
 
-	/* region 5 is shared stack for interrupts and exceptions in SRAM: */
-	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, 5,
+	/* region 6 is shared stack for interrupts and exceptions in SRAM: */
+	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, 6,
 			    &g_cortex_m_exception_stack,
 			    &g_cortex_m_exception_stack + 1,
 			    0x2,  /* privileged rw- */
@@ -1714,7 +1730,7 @@ k64f_uart_rx_tx_interrupt_e_handler(
         uart_device_p->urt_signature, uart_device_p);
 
     uint32_t reg_value;
-    struct uart_device_var *const uart_var_p = uart_device_p->urt_var_p;
+    struct uart_device_var *const restrict uart_var_p = uart_device_p->urt_var_p;
     UART_MemMapPtr uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
 
     DBG_ASSERT(
@@ -1737,7 +1753,7 @@ k64f_uart_rx_tx_interrupt_e_handler(
         s1_reg_value, uart_device_p);
 
     /*
-     * "Transmit data register empty" interrupt:
+     * "Tx FIFO empty" interrupt:
      */
     if (s1_reg_value & UART_S1_TDRE_MASK) {
         /*
@@ -1755,7 +1771,12 @@ k64f_uart_rx_tx_interrupt_e_handler(
 	/*
 	 * Fill the Tx FIFO as much as possible:
 	 */
-	for ( ; ; ) {
+	uint_fast8_t tx_fifo_length =
+		    read_8bit_mmio_register(&UART_TCFIFO_REG(uart_mmio_registers_p));
+
+	DBG_ASSERT(tx_fifo_length == 0, tx_fifo_length, 0);
+
+	for (uint_fast8_t i = 0; i < uart_var_p->urt_tx_fifo_size; ++i) {
             uint8_t byte_to_transmit;
             bool entry_read = rtos_k_byte_circular_buffer_read(
                                 &uart_var_p->urt_transmit_queue,
@@ -1769,16 +1790,6 @@ k64f_uart_rx_tx_interrupt_e_handler(
 
 	    write_8bit_mmio_register(&UART_D_REG(uart_mmio_registers_p),
 				     byte_to_transmit);
-
-	    uint8_t tx_fifo_length =
-		    read_8bit_mmio_register(&UART_TCFIFO_REG(uart_mmio_registers_p));
-	    if (tx_fifo_length == uart_var_p->urt_tx_fifo_size) {
-		break;
-	    }
-
-	    DBG_ASSERT(
-	        tx_fifo_length < uart_var_p->urt_tx_fifo_size,
-	        tx_fifo_length, uart_var_p->urt_tx_fifo_size);
         }
 
 	rtos_k_restore_cpu_interrupts(cpu_status_register);
@@ -1794,15 +1805,20 @@ k64f_uart_rx_tx_interrupt_e_handler(
     }
 
     /*
-     * "Receive data register full" interrupt:
+     * "Rx FIFO not empty" interrupt:
      */
     if (s1_reg_value & UART_S1_RDRF_MASK) {
-	bool sw_recv_queue_full = false;
+        uint_fast8_t rx_fifo_length =
+		    read_8bit_mmio_register(&UART_RCFIFO_REG(uart_mmio_registers_p));
+
+	DBG_ASSERT(
+	        rx_fifo_length > 0 && rx_fifo_length <= uart_var_p->urt_rx_fifo_size,
+	        rx_fifo_length, uart_var_p->urt_rx_fifo_size);
 
 	/*
 	 * Drain the Rx FIFO as much as possible:
 	 */
-	for ( ; ; ) {
+	for (uint_fast8_t i = 0; i < rx_fifo_length; i++) {
             uint8_t byte_received =
 		    read_8bit_mmio_register(&UART_D_REG(uart_mmio_registers_p));
 
@@ -1812,35 +1828,17 @@ k64f_uart_rx_tx_interrupt_e_handler(
                 false);
 
             if (!entry_written) {
-                uart_var_p->urt_received_bytes_dropped ++;
-		sw_recv_queue_full = true;
+                uart_var_p->urt_received_bytes_dropped += (rx_fifo_length - i);
 		break;
             }
-
-	    uint8_t rx_fifo_length =
-		    read_8bit_mmio_register(&UART_RCFIFO_REG(uart_mmio_registers_p));
-	    if (rx_fifo_length == 0) {
-		break;
-	    }
-
-	    DBG_ASSERT(
-	        rx_fifo_length <= uart_var_p->urt_rx_fifo_size,
-	        rx_fifo_length, uart_var_p->urt_rx_fifo_size);
 	}
 
-	if (sw_recv_queue_full) {
-	    /*
-	     * If the software receive queue is full, disable the
-	     * "Rx FIFO not empty" interrupts:
-	     *
-	     * NOTE: We need to do this as the interrupt is still asserted.
-	     * These interrupts will be re-enabled when there is room
-	     * in the receive queue.
-	     */
-	    reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
-	    reg_value &= ~UART_C2_RIE_MASK;
-            write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
-	}
+	/*
+	 * Flush Rx FIFO, to reset FIFO pointers:
+	 */
+	write_8bit_mmio_register(
+	    &UART_CFIFO_REG(uart_mmio_registers_p),
+	    UART_CFIFO_RXFLUSH_MASK);
     }
 }
 

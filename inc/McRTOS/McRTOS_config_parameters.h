@@ -164,7 +164,7 @@ C_ASSERT(RTOS_MAX_NUM_INTERRUPTS < SOC_NUM_INTERRUPT_CHANNELS);
 /**
  * Number of global MPU regions
  */
-#define RTOS_NUM_GLOBAL_MPU_REGIONS UINT8_C(5)
+#define RTOS_NUM_GLOBAL_MPU_REGIONS UINT8_C(6)
 
 /**
  * Number of MPU data regions (r/w) used by the current
