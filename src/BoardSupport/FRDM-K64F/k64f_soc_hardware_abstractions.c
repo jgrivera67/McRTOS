@@ -69,7 +69,7 @@ C_ASSERT(
 /**
  * MPU region index for the first data region for threads
  */
-#define FIRST_MPU_DATA_REGION_FOR_THREADS   (RTOS_NUM_GLOBAL_MPU_REGIONS + 1)
+#define FIRST_MPU_THREAD_RW_REGION   (RTOS_NUM_GLOBAL_MPU_REGIONS + 1)
 
 /**
  * Const fields of a MPU device
@@ -815,13 +815,13 @@ k64f_set_mpu_region(
 
     uint32_t reg_value;
 
-    FDC_ASSERT(cpu_id < ARRAY_SIZE(privileged_permissions_fields),
+    DBG_ASSERT(cpu_id < ARRAY_SIZE(privileged_permissions_fields),
  	       cpu_id, ARRAY_SIZE(privileged_permissions_fields));
 
-    FDC_ASSERT(region_index < mpu_var_p->num_regions,
+    DBG_ASSERT(region_index < mpu_var_p->num_regions,
  	       region_index, mpu_var_p->num_regions);
 
-    FDC_ASSERT(start_addr < end_addr &&
+    DBG_ASSERT(start_addr < end_addr &&
 	       (uintptr_t)start_addr % SOC_MPU_REGION_ALIGNMENT == 0 &&
 	       (uintptr_t)end_addr % SOC_MPU_REGION_ALIGNMENT == 0,
 	       start_addr, end_addr);
@@ -874,8 +874,8 @@ k64f_mpu_init(void) {
 
     mpu_var_p->num_regions = num_mpu_regions_table[nrgd_field];
 
-    FDC_ASSERT(mpu_var_p->num_regions >= RTOS_NUM_MPU_REGIONS,
-	       mpu_var_p->num_regions, RTOS_NUM_MPU_REGIONS);
+    FDC_ASSERT(mpu_var_p->num_regions >= RTOS_MAX_MPU_REGIONS,
+	       mpu_var_p->num_regions, RTOS_MAX_MPU_REGIONS);
 
     /*
      * Disable MPU to configure it:
@@ -952,16 +952,19 @@ k64f_mpu_init(void) {
 }
 
 
-static inline void
-mpu_set_rw_region(
+/*
+ *
+ * Set all the r/w regions for the current thread, including the stack region.
+ *
+ * NOTE: This function is to be invoked as part of a thread context switch
+ */
+void
+mpu_set_thread_rw_regions(
     cpu_id_t cpu_id,
     bool privileged,
-    uint8_t region_index,
-    struct mpu_region_range *region)
+    struct mpu_region_range regions[],
+    uint8_t num_mpu_rw_regions)
 {
-    uint32_t privileged_permissions;
-    uint32_t unprivileged_permissions;
-
     DBG_ASSERT(
         g_mpu.signature == MPU_DEVICE_SIGNATURE,
         g_mpu.signature, 0);
@@ -971,46 +974,106 @@ mpu_set_rw_region(
 
     volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
 
+    DBG_ASSERT(num_mpu_rw_regions <= RTOS_MAX_MPU_THREAD_RW_REGIONS,
+	num_mpu_rw_regions, RTOS_MAX_MPU_THREAD_RW_REGIONS);
+
+    uint32_t privileged_permissions;
+    uint32_t unprivileged_permissions;
+
     if (privileged) {
-	privileged_permissions = 0x2;	/* rw- */
+	privileged_permissions = 0x2;   /* rw- */
 	unprivileged_permissions = 0x0; /* --- */
     } else {
-	privileged_permissions = 0x2;	/* rw- */
 	unprivileged_permissions = 0x6; /* rw- */
+	privileged_permissions = 0x2;   /* rw- */
     }
 
-    if (region->start_addr != NULL) {
+    uint_fast8_t region_index = FIRST_MPU_THREAD_RW_REGION;
+
+    for (uint_fast8_t i = 0; i < num_mpu_rw_regions; i++) {
+	DBG_ASSERT(regions[i].start_addr != NULL, i, 0);
 	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, region_index,
-			    region->start_addr, region->end_addr,
+			    regions[i].start_addr, regions[i].end_addr,
 			    privileged_permissions, unprivileged_permissions);
-    } else {
-	/*
-	 * Set region as invalid
-	 */
+
+	region_index ++;
+    }
+
+    /*
+     * Set remaining regions as invalid
+     */
+    for ( ; region_index < RTOS_MAX_MPU_THREAD_RW_REGIONS; region_index ++) {
 	write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][3],
 				  ~MPU_WORD_VLD_MASK);
     }
 }
 
 
-/*
- * This function is to be invoked as part of a thread context switch
- */
 void
-mpu_set_thread_rw_regions(
+mpu_set_rw_region(
     cpu_id_t cpu_id,
     bool privileged,
-    struct mpu_region_range regions[])
+    uint8_t thread_rw_region_index,
+    void *start_addr,
+    void *end_addr)
 {
-    C_ASSERT2(assert_num_data_regions, RTOS_NUM_THREAD_MPU_DATA_REGIONS == 3);
+    uint32_t privileged_permissions;
+    uint32_t unprivileged_permissions;
+
+    FDC_ASSERT(
+        g_mpu.signature == MPU_DEVICE_SIGNATURE,
+        g_mpu.signature, 0);
+
+    struct mpu_device_var *mpu_var_p = g_mpu.var_p;
+    FDC_ASSERT(mpu_var_p->initialized, mpu_var_p, 0);
+
+    volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
+
+    FDC_ASSERT(start_addr != NULL, start_addr, end_addr);
+    FDC_ASSERT(start_addr <= end_addr, start_addr, end_addr);
+    FDC_ASSERT(thread_rw_region_index < RTOS_MAX_MPU_THREAD_RW_REGIONS,
+	       thread_rw_region_index, RTOS_MAX_MPU_THREAD_RW_REGIONS);
+
+    mpu_region_index_t region_index = FIRST_MPU_THREAD_RW_REGION +
+				      thread_rw_region_index;
+
+    if (privileged) {
+	privileged_permissions = 0x2;	/* rw- */
+	unprivileged_permissions = 0x0; /* --- */
+    } else {
+	unprivileged_permissions = 0x6; /* rw- */
+	privileged_permissions = 0x2;	/* rw- */
+    }
+
+    k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, region_index,
+			start_addr, end_addr,
+			privileged_permissions, unprivileged_permissions);
+}
+
+
+void
+mpu_unset_rw_region(mpu_thread_rw_region_index_t thread_rw_region_index)
+{
+    FDC_ASSERT(
+        g_mpu.signature == MPU_DEVICE_SIGNATURE,
+        g_mpu.signature, 0);
+
+    struct mpu_device_var *mpu_var_p = g_mpu.var_p;
+    FDC_ASSERT(mpu_var_p->initialized, mpu_var_p, 0);
+
+    volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
+
+    mpu_region_index_t region_index = FIRST_MPU_THREAD_RW_REGION +
+				      thread_rw_region_index;
+
+    FDC_ASSERT(region_index < RTOS_MAX_MPU_THREAD_RW_REGIONS,
+	       region_index, RTOS_MAX_MPU_THREAD_RW_REGIONS);
 
     /*
-     * Set all the r/w regions for the current thread, including the stack region:
+     * Set region as invalid
      */
-    mpu_set_rw_region(cpu_id, privileged, RTOS_NUM_GLOBAL_MPU_REGIONS + 1, &regions[0]);
-    mpu_set_rw_region(cpu_id, privileged, RTOS_NUM_GLOBAL_MPU_REGIONS + 2, &regions[1]);
-    mpu_set_rw_region(cpu_id, privileged, RTOS_NUM_GLOBAL_MPU_REGIONS + 3, &regions[2]);
-    mpu_set_rw_region(cpu_id, privileged, RTOS_NUM_GLOBAL_MPU_REGIONS + 4, &regions[3]);
+    write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][3],
+			      ~MPU_WORD_VLD_MASK);
 }
 
 
@@ -1808,6 +1871,8 @@ k64f_uart_rx_tx_interrupt_e_handler(
      * "Rx FIFO not empty" interrupt:
      */
     if (s1_reg_value & UART_S1_RDRF_MASK) {
+	uint_fast8_t i;
+
 #if 0 //???
 	/*
 	 * Disable UART's receiver:
@@ -1819,7 +1884,6 @@ k64f_uart_rx_tx_interrupt_e_handler(
 
         uint_fast8_t rx_fifo_length =
 		    read_8bit_mmio_register(&UART_RCFIFO_REG(uart_mmio_registers_p));
-
 	DBG_ASSERT(
 	        rx_fifo_length > 0 && rx_fifo_length <= uart_var_p->urt_rx_fifo_size,
 	        rx_fifo_length, uart_var_p->urt_rx_fifo_size);
@@ -1827,32 +1891,33 @@ k64f_uart_rx_tx_interrupt_e_handler(
 	/*
 	 * Drain the Rx FIFO as much as possible:
 	 */
-	for (uint_fast8_t i = 0; i < rx_fifo_length; i++) {
+	for (i = 0; i < rx_fifo_length; i++) {
             uint8_t byte_received =
 		    read_8bit_mmio_register(&UART_D_REG(uart_mmio_registers_p));
 
 	    bool entry_written = rtos_k_byte_circular_buffer_write(
-                &uart_var_p->urt_receive_queue,
-                byte_received,
-                false);
+					&uart_var_p->urt_receive_queue,
+					byte_received,
+					false);
 
             if (!entry_written) {
-                uart_var_p->urt_received_bytes_dropped += (rx_fifo_length - i);
 		break;
             }
 	}
 
-	/*
-	 * Flush Rx FIFO, to reset FIFO pointers:
-	 */
-	write_8bit_mmio_register(
-	    &UART_CFIFO_REG(uart_mmio_registers_p),
-	    UART_CFIFO_RXFLUSH_MASK);
+	if (i == rx_fifo_length) {
+	    /*
+	     * Flush Rx FIFO, to reset FIFO pointers:
+	     */
+	    write_8bit_mmio_register(
+		&UART_CFIFO_REG(uart_mmio_registers_p),
+		UART_CFIFO_RXFLUSH_MASK);
 
-	rx_fifo_length =
-	    read_8bit_mmio_register(&UART_RCFIFO_REG(uart_mmio_registers_p));
+	    rx_fifo_length =
+		read_8bit_mmio_register(&UART_RCFIFO_REG(uart_mmio_registers_p));
 
-	DBG_ASSERT(rx_fifo_length == 0, 0, 0);
+	    DBG_ASSERT(rx_fifo_length == 0, 0, 0);
+	}
 
 #if 0 //???
 	/*

@@ -112,6 +112,10 @@ const void *const g_rtos_system_call_dispatch_table[] =
         RTOS_THREAD_YIELD_SYSTEM_CALL, rtos_k_thread_yield),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
         RTOS_CALLER_IS_THREAD_SYSTEM_CALL, rtos_k_caller_is_thread),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_MPU_RW_REGION_PUSH_SYSTEM_CALL, rtos_k_mpu_rw_region_push),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_MPU_RW_REGION_POP_SYSTEM_CALL, rtos_k_mpu_rw_region_pop),
 };
 
 C_ASSERT(ARRAY_SIZE(g_rtos_system_call_dispatch_table) == RTOS_NUM_SYSTEM_CALLS);
@@ -266,14 +270,6 @@ rtos_k_thread_init(
     rtos_thread_p->thr_signature = RTOS_THREAD_SIGNATURE;
     rtos_thread_p->thr_function_p = params_p->p_function_p;
     rtos_thread_p->thr_function_arg_p = params_p->p_function_arg_p;
-    for (uint8_t i = 0; i < RTOS_NUM_THREAD_MPU_DATA_REGIONS; ++i) {
-	rtos_thread_p->thr_mpu_rw_regions[i] = params_p->p_mpu_data_regions[i];
-    }
-
-    rtos_thread_p->thr_mpu_rw_regions[RTOS_NUM_THREAD_MPU_DATA_REGIONS].start_addr =
-	rtos_thread_p->thr_execution_stack_p;
-    rtos_thread_p->thr_mpu_rw_regions[RTOS_NUM_THREAD_MPU_DATA_REGIONS].end_addr =
-	rtos_thread_p->thr_execution_stack_p + 1;
 
 #   ifdef LCD_SUPPORTED
     rtos_thread_p->thr_lcd_channel = params_p->p_lcd_channel;
@@ -343,6 +339,13 @@ rtos_k_thread_init(
     }
 
     rtos_thread_p->thr_execution_stack_p = thread_stack_p;
+
+    /*
+     * Initialize thread's MPU regions:
+     */
+    rtos_thread_p->thr_mpu_rw_regions[0].start_addr = thread_stack_p;
+    rtos_thread_p->thr_mpu_rw_regions[0].end_addr = thread_stack_p + 1;
+    rtos_thread_p->thr_num_mpu_rw_regions = 1;
 
     /*
      * Initialize the thread's execution context:
@@ -2733,6 +2736,113 @@ rtos_k_lcd_draw_tile(
     }
 }
 #endif  /*  LCD_SUPPORTED */
+
+/**
+ * Add a new MPU R/W region to the calling thread
+ */
+fdc_error_t
+rtos_k_mpu_rw_region_push(
+    void *start_addr,
+    void *end_addr)
+{
+    FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
+
+    FDC_ASSERT(start_addr != NULL && start_addr < end_addr,
+	       start_addr, end_addr);
+
+    fdc_error_t fdc_error = 0;
+    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
+    struct rtos_cpu_controller *cpu_controller_p =
+        &g_McRTOS_p->rts_cpu_controllers[cpu_id];
+
+    struct rtos_execution_context *current_execution_context_p =
+        cpu_controller_p->cpc_current_execution_context_p;
+
+    FDC_ASSERT(
+        current_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
+        current_execution_context_p->ctx_context_type,
+        current_execution_context_p);
+
+    struct rtos_thread *current_thread_p =
+        RTOS_EXECUTION_CONTEXT_GET_THREAD(current_execution_context_p);
+
+    /*
+     * Disable interrupts in the ARM core
+     */
+    cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
+    uint_fast8_t num_rw_regions = current_thread_p->thr_num_mpu_rw_regions;
+
+    if (num_rw_regions < RTOS_MAX_MPU_THREAD_RW_REGIONS) {
+	    current_thread_p->thr_mpu_rw_regions[num_rw_regions].start_addr = start_addr;
+	    current_thread_p->thr_mpu_rw_regions[num_rw_regions].end_addr = end_addr;
+	    mpu_set_rw_region(cpu_id,
+			      current_thread_p->thr_privileged,
+			      num_rw_regions,
+			      start_addr,
+			      end_addr);
+
+	    current_thread_p->thr_num_mpu_rw_regions ++;
+    } else {
+	   fdc_error = CAPTURE_FDC_ERROR(
+                        "MPU region could not be added to thread",
+                        start_addr, end_addr);
+    }
+
+    /*
+     * Restore previous interrupt masking in the ARM core
+     */
+    rtos_k_restore_cpu_interrupts(cpu_status_register);
+    return fdc_error;
+}
+
+
+/**
+ * Remove the last MPU R/W region that was added to the calling thread
+ * by a previous call to rtos_k_mpu_rw_region_push().
+ */
+void
+rtos_k_mpu_rw_region_pop(void)
+{
+    FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
+
+    struct rtos_cpu_controller *cpu_controller_p =
+        &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
+
+    struct rtos_execution_context *current_execution_context_p =
+        cpu_controller_p->cpc_current_execution_context_p;
+
+    FDC_ASSERT(
+        current_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
+        current_execution_context_p->ctx_context_type,
+        current_execution_context_p);
+
+    struct rtos_thread *current_thread_p =
+        RTOS_EXECUTION_CONTEXT_GET_THREAD(current_execution_context_p);
+
+    /*
+     * Disable interrupts in the ARM core
+     */
+    cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
+    uint_fast8_t num_rw_regions = current_thread_p->thr_num_mpu_rw_regions;
+
+    /*
+     * If there is only one region left, it cannot be removed as it is used for
+     * the thread's stack.
+     */
+    if (num_rw_regions > 1) {
+	    mpu_unset_rw_region(num_rw_regions);
+	    current_thread_p->thr_num_mpu_rw_regions --;
+    } else {
+	   (void)CAPTURE_FDC_ERROR(
+		    "MPU region could not be removed from thread",
+		    current_thread_p, num_rw_regions);
+    }
+
+    /*
+     * Restore previous interrupt masking in the ARM core
+     */
+    rtos_k_restore_cpu_interrupts(cpu_status_register);
+}
 
 
 /**

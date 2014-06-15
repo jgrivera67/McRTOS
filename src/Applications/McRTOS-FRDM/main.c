@@ -74,12 +74,6 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
 	.p_name_p = "LED flashing thread",
         .p_function_p = led_flashing_thread_f,
         .p_function_arg_p = NULL,
-	.p_mpu_data_regions =
-	{
-	    RTOS_DEFINE_MPU_DATA_REGION(0, &g_app, &g_app + 1),
-	    RTOS_DEFINE_MPU_DATA_REGION(1, NULL, NULL),
-	    RTOS_DEFINE_MPU_DATA_REGION(2, NULL, NULL),
-	},
         .p_priority = LED_FLASHING_THREAD_PRIORITY,
         .p_thread_pp = NULL,
     },
@@ -90,7 +84,6 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
         .p_name_p = "accelerometer thread",
         .p_function_p = accelerometer_thread_f,
         .p_function_arg_p = NULL,
-	.p_global_data_p = &g_app,
         .p_priority = ACCELEROMETER_THREAD_PRIORITY,
         .p_thread_pp = NULL,
     },
@@ -204,6 +197,11 @@ led_flashing_thread_f(void *arg)
 
     console_printf("Initializing led flashing thread ...\n");
 
+    fdc_error = rtos_mpu_rw_region_push(&g_app, &g_app + 1);
+    if (fdc_error != 0) {
+	    goto exit;
+    }
+
     uint32_t led_color_mask = g_app.led_color_mask;
 
     for ( ; ; ) {
@@ -222,6 +220,7 @@ led_flashing_thread_f(void *arg)
         "thread should not have terminated",
         cpu_id, rtos_thread_self());
 
+exit:
     return fdc_error;
 }
 

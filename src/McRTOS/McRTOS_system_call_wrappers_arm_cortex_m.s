@@ -253,4 +253,10 @@ GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_THREAD_YIELD_SYSTEM_CALL, \
 GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_CALLER_IS_THREAD_SYSTEM_CALL, \
                                  rtos_caller_is_thread
 
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_MPU_RW_REGION_PUSH_SYSTEM_CALL, \
+                                 rtos_mpu_rw_region_push
+
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_MPU_RW_REGION_POP_SYSTEM_CALL, \
+                                 rtos_mpu_rw_region_pop
+
 .end

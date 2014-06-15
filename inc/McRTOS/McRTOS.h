@@ -153,12 +153,6 @@ C_ASSERT(
 			& RTOS_INTR_BIT_MAP_ENTRY_MASK(_intr_channel)) ?    \
 			1 : 0)
 
-#define RTOS_DEFINE_MPU_DATA_REGION(_i, _start_addr, _end_addr) \
-	[_i] = {							    \
-		.start_addr = (_start_addr),				    \
-		.end_addr = (_end_addr)					    \
-	}
-
 #ifdef LCD_SUPPORTED
 /**
  * Range type for LCD channels
@@ -212,12 +206,6 @@ struct rtos_thread_creation_params
      * Argument to be passed in to the thread function
      */
     void *p_function_arg_p;
-
-    /**
-     * Global data regions accessible from the thread
-     */
-    struct mpu_region_range
-	    p_mpu_data_regions[RTOS_NUM_THREAD_MPU_DATA_REGIONS];
 
     /**
      * Thread priority
@@ -555,6 +543,14 @@ rtos_lcd_draw_tile(
     _IN_ lcd_x_t x,
     _IN_ lcd_y_t y,
     _IN_ lcd_color_t fill_color);
+
+fdc_error_t
+rtos_mpu_rw_region_push(
+    void *start_addr,
+    void *end_addr);
+
+void
+rtos_mpu_rw_region_pop(void);
 
 fdc_error_t
 rtos_app_system_call(

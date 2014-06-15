@@ -288,7 +288,8 @@ void rtos_thread_scheduler(
 
     mpu_set_thread_rw_regions(SOC_GET_CURRENT_CPU_ID(),
 			      chosen_thread_p->thr_privileged,
-			      chosen_thread_p->thr_mpu_rw_regions);
+			      chosen_thread_p->thr_mpu_rw_regions,
+			      chosen_thread_p->thr_num_mpu_rw_regions);
 
     rtos_k_restore_execution_context(chosen_context_p, ctx_switch_type);
 

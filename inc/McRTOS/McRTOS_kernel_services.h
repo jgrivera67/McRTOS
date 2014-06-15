@@ -649,13 +649,6 @@ struct rtos_thread
     struct rtos_thread_execution_stack *thr_execution_stack_p;
 
     /**
-     * MPU r/w regions accessible from the thread, including one region
-     * for the thread's stack
-     */
-    struct mpu_region_range
-	    thr_mpu_rw_regions[RTOS_NUM_THREAD_MPU_DATA_REGIONS + 1];
-
-    /**
      * Abort status passed in to rtos_thread_abort(), if ever called
      * by the thread
      */
@@ -699,6 +692,11 @@ struct rtos_thread
      * (false)
      */
     uint8_t thr_privileged;
+
+    /**
+     * Number of red/write MPU regions currently defined for the thread
+     */
+    uint8_t thr_num_mpu_rw_regions;
 
     /**
      * Thread state history
@@ -764,6 +762,13 @@ struct rtos_thread
      * by calling rtos_k_thread_condvar_signal().
      */
     struct rtos_condvar  __attribute__ ((aligned(sizeof(uint32_t)))) thr_condvar;
+
+    /**
+     * MPU r/w regions accessible from the thread, including one region
+     * for the thread's stack
+     */
+    struct mpu_region_range
+	    thr_mpu_rw_regions[RTOS_MAX_MPU_THREAD_RW_REGIONS];
 
 } __attribute__ ((aligned(SOC_CACHE_LINE_SIZE_IN_BYTES)));
 
@@ -981,6 +986,14 @@ rtos_k_lcd_draw_tile(
     _IN_ lcd_x_t x,
     _IN_ lcd_y_t y,
     _IN_ lcd_color_t fill_color);
+
+fdc_error_t
+rtos_k_mpu_rw_region_push(
+    void *start_addr,
+    void *end_addr);
+
+void
+rtos_k_mpu_rw_region_pop(void);
 
 fdc_error_t
 rtos_k_app_system_call(

@@ -213,6 +213,12 @@ typedef void isr_function_t(void);
 
 C_ASSERT(sizeof(isr_function_t *) == sizeof(uint32_t));
 
+typedef _RANGE_(0, RTOS_MAX_MPU_REGIONS - 1)
+        uint8_t mpu_region_index_t;
+
+typedef _RANGE_(0, RTOS_MAX_MPU_THREAD_RW_REGIONS - 1)
+        uint8_t mpu_thread_rw_region_index_t;
+
 /*
  * I2C transaction header fields
  */
@@ -255,7 +261,17 @@ struct mpu_region_range {
 void mpu_set_thread_rw_regions(
     cpu_id_t cpu_id,
     bool privileged,
-    struct mpu_region_range regions[]);
+    struct mpu_region_range regions[],
+    uint8_t num_mpu_rw_regions);
+
+void mpu_set_rw_region(
+    cpu_id_t cpu_id,
+    bool privileged,
+    mpu_thread_rw_region_index_t thread_rw_region_index,
+    void *start_addr,
+    void *end_addr);
+
+void mpu_unset_rw_region(mpu_thread_rw_region_index_t thread_rw_region_index);
 
 void install_isr(
     interrupt_channel_t channel,

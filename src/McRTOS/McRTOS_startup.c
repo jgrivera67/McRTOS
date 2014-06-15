@@ -91,12 +91,6 @@ static const struct rtos_thread_creation_params g_rtos_system_threads[] =
         .p_lcd_channel = RTOS_LCD_CHANNEL_NONE,
 #       endif
         .p_thread_pp = NULL,
-	.p_mpu_data_regions =
-	{
-	    RTOS_DEFINE_MPU_DATA_REGION(0, NULL, NULL),
-	    RTOS_DEFINE_MPU_DATA_REGION(1, NULL, NULL),
-	    RTOS_DEFINE_MPU_DATA_REGION(2, NULL, NULL),
-	},
     },
 
     [RTOS_IDLE_SYSTEM_THREAD] =
@@ -109,12 +103,6 @@ static const struct rtos_thread_creation_params g_rtos_system_threads[] =
         .p_lcd_channel = RTOS_LCD_CHANNEL_NONE,
 #       endif
         .p_thread_pp = NULL,
-	.p_mpu_data_regions =
-	{
-	    RTOS_DEFINE_MPU_DATA_REGION(0, NULL, NULL),
-	    RTOS_DEFINE_MPU_DATA_REGION(1, NULL, NULL),
-	    RTOS_DEFINE_MPU_DATA_REGION(2, NULL, NULL),
-	},
     },
 };
 
