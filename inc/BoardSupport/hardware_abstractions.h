@@ -310,6 +310,13 @@ void uart_init(
         _IN_ uint32_t baud,
         _IN_ uint8_t mode);
 
+void uart_enable_tx_rx_fifos(
+    _IN_ const struct uart_device *uart_device_p);
+
+void uart_disable_tx_rx_fifos(
+    _IN_ const struct uart_device *uart_device_p);
+
+
 _REQUIRES_MUTUAL_EXCLUSION_
 void uart_putchar(
     _IN_ const struct uart_device *uart_device_p,

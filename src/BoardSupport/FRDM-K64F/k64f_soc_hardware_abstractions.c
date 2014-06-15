@@ -123,6 +123,7 @@ struct uart_device_var {
     struct rtos_circular_buffer urt_receive_queue;
     uint8_t urt_tx_fifo_size;
     uint8_t urt_rx_fifo_size;
+    bool urt_fifos_enabled;
 };
 
 
@@ -1642,6 +1643,8 @@ uart_init(
         &UART_CFIFO_REG(uart_mmio_registers_p),
 	UART_CFIFO_TXFLUSH_MASK | UART_CFIFO_RXFLUSH_MASK);
 
+    uart_var_p->urt_fifos_enabled = true;
+
     /*
      * Enable Tx pin:
      */
@@ -1776,6 +1779,92 @@ uart_stop(
 }
 
 
+void
+uart_enable_tx_rx_fifos(
+    _IN_ const struct uart_device *uart_device_p)
+{
+    uint32_t reg_value;
+
+    FDC_ASSERT(
+        uart_device_p->urt_signature == UART_DEVICE_SIGNATURE,
+        uart_device_p->urt_signature, uart_device_p);
+
+    struct uart_device_var *uart_var_p = uart_device_p->urt_var_p;
+    UART_MemMapPtr uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
+
+    FDC_ASSERT(uart_var_p->urt_initialized, uart_device_p, 0);
+    FDC_ASSERT(!uart_var_p->urt_fifos_enabled, uart_device_p, 0);
+
+    /*
+     * Disable UART's transmitter and receiver:
+     */
+    reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
+    reg_value &= ~(UART_C2_TE_MASK | UART_C2_RE_MASK);
+    write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
+
+    /*
+     * - Enable Tx and Rx FIFOs
+     * - Flush Tx and Rx FIFOs
+     */
+    write_8bit_mmio_register(
+        &UART_PFIFO_REG(uart_mmio_registers_p),
+	UART_PFIFO_TXFE_MASK | UART_PFIFO_RXFE_MASK);
+    write_8bit_mmio_register(
+        &UART_CFIFO_REG(uart_mmio_registers_p),
+	UART_CFIFO_TXFLUSH_MASK | UART_CFIFO_RXFLUSH_MASK);
+
+    /*
+     * Enable UART's transmitter and receiver:
+     */
+    reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
+    reg_value |= (UART_C2_TE_MASK | UART_C2_RE_MASK);
+    write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
+}
+
+
+void
+uart_disable_tx_rx_fifos(
+    _IN_ const struct uart_device *uart_device_p)
+{
+    uint32_t reg_value;
+
+    FDC_ASSERT(
+        uart_device_p->urt_signature == UART_DEVICE_SIGNATURE,
+        uart_device_p->urt_signature, uart_device_p);
+
+    struct uart_device_var *uart_var_p = uart_device_p->urt_var_p;
+    UART_MemMapPtr uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
+
+    FDC_ASSERT(uart_var_p->urt_initialized, uart_device_p, 0);
+    FDC_ASSERT(uart_var_p->urt_fifos_enabled, uart_device_p, 0);
+
+    /*
+     * Disable UART's transmitter and receiver:
+     */
+    reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
+    reg_value &= ~(UART_C2_TE_MASK | UART_C2_RE_MASK);
+    write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
+
+    /*
+     * - Disable Tx and Rx FIFOs
+     * - Flush Tx and Rx FIFOs
+     */
+    write_8bit_mmio_register(
+        &UART_PFIFO_REG(uart_mmio_registers_p),
+	(uint8_t)~(UART_PFIFO_TXFE_MASK | UART_PFIFO_RXFE_MASK));
+    write_8bit_mmio_register(
+        &UART_CFIFO_REG(uart_mmio_registers_p),
+	UART_CFIFO_TXFLUSH_MASK | UART_CFIFO_RXFLUSH_MASK);
+
+    /*
+     * Enable UART's transmitter and receiver:
+     */
+    reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
+    reg_value |= (UART_C2_TE_MASK | UART_C2_RE_MASK);
+    write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
+}
+
+
 /**
  * UART Rx/Tx interrupt handler with interrupts enabled
  */
@@ -1872,15 +1961,8 @@ k64f_uart_rx_tx_interrupt_e_handler(
      */
     if (s1_reg_value & UART_S1_RDRF_MASK) {
 	uint_fast8_t i;
-
-#if 0 //???
-	/*
-	 * Disable UART's receiver:
-	 */
-	reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
-	reg_value &= ~UART_C2_RE_MASK;
-	write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
-#endif
+        uint_fast8_t byte_received;
+	bool entry_written;
 
         uint_fast8_t rx_fifo_length =
 		    read_8bit_mmio_register(&UART_RCFIFO_REG(uart_mmio_registers_p));
@@ -1889,29 +1971,40 @@ k64f_uart_rx_tx_interrupt_e_handler(
 	        rx_fifo_length, uart_var_p->urt_rx_fifo_size);
 
 	/*
-	 * Drain the Rx FIFO as much as possible:
+	 * Drain the Rx FIFO but leave one byte in it:
 	 */
-	for (i = 0; i < rx_fifo_length; i++) {
-            uint8_t byte_received =
+	for (i = 0; i < rx_fifo_length - 1; i++) {
+            byte_received =
 		    read_8bit_mmio_register(&UART_D_REG(uart_mmio_registers_p));
 
-	    bool entry_written = rtos_k_byte_circular_buffer_write(
-					&uart_var_p->urt_receive_queue,
-					byte_received,
-					false);
+	    entry_written = rtos_k_byte_circular_buffer_write(
+				&uart_var_p->urt_receive_queue,
+				byte_received,
+				false);
 
             if (!entry_written) {
+		uart_var_p->urt_received_bytes_dropped ++;
 		break;
             }
 	}
 
-	if (i == rx_fifo_length) {
-	    /*
-	     * Flush Rx FIFO, to reset FIFO pointers:
-	     */
-	    write_8bit_mmio_register(
-		&UART_CFIFO_REG(uart_mmio_registers_p),
-		UART_CFIFO_RXFLUSH_MASK);
+	/*
+	 * Drain the last byte from the FIFO in a special way to clear the
+	 * RDRF flag in the S1 register:
+	 */
+	if (i == rx_fifo_length - 1) {
+	    s1_reg_value = read_8bit_mmio_register(&UART_S1_REG(uart_mmio_registers_p));
+	    byte_received =
+		    read_8bit_mmio_register(&UART_D_REG(uart_mmio_registers_p));
+
+	    entry_written = rtos_k_byte_circular_buffer_write(
+				&uart_var_p->urt_receive_queue,
+				byte_received,
+				false);
+
+            if (!entry_written) {
+		uart_var_p->urt_received_bytes_dropped ++;
+	    }
 
 	    rx_fifo_length =
 		read_8bit_mmio_register(&UART_RCFIFO_REG(uart_mmio_registers_p));
@@ -1919,14 +2012,12 @@ k64f_uart_rx_tx_interrupt_e_handler(
 	    DBG_ASSERT(rx_fifo_length == 0, 0, 0);
 	}
 
-#if 0 //???
 	/*
-	 * Enable UART's receiver:
-	 */
-	reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
-	reg_value |= UART_C2_RE_MASK;
+         * Disable generation of receive interrupts:
+         */
+        reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
+        reg_value &= ~UART_C2_RIE_MASK;
 	write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
-#endif
     }
 }
 
@@ -2092,13 +2183,14 @@ uart_getchar_with_polling(
      * Do polling until the UART's receive buffer is not empty:
      */
     for ( ; ; ) {
-        reg_value = read_8bit_mmio_register(&UART_S1_REG(uart_mmio_registers_p));
+	reg_value = read_8bit_mmio_register(&UART_S1_REG(uart_mmio_registers_p));
         if ((reg_value & UART_S1_RDRF_MASK) != 0) {
             break;
         }
     }
 
     uint8_t byte_received = read_8bit_mmio_register(&UART_D_REG(uart_mmio_registers_p));
+
     return byte_received;
 }
 
