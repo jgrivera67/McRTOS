@@ -301,8 +301,9 @@
 #   define CPU_MODE_IS_UNPRIVILEGED(_reg_control_value) \
         (((_reg_control_value) & CPU_REG_CONTROL_nPRIV_MASK) != 0)
 
-#   define CPU_MODE_IS_PRIVILEGED(_reg_control_value) \
-        (((_reg_control_value) & CPU_REG_CONTROL_nPRIV_MASK) == 0)
+#   define CPU_MODE_IS_PRIVILEGED(_reg_control_value, _reg_ipsr_value) \
+        (CPU_MODE_IS_HANDLER(_reg_ipsr_value) || \
+	 ((_reg_control_value) & CPU_REG_CONTROL_nPRIV_MASK) == 0)
 
 #   define CPU_USING_MSP_STACK_POINTER(_reg_control_value) \
         (((_reg_control_value) & CPU_REG_CONTROL_SPSEL_MASK) == 0)

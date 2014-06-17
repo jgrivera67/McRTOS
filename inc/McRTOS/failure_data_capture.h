@@ -142,7 +142,7 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
 #   define FDC_ASSERT_PRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED() \
     do {                                                                    \
         FDC_ASSERT(                                                         \
-            CPU_MODE_IS_PRIVILEGED(__get_CONTROL()), 0, 0);                 \
+            CPU_MODE_IS_PRIVILEGED(__get_CONTROL(), __get_IPSR()), 0, 0);   \
         FDC_ASSERT(                                                         \
             CPU_INTERRUPTS_ARE_ENABLED(__get_PRIMASK()), 0, 0);             \
     } while (0)

@@ -1282,20 +1282,20 @@ micro_trace_init(void)
         reg_value, MTB_MASTER_MASK_MASK, MTB_MASTER_MASK_SHIFT,
         MTB_MASTER_MASK_VALUE);
     write_32bit_mmio_register(&MTB_MASTER, reg_value);
-#endif // ???
 
     g_micro_trace_initialized = true;
+#endif // ???
 }
 
 
 void
 micro_trace_stop(void)
 {
+#if 0 // ???
     if (! g_micro_trace_initialized) {
         return;
     }
 
-#if 0 // ???
     /*
      * Disable micro tracing
      */

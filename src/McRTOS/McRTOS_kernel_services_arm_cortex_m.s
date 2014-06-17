@@ -156,12 +156,15 @@ rtos_k_restore_execution_context:
      * r0 == &execution_context_p->ctx_cpu_saved_registers
      */
     ldr     r1, [r0, #(CPU_REG_CONTROL*ARM_CPU_WORD_SIZE_IN_BYTES)]
+#if 0
     mov	    r2, #CPU_REG_CONTROL_nPRIV_MASK
     tst	    r1, r2
     beq	    L_return_to_thread_context
     mrs	    r1, control
     orr	    r1, r1, r2
+#endif
     msr	    control, r1
+    isb
 
 L_return_to_thread_context:
     /*

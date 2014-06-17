@@ -304,7 +304,7 @@ check_isr_reset_entry_asserts(void)
         CPU_USING_MSP_STACK_POINTER(current_control), 0, 0);
 
     FDC_ASSERT(
-        CPU_MODE_IS_PRIVILEGED(current_control), 0, 0);
+        CPU_MODE_IS_PRIVILEGED(current_control, current_ipsr), 0, 0);
 
     FDC_ASSERT(
         CPU_INTERRUPTS_ARE_ENABLED(__get_PRIMASK()), 0, 0);
@@ -838,10 +838,9 @@ fdc_trace_rtos_context_switch(
         (CPU_MODE_IS_INTERRUPT(actual_ipsr) ||
          CPU_MODE_IS_PENDSV_EXCEPTION(actual_ipsr) ||
          CPU_MODE_IS_HARD_FAULT_EXCEPTION(actual_ipsr)) &&
-         CPU_MODE_IS_PRIVILEGED(actual_control_reg) &&
+         CPU_MODE_IS_PRIVILEGED(actual_control_reg, actual_ipsr) &&
          CPU_USING_MSP_STACK_POINTER(actual_control_reg),
         actual_ipsr, actual_control_reg);
-
 #   else
 #       error "CPU architecture not supported"
 #   endif
@@ -1148,6 +1147,7 @@ check_rtos_public_kernel_service_preconditions(bool thread_callers_only)
 
     CAPTURE_ARM_LR_REGISTER(cpu_lr_register);
     cpu_register_t cpu_control_register = __get_CONTROL();
+    cpu_register_t cpu_ipsr_register = __get_IPSR();
 
     if (cpu_controller_p->cpc_startup_completed)
     {
@@ -1176,8 +1176,8 @@ check_rtos_public_kernel_service_preconditions(bool thread_callers_only)
                 current_context_p->ctx_cpu_mode, cpu_lr_register);
 
             FDC_ASSERT(
-                CPU_MODE_IS_PRIVILEGED(cpu_control_register),
-                cpu_control_register, current_context_p);
+                CPU_MODE_IS_PRIVILEGED(cpu_control_register, cpu_ipsr_register),
+                cpu_control_register, cpu_ipsr_register);
         }
         else
         {
@@ -1190,8 +1190,8 @@ check_rtos_public_kernel_service_preconditions(bool thread_callers_only)
                 current_context_p->ctx_cpu_mode, current_context_p);
 
             FDC_ASSERT(
-                CPU_MODE_IS_PRIVILEGED(cpu_control_register),
-                cpu_control_register, current_context_p);
+                CPU_MODE_IS_PRIVILEGED(cpu_control_register, cpu_ipsr_register),
+                cpu_control_register, cpu_ipsr_register);
 
             FDC_ASSERT(!thread_callers_only, 0, 0);
         }

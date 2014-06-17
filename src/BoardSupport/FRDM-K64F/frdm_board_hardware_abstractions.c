@@ -34,15 +34,15 @@ static struct pin_config_info g_frdm_rgb_led_pins[] = {
             FRDM_RGB_LED_GREEN_PIN_INDEX,
             PORT_PCR_MUX(1),
             false,
-            PORTB_BASE_PTR,
-            PTB_BASE_PTR),
+            PORTE_BASE_PTR,
+            PTE_BASE_PTR),
 
     [FRDM_BLUE_LED] = PIN_COFIG_INFO_INITIALIZER(
             FRDM_RGB_LED_BLUE_PIN_INDEX,
             PORT_PCR_MUX(1),
             false,
-            PORTD_BASE_PTR,
-            PTD_BASE_PTR)
+            PORTB_BASE_PTR,
+            PTB_BASE_PTR)
 };
 
 C_ASSERT(ARRAY_SIZE(g_frdm_rgb_led_pins) == FRDM_NUM_RGB_LED_PINS);

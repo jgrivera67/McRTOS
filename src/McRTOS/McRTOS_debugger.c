@@ -89,7 +89,7 @@ rtos_common_fault_exception_handler(
     fdc_info_p->fdc_handling_exception = true;
 
     DEBUG_PRINTF(
-        "Hard fault %u exception caught on context %#p\n",
+        "Fault %u exception caught on context %#p\n",
 	exception_vector,
         current_execution_context_p);
 
@@ -129,7 +129,7 @@ rtos_common_fault_exception_handler(
 
     fdc_info_p->fdc_handling_exception = false;
     micro_trace_restart();
-    debugger_printf("*** Exiting debugger ***\n");//???
+    DEBUG_PRINTF("*** Exiting debugger ***\n");
 }
 
 

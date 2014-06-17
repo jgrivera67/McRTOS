@@ -25,14 +25,14 @@ TODO("Remove these pragmas")
 enum app_thread_priorities
 {
     ACCELEROMETER_THREAD_PRIORITY = RTOS_HIGHEST_THREAD_PRIORITY + 1,
-    LED_FLASHING_THREAD_PRIORITY = RTOS_HIGHEST_THREAD_PRIORITY + 2,
 };
 
 static void app_hardware_init(void);
 static void app_hardware_stop(void);
 static void app_software_init(void);
 static void dummy_command(const char *cmd_line);
-static fdc_error_t led_flashing_thread_f(void *arg);
+static fdc_error_t hello_world_thread_thread_f(void *arg);
+
 #if 0 // ???
 static fdc_error_t accelerometer_thread_f(void *arg);
 #endif
@@ -71,10 +71,19 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
 {
     [0] =
     {
-	.p_name_p = "LED flashing thread",
-        .p_function_p = led_flashing_thread_f,
-        .p_function_arg_p = NULL,
-        .p_priority = LED_FLASHING_THREAD_PRIORITY,
+	.p_name_p = "Hello World thread 1",
+        .p_function_p = hello_world_thread_thread_f,
+        .p_function_arg_p = "first thread",
+        .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 2,
+        .p_thread_pp = NULL,
+    },
+
+    [1] =
+    {
+	.p_name_p = "Hello World thread 2",
+        .p_function_p = hello_world_thread_thread_f,
+        .p_function_arg_p = "second thread",
+        .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 2,
         .p_thread_pp = NULL,
     },
 
@@ -188,32 +197,21 @@ dummy_command(const char *cmd_line)
 }
 
 static fdc_error_t
-led_flashing_thread_f(void *arg)
+hello_world_thread_thread_f(void *arg)
 {
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
-    FDC_ASSERT(arg == NULL, arg, cpu_id);
-
-    console_printf("Initializing led flashing thread ...\n");
+    FDC_ASSERT(arg != NULL, arg, cpu_id);
 
     fdc_error = rtos_mpu_rw_region_push(&g_app, &g_app + 1);
     if (fdc_error != 0) {
 	    goto exit;
     }
 
-    uint32_t led_color_mask = g_app.led_color_mask;
-
     for ( ; ; ) {
-	if (led_color_mask != g_app.led_color_mask) {
-	    turn_off_rgb_led(led_color_mask);
-	    led_color_mask = g_app.led_color_mask;
-	}
-
-	toggle_rgb_led(led_color_mask);
-        rtos_thread_delay(100);
-	toggle_rgb_led(led_color_mask);
-        rtos_thread_delay(500);
+	console_printf("%s: %s\n", __func__, arg);
+	rtos_thread_delay(2000);
     }
 
     fdc_error = CAPTURE_FDC_ERROR(

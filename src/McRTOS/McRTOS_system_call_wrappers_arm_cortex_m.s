@@ -47,11 +47,29 @@
 
 \_rtos_function_:
     push    {r4-r5, lr}
+    /*
+     * Check if caller is an ISR:
+     */
+#if 1
+    mrs	    r4, ipsr
+    mov	    r5, #CPU_REG_IPSR_EXCEPTION_NUMBER_MASK
+    tst	    r4, r5
+    bne	    L_fast_path_\_rtos_function_
+#else
+    mrs	    r4, msp
+    cmp	    r4, sp
+    beq	    L_fast_path_\_rtos_function_
+#endif
+
+    /*
+     * Check if caller is a thread running in privileged mode:
+     */
     mrs	    r4, control
     mov	    r5, #CPU_REG_CONTROL_nPRIV_MASK
     tst	    r4, r5
     bne	    L_slow_path_\_rtos_function_
 
+ L_fast_path_\_rtos_function_:
     /*
      * Caller is in privileged mode already, so just call the corresponding
      * kernel service directly:

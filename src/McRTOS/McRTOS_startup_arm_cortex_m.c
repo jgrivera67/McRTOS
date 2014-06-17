@@ -158,7 +158,7 @@ cortex_m_nvic_init(void)
 
     /*
      * Set the priority of the SVC exception to the highest priority also,
-     * to ensurethe SVC excpetion handler is not interrupted.
+     * to ensure the SVC exception handler is not interrupted.
      */
     install_isr(
         VECTOR_NUMBER_TO_IRQ_NUMBER(INT_SVCall),
