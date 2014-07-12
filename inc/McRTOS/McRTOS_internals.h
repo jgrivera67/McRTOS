@@ -453,9 +453,8 @@ struct McRTOS
 
 #   ifdef _CPU_CYCLES_MEASURE_
     /**
-     * Approximate overhead for taking a measurement of time in CPU clock
-     * cycles, using the BEGIN_CPU_CYCLES_MEASURE()/END_CPU_CYCLES_MEASURE()
-     * macros.
+     * Overhead for taking a measurement of time in CPU clock cycles, using
+     * the BEGIN_CPU_CYCLES_MEASURE()/END_CPU_CYCLES_MEASURE() macros.
      */
     cpu_clock_cycles_t rts_cpu_cycles_measure_overhead;
 #   endif

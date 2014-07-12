@@ -537,8 +537,6 @@ rtos_root_thread_f(void *arg)
 
     FDC_ASSERT(arg == NULL, arg, cpu_id);
     FDC_ASSERT(rtos_app_config_p != NULL, 0, 0);
-    //debugger_printf("\n*** JGR: enter %s\n", __func__);//???
-
     if (cpu_id == 0)
     {
         /*

@@ -5,14 +5,14 @@
  *
  * Copyright (C) 2013 German Rivera
  *
- * @author German Rivera 
- */ 
+ * @author German Rivera
+ */
 #ifndef _COMPILE_TIME_CHECKS_H
 #define _COMPILE_TIME_CHECKS_H
 
 /*
  * Compile-time assertion macros
- */ 
+ */
 
 #define C_ASSERT(_cond) \
         extern const char c_assert_dummy_decl[(_cond) ? 1 : -1]
@@ -23,7 +23,7 @@
 /*
  * Annotation macros to be used to "annotate" function parameters
  * and typedefs. These annotations can be used by a static analysis tool.
- */ 
+ */
 
 /**
  * Untrusted input parameter
@@ -87,7 +87,7 @@
         __builtin_expect((_condition), 0)
 
 /**
- * Macro to generate a message pragma as a TODO reminder 
+ * Macro to generate a message pragma as a TODO reminder
  */
 #define TODO(_todo_msg) __DO_PRAGMA(message ("*** TODO: " #_todo_msg))
 #define __DO_PRAGMA(_x) _Pragma(#_x)

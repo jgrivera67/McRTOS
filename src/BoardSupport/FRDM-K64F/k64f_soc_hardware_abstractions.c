@@ -892,7 +892,7 @@ k64f_mpu_init(void) {
 	 * Only its permissions can be changed.
 	 */
 
-	/* Make region 0 unaccessible: */
+	/* Make region 0 non-accessible: */
         write_32bit_mmio_register(&mpu_regs_p->RGDAAC[0], 0);
 
 	/*
@@ -1360,65 +1360,41 @@ micro_trace_get_cursor(uint64_t **mtb_cursor_pp, bool *mtb_cursor_wrapped_p)
 static void
 init_cpu_clock_cycles_counter(void)
 {
-    /*
-     * Enable the clock to the PIT Module
-     */
-    uint32_t reg_value = read_32bit_mmio_register(&SIM_SCGC6);
-    reg_value |= SIM_SCGC6_PIT_MASK;
-    write_32bit_mmio_register(&SIM_SCGC6, reg_value);
+    uint32_t reg_value;
 
     /*
-     * Turn on PIT
-     *
-     * Bit MIDS = 0: Clock for standard PIT timers is enabled
-     * Bit FRZ = 1: Timers are stopped in Debug mode.
+     * Enable DWT and ITM blocks of the Cortex-M4 core:
      */
-    write_32bit_mmio_register(
-        &PIT_MCR,
-        PIT_MCR_FRZ_MASK);
+    reg_value = read_32bit_mmio_register(&CoreDebug->DEMCR);
+    reg_value |= CoreDebug_DEMCR_TRCENA_Msk;
+    write_32bit_mmio_register(&CoreDebug->DEMCR, reg_value);
 
     /*
-     * Configure the lifetimer timer, by chaining timer 1 to timer 0,
-     * and by setting the LDVAL register of each timer to the maximum value.
-     * Each timer is a down counter. Interrupts are left disabled for both
-     * timers.
+     * Reset CPU clock cycle counter:
      */
-    write_32bit_mmio_register(&PIT_LDVAL0, 0xFFFFFFFF);
-    write_32bit_mmio_register(&PIT_LDVAL1, 0xFFFFFFFF);
+    write_32bit_mmio_register(&DWT->CYCCNT, 0);
 
     /*
-     * Bit CHN = 1: Timer 1 is chained to previous timer (timer 0).
-     * Bit TIE = 0: Interrupt requests from Timer 1 are disabled.
-     * Bit TEN = 1: Timer 1 is enabled.
+     * Enable DWT's CYCCNT:
      */
-    write_32bit_mmio_register(
-        &PIT_TCTRL1,
-        PIT_TCTRL_CHN_MASK | PIT_TCTRL_TEN_MASK);
+
+    reg_value = read_32bit_mmio_register(&DWT->CTRL);
 
     /*
-     * Bit CHN = 0: Timer 0 is not chained.
-     * Bit TIE = 0: Interrupt requests from Timer 0 are disabled.
-     * Bit TEN = 1: Timer 0 is enabled.
+     * Check that this cortex-M4 core does implement CYCCNT:
      */
-    write_32bit_mmio_register(
-        &PIT_TCTRL0,
-        PIT_TCTRL_TEN_MASK);
-}
+    FDC_ASSERT((reg_value & DWT_CTRL_NOCYCCNT_Msk) == 0,
+	       reg_value, 0);
 
-
-uint64_t
-get_cpu_clock_cycles64(void)
-{
-    uint32_t low_reg_value = read_32bit_mmio_register(&PIT_LTMR64L);
-    uint32_t high_reg_value = read_32bit_mmio_register(&PIT_LTMR64H);
-
-    return ((uint64_t)high_reg_value << 32) + low_reg_value;
+    reg_value |= DWT_CTRL_CYCCNTENA_Msk;
+    write_32bit_mmio_register(&DWT->CTRL, reg_value);
 }
 
 
 uint32_t
 get_cpu_clock_cycles(void)
 {
+#if 0
     uint32_t low_reg_value = read_32bit_mmio_register(&PIT_LTMR64L);
 
     /*
@@ -1426,6 +1402,9 @@ get_cpu_clock_cycles(void)
      * need to multiply by 2 to get the accurate number CPU clock cycles.
      */
     return low_reg_value * 2;
+#else
+    return DWT->CYCCNT;
+#endif
 }
 #endif /* _CPU_CYCLES_MEASURE_ */
 

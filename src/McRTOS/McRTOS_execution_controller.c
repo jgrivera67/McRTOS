@@ -391,7 +391,7 @@ rtos_tick_timer_interrupt_handler(
 }
 
 
-#ifdef _CPU_CYCLES_MEASURE_
+#ifdef _MEASURE_INTERRUPTS_DISABLED_TIME_
 
 cpu_status_register_t
 rtos_start_interrupts_disabled_time_measure(
@@ -491,7 +491,7 @@ Exit:
     return saved_cpsr;
 }
 
-#endif /* _CPU_CYCLES_MEASURE_ */
+#endif /* _MEASURE_INTERRUPTS_DISABLED_TIME_ */
 
 
 /**

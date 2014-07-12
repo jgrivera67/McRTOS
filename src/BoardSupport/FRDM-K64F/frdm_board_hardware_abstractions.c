@@ -22,7 +22,7 @@ static void rgb_led_init(void);
 /**
  * FRDM board RGB LED pins
  */
-static struct pin_config_info g_frdm_rgb_led_pins[] = {
+static const struct pin_config_info g_frdm_rgb_led_pins[] = {
     [FRDM_RED_LED] = PIN_COFIG_INFO_INITIALIZER(
             FRDM_RGB_LED_RED_PIN_INDEX,
             PORT_PCR_MUX(1),
