@@ -1860,8 +1860,6 @@ rtos_k_enter_interrupt(
 {
     DBG_ASSERT_CPU_INTERRUPTS_DISABLED();
 
-    RTOS_START_INTERRUPTS_DISABLED_TIME_MEASURE();
-
     FDC_ASSERT(
         rtos_interrupt_p->int_signature == RTOS_INTERRUPT_SIGNATURE,
         rtos_interrupt_p->int_signature, rtos_interrupt_p);
@@ -2024,8 +2022,6 @@ rtos_k_enter_interrupt(
     FDC_TRACE_RTOS_CONTEXT_SWITCH(new_interrupt_context_p, ctx_switch_type);
     cpu_controller_p->cpc_current_execution_context_p = new_interrupt_context_p;
 
-    RTOS_STOP_INTERRUPTS_DISABLED_TIME_MEASURE();
-
 #   if DEFINED_ARM_CLASSIC_ARCH()
     /*
      * The stack pointer for an interrupt context always starts at the bottom
@@ -2058,8 +2054,6 @@ void
 rtos_k_exit_interrupt(void)
 {
     DBG_ASSERT_CPU_INTERRUPTS_DISABLED();
-
-    RTOS_START_INTERRUPTS_DISABLED_TIME_MEASURE();
 
     struct rtos_cpu_controller *cpu_controller_p =
         &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
@@ -3120,10 +3114,11 @@ rtos_k_disable_cpu_interrupts(void)
 {
     cpu_status_register_t old_primask = __get_PRIMASK();
 
-    __disable_irq();
-    __ISB();
-
-    RTOS_START_INTERRUPTS_DISABLED_TIME_MEASURE();
+    if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
+	__disable_irq();
+	__ISB();
+	RTOS_START_INTERRUPTS_DISABLED_TIME_MEASURE();
+    }
 
     return old_primask;
 }
@@ -3138,13 +3133,11 @@ rtos_k_disable_cpu_interrupts(void)
  void
  rtos_k_restore_cpu_interrupts(cpu_register_t old_primask)
 {
-
-    RTOS_STOP_INTERRUPTS_DISABLED_TIME_MEASURE();
-
-   if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
+    if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
+	RTOS_STOP_INTERRUPTS_DISABLED_TIME_MEASURE();
         __ISB();
         __enable_irq();
-   }
+    }
 }
 
 

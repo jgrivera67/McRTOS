@@ -14,6 +14,7 @@
  * Imported symbols
  */
 .extern rtos_hard_fault_exception_handler
+.extern rtos_start_interrupts_disabled_time_measure
 
 /*
  * Exported functions
@@ -49,9 +50,6 @@
 .func cortex_m_pendsv_exception_handler
 
 cortex_m_pendsv_exception_handler:
-    cpsid   i
-    isb
-
     /*
      * Pre-saved registers were automatically saved on the stack.
      * The pre-saved registers appear in the following order in
@@ -64,6 +62,22 @@ cortex_m_pendsv_exception_handler:
      * - r15 (pc)
      * - psr
      */
+
+    /*
+     * Disable interrupts in the CPU, to ensure atomic saving of the
+     * rest of the current context
+     */
+    cpsid   i
+    isb
+
+#ifdef _MEASURE_INTERRUPTS_DISABLED_TIME_
+    /*
+     * Call rtos_start_interrupts_disabled_time_measure():
+     */
+    mov	    r0, lr
+    bl      rtos_start_interrupts_disabled_time_measure
+    mov	    lr, r0
+#endif /* _MEASURE_INTERRUPTS_DISABLED_TIME_ */
 
     /*
      * Get stack pointer in use:

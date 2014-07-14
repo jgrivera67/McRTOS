@@ -228,9 +228,15 @@ struct rtos_cpu_controller
 
     /**
      * Counter indicating if measurement of interrupts disabled time is
-     * currently in progressing.
+     * currently in progress.
      */
     uint8_t cpc_interrupts_disabled_being_measured_count;
+
+    /**
+     * Flag that indicates that measurement of interrupt;s disabled time is
+     * enabled
+     */
+    bool cpc_measure_interrupts_disabled_time;
 
     /*
      * Boolean flag indicating that rtos_startup() has been completed for this
@@ -860,10 +866,10 @@ void rtos_thread_scheduler(rtos_context_switch_type_t ctx_switch_type);
 extern rtos_timer_function_t rtos_delay_timer_callback;
 
 cpu_status_register_t rtos_start_interrupts_disabled_time_measure(
-    _IN_ cpu_status_register_t saved_cpsr);
+    _IN_ cpu_register_t saved_reg);
 
 cpu_status_register_t rtos_stop_interrupts_disabled_time_measure(
-    _IN_ cpu_status_register_t saved_cpsr);
+    _IN_ cpu_register_t saved_reg);
 
 void rtos_execution_context_init(
     _OUT_ struct rtos_execution_context *execution_context_p,

@@ -81,11 +81,8 @@ rtos_k_restore_execution_context:
      * Call rtos_stop_interrupts_disabled_time_measure():
      *
      * NOTE:
-     * - For Cortex-M, we don't need to use the arg of
-     *   rtos_stop_interrupts_disabled_time_measure()
      * - It is assumed that earlier in the code path that lead us here, we made
-     *   a call to rtos_start_interrupts_disabled_time_measure() via the macro
-     *   RTOS_START_INTERRUPTS_DISABLED_TIME_MEASURE().
+     *   a call to rtos_start_interrupts_disabled_time_measure().
      */
     bl      rtos_stop_interrupts_disabled_time_measure
 #endif /* _MEASURE_INTERRUPTS_DISABLED_TIME_ */
@@ -278,15 +275,12 @@ rtos_k_synchronous_context_switch:
 #ifdef _MEASURE_INTERRUPTS_DISABLED_TIME_
     /*
      * Call rtos_stop_interrupts_disabled_time_measure():
-     *
-     * NOTE:
-     * - For Cortex-M, we don't need to use the arg of
-     *   rtos_stop_interrupts_disabled_time_measure()
      */
-    push    {r0, lr}
+    push    {r0}
+    mov	    r0, lr
     bl      rtos_stop_interrupts_disabled_time_measure
-    pop     {r0, r1}
-    mov     lr, r1
+    mov	    lr, r0
+    pop     {r0}
 #endif /* _MEASURE_INTERRUPTS_DISABLED_TIME_ */
 
     /*
@@ -311,19 +305,15 @@ rtos_k_synchronous_context_switch:
      * is expected by the callers of this function:
      */
     cpsid   i
+    isb
 
 #ifdef _MEASURE_INTERRUPTS_DISABLED_TIME_
     /*
      * Call rtos_start_interrupts_disabled_time_measure():
-     *
-     * NOTE:
-     * - For Cortex-M, we don't need to use the arg of
-     *   rtos_start_interrupts_disabled_time_measure()
      */
-    push    {lr}
+    mov	    r0, lr
     bl      rtos_start_interrupts_disabled_time_measure
-    pop     {r0}
-    mov     lr, r0
+    mov	    lr, r0
 #endif /* _MEASURE_INTERRUPTS_DISABLED_TIME_ */
 
     bx      lr

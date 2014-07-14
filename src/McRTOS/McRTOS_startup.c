@@ -40,6 +40,7 @@ enum system_thread_priorities
             .cpc_thread_scheduler_calls = 0,                            \
             .cpc_accumulated_thread_scheduler_overhead = 0,             \
             .cpc_interrupts_disabled_being_measured_count = 0,          \
+            .cpc_measure_interrupts_disabled_time = false,		\
             .cpc_startup_completed = false,                             \
             .cpc_pending_thread_time_slice_decrement = false,           \
             .cpc_current_timer_wheel_spoke_index = 0,                   \
@@ -391,22 +392,20 @@ rtos_startup(
 
     cpu_controller_p->cpc_startup_completed = true;
 
-    /*
-     * Reset 'cpc_longest_time_interrupts_disabled' to 0, as this
-     * is boot time, and should not be taken into account.
-     *
-     * NOTE: We need to reset this because soc_hardware_init() calls device
-     * initialization functions which may call
-     * rtos_k_disable_cpu_interrupts()/rtos_k_restore_cpu_interrupts()
-     */
-    cpu_controller_p->cpc_longest_time_interrupts_disabled = 0;
-
     DBG_ASSERT_CPU_INTERRUPTS_DISABLED();
 
+#ifdef _MEASURE_INTERRUPTS_DISABLED_TIME_
     /*
      * Start measuring interrupts disabled time from here:
      */
+
+    FDC_ASSERT(
+	cpu_controller_p->cpc_longest_time_interrupts_disabled == 0,
+	cpu_controller_p->cpc_longest_time_interrupts_disabled, cpu_controller_p);
+
+    cpu_controller_p->cpc_measure_interrupts_disabled_time = true;
     RTOS_START_INTERRUPTS_DISABLED_TIME_MEASURE();
+#endif
 
     /*
      * Do a synchronous context switch, to switch from running the reset

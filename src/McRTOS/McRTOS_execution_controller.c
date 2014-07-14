@@ -395,20 +395,20 @@ rtos_tick_timer_interrupt_handler(
 
 cpu_status_register_t
 rtos_start_interrupts_disabled_time_measure(
-    cpu_status_register_t saved_cpsr)
+    cpu_register_t saved_reg)
 {
-
     DBG_ASSERT_CPU_INTERRUPTS_DISABLED();
 
     struct rtos_cpu_controller *cpu_controller_p =
         &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
 
-    /*
-     * Skip measure if the thread scheduler has not been turned on yet:
-     */
     if (_INFREQUENTLY_TRUE_(
-            cpu_controller_p->cpc_current_execution_context_p == NULL))
+            !cpu_controller_p->cpc_measure_interrupts_disabled_time))
     {
+	DBG_ASSERT(
+	    cpu_controller_p->cpc_interrupts_disabled_being_measured_count == 0,
+	    cpu_controller_p, 0);
+
         goto Exit;
     }
 
@@ -428,27 +428,26 @@ rtos_start_interrupts_disabled_time_measure(
     cpu_controller_p->cpc_interrupts_disabled_being_measured_count ++;
 
 Exit:
-    return saved_cpsr;
+    return saved_reg;
 }
 
 
 cpu_status_register_t
 rtos_stop_interrupts_disabled_time_measure(
-    cpu_status_register_t saved_cpsr)
+    cpu_register_t saved_reg)
 {
     DBG_ASSERT_CPU_INTERRUPTS_DISABLED();
 
     struct rtos_cpu_controller *cpu_controller_p =
         &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
 
-    struct rtos_execution_context *current_execution_context_p =
-        cpu_controller_p->cpc_current_execution_context_p;
-
-    /*
-     * Skip measure if the thread scheduler has not been turned on yet:
-     */
-    if (_INFREQUENTLY_TRUE_(current_execution_context_p == NULL))
+    if (_INFREQUENTLY_TRUE_(
+            !cpu_controller_p->cpc_measure_interrupts_disabled_time))
     {
+	DBG_ASSERT(
+	    cpu_controller_p->cpc_interrupts_disabled_being_measured_count == 0,
+	    cpu_controller_p, 0);
+
         goto Exit;
     }
 
@@ -473,7 +472,7 @@ rtos_stop_interrupts_disabled_time_measure(
         delta_cpu_cycles -= g_McRTOS_p->rts_cpu_cycles_measure_overhead;
 
         FDC_ASSERT(
-            CPU_CLOCK_CYCLES_TO_MICROSECONDS(delta_cpu_cycles) <= 500,
+            CPU_CLOCK_CYCLES_TO_MICROSECONDS(delta_cpu_cycles) <= 1000,
             CPU_CLOCK_CYCLES_TO_MICROSECONDS(delta_cpu_cycles),
             end_time_stamp);
 
@@ -488,7 +487,7 @@ rtos_stop_interrupts_disabled_time_measure(
 
 
 Exit:
-    return saved_cpsr;
+    return saved_reg;
 }
 
 #endif /* _MEASURE_INTERRUPTS_DISABLED_TIME_ */

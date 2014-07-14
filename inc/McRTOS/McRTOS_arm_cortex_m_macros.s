@@ -140,7 +140,7 @@
  */
 .macro RTOS_ENTER_ISR_COMMON _g_rtos_interrupt_p_
     /*
-     * We can clobber r0-r3, r12, lr, pc and psr as they are pre-saved registers
+     * We can clobber r0-r3, r12, pc and psr as they are pre-saved registers
      */
 
     /*
@@ -226,6 +226,12 @@
     cpsid   i
     isb
 
+#ifdef _MEASURE_INTERRUPTS_DISABLED_TIME_
+    mov r0, lr
+    bl rtos_start_interrupts_disabled_time_measure
+    mov lr, r0
+#endif
+
     RTOS_ENTER_ISR_COMMON \_g_rtos_interrupt_p_
 
     /*
@@ -234,6 +240,11 @@
      * NOTE: This is necessary so that higher priority interrupts can preempt this
      * ISR (nested interrupts).
      */
+
+#ifdef _MEASURE_INTERRUPTS_DISABLED_TIME_
+    bl rtos_stop_interrupts_disabled_time_measure
+#endif
+
     isb
     cpsie   i
 .endm
@@ -263,13 +274,17 @@
  */
 .macro RTOS_ENTER_SPLIT_ISR _g_rtos_interrupt_p_, _interrupt_d_half_handler_function_
     /*
-     * Cortex-M process leave interrupts enabled on the CPU upon entering
+     * Cortex-M processors leave interrupts enabled on the CPU upon entering
      * an exception, so we need to disable them here:
-     *
-     * NOTE: same not as for RTOS_ENTER_ISR()
      */
     cpsid   i
     isb
+
+#ifdef _MEASURE_INTERRUPTS_DISABLED_TIME_
+    mov r0, lr
+    bl rtos_start_interrupts_disabled_time_measure
+    mov lr, r0
+#endif
 
     RTOS_ENTER_ISR_COMMON \_g_rtos_interrupt_p_
 
@@ -285,6 +300,11 @@
      * NOTE: This is necessary so that higher priority interrupts can preempt this
      * ISR (nested interrupts).
      */
+
+#ifdef _MEASURE_INTERRUPTS_DISABLED_TIME_
+    bl rtos_stop_interrupts_disabled_time_measure
+#endif
+
     isb
     cpsie   i
 .endm
@@ -310,6 +330,10 @@
      */
     cpsid   i
     isb
+
+#ifdef _MEASURE_INTERRUPTS_DISABLED_TIME_
+    bl rtos_start_interrupts_disabled_time_measure
+#endif
 
     /*
      * Call rtos_k_exit_interrupt()

@@ -228,9 +228,7 @@ capture_assert_failure(
 
     if (!fdc_info_p->fdc_handling_exception) {
         if (fdc_info_p->fdc_asserts_failures_breakpoint_on) {
-	    debugger_printf("%s:%d\n", __func__, __LINE__);//???
             ARTIFICIAL_BREAK_POINT();
-	    debugger_printf("%s:%d\n", __func__, __LINE__);//???
         } else {
             micro_trace_restart();
         }
