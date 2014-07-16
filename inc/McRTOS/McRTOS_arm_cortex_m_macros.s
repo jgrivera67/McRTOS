@@ -141,7 +141,24 @@
 .macro RTOS_ENTER_ISR_COMMON _g_rtos_interrupt_p_
     /*
      * We can clobber r0-r3, r12, pc and psr as they are pre-saved registers
+     *
+     * Cortex-M process leave interrupts enabled on the CPU upon entering
+     * an exception, so we need to disable them here:
+     *
+     * NOTE: A nested interrupt may have occurred between the time the original
+     * interrupt interrupted the current thread and this point (after the CPU
+     * saved the pre-saved registers on the PSP stack). In that case,
+     * lr will be CPU_EXC_RETURN_TO_HANDLER_MODE but the current context will be
+     * of type RTOS_THREAD_CONTEXT.
      */
+    cpsid   i
+    isb
+
+#ifdef _MEASURE_INTERRUPTS_DISABLED_TIME_
+    mov	    r0, lr
+    bl	    rtos_start_interrupts_disabled_time_measure
+    mov	    lr, r0
+#endif
 
     /*
      * Set r2 to \_g_rtos_interrupt_p_
@@ -213,25 +230,6 @@
  *
  */
 .macro RTOS_ENTER_ISR _g_rtos_interrupt_p_
-    /*
-     * Cortex-M process leave interrupts enabled on the CPU upon entering
-     * an exception, so we need to disable them here:
-     *
-     * NOTE: A nested interrupt may have occurred between the time the original
-     * interrupt interrupted the current thread and this point (after the CPU
-     * saved the pre-saved registers on the PSP stack). In that case,
-     * lr will be CPU_EXC_RETURN_TO_HANDLER_MODE but the current context will be
-     * of type RTOS_THREAD_CONTEXT.
-     */
-    cpsid   i
-    isb
-
-#ifdef _MEASURE_INTERRUPTS_DISABLED_TIME_
-    mov r0, lr
-    bl rtos_start_interrupts_disabled_time_measure
-    mov lr, r0
-#endif
-
     RTOS_ENTER_ISR_COMMON \_g_rtos_interrupt_p_
 
     /*
@@ -242,7 +240,7 @@
      */
 
 #ifdef _MEASURE_INTERRUPTS_DISABLED_TIME_
-    bl rtos_stop_interrupts_disabled_time_measure
+    bl	    rtos_stop_interrupts_disabled_time_measure
 #endif
 
     isb
@@ -273,19 +271,6 @@
  * N/A
  */
 .macro RTOS_ENTER_SPLIT_ISR _g_rtos_interrupt_p_, _interrupt_d_half_handler_function_
-    /*
-     * Cortex-M processors leave interrupts enabled on the CPU upon entering
-     * an exception, so we need to disable them here:
-     */
-    cpsid   i
-    isb
-
-#ifdef _MEASURE_INTERRUPTS_DISABLED_TIME_
-    mov r0, lr
-    bl rtos_start_interrupts_disabled_time_measure
-    mov lr, r0
-#endif
-
     RTOS_ENTER_ISR_COMMON \_g_rtos_interrupt_p_
 
     /*
@@ -302,7 +287,7 @@
      */
 
 #ifdef _MEASURE_INTERRUPTS_DISABLED_TIME_
-    bl rtos_stop_interrupts_disabled_time_measure
+    bl	    rtos_stop_interrupts_disabled_time_measure
 #endif
 
     isb
@@ -332,7 +317,7 @@
     isb
 
 #ifdef _MEASURE_INTERRUPTS_DISABLED_TIME_
-    bl rtos_start_interrupts_disabled_time_measure
+    bl	    rtos_start_interrupts_disabled_time_measure
 #endif
 
     /*

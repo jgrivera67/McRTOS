@@ -517,6 +517,11 @@ rtos_init_reset_execution_context(
         &cpu_controller_p->cpc_reset_execution_context;
 }
 
+#pragma GCC diagnostic push
+
+#ifndef _RELIABILITY_CHECKS_
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#endif
 
 /**
  * McRTOS root thread function
@@ -638,7 +643,6 @@ rtos_root_thread_f(void *arg)
     return fdc_error;
 }
 
-
 /**
  * McRTOS idle thread function
  */
@@ -694,6 +698,7 @@ rtos_idle_thread_f(void *arg)
     return fdc_error;
 }
 
+#pragma GCC diagnostic pop
 
 static void
 rtos_parse_command_line(
@@ -813,8 +818,8 @@ McRTOS_display_stats(void)
             GLIST_NODE_ENTRY(
                 context_node_p, struct rtos_execution_context, ctx_list_node);
 
-        uint8_t context_type_symbol;
-        uint32_t priority;
+        uint8_t context_type_symbol = '?';
+        uint32_t priority = UINT32_MAX;
 
         switch (context_p->ctx_context_type)
         {

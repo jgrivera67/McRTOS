@@ -82,11 +82,14 @@ rtos_common_fault_exception_handler(
 
     rtos_execution_stack_entry_t *before_exception_stack_p;
 
+#   ifdef _RELIABILITY_CHECKS_
     struct rtos_cpu_controller *cpu_controller_p =
         &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
+
     struct fdc_info *fdc_info_p = &cpu_controller_p->cpc_failures_info;
 
     fdc_info_p->fdc_handling_exception = true;
+#   endif
 
     DEBUG_PRINTF(
         "Fault %u exception caught on context %#p\n",
@@ -110,6 +113,7 @@ rtos_common_fault_exception_handler(
                     current_execution_context_p->ctx_cpu_saved_registers.cpu_reg_msp;
     }
 
+#   ifdef _RELIABILITY_CHECKS_
     capture_unexpected_fault(
             (void *)before_exception_stack_p[CPU_REG_PC], 0,
             before_exception_stack_p[CPU_REG_PSR],
@@ -120,6 +124,9 @@ rtos_common_fault_exception_handler(
     } else {
         rtos_reboot();
     }
+#   else
+    rtos_reboot();
+#   endif
 
     /*
      * Change the saved PC to point to the instruction after the faulting
@@ -127,7 +134,10 @@ rtos_common_fault_exception_handler(
      */
     before_exception_stack_p[CPU_REG_PC] += sizeof(cpu_instruction_t);
 
+#   ifdef _RELIABILITY_CHECKS_
     fdc_info_p->fdc_handling_exception = false;
+#   endif
+
     micro_trace_restart();
     DEBUG_PRINTF("*** Exiting debugger ***\n");
 }
@@ -311,15 +321,18 @@ rtos_dbg_dump_all_execution_contexts(void)
         rtos_dbg_dump_execution_context(context_p);
     }
 
+#   ifdef _RELIABILITY_CHECKS_
     rtos_dbg_dump_memory_with_call_stack(
         g_cortex_m_exception_stack.es_stack - 1,
         RTOS_INTERRUPT_STACK_NUM_ENTRIES + 2,
         "Stack shared by all exceptions");
+#   endif
 }
 
 static void
 rtos_dbg_dump_debug_msg_buffer(void)
 {
+#   ifdef _RELIABILITY_CHECKS_
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
     struct rtos_cpu_controller *cpu_controller_p =
         &g_McRTOS_p->rts_cpu_controllers[cpu_id];
@@ -331,6 +344,7 @@ rtos_dbg_dump_debug_msg_buffer(void)
     for (char *s = fdc_info_p->fdc_debug_msg_buffer; *s != '\0'; s ++) {
         uart_putchar_with_polling(g_console_serial_port_p, *s);
     }
+#   endif
 }
 
 static void
@@ -534,6 +548,7 @@ rtos_dbg_dump_memory_with_call_stack(
 static void
 rtos_dbg_dump_context_switch_traces(void)
 {
+#   ifdef _RELIABILITY_CHECKS_
     struct rtos_cpu_controller *cpu_controller_p =
         &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
 
@@ -625,6 +640,7 @@ rtos_dbg_dump_context_switch_traces(void)
         }
 #       endif
     }
+#   endif
 }
 
 

@@ -17,7 +17,9 @@ PLATFORM ?=
 #
 # BUILD_FLAVOR values: debug, reliability, performance
 #
-BUILD_FLAVOR := debug
+#BUILD_FLAVOR := debug
+BUILD_FLAVOR := reliability
+#BUILD_FLAVOR := performance
 SOURCE_DIR := src
 OBJECT_DIR := $(PLATFORM)-obj-$(BUILD_FLAVOR)
 UNIT_TESTS_DIR := unit_tests

@@ -13,7 +13,7 @@
 
 .text
 .thumb
-//.syntax unified
+.syntax unified
 
 /*
  * Generate ISR functions:

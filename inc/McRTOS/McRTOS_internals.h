@@ -233,7 +233,7 @@ struct rtos_cpu_controller
     uint8_t cpc_interrupts_disabled_being_measured_count;
 
     /**
-     * Flag that indicates that measurement of interrupt;s disabled time is
+     * Flag that indicates that measurement of interrupts disabled time is
      * enabled
      */
     bool cpc_measure_interrupts_disabled_time;
@@ -324,6 +324,8 @@ struct rtos_cpu_controller
      * Failures captured for this CPU core
      */
     struct fdc_info cpc_failures_info;
+#else
+    uint32_t cpc_failures_info;
 #endif
 
     /**
@@ -983,6 +985,11 @@ rtos_preemption_chain_pop_context(
     return last_preempted_context_p;
 }
 
+#pragma GCC diagnostic push
+
+#ifndef _RELIABILITY_CHECKS_
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#endif
 
 /**
  * Remove the given execution context from the preemption chain.
@@ -1006,5 +1013,7 @@ rtos_preemption_chain_remove_context(
 
     glist_remove_elem(&context_p->ctx_preemption_chain_node);
 }
+
+#pragma GCC diagnostic pop
 
 #endif /* _McRTOS_INTERNALS_H */

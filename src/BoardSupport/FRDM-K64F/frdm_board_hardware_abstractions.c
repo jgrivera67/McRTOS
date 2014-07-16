@@ -77,7 +77,7 @@ frdm_board_init(void)
     if (software_reset_happened()) {
         (void)set_rgb_led_color(LED_COLOR_YELLOW);
     } else {
-        (void)set_rgb_led_color(LED_COLOR_GREEN);
+        (void)set_rgb_led_color(LED_COLOR_BLACK);
     }
 #   endif
 }

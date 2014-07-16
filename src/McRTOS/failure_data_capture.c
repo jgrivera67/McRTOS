@@ -39,12 +39,13 @@
 
 #endif /* CPPUTEST_COMPILATION */
 
-
+#ifdef _RELIABILITY_CHECKS_
 static void capture_unexpected_exception_failure(
     enum unexpected_exception_types exception_type,
     void *location,
     uintptr_t arg,
     cpu_status_register_t cpu_status_register);
+#endif
 
 /**
  * Check if the CPU is running in little-endian mode
@@ -80,6 +81,11 @@ is_cpu_little_endian(void)
     }
 }
 
+#pragma GCC diagnostic push
+
+#ifndef _RELIABILITY_CHECKS_
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#endif
 
 /**
  * Function that actually captures a failure data record. This function is
@@ -92,6 +98,8 @@ rtos_k_capture_failure_data(
     uintptr_t arg2,
     void *failure_location)
 {
+#   ifdef _RELIABILITY_CHECKS_
+
     struct rtos_cpu_controller *cpu_controller_p =
         &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
     struct fdc_info *fdc_info_p = &cpu_controller_p->cpc_failures_info;
@@ -174,6 +182,8 @@ rtos_k_capture_failure_data(
     {
         rtos_k_restore_cpu_interrupts(cpu_sr);
     }
+
+#   endif /* _RELIABILITY_CHECKS_ */
 }
 
 
@@ -182,12 +192,14 @@ rtos_k_set_fdc_params(
     _IN_ bool assert_break_point_on,
     _IN_ bool exception_debugger_on)
 {
+#   ifdef _RELIABILITY_CHECKS_
     struct rtos_cpu_controller *cpu_controller_p =
         &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
     struct fdc_info *fdc_info_p = &cpu_controller_p->cpc_failures_info;
 
     fdc_info_p->fdc_asserts_failures_breakpoint_on = assert_break_point_on;
     fdc_info_p->fdc_exception_debugger_on = exception_debugger_on;
+#   endif /* _RELIABILITY_CHECKS_ */
 }
 
 
@@ -200,6 +212,7 @@ capture_assert_failure(
     uintptr_t arg1,
     uintptr_t arg2)
 {
+#   ifdef _RELIABILITY_CHECKS_
     uint32_t *return_address;
     uint32_t *assert_address;
 
@@ -233,6 +246,7 @@ capture_assert_failure(
             micro_trace_restart();
         }
     }
+#   endif /* _RELIABILITY_CHECKS_ */
 }
 
 
@@ -245,6 +259,7 @@ capture_fdc_error(
     uintptr_t arg1,
     uintptr_t arg2)
 {
+#   ifdef _RELIABILITY_CHECKS_
     uint32_t *return_address;
     uint32_t *error_address;
 
@@ -275,8 +290,276 @@ capture_fdc_error(
     }
 
     return (fdc_error_t)error_address;
+#   else
+
+    return 0;
+
+#   endif /* _RELIABILITY_CHECKS_ */
 }
 
+/**
+ * Captures a trace for a context switch and checks the preconditions for
+ * moving to a new execution context
+ */
+void
+fdc_trace_rtos_context_switch(
+    _IN_ const struct rtos_execution_context *target_execution_context_p,
+    _IN_ rtos_context_switch_type_t ctx_switch_type)
+{
+#   ifdef _RELIABILITY_CHECKS_
+    struct rtos_cpu_controller *cpu_controller_p =
+        &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
+
+#   ifdef DEBUG
+    struct rtos_execution_context *current_execution_context_p =
+        cpu_controller_p->cpc_current_execution_context_p;
+#   endif
+
+    DBG_ASSERT(
+        target_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT ||
+        target_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
+        target_execution_context_p->ctx_context_type, target_execution_context_p);
+
+    DBG_ASSERT_RTOS_EXECUTION_CONTEXT_INVARIANTS(target_execution_context_p);
+
+#   ifdef DEBUG
+    switch (ctx_switch_type) {
+    case RTOS_CSW_THREAD_TO_INTERRUPT:
+    case RTOS_CSW_THREAD_TO_EARLY_NESTED_INTERRUPT:
+        DBG_ASSERT(
+            current_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
+            current_execution_context_p->ctx_context_type,
+            current_execution_context_p);
+
+        DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(
+            current_execution_context_p, ctx_switch_type);
+
+        DBG_ASSERT(
+            target_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
+            target_execution_context_p->ctx_context_type,
+            target_execution_context_p);
+        break;
+
+    case RTOS_CSW_ENTERING_NESTED_INTERRUPT:
+        DBG_ASSERT(
+            current_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
+            current_execution_context_p->ctx_context_type,
+            current_execution_context_p);
+
+        DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(
+            current_execution_context_p, ctx_switch_type);
+
+        DBG_ASSERT(
+            target_execution_context_p != current_execution_context_p,
+            target_execution_context_p, current_execution_context_p);
+
+        DBG_ASSERT(
+            target_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
+            target_execution_context_p->ctx_context_type,
+            target_execution_context_p);
+        break;
+
+    case RTOS_CSW_EXITING_NESTED_INTERRUPT:
+        DBG_ASSERT(
+            current_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
+            current_execution_context_p->ctx_context_type,
+            current_execution_context_p);
+
+        DBG_ASSERT(
+            target_execution_context_p != current_execution_context_p,
+            target_execution_context_p, current_execution_context_p);
+
+        DBG_ASSERT(
+            target_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
+            target_execution_context_p->ctx_context_type,
+            target_execution_context_p);
+
+        DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(
+            target_execution_context_p, ctx_switch_type);
+        break;
+
+    case RTOS_CSW_INTERRUPT_TO_THREAD:
+    case RTOS_CSW_EXITING_EARLY_NESTED_INTERRUPT:
+        DBG_ASSERT(
+            current_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
+            current_execution_context_p->ctx_context_type,
+            current_execution_context_p);
+
+        DBG_ASSERT(
+            target_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
+            target_execution_context_p->ctx_context_type,
+            target_execution_context_p);
+
+        DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(
+            target_execution_context_p, ctx_switch_type);
+        break;
+
+    case RTOS_CSW_THREAD_TO_THREAD:
+        DBG_ASSERT(
+            current_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
+            current_execution_context_p->ctx_context_type,
+            current_execution_context_p);
+
+        DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(
+            current_execution_context_p, ctx_switch_type);
+
+        if (target_execution_context_p != current_execution_context_p) {
+            DBG_ASSERT(
+                target_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
+                target_execution_context_p->ctx_context_type,
+                target_execution_context_p);
+
+            DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(
+                target_execution_context_p, ctx_switch_type);
+        }
+        break;
+
+    case RTOS_CSW_RESET_TO_THREAD:
+        DBG_ASSERT(
+            current_execution_context_p->ctx_context_type == RTOS_RESET_CONTEXT,
+            current_execution_context_p->ctx_context_type,
+            current_execution_context_p);
+
+        DBG_ASSERT(
+            target_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
+            target_execution_context_p->ctx_context_type,
+            target_execution_context_p);
+
+        DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(
+            target_execution_context_p, ctx_switch_type);
+        break;
+
+    default:
+        FDC_ASSERT(false, ctx_switch_type, target_execution_context_p);
+    }
+
+    if (current_execution_context_p != target_execution_context_p) {
+        DBG_ASSERT_RTOS_EXECUTION_CONTEXT_INVARIANTS(current_execution_context_p);
+
+        DBG_ASSERT(
+            current_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT ||
+            current_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT ||
+            current_execution_context_p->ctx_context_type == RTOS_RESET_CONTEXT,
+            current_execution_context_p->ctx_context_type, current_execution_context_p);
+    } else {
+        DBG_ASSERT(
+            target_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
+            target_execution_context_p->ctx_context_type, target_execution_context_p);
+    }
+#   endif /* DEBUG */
+
+#   if DEFINED_ARM_CLASSIC_ARCH()
+    /*
+     * Validate Context switch assumptions:
+     */
+    cpu_status_register_t actual_cpsr;
+    CAPTURE_ARM_CPSR_REGISTER(actual_cpsr);
+
+    uint32_t actual_arm_mode = (actual_cpsr & ARM_MODE_MASK);
+
+    DBG_ASSERT(
+        CPU_INTERRUPTS_ARE_DISABLED(actual_cpsr),
+        actual_cpsr, target_execution_context_p);
+
+    DBG_ASSERT(
+        actual_arm_mode == ARM_MODE_SVC ||
+        actual_arm_mode == ARM_MODE_IRQ ||
+        actual_arm_mode == ARM_MODE_SYS,
+        actual_arm_mode, target_execution_context_p);
+
+#   elif DEFINED_ARM_CORTEX_M_ARCH()
+
+#   ifdef DEBUG
+    cpu_status_register_t actual_primask = __get_PRIMASK();
+    cpu_status_register_t actual_ipsr = __get_IPSR();
+    cpu_status_register_t actual_control_reg = __get_CONTROL();
+#   endif
+
+    DBG_ASSERT(
+        CPU_INTERRUPTS_ARE_DISABLED(actual_primask),
+        actual_primask, target_execution_context_p);
+
+    DBG_ASSERT(
+        (CPU_MODE_IS_INTERRUPT(actual_ipsr) ||
+         CPU_MODE_IS_PENDSV_EXCEPTION(actual_ipsr) ||
+         CPU_MODE_IS_HARD_FAULT_EXCEPTION(actual_ipsr)) &&
+         CPU_MODE_IS_PRIVILEGED(actual_control_reg, actual_ipsr) &&
+         CPU_USING_MSP_STACK_POINTER(actual_control_reg),
+        actual_ipsr, actual_control_reg);
+#   else
+#       error "CPU architecture not supported"
+#   endif
+
+    /*
+     * Capture context switch trace:
+     */
+
+    struct fdc_info *fdc_info_p = &cpu_controller_p->cpc_failures_info;
+
+    fdc_context_switch_trace_entry_t trace_entry =
+        target_execution_context_p->ctx_prefilled_trace_entry;
+
+    SET_BIT_FIELD(
+        trace_entry,
+        FDC_CST_LAST_SWITCHED_OUT_REASON_MASK,
+        FDC_CST_LAST_SWITCHED_OUT_REASON_SHIFT,
+        target_execution_context_p->ctx_last_switched_out_reason);
+
+    if (target_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT)
+    {
+        struct rtos_thread *target_thread_p =
+            RTOS_EXECUTION_CONTEXT_GET_THREAD(target_execution_context_p);
+
+        DBG_ASSERT(
+            target_thread_p->thr_state == RTOS_THREAD_RUNNING,
+            target_thread_p->thr_state, target_thread_p);
+
+        SET_BIT_FIELD(
+            trace_entry,
+            FDC_CST_CONTEXT_PRIORITY_MASK,
+            FDC_CST_CONTEXT_PRIORITY_SHIFT,
+            target_thread_p->thr_current_priority);
+    }
+
+    SET_BIT_FIELD(
+        trace_entry,
+        FDC_CST_CONTEXT_SWITCH_TYPE_MASK,
+        FDC_CST_CONTEXT_SWITCH_TYPE_SHIFT,
+        ctx_switch_type);
+
+#   if DEFINED_ARM_CLASSIC_ARCH()
+    cpu_status_register_t current_cpsr =
+        current_execution_context_p->ctx_cpu_registers[CPU_REG_CPSR];
+
+    SET_BIT_FIELD(
+        trace_entry,
+        FDC_CST_CURRENT_CPU_MODE_MASK,
+        FDC_CST_CURRENT_CPU_MODE_SHIFT,
+        current_cpsr & 0xf);
+
+    SET_BIT_FIELD(
+        trace_entry,
+        FDC_CST_TARGET_CPU_MODE_MASK,
+        FDC_CST_TARGET_CPU_MODE_SHIFT,
+        target_cpsr & 0xf);
+#   endif
+
+    fdc_info_p->fdc_context_switch_trace_buffer[
+        fdc_info_p->fdc_context_switch_trace_cursor] = trace_entry;
+
+    fdc_info_p->fdc_context_switch_trace_cursor ++;
+    if (fdc_info_p->fdc_context_switch_trace_cursor ==
+        RTOS_NUM_CONTEXT_SWITCH_TRACE_BUFFER_ENTRIES) {
+        fdc_info_p->fdc_context_switch_trace_cursor = 0;
+    }
+
+    fdc_info_p->fdc_context_switch_count ++;
+#   endif /* _RELIABILITY_CHECKS_ */
+}
+
+#pragma GCC diagnostic pop
+
+#ifdef _RELIABILITY_CHECKS_
 
 void
 check_isr_reset_entry_asserts(void)
@@ -313,8 +596,6 @@ check_isr_reset_entry_asserts(void)
 #endif
 }
 
-
-#ifdef _RELIABILITY_CHECKS_
 
 /**
  * Check the invariants of a McRTOS execution context
@@ -357,6 +638,7 @@ check_rtos_execution_context_invariants(
             rtos_execution_context_p->ctx_cpu_mode == RTOS_PRIVILEGED_THREAD_MODE,
             rtos_execution_context_p->ctx_cpu_mode, rtos_execution_context_p);
 
+#	ifdef DEBUG
         if (rtos_thread_p->thr_state == RTOS_THREAD_RUNNING)
         {
             struct rtos_cpu_controller *cpu_controller_p =
@@ -367,7 +649,6 @@ check_rtos_execution_context_invariants(
                 rtos_thread_p, cpu_controller_p->cpc_current_thread_p);
         }
 
-#ifdef DEBUG
         struct rtos_thread_execution_stack *thread_execution_stack_p =
             rtos_thread_p->thr_execution_stack_p;
 
@@ -383,7 +664,7 @@ check_rtos_execution_context_invariants(
                 &thread_execution_stack_p->tes_stack[RTOS_THREAD_STACK_NUM_ENTRIES],
             stack_bottom_end_p,
             &thread_execution_stack_p->tes_stack[RTOS_THREAD_STACK_NUM_ENTRIES]);
-#endif
+#	endif
     }
     else if (rtos_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT)
     {
@@ -652,265 +933,6 @@ check_rtos_execution_context_cpu_registers(
 #   error "CPU architecture not supported"
 #endif
 
-#endif /* _RELIABILITY_CHECKS_ */
-
-
-/**
- * Captures a trace for a context switch and checks the preconditions for
- * moving to a new execution context
- */
-void
-fdc_trace_rtos_context_switch(
-    _IN_ const struct rtos_execution_context *target_execution_context_p,
-    _IN_ rtos_context_switch_type_t ctx_switch_type)
-{
-    struct rtos_cpu_controller *cpu_controller_p =
-        &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
-
-    struct rtos_execution_context *current_execution_context_p =
-        cpu_controller_p->cpc_current_execution_context_p;
-
-    DBG_ASSERT(
-        target_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT ||
-        target_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
-        target_execution_context_p->ctx_context_type, target_execution_context_p);
-
-    DBG_ASSERT_RTOS_EXECUTION_CONTEXT_INVARIANTS(target_execution_context_p);
-
-#   ifdef DEBUG
-    switch (ctx_switch_type) {
-    case RTOS_CSW_THREAD_TO_INTERRUPT:
-    case RTOS_CSW_THREAD_TO_EARLY_NESTED_INTERRUPT:
-        DBG_ASSERT(
-            current_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
-            current_execution_context_p->ctx_context_type,
-            current_execution_context_p);
-
-        DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(
-            current_execution_context_p, ctx_switch_type);
-
-        DBG_ASSERT(
-            target_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
-            target_execution_context_p->ctx_context_type,
-            target_execution_context_p);
-        break;
-
-    case RTOS_CSW_ENTERING_NESTED_INTERRUPT:
-        DBG_ASSERT(
-            current_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
-            current_execution_context_p->ctx_context_type,
-            current_execution_context_p);
-
-        DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(
-            current_execution_context_p, ctx_switch_type);
-
-        DBG_ASSERT(
-            target_execution_context_p != current_execution_context_p,
-            target_execution_context_p, current_execution_context_p);
-
-        DBG_ASSERT(
-            target_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
-            target_execution_context_p->ctx_context_type,
-            target_execution_context_p);
-        break;
-
-    case RTOS_CSW_EXITING_NESTED_INTERRUPT:
-        DBG_ASSERT(
-            current_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
-            current_execution_context_p->ctx_context_type,
-            current_execution_context_p);
-
-        DBG_ASSERT(
-            target_execution_context_p != current_execution_context_p,
-            target_execution_context_p, current_execution_context_p);
-
-        DBG_ASSERT(
-            target_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
-            target_execution_context_p->ctx_context_type,
-            target_execution_context_p);
-
-        DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(
-            target_execution_context_p, ctx_switch_type);
-        break;
-
-    case RTOS_CSW_INTERRUPT_TO_THREAD:
-    case RTOS_CSW_EXITING_EARLY_NESTED_INTERRUPT:
-        DBG_ASSERT(
-            current_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
-            current_execution_context_p->ctx_context_type,
-            current_execution_context_p);
-
-        DBG_ASSERT(
-            target_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
-            target_execution_context_p->ctx_context_type,
-            target_execution_context_p);
-
-        DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(
-            target_execution_context_p, ctx_switch_type);
-        break;
-
-    case RTOS_CSW_THREAD_TO_THREAD:
-        DBG_ASSERT(
-            current_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
-            current_execution_context_p->ctx_context_type,
-            current_execution_context_p);
-
-        DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(
-            current_execution_context_p, ctx_switch_type);
-
-        if (target_execution_context_p != current_execution_context_p) {
-            DBG_ASSERT(
-                target_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
-                target_execution_context_p->ctx_context_type,
-                target_execution_context_p);
-
-            DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(
-                target_execution_context_p, ctx_switch_type);
-        }
-        break;
-
-    case RTOS_CSW_RESET_TO_THREAD:
-        DBG_ASSERT(
-            current_execution_context_p->ctx_context_type == RTOS_RESET_CONTEXT,
-            current_execution_context_p->ctx_context_type,
-            current_execution_context_p);
-
-        DBG_ASSERT(
-            target_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
-            target_execution_context_p->ctx_context_type,
-            target_execution_context_p);
-
-        DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(
-            target_execution_context_p, ctx_switch_type);
-        break;
-
-    default:
-        FDC_ASSERT(false, ctx_switch_type, target_execution_context_p);
-    }
-
-    if (current_execution_context_p != target_execution_context_p) {
-        DBG_ASSERT_RTOS_EXECUTION_CONTEXT_INVARIANTS(current_execution_context_p);
-
-        DBG_ASSERT(
-            current_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT ||
-            current_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT ||
-            current_execution_context_p->ctx_context_type == RTOS_RESET_CONTEXT,
-            current_execution_context_p->ctx_context_type, current_execution_context_p);
-    } else {
-        DBG_ASSERT(
-            target_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
-            target_execution_context_p->ctx_context_type, target_execution_context_p);
-    }
-#   endif /* DEBUG */
-
-#   if DEFINED_ARM_CLASSIC_ARCH()
-    /*
-     * Validate Context switch assumptions:
-     */
-    cpu_status_register_t actual_cpsr;
-    CAPTURE_ARM_CPSR_REGISTER(actual_cpsr);
-
-    uint32_t actual_arm_mode = (actual_cpsr & ARM_MODE_MASK);
-
-    DBG_ASSERT(
-        CPU_INTERRUPTS_ARE_DISABLED(actual_cpsr),
-        actual_cpsr, target_execution_context_p);
-
-    DBG_ASSERT(
-        actual_arm_mode == ARM_MODE_SVC ||
-        actual_arm_mode == ARM_MODE_IRQ ||
-        actual_arm_mode == ARM_MODE_SYS,
-        actual_arm_mode, target_execution_context_p);
-
-#   elif DEFINED_ARM_CORTEX_M_ARCH()
-
-    cpu_status_register_t actual_primask = __get_PRIMASK();
-
-    cpu_status_register_t actual_ipsr = __get_IPSR();
-
-    cpu_status_register_t actual_control_reg = __get_CONTROL();
-
-    DBG_ASSERT(
-        CPU_INTERRUPTS_ARE_DISABLED(actual_primask),
-        actual_primask, target_execution_context_p);
-
-    DBG_ASSERT(
-        (CPU_MODE_IS_INTERRUPT(actual_ipsr) ||
-         CPU_MODE_IS_PENDSV_EXCEPTION(actual_ipsr) ||
-         CPU_MODE_IS_HARD_FAULT_EXCEPTION(actual_ipsr)) &&
-         CPU_MODE_IS_PRIVILEGED(actual_control_reg, actual_ipsr) &&
-         CPU_USING_MSP_STACK_POINTER(actual_control_reg),
-        actual_ipsr, actual_control_reg);
-#   else
-#       error "CPU architecture not supported"
-#   endif
-
-    /*
-     * Capture context switch trace:
-     */
-
-    struct fdc_info *fdc_info_p = &cpu_controller_p->cpc_failures_info;
-
-    fdc_context_switch_trace_entry_t trace_entry =
-        target_execution_context_p->ctx_prefilled_trace_entry;
-
-    SET_BIT_FIELD(
-        trace_entry,
-        FDC_CST_LAST_SWITCHED_OUT_REASON_MASK,
-        FDC_CST_LAST_SWITCHED_OUT_REASON_SHIFT,
-        target_execution_context_p->ctx_last_switched_out_reason);
-
-    if (target_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT)
-    {
-        struct rtos_thread *target_thread_p =
-            RTOS_EXECUTION_CONTEXT_GET_THREAD(target_execution_context_p);
-
-        DBG_ASSERT(
-            target_thread_p->thr_state == RTOS_THREAD_RUNNING,
-            target_thread_p->thr_state, target_thread_p);
-
-        SET_BIT_FIELD(
-            trace_entry,
-            FDC_CST_CONTEXT_PRIORITY_MASK,
-            FDC_CST_CONTEXT_PRIORITY_SHIFT,
-            target_thread_p->thr_current_priority);
-    }
-
-    SET_BIT_FIELD(
-        trace_entry,
-        FDC_CST_CONTEXT_SWITCH_TYPE_MASK,
-        FDC_CST_CONTEXT_SWITCH_TYPE_SHIFT,
-        ctx_switch_type);
-
-#   if DEFINED_ARM_CLASSIC_ARCH()
-    cpu_status_register_t current_cpsr =
-        current_execution_context_p->ctx_cpu_registers[CPU_REG_CPSR];
-
-    SET_BIT_FIELD(
-        trace_entry,
-        FDC_CST_CURRENT_CPU_MODE_MASK,
-        FDC_CST_CURRENT_CPU_MODE_SHIFT,
-        current_cpsr & 0xf);
-
-    SET_BIT_FIELD(
-        trace_entry,
-        FDC_CST_TARGET_CPU_MODE_MASK,
-        FDC_CST_TARGET_CPU_MODE_SHIFT,
-        target_cpsr & 0xf);
-#   endif
-
-    fdc_info_p->fdc_context_switch_trace_buffer[
-        fdc_info_p->fdc_context_switch_trace_cursor] = trace_entry;
-
-    fdc_info_p->fdc_context_switch_trace_cursor ++;
-    if (fdc_info_p->fdc_context_switch_trace_cursor ==
-        RTOS_NUM_CONTEXT_SWITCH_TRACE_BUFFER_ENTRIES) {
-        fdc_info_p->fdc_context_switch_trace_cursor = 0;
-    }
-
-    fdc_info_p->fdc_context_switch_count ++;
-}
-
 
 #if DEFINED_ARM_CLASSIC_ARCH()
 
@@ -1044,6 +1066,8 @@ capture_unexpected_exception_failure(
         cpu_controller_p->cpc_current_execution_context_p);
 }
 
+#endif /* _RELIABILITY_CHECKS_ */
+
 
 /**
  * Fatal error handler
@@ -1068,6 +1092,7 @@ void fatal_error_handler(fdc_error_t fdc_error)
 }
 
 
+#ifdef _RELIABILITY_CHECKS_
 void
 check_rtos_public_kernel_service_preconditions(bool thread_callers_only)
 {
@@ -1261,7 +1286,7 @@ check_rtos_interrupt_entry_preconditions(
         interrupt_context_p != current_context_p,
         interrupt_context_p, current_context_p);
 
-#   if DEBUG
+#   ifdef DEBUG
     if (rtos_interrupt_p->int_channel < 0) {
         FDC_ASSERT(
             RTOS_INTR_BIT_MAP_GET_BIT(
@@ -1506,3 +1531,4 @@ capture_fdc_debug_printf(const char *fmt, ...)
    }
 }
 
+#endif /* _RELIABILITY_CHECKS_ */

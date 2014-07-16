@@ -836,10 +836,9 @@ rtos_k_mutex_acquire(
     _IN_ struct rtos_mutex *rtos_mutex_p)
 {
     FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
-
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
     struct rtos_cpu_controller *cpu_controller_p =
-        &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
+        &g_McRTOS_p->rts_cpu_controllers[cpu_id];
 
     struct rtos_execution_context *current_execution_context_p =
         cpu_controller_p->cpc_current_execution_context_p;
@@ -1196,7 +1195,7 @@ rtos_k_condvar_wait(
 
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
     struct rtos_cpu_controller *cpu_controller_p =
-        &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
+        &g_McRTOS_p->rts_cpu_controllers[cpu_id];
 
     struct rtos_execution_context *current_execution_context_p =
         cpu_controller_p->cpc_current_execution_context_p;
@@ -1291,7 +1290,7 @@ rtos_k_condvar_wait_interrupt(
 
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
     struct rtos_cpu_controller *cpu_controller_p =
-        &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
+        &g_McRTOS_p->rts_cpu_controllers[cpu_id];
 
     struct rtos_execution_context *current_execution_context_p =
         cpu_controller_p->cpc_current_execution_context_p;
@@ -1840,6 +1839,11 @@ Exit:
     }
 }
 
+#pragma GCC diagnostic push
+
+#ifndef _RELIABILITY_CHECKS_
+#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
+#endif
 
 /**
  * Function to be invoked at the beginning of an assembly language ISR,
@@ -1928,9 +1932,11 @@ rtos_k_enter_interrupt(
     new_interrupt_context_p->ctx_last_switched_in_time_stamp = get_cpu_clock_cycles();
 #   endif
 
+#   ifdef _RELIABILITY_CHECKS_
     struct fdc_info *fdc_info_p = &cpu_controller_p->cpc_failures_info;
 
     fdc_info_p->fdc_interrupt_channel_counters[interrupt_channel] ++;
+#   endif
 
     /*
      * Neither the calling interrupt context nor the interrupted execution context are
@@ -2042,6 +2048,7 @@ rtos_k_enter_interrupt(
 #   endif
 }
 
+#pragma GCC diagnostic pop
 
 /**
  * Function to be invoked at the end of an assembly language ISR.
@@ -2160,6 +2167,7 @@ rtos_k_exit_interrupt(void)
             preempted_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
             preempted_context_p->ctx_context_type, preempted_context_p);
 
+#	ifdef DEBUG
         struct rtos_thread *current_thread_p =
             RTOS_EXECUTION_CONTEXT_GET_THREAD(preempted_context_p);
 
@@ -2168,6 +2176,7 @@ rtos_k_exit_interrupt(void)
             current_thread_p, cpu_controller_p->cpc_current_thread_p);
 
         DBG_ASSERT_RTOS_THREAD_INVARIANTS(current_thread_p);
+#	endif
 
         if (preempted_context_p->
                 ctx_cpu_saved_registers.cpu_reg_lr_on_exc_entry ==
@@ -2907,7 +2916,7 @@ rtos_k_mpu_rw_region_pop(void)
             _IN_ _entry_type entry_value,                                   \
             _IN_ bool wait_if_full)                                         \
         {                                                                   \
-            cpu_status_register_t saved_cpu_intr_mask;                      \
+            cpu_status_register_t saved_cpu_intr_mask = 0;                  \
             bool entry_written;                                             \
                                                                             \
             if (circ_buf_p->cb_mutex_p == NULL) {                           \
@@ -2993,7 +3002,7 @@ rtos_k_mpu_rw_region_pop(void)
             _OUT_ _entry_type *entry_value_p,                               \
             _IN_ bool wait_if_empty)                                        \
         {                                                                   \
-            cpu_status_register_t saved_cpu_intr_mask;                      \
+            cpu_status_register_t saved_cpu_intr_mask = 0;                  \
             bool entry_read;                                                \
                                                                             \
             if (circ_buf_p->cb_mutex_p == NULL) {                           \

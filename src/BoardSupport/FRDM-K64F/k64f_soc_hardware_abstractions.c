@@ -1059,8 +1059,10 @@ mpu_unset_rw_region(mpu_thread_rw_region_index_t thread_rw_region_index)
         g_mpu.signature == MPU_DEVICE_SIGNATURE,
         g_mpu.signature, 0);
 
+#   ifdef _RELIABILITY_CHECKS_
     struct mpu_device_var *mpu_var_p = g_mpu.var_p;
     FDC_ASSERT(mpu_var_p->initialized, mpu_var_p, 0);
+#   endif
 
     volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
 
@@ -1086,11 +1088,13 @@ mpu_unset_rw_region(mpu_thread_rw_region_index_t thread_rw_region_index)
 cpu_reset_cause_t
 soc_hardware_init(void)
 {
+#   ifdef _RELIABILITY_CHECKS_
     cpu_status_register_t reg_primask = __get_PRIMASK();
 
     FDC_ASSERT(
         CPU_INTERRUPTS_ARE_DISABLED(reg_primask),
         reg_primask, 0);
+#   endif
 
     cpu_reset_cause_t reset_cause = find_reset_cause();
 
@@ -1768,11 +1772,14 @@ uart_enable_tx_rx_fifos(
         uart_device_p->urt_signature == UART_DEVICE_SIGNATURE,
         uart_device_p->urt_signature, uart_device_p);
 
-    struct uart_device_var *uart_var_p = uart_device_p->urt_var_p;
     UART_MemMapPtr uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
+
+#   ifdef _RELIABILITY_CHECKS_
+    struct uart_device_var *uart_var_p = uart_device_p->urt_var_p;
 
     FDC_ASSERT(uart_var_p->urt_initialized, uart_device_p, 0);
     FDC_ASSERT(!uart_var_p->urt_fifos_enabled, uart_device_p, 0);
+#   endif
 
     /*
      * Disable UART's transmitter and receiver:
@@ -1811,11 +1818,14 @@ uart_disable_tx_rx_fifos(
         uart_device_p->urt_signature == UART_DEVICE_SIGNATURE,
         uart_device_p->urt_signature, uart_device_p);
 
-    struct uart_device_var *uart_var_p = uart_device_p->urt_var_p;
     UART_MemMapPtr uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
+
+#   ifdef _RELIABILITY_CHECKS_
+    struct uart_device_var *uart_var_p = uart_device_p->urt_var_p;
 
     FDC_ASSERT(uart_var_p->urt_initialized, uart_device_p, 0);
     FDC_ASSERT(uart_var_p->urt_fifos_enabled, uart_device_p, 0);
+#   endif
 
     /*
      * Disable UART's transmitter and receiver:
@@ -1902,10 +1912,12 @@ k64f_uart_rx_tx_interrupt_e_handler(
 	/*
 	 * Fill the Tx FIFO as much as possible:
 	 */
+#	ifdef DEBUG
 	uint_fast8_t tx_fifo_length =
 		    read_8bit_mmio_register(&UART_TCFIFO_REG(uart_mmio_registers_p));
 
 	DBG_ASSERT(tx_fifo_length == 0, tx_fifo_length, 0);
+#	endif
 
 	for (uint_fast8_t i = 0; i < uart_var_p->urt_tx_fifo_size; ++i) {
             uint8_t byte_to_transmit;
@@ -2012,6 +2024,12 @@ k64f_uart_err_interrupt_e_handler(
 }
 
 
+#pragma GCC diagnostic push
+
+#ifndef _RELIABILITY_CHECKS_
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#endif
+
 /**
  * Send a character over a UART serial port, blocking the caller on a condvar
  * if the UART Tx fifo is full.
@@ -2062,6 +2080,7 @@ uart_putchar(
     }
 }
 
+#pragma GCC diagnostic pop
 
 /**
  * Send a character over a UART serial port, doing polling until the
@@ -2100,6 +2119,11 @@ uart_putchar_with_polling(
     write_8bit_mmio_register(&UART_D_REG(uart_mmio_registers_p), c);
 }
 
+#pragma GCC diagnostic push
+
+#ifndef _RELIABILITY_CHECKS_
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#endif
 
 /**
  * Receive a character from a UART serial port, blocking the caller
@@ -2127,14 +2151,16 @@ uart_getchar(
     write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
 
     bool entry_read = rtos_k_byte_circular_buffer_read(
-        &uart_var_p->urt_receive_queue,
-        &char_received,
-        true);
+			&uart_var_p->urt_receive_queue,
+			&char_received,
+			true);
 
-    DBG_ASSERT(entry_read, uart_device_p, 0);
+    FDC_ASSERT(entry_read, uart_device_p, 0);
 
     return char_received;
 }
+
+#pragma GCC diagnostic pop
 
 /**
  * Reads the next character received from a UART serial port, doing polling
@@ -2145,11 +2171,14 @@ uart_getchar_with_polling(
     _IN_ const struct uart_device *uart_device_p)
 {
     uint32_t reg_value;
-    struct uart_device_var *const uart_var_p = uart_device_p->urt_var_p;
     UART_MemMapPtr uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
+
+#   ifdef _RELIABILITY_CHECKS_
+    struct uart_device_var *const uart_var_p = uart_device_p->urt_var_p;
 
     FDC_ASSERT(
         uart_var_p->urt_initialized, uart_var_p, uart_device_p);
+#   endif
 
     /*
      * Disable generation of receive interrupts:

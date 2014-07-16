@@ -124,6 +124,7 @@ cortex_m_mpu_init(void)
 void
 cortex_m_nvic_init(void)
 {
+#   ifdef _RELIABILITY_CHECKS_
     uint32_t reg_value;
 
     /*
@@ -131,6 +132,7 @@ cortex_m_nvic_init(void)
      */
     reg_value = read_32bit_mmio_register(&SCB->VTOR);
     FDC_ASSERT(reg_value == 0x0, reg_value, 0);
+#   endif
 
     /*
      * Disable interrupts in the ARM core
@@ -172,6 +174,11 @@ cortex_m_nvic_init(void)
     rtos_k_restore_cpu_interrupts(cpu_status_register);
 }
 
+#pragma GCC diagnostic push
+
+#ifndef _RELIABILITY_CHECKS_
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#endif
 
 /**
  * Configure an ISR in the NVIC, for an external interrupt, and in the SCB
@@ -184,14 +191,15 @@ install_isr(
         interrupt_prio_t priority,
         cpu_id_t cpu_id)
 {
-    extern const isr_function_t *const g_interrupt_vector_table[];
     IRQn_Type irq_number = (IRQn_Type)channel;
     uint32_t vector_number = IRQ_NUMBER_TO_VECTOR_NUMBER(irq_number);
 
+#   ifdef _RELIABILITY_CHECKS_
     /*
      * Since for the Cortex-M all ISRs are installed at compile-time,
      * we don't install the ISR here, but we can check it
      */
+    extern const isr_function_t *const g_interrupt_vector_table[];
     isr_function_t *installed_isr_p = g_interrupt_vector_table[vector_number];
 
     FDC_ASSERT(
@@ -204,6 +212,7 @@ install_isr(
         priority, SOC_NUM_INTERRUPT_PRIORITIES);
 
     FDC_ASSERT(cpu_id < SOC_NUM_CPU_CORES, cpu_id, 0);
+#   endif
 
     /*
      * Disable interrupts in the ARM core
@@ -256,6 +265,7 @@ install_isr(
     rtos_k_restore_cpu_interrupts(cpu_status_register);
 }
 
+#pragma GCC diagnostic pop
 
 /**
  * Initializes the RTOS tick timer for the calling CPU core

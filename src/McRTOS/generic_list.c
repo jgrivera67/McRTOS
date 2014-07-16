@@ -144,7 +144,9 @@ glist_add_tail_elem(struct glist_node *list_p, struct glist_node *elem_p)
 void
 glist_remove_elem(struct glist_node *elem_p)
 {
+#ifdef _RELIABILITY_CHECKS_
     struct glist_node *list_p = elem_p->ln_anchor_p;
+#endif
 
     /*
      * elem_p is in a list:

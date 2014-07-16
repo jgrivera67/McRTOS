@@ -27,7 +27,6 @@ struct glist_node {
 	 */
 	struct glist_node *ln_prev_p;
 
-#ifdef _RELIABILITY_CHECKS_
 	/**
 	 * A glist_node structure can be either the anchor node of a list
          * or a child node in a list, but not both.
@@ -44,11 +43,8 @@ struct glist_node {
      		 */
 		uintptr_t ln_node_count;
 	};
-#endif /* _RELIABILITY_CHECKS_ */
 };
 
-
-#ifdef _RELIABILITY_CHECKS_
 
 /**
  * Compile time initializer of a list node
@@ -61,7 +57,7 @@ struct glist_node {
 	}
 
 /**
- * Macro to initialize a glist_node structure at run time 
+ * Macro to initialize a glist_node structure at run time
  */
 #define GLIST_NODE_INIT(_list_p) 					\
  	do { 								\
@@ -78,7 +74,7 @@ struct glist_node {
  * 			the element.
  */
 #define GLIST_NODE_GET_LIST(_elem_p) \
-	((_elem_p)->ln_anchor_p) 
+	((_elem_p)->ln_anchor_p)
 
 /**
  * Return the number of elements of a given list
@@ -87,26 +83,7 @@ struct glist_node {
  * 			the list.
  */
 #define GLIST_GET_NODE_COUNT(_list_p) \
-	((_list_p)->ln_node_count) 
-
-#else
-
-#define GLIST_NODE_INITIALIZER(_list_node)				\
- 	{ 								\
-		.ln_next_p = &(_list_node),				\
-		.ln_prev_p = &(_list_node),				\
-	}
-
-/**
- * Macro to initialize a glist_node structure at run time 
- */
-#define GLIST_NODE_INIT(_list_p) 					\
- 	do { 								\
-		(_list_p)->ln_next_p = (_list_p);			\
-		(_list_p)->ln_prev_p = (_list_p);			\
-	} while(0)
-
-#endif /* _RELIABILITY_CHECKS_ */
+	((_list_p)->ln_node_count)
 
 /**
  * Iterator to traverse a list
@@ -128,7 +105,7 @@ struct glist_node {
  *
  * @param _elem_p	variable of type 'struct glist_node *' used as loop index.
  * @param _next_p	variable of type 'struct glist_node *' used as a temp
- *			location to save the ln_next_p forward link between 
+ *			location to save the ln_next_p forward link between
  *			iterations.
  * @param _list_p	variable of type 'struct glist_node *' that points to the
  *			linked list object being traversed.
@@ -216,7 +193,7 @@ struct glist_node {
  * 			the list.
  */
 #define GLIST_GET_FIRST(_list_p) \
-	(GLIST_IS_EMPTY(_list_p) ? NULL : (_list_p)->ln_next_p) 
+	(GLIST_IS_EMPTY(_list_p) ? NULL : (_list_p)->ln_next_p)
 
 /**
  * Return the pointer to the last element of a list or NULL if the list
@@ -226,7 +203,7 @@ struct glist_node {
  * 			the list.
  */
 #define GLIST_GET_LAST(_list_p) \
-	(GLIST_IS_EMPTY(_list_p) ? NULL : (_list_p)->ln_prev_p) 
+	(GLIST_IS_EMPTY(_list_p) ? NULL : (_list_p)->ln_prev_p)
 
 /**
  * Tell if a list node is not in any list
@@ -240,14 +217,14 @@ struct glist_node {
 #endif
 
 /**
- * Tell if a list is empty 
+ * Tell if a list is empty
  */
 #define GLIST_IS_EMPTY(_list_p)     GLIST_NODE_IS_UNLINKED(_list_p)
 
 /**
- * Tell if a list is not empty 
+ * Tell if a list is not empty
  */
-#define GLIST_IS_NOT_EMPTY(_list_p) (!GLIST_IS_EMPTY(_list_p))     
+#define GLIST_IS_NOT_EMPTY(_list_p) (!GLIST_IS_EMPTY(_list_p))
 
 /**
  * Tell if a list node belongs to a list (any list)
@@ -255,7 +232,7 @@ struct glist_node {
 #define GLIST_NODE_IS_LINKED(_list_node_p) \
         (! GLIST_NODE_IS_UNLINKED(_list_node_p))
 
-    
+
 typedef void glist_add_elem_function_t(
                 struct glist_node *list_p,
                 struct glist_node *elem_p);

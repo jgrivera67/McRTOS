@@ -505,7 +505,7 @@ embedded_vprintf(
     const char *cursor_p = fmt;
     bool parsing_format_specifier = false;
     bool print_numeric_base_prefix = false;
-    uint8_t padding_count;
+    uint8_t padding_count = 0;
 
     FDC_ASSERT_VALID_FUNCTION_POINTER(putchar_func_p);
     FDC_ASSERT_VALID_RAM_OR_ROM_POINTER(fmt, sizeof(char));

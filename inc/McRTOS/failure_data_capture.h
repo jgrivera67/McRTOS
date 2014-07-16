@@ -304,6 +304,7 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
 #define FDC_ASSERT_LESS_THAN(_value1, _value2)
 #define FDC_ASSERT(_cond, _arg1, _arg2)
 #define FDC_ASSERT_CPU_INTERRUPTS_DISABLED()
+#define FDC_ASSERT_PRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED()
 #define FDC_ASSERT_UNPRIVILEGED_CPU_MODE()
 #define FDC_ASSERT_COMING_FROM_RESET()
 #define FDC_ASSERT_CPU_IS_LITTLE_ENDIAN()
@@ -311,6 +312,7 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
 #define FDC_ASSERT_VALID_FUNCTION_POINTER(_func_ptr)
 #define FDC_ASSERT_VALID_RAM_POINTER(_data_ptr, _alignment)
 #define FDC_ASSERT_VALID_ROM_POINTER(_data_ptr, _alignment)
+#define FDC_ASSERT_VALID_RAM_OR_ROM_POINTER(_data_ptr, _alignment)
 #define FDC_ASSERT_RTOS_EXECUTION_CONTEXT_INVARIANTS( \
             _rtos_execution_context_p)
 
@@ -326,6 +328,8 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
 #define FDC_ASSERT_RTOS_INTERRUPT_E_HANDLER_PRECONDITIONS(_rtos_interrupt_p)
 #define FDC_TRACE_RTOS_CONTEXT_SWITCH( \
             _rtos_execution_context_p, _context_switch_type)
+
+#define VALID_CODE_ADDRESS(_code_addr)	true
 
 #endif /* _RELIABILITY_CHECKS_ */
 
@@ -432,6 +436,7 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
 #define DBG_ASSERT_LESS_THAN(_value1, _value2)
 #define DBG_ASSERT(_cond, _arg1, _arg2)
 #define DBG_ASSERT_CPU_INTERRUPTS_DISABLED()
+#define DBG_ASSERT_PRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED()
 #define DBG_ASSERT_VALID_MMIO_ADDRESS(_io_addr)
 #define DBG_ASSERT_VALID_FUNCTION_POINTER(_func_ptr)
 #define DBG_ASSERT_VALID_RAM_POINTER(_data_ptr, _alignment)
@@ -752,7 +757,8 @@ C_ASSERT(RTOS_NUM_CONTEXT_SWITCH_TRACE_BUFFER_ENTRIES <= UINT16_MAX);
 
 #else
 
-#define FDC_INFO_INITIALIZER(_fdc_info)
+#define FDC_INFO_INITIALIZER(_fdc_info) \
+	_fdc_info = 0
 
 #endif /* _RELIABILITY_CHECKS_ */
 
