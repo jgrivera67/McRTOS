@@ -161,7 +161,7 @@ endif
 ifeq "$(BUILD_FLAVOR)" "performance"
     CPPFLAGS += -D_CPU_CYCLES_MEASURE_
     #OPT can be -O1, -O2, -Os or -O3
-    OPT = -O0
+    OPT = -O2
 endif
 
 # optimisation level here -O0, -O1, -O2, -Os, or -03

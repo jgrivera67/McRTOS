@@ -18,6 +18,12 @@
 #pragma GCC diagnostic ignored "-Wunused-local-typedefs"
 #pragma GCC diagnostic ignored "-Wunused-parameter" // ???
 
+/*
+ * Disable compiler optimizations for this file, since it contains
+ * timing sensitive functions
+ */
+#pragma GCC optimize "O0"
+
 /**
  * Crystal frequency in HZ
  */
@@ -779,6 +785,7 @@ soc_early_init(void)
                 0x0100U;
     write_16bit_mmio_register(&WDOG_STCTRLH, reg_value);
 }
+
 
 static void
 k64f_set_mpu_region(
