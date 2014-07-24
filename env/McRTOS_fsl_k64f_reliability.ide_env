@@ -1,0 +1,6 @@
+export PLATFORM="FRDM-K64F"
+export APPLICATION="McRTOS-FRDM"
+export BUILD_FLAVOR=reliability
+
+. $HOME/embsys/projects/McRTOS/env/McRTOS_common.ide_env
+

@@ -1,0 +1,74 @@
+base_dir=$HOME/embsys/projects
+project="McRTOS"
+#export PLATFORM="FRDM-KL25Z"
+export PLATFORM="FRDM-K20D5"
+export APPLICATION="McRTOS-FRDM"
+export SRC_TREE_DIR="$base_dir/$project"
+export SRC_DB_DIR="$base_dir/${project}_src_database"
+export SRC_SUBDIRS=""
+export CSCOPE_DB="$SRC_DB_DIR/cscope.out"
+export CSCOPE_ROOT_DIR=$SRC_TREE_DIR
+export CSCOPE_ROOT_DIR_EXPORTS=""
+export IDE_VIM_SESSION="$base_dir/${project}.vim"
+export DEFAULT_OBJ_FLAVOR_SUBDIR="${PLATFORM}-obj-debug"
+export BIN_FILE="$DEFAULT_OBJ_FLAVOR_SUBDIR/Applications/$APPLICATION/$APPLICATION.bin"
+export TOOLCHAIN=$HOME/embsys/tools/gcc-arm-none-eabi-4_8-2013q4/bin/arm-none-eabi
+export MAKEFILE_DIR="$SRC_TREE_DIR"
+export IDE_SHELL_RC_FILE=$base_dir/${project}_fsl_k20d5.ide_env
+
+function my_build_all
+{
+	run_build build
+}
+
+function my_rebuild_all
+{
+	run_build rebuild
+}
+
+function run_build
+{
+	typeset status
+	typeset target
+
+	if [ $# != 1 ]; then
+		echo "Usage: $FUNCNAME <make target>"
+		return 1
+	fi
+
+	target=$1
+	cd $MAKEFILE_DIR
+	echo "*** Building $APPLICATION for platform $PLATFORM ..."
+	make $target 2>&1 | tee ~/tmp/make.$$.log
+	status=$?
+	if [ $status != 0 ]; then
+		echo "*** Build failed with error $status ***"
+	else
+		echo "*** Build succeeded ***"
+	fi
+
+	num_warnings=$(grep -c '[Ww]arning:' ~/tmp/make.$$.log)
+	num_errors=$(grep -c '[Ee]rror:' ~/tmp/make.$$.log)
+	num_todos=$(grep -c 'TODO:' ~/tmp/make.$$.log)
+	echo "*** Total number of errors: $num_errors ***"
+	echo "*** Total number of warnings: $num_warnings ***"
+	echo "*** Total number of TODOs: $num_todos ***"
+	return $status
+}
+
+function my_update_flash
+{
+    echo "copying $BIN_FILE to $PLATFORM flash ..."
+    cp $BIN_FILE /media/$USER/$PLATFORM
+    status=$?
+    if [ $status != 0 ]; then
+	echo "*** cp failed with error $status ***"
+	return 1
+    fi
+
+    sync
+    return 0
+}
+
+cd $SRC_TREE_DIR
+#gvim -S $IDE_VIM_SESSION

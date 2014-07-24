@@ -6,20 +6,25 @@
 # Author: German Rivera - September, 2013
 #
 
+#
+# Application subdirectory
+# This variable must be set via an environment variable
+#
 APPLICATION ?=
 
 #
 # PLATFORM values: LPC2478-STK, LM4F120-LaunchPad, FRDM-KL25Z, FRDM-K20D50,
 # FRDM-K64F
+# This variable must be set via an environment variable
 #
 PLATFORM ?=
 
 #
 # BUILD_FLAVOR values: debug, reliability, performance
+# This variable must be set via an environment variable
 #
-#BUILD_FLAVOR := debug
-#BUILD_FLAVOR := reliability
-BUILD_FLAVOR := performance
+BUILD_FLAVOR ?=
+
 SOURCE_DIR := src
 OBJECT_DIR := $(PLATFORM)-obj-$(BUILD_FLAVOR)
 UNIT_TESTS_DIR := unit_tests

@@ -1,0 +1,6 @@
+export PLATFORM="LM4F120-LaunchPad"
+export APPLICATION="McRTOS-launchpad"
+export BUILD_FLAVOR=debug
+
+. $HOME/embsys/projects/McRTOS/env/McRTOS_common.ide_env
+
