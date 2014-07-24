@@ -125,7 +125,7 @@ rtos_common_fault_exception_handler(
         rtos_reboot();
     }
 #   else
-    rtos_reboot();
+    rtos_run_debugger(current_execution_context_p, before_exception_stack_p);
 #   endif
 
     /*

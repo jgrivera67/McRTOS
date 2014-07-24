@@ -80,12 +80,8 @@ glist_add_head_elem(struct glist_node *list_p, struct glist_node *elem_p)
     list_p->ln_next_p->ln_prev_p = elem_p;
     list_p->ln_next_p = elem_p;
 
-#ifdef _RELIABILITY_CHECKS_
-
     list_p->ln_node_count ++;
     elem_p->ln_anchor_p = list_p;
-
-#endif /* _RELIABILITY_CHECKS_ */
 
 } /* glist_add_head_elem */
 
@@ -120,12 +116,8 @@ glist_add_tail_elem(struct glist_node *list_p, struct glist_node *elem_p)
     list_p->ln_prev_p->ln_next_p = elem_p;
     list_p->ln_prev_p = elem_p;
 
-#ifdef _RELIABILITY_CHECKS_
-
     list_p->ln_node_count ++;
     elem_p->ln_anchor_p = list_p;
-
-#endif /* _RELIABILITY_CHECKS_ */
 
 } /* glist_add_tail_elem */
 
@@ -144,9 +136,9 @@ glist_add_tail_elem(struct glist_node *list_p, struct glist_node *elem_p)
 void
 glist_remove_elem(struct glist_node *elem_p)
 {
-#ifdef _RELIABILITY_CHECKS_
+#   ifdef _RELIABILITY_CHECKS_
     struct glist_node *list_p = elem_p->ln_anchor_p;
-#endif
+#   endif
 
     /*
      * elem_p is in a list:
@@ -160,12 +152,8 @@ glist_remove_elem(struct glist_node *elem_p)
     elem_p->ln_prev_p->ln_next_p = elem_p->ln_next_p;
     elem_p->ln_next_p->ln_prev_p = elem_p->ln_prev_p;
 
-#ifdef _RELIABILITY_CHECKS_
-
     elem_p->ln_anchor_p->ln_node_count --;
     elem_p->ln_anchor_p = NULL;
-
-#endif /* _RELIABILITY_CHECKS_ */
 
     /*
      * Reset links of the removed node to point to itself:
@@ -198,12 +186,10 @@ glist_migrate_nodes(struct glist_node *src_list_p, struct glist_node *dest_list_
     FDC_ASSERT_GLIST_ANCHOR_INVARIANTS(src_list_p);
     FDC_ASSERT_GLIST_ANCHOR_INVARIANTS(dest_list_p);
 
-#ifdef _RELIABILITY_CHECKS_
     if (src_list_p->ln_node_count == 0)
     {
         return;
     }
-#endif /* _RELIABILITY_CHECKS_ */
 
     src_list_p->ln_prev_p->ln_next_p = dest_list_p->ln_next_p;
     src_list_p->ln_next_p->ln_prev_p = dest_list_p;
@@ -211,8 +197,6 @@ glist_migrate_nodes(struct glist_node *src_list_p, struct glist_node *dest_list_
     dest_list_p->ln_next_p = src_list_p->ln_next_p;
 
     dest_list_p->ln_node_count += src_list_p->ln_node_count;
-
-#ifdef _RELIABILITY_CHECKS_
 
     /*
      * Update the anchor node for the migrated nodes:
@@ -229,8 +213,6 @@ glist_migrate_nodes(struct glist_node *src_list_p, struct glist_node *dest_list_
             break;
         }
     }
-
-#endif /* _RELIABILITY_CHECKS_ */
 
     FDC_ASSERT(src_list_p->ln_node_count == 0,
 	   src_list_p->ln_node_count, src_list_p);

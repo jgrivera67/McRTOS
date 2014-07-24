@@ -480,9 +480,6 @@ rtos_stop_interrupts_disabled_time_measure(
         {
             cpu_controller_p->cpc_longest_time_interrupts_disabled = delta_cpu_cycles;
         }
-
-        cpu_controller_p->cpc_latest_measurement_time_interrupts_disabled =
-            delta_cpu_cycles;
     }
 
 

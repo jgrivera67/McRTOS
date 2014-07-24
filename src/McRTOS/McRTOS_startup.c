@@ -47,7 +47,6 @@ enum system_thread_priorities
             .cpc_ticks_since_boot_count = 0,                            \
             .cpc_interrupts_disabled_start_time_stamp = 0,              \
             .cpc_longest_time_interrupts_disabled = 0,                  \
-            .cpc_latest_measurement_time_interrupts_disabled = 0,       \
             .cpc_app_config_p = NULL,                                   \
             FDC_INFO_INITIALIZER(.cpc_failures_info),                   \
             .cpc_execution_contexts_list_anchor =                       \
@@ -795,9 +794,6 @@ McRTOS_display_stats(void)
 
     console_printf("Longest interrupts disabled time: %u us\n",
          CPU_CLOCK_CYCLES_TO_MICROSECONDS(cpu_controller_p->cpc_longest_time_interrupts_disabled));
-
-    console_printf("Latest interrupts disabled time: %u us\n",
-         CPU_CLOCK_CYCLES_TO_MICROSECONDS(cpu_controller_p->cpc_latest_measurement_time_interrupts_disabled));
 
     console_printf("Stop CPU in idle thread: %s\n\n",
         g_McRTOS_p->rts_stop_idle_cpu ? "On" : "Off");

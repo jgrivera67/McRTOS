@@ -38,7 +38,7 @@
 /**
  * Number of ticks for a system heartbeat
  */
-#define RTOS_HEARTBEAT_TICKS    UINT32_C(512)
+#define RTOS_HEARTBEAT_TICKS    UINT32_C(256)
 
 /**
  * Execution stack size for threads (in number of stack entries)

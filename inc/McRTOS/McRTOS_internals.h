@@ -310,11 +310,6 @@ struct rtos_cpu_controller
     cpu_clock_cycles_t cpc_longest_time_interrupts_disabled;
 
     /**
-     * Latest measurement of time interrupts have been disabled
-     */
-    cpu_clock_cycles_t cpc_latest_measurement_time_interrupts_disabled;
-
-    /**
      * Pointer to the per-CPU application startup configuration
      */
     const struct rtos_per_cpu_startup_app_configuration *cpc_app_config_p;
