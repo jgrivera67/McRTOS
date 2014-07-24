@@ -802,9 +802,10 @@ McRTOS_display_stats(void)
     struct glist_node *context_node_p;
 
     console_printf(
-        "Context    Name                           Priority Switched-out Preempted  Tstamp last  Switched-out\n"
-        "address                                            count        count      switched-out history\n"
-        "========== ============================== ======== ============ ========== ============ ============\n");
+	"Context    Name                           Priority Switched-out Preempted  CPU        CPU under 1ms  Tstamp last  Switched-out\n"
+	"address                                            count        count      usage (ms) usage (cycles) switched-out history\n"
+	"========== ============================== ======== ============ ========== ========== ============== ============ ============\n");
+
 
     GLIST_FOR_EACH_NODE(
         context_node_p,
@@ -839,13 +840,15 @@ McRTOS_display_stats(void)
         }
 
         console_printf(
-            "%#8p %30s %c%7u %12u %10u %12u %#x%x\n",
+	    "%#8p %30s %c%7u %12u %10u %10u %14u %12u %#x%x\n",
             context_p,
             context_p->ctx_name_p,
             context_type_symbol,
             priority,
             context_p->ctx_switched_out_counter,
             context_p->ctx_preempted_counter,
+	    context_p->ctx_accumulated_cpu_usage_milliseconds,
+	    context_p->ctx_accumulated_cpu_usage_cycles,
             context_p->ctx_last_switched_out_time_stamp_in_ticks,
             context_p->ctx_switched_out_reason_history,
             context_p->ctx_last_switched_out_reason
