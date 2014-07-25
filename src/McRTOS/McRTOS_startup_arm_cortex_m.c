@@ -227,7 +227,8 @@ install_isr(
          */
         FDC_ASSERT(
             vector_number == INT_SysTick ||
-            vector_number == INT_PendableSrvReq,
+            vector_number == INT_PendableSrvReq ||
+            vector_number == INT_SVCall,
             vector_number, interruptServiceRoutine);
 
         /*
@@ -238,7 +239,7 @@ install_isr(
         if (vector_number == INT_SysTick) {
             write_32bit_mmio_register(
                 &SCB->ICSR, SCB_ICSR_PENDSTCLR_Msk);
-        } else {
+        } else if (vector_number == INT_PendableSrvReq) {
             write_32bit_mmio_register(
                 &SCB->ICSR, SCB_ICSR_PENDSVCLR_Msk);
         }

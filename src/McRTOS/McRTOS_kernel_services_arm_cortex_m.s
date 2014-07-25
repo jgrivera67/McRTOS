@@ -18,7 +18,6 @@
 .extern rtos_start_interrupts_disabled_time_measure
 .extern rtos_stop_interrupts_disabled_time_measure
 .extern check_synchronous_context_switch_preconditions
-.extern capture_assert_failure
 
 .text
 .thumb

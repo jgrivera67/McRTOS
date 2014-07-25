@@ -1712,6 +1712,18 @@ rtos_k_register_interrupt(
     struct rtos_cpu_controller *cpu_controller_p =
         &g_McRTOS_p->rts_cpu_controllers[cpu_id];
 
+    if (channel < 0) {
+        FDC_ASSERT(
+            RTOS_INTR_BIT_MAP_GET_BIT(
+		cpu_controller_p->cpc_active_internal_interrupts, -channel) == 0,
+            cpu_controller_p->cpc_active_internal_interrupts, -channel);
+    } else {
+        FDC_ASSERT(
+            RTOS_INTR_BIT_MAP_GET_BIT(
+		cpu_controller_p->cpc_active_external_interrupts, channel) == 0,
+            cpu_controller_p->cpc_active_external_interrupts, channel);
+    }
+
     /*
      * Allocate an interrupt object:
      */

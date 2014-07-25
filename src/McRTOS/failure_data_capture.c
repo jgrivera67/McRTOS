@@ -26,16 +26,26 @@
 #   define FAILURE_PRINTF(_fmt, ...) \
             cpputest_printf(                                                \
                 "FDC: " _fmt, ##__VA_ARGS__)
+
+#elif defined(_RELIABILITY_CHECKS_)
+#   define FAILURE_PRINTF(_fmt, ...) \
+    do {								    \
+            capture_fdc_debug_printf(                                       \
+                "FDC: " _fmt, ##__VA_ARGS__);				    \
+    } while (0)
+
 #else
     /**
      * NOTE: we cannot use console_printf() here because FAILURE_PRINTF()
      * needs to be able to always send output to serial port.
      */
 #   define FAILURE_PRINTF(_fmt, ...) \
+    do {								    \
             embedded_printf(                                                \
                 (putchar_func_t *)uart_putchar_with_polling,                \
                 (void *)g_console_serial_port_p,                            \
-                "FDC: " _fmt, ##__VA_ARGS__)
+                "FDC: " _fmt, ##__VA_ARGS__);				    \
+    } while (0)
 
 #endif /* CPPUTEST_COMPILATION */
 
@@ -203,6 +213,7 @@ rtos_k_set_fdc_params(
 }
 
 
+#ifdef _RELIABILITY_CHECKS_
 /**
  * Captures failure data for an assertion failure
  */
@@ -212,7 +223,6 @@ capture_assert_failure(
     uintptr_t arg1,
     uintptr_t arg2)
 {
-#   ifdef _RELIABILITY_CHECKS_
     uint32_t *return_address;
     uint32_t *assert_address;
 
@@ -246,8 +256,8 @@ capture_assert_failure(
             micro_trace_restart();
         }
     }
-#   endif /* _RELIABILITY_CHECKS_ */
 }
+#endif /* _RELIABILITY_CHECKS_ */
 
 
 /**
@@ -1532,3 +1542,4 @@ capture_fdc_debug_printf(const char *fmt, ...)
 }
 
 #endif /* _RELIABILITY_CHECKS_ */
+
