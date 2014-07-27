@@ -472,7 +472,7 @@ rtos_stop_interrupts_disabled_time_measure(
         delta_cpu_cycles -= g_McRTOS_p->rts_cpu_cycles_measure_overhead;
 
         FDC_ASSERT(
-            CPU_CLOCK_CYCLES_TO_MICROSECONDS(delta_cpu_cycles) <= 1000,
+            CPU_CLOCK_CYCLES_TO_MICROSECONDS(delta_cpu_cycles) <= RTOS_MAX_TIME_INTERRUPTS_DISABLED,
             CPU_CLOCK_CYCLES_TO_MICROSECONDS(delta_cpu_cycles),
             end_time_stamp);
 

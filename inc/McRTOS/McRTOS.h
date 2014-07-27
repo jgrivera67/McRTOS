@@ -13,6 +13,7 @@
 #include "McRTOS_config_parameters.h"
 #include "hardware_abstractions.h"
 #include "failure_data_capture.h"
+#include "utils.h"
 
 /*
  * Opaque types
@@ -111,27 +112,26 @@ typedef uint32_t rtos_thread_prio_bitmap_t;
 C_ASSERT(
     sizeof(rtos_thread_prio_bitmap_t) * 8 == RTOS_NUM_THREAD_PRIORITIES);
 
+#define RTOS_INTERRUPTS_BITMAP_NUM_WORDS \
+	HOW_MANY(SOC_NUM_INTERRUPT_CHANNELS, sizeof(uint32_t) * 8)
+
 /**
  * Per CPU interrupts bit map type
  */
-#if defined(LM4F120_SOC)
-typedef uint32_t rtos_per_cpu_interrupts_bitmap_t[5];
-#elif defined(KL25Z_SOC)
-typedef uint32_t rtos_per_cpu_interrupts_bitmap_t[1];
-#elif defined(K64F_SOC)
-typedef uint32_t rtos_per_cpu_interrupts_bitmap_t[3];
-#else
-#error "SoC not supported"
-#endif
+typedef uint32_t rtos_per_cpu_interrupts_bitmap_t[RTOS_INTERRUPTS_BITMAP_NUM_WORDS];
 
 C_ASSERT(
     sizeof(rtos_per_cpu_interrupts_bitmap_t) * 8 >= SOC_NUM_INTERRUPT_CHANNELS);
 
 #define RTOS_INTR_BIT_MAP_ENTRY_INDEX(_intr_channel) \
-	((_intr_channel) / sizeof(uint32_t))
+	((_intr_channel) / (sizeof(uint32_t) * 8))
+
+C_ASSERT(
+    RTOS_INTR_BIT_MAP_ENTRY_INDEX(SOC_NUM_INTERRUPT_CHANNELS - 1) ==
+    RTOS_INTERRUPTS_BITMAP_NUM_WORDS - 1);
 
 #define RTOS_INTR_BIT_MAP_ENTRY_MASK(_intr_channel) \
-	BIT((_intr_channel) % sizeof(uint32_t))
+	BIT((_intr_channel) % (sizeof(uint32_t) * 8))
 
 #define RTOS_INTR_BIT_MAP_SET_BIT(_intr_bitmap_p, _intr_channel) \
 	do {								    \

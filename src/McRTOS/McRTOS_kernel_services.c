@@ -1915,7 +1915,8 @@ rtos_k_enter_interrupt(
             RTOS_INTR_BIT_MAP_GET_BIT(
 		cpu_controller_p->cpc_active_external_interrupts,
 		interrupt_channel) == 0,
-            cpu_controller_p->cpc_active_external_interrupts, interrupt_channel);
+            cpu_controller_p->cpc_active_external_interrupts[
+		RTOS_INTR_BIT_MAP_ENTRY_INDEX(interrupt_channel)], interrupt_channel);
 
 	RTOS_INTR_BIT_MAP_SET_BIT(
 	     cpu_controller_p->cpc_active_external_interrupts,
@@ -1932,11 +1933,32 @@ rtos_k_enter_interrupt(
     /*
      * Track CPU usage for interrupted execution context:
      */
-    cpu_clock_cycles_t used_cpu_cycles =
-        CPU_CLOCK_CYCLES_DELTA(
-            interrupted_context_p->ctx_last_switched_in_time_stamp,
-            get_cpu_clock_cycles()) -
-        g_McRTOS_p->rts_cpu_cycles_measure_overhead;
+    cpu_clock_cycles_t used_cpu_cycles;
+
+    if (_INFREQUENTLY_TRUE_(
+	    interrupted_context_p->ctx_last_switched_in_time_stamp == 0 &&
+	    interrupted_context_p->ctx_switched_out_counter == 0)) {
+	/*
+	 * Context interrupted before it got the chance to start executing
+	 * after being chosen to run for the very first time
+	 */
+	used_cpu_cycles = 0;
+    } else {
+	used_cpu_cycles =
+	    CPU_CLOCK_CYCLES_DELTA(
+		interrupted_context_p->ctx_last_switched_in_time_stamp,
+		get_cpu_clock_cycles());
+
+	if (used_cpu_cycles > g_McRTOS_p->rts_cpu_cycles_measure_overhead) {
+	    used_cpu_cycles -= g_McRTOS_p->rts_cpu_cycles_measure_overhead;
+	} else {
+	    /*
+	     * Context interrupted before it got the chance to start executing
+	     * after being chosen to run
+	     */
+	    used_cpu_cycles = 0;
+	}
+    }
 
     RTOS_EXECUTION_CONTEXT_UPDATE_CPU_USAGE(
         interrupted_context_p, used_cpu_cycles);
@@ -2106,7 +2128,7 @@ rtos_k_exit_interrupt(void)
             RTOS_INTR_BIT_MAP_GET_BIT(
 		cpu_controller_p->cpc_active_internal_interrupts,
 		-interrupt_channel) != 0,
-            cpu_controller_p->cpc_active_internal_interrupts, cpu_controller_p);
+            cpu_controller_p->cpc_active_internal_interrupts, -interrupt_channel);
 
 	RTOS_INTR_BIT_MAP_CLEAR_BIT(
 	     cpu_controller_p->cpc_active_internal_interrupts,
@@ -2116,7 +2138,7 @@ rtos_k_exit_interrupt(void)
             RTOS_INTR_BIT_MAP_GET_BIT(
 		cpu_controller_p->cpc_active_external_interrupts,
 		interrupt_channel) != 0,
-            cpu_controller_p->cpc_active_external_interrupts, cpu_controller_p);
+            cpu_controller_p->cpc_active_external_interrupts, interrupt_channel);
 
 	RTOS_INTR_BIT_MAP_CLEAR_BIT(
 	     cpu_controller_p->cpc_active_external_interrupts,

@@ -100,6 +100,7 @@ function my_gdb
 	echo "$FUNCNAME: Generating $init_script ..."
 	echo "
 target remote localhost:3333
+#target remote | ~/linux_apps/open_ocd/bin/openocd -f $openocd_cfg_file -c 'gdb_port pipe; log_output $openocd_log_file'
 show remotetimeout
 set remotetimeout 180
 #monitor arm7_9 dcc_downloads enable
@@ -120,12 +121,13 @@ set history expansion on
 set history file $gdb_history_file
 set history save on
 show history
-#target remote | ~/linux_apps/open_ocd/bin/openocd -f $openocd_cfg_file -c 'gdb_port pipe; log_output $openocd_log_file'
 " > $init_script
 
     fi
 
+    #~/embsys/tools/openocd/bin/openocd -f $openocd_cfg_file &
     ~/linux_apps/open_ocd/bin/openocd -f $openocd_cfg_file &
+
     #ddd --gdb --trace --debugger "gdb --command=$init_script"
     gdb --command=$init_script
 }

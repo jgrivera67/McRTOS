@@ -609,7 +609,7 @@ extern struct McRTOS *const g_McRTOS_p;
             _execution_context_p, _used_cpu_cycles)                         \
         do {                                                                \
             DBG_ASSERT(                                                     \
-                (int32_t)(_used_cpu_cycles) > 0,                            \
+                (int32_t)(_used_cpu_cycles) >= 0,                           \
                 _used_cpu_cycles, _execution_context_p);                    \
             (_execution_context_p)->                                        \
                 ctx_accumulated_cpu_usage_cycles += (_used_cpu_cycles);     \
