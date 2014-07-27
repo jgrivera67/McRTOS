@@ -1944,10 +1944,19 @@ rtos_k_enter_interrupt(
 	 */
 	used_cpu_cycles = 0;
     } else {
+	cpu_clock_cycles_t end_cycles = get_cpu_clock_cycles();
+
 	used_cpu_cycles =
 	    CPU_CLOCK_CYCLES_DELTA(
 		interrupted_context_p->ctx_last_switched_in_time_stamp,
-		get_cpu_clock_cycles());
+		end_cycles);
+#	if 0
+        FDC_ASSERT(
+	    used_cpu_cycles <
+	    MILLISECONDS_TO_CPU_CLOCK_CYCLES(RTOS_THREAD_TIME_SLICE_IN_TICKS *
+					     RTOS_MILLISECONDS_PER_TICK),
+	    end_cycles, interrupted_context_p->ctx_last_switched_in_time_stamp);
+#	endif
 
 	if (used_cpu_cycles > g_McRTOS_p->rts_cpu_cycles_measure_overhead) {
 	    used_cpu_cycles -= g_McRTOS_p->rts_cpu_cycles_measure_overhead;

@@ -830,12 +830,15 @@ k64f_set_mpu_region(
  	       region_index, mpu_var_p->num_regions);
 
     DBG_ASSERT(start_addr < end_addr &&
-	       (uintptr_t)start_addr % SOC_MPU_REGION_ALIGNMENT == 0 &&
-	       (uintptr_t)end_addr % SOC_MPU_REGION_ALIGNMENT == 0,
+	       (uintptr_t)start_addr % SOC_MPU_REGION_ALIGNMENT == 0,
 	       start_addr, end_addr);
 
-    write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][0], (uintptr_t)start_addr);
-    write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][1], (uintptr_t)end_addr);
+    reg_value = ((uintptr_t)start_addr & SOC_MPU_REGION_ALIGNMENT_MASK);
+    write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][0], reg_value);
+
+    reg_value = (((uintptr_t)end_addr & SOC_MPU_REGION_ALIGNMENT_MASK) |
+		 (SOC_MPU_REGION_ALIGNMENT - 1));
+    write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][1], reg_value);
 
     reg_value = read_32bit_mmio_register(&mpu_regs_p->WORD[region_index][2]);
     SET_BIT_FIELD(reg_value,

@@ -94,6 +94,11 @@ C_ASSERT(ADC_INTERRUPT_PRIORITY > SOC_HIGHEST_INTERRUPT_PRIORITY);
  */
 #define SOC_MPU_REGION_ALIGNMENT	UINT32_C(32)
 
+/*
+ * MPU region alignment mask
+ */
+#define SOC_MPU_REGION_ALIGNMENT_MASK	(~(UINT32_C(32) - 1))
+
 /**
  * Check that an mmio address is in the valid MMIO space
  */

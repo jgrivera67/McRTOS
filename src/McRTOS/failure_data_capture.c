@@ -27,23 +27,10 @@
             cpputest_printf(                                                \
                 "FDC: " _fmt, ##__VA_ARGS__)
 
-#elif defined(_RELIABILITY_CHECKS_)
+#else
 #   define FAILURE_PRINTF(_fmt, ...) \
     do {								    \
             capture_fdc_debug_printf(                                       \
-                "FDC: " _fmt, ##__VA_ARGS__);				    \
-    } while (0)
-
-#else
-    /**
-     * NOTE: we cannot use console_printf() here because FAILURE_PRINTF()
-     * needs to be able to always send output to serial port.
-     */
-#   define FAILURE_PRINTF(_fmt, ...) \
-    do {								    \
-            embedded_printf(                                                \
-                (putchar_func_t *)uart_putchar_with_polling,                \
-                (void *)g_console_serial_port_p,                            \
                 "FDC: " _fmt, ##__VA_ARGS__);				    \
     } while (0)
 
@@ -1489,6 +1476,8 @@ check_synchronous_context_switch_preconditions(
 }
 #endif
 
+#endif /* _RELIABILITY_CHECKS_ */
+
 static void
 fdc_capture_debug_putchar(
     void *putchar_arg_p,
@@ -1540,6 +1529,4 @@ capture_fdc_debug_printf(const char *fmt, ...)
         __enable_irq();
    }
 }
-
-#endif /* _RELIABILITY_CHECKS_ */
 

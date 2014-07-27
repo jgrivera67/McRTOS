@@ -314,14 +314,10 @@ struct rtos_cpu_controller
      */
     const struct rtos_per_cpu_startup_app_configuration *cpc_app_config_p;
 
-#ifdef _RELIABILITY_CHECKS_
     /**
      * Failures captured for this CPU core
      */
     struct fdc_info cpc_failures_info;
-#else
-    uint32_t cpc_failures_info;
-#endif
 
     /**
      * Anchor node node of the list of execution contexts that exist in the systems
@@ -608,9 +604,6 @@ extern struct McRTOS *const g_McRTOS_p;
 #   define RTOS_EXECUTION_CONTEXT_UPDATE_CPU_USAGE( \
             _execution_context_p, _used_cpu_cycles)                         \
         do {                                                                \
-            DBG_ASSERT(                                                     \
-                (int32_t)(_used_cpu_cycles) >= 0,                           \
-                _used_cpu_cycles, _execution_context_p);                    \
             (_execution_context_p)->                                        \
                 ctx_accumulated_cpu_usage_cycles += (_used_cpu_cycles);     \
             if ((_execution_context_p)->                                    \

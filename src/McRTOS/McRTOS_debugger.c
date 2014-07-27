@@ -332,7 +332,6 @@ rtos_dbg_dump_all_execution_contexts(void)
 static void
 rtos_dbg_dump_debug_msg_buffer(void)
 {
-#   ifdef _RELIABILITY_CHECKS_
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
     struct rtos_cpu_controller *cpu_controller_p =
         &g_McRTOS_p->rts_cpu_controllers[cpu_id];
@@ -344,7 +343,6 @@ rtos_dbg_dump_debug_msg_buffer(void)
     for (char *s = fdc_info_p->fdc_debug_msg_buffer; *s != '\0'; s ++) {
         uart_putchar_with_polling(g_console_serial_port_p, *s);
     }
-#   endif
 }
 
 static void

@@ -15,8 +15,8 @@ ENTRY(cortex_m_reset_handler)
 MEMORY
 {
   flash_interrupts  (rx) : ORIGIN = 0x00000000, LENGTH = 0x400
-  flash_cfmprotrom  (rx) : ORIGIN = 0x00000400, LENGTH = 0x10
-  flash_text        (rx) : ORIGIN = 0x00000410, LENGTH = 1024K - 0x410
+  flash_cfmprotrom  (rx) : ORIGIN = 0x00000400, LENGTH = 0x20
+  flash_text        (rx) : ORIGIN = 0x00000420, LENGTH = 1024K - 0x420
   sram_data         (rwx) : ORIGIN = 0x1FFF0000, LENGTH = 256K
 }
 

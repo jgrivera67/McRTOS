@@ -87,7 +87,7 @@
 C_ASSERT(RTOS_MAX_NUM_INTERRUPTS < SOC_NUM_INTERRUPT_CHANNELS);
 
 /**
- * Time slice in number of timer ticks for each thread of the priority.
+ * Time slice in number of timer ticks for each thread of the same priority.
  * Threads with the same priority are scheduled in a round-robin fashion,
  * giving each thread the CPU for this number of ticks.
  */
@@ -185,7 +185,7 @@ C_ASSERT(RTOS_MAX_NUM_INTERRUPTS < SOC_NUM_INTERRUPT_CHANNELS);
 #ifdef DEBUG
 #   define RTOS_MAX_TIME_INTERRUPTS_DISABLED UINT32_C(100)
 #elif defined(_RELIABILITY_CHECKS_)
-#   define RTOS_MAX_TIME_INTERRUPTS_DISABLED UINT32_C(50)
+#   define RTOS_MAX_TIME_INTERRUPTS_DISABLED UINT32_C(70)
 #else
 #   define RTOS_MAX_TIME_INTERRUPTS_DISABLED UINT32_C(25)
 #endif
