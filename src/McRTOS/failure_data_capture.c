@@ -30,7 +30,7 @@
 #else
 #   define FAILURE_PRINTF(_fmt, ...) \
     do {								    \
-            capture_fdc_debug_printf(                                       \
+            capture_fdc_msg_printf(					    \
                 "FDC: " _fmt, ##__VA_ARGS__);				    \
     } while (0)
 
@@ -1479,24 +1479,24 @@ check_synchronous_context_switch_preconditions(
 #endif /* _RELIABILITY_CHECKS_ */
 
 static void
-fdc_capture_debug_putchar(
+fdc_capture_msg_putchar(
     void *putchar_arg_p,
     _IN_ uint8_t c)
 {
     struct fdc_info *fdc_info_p = putchar_arg_p;
-    uint16_t cursor = fdc_info_p->fdc_debug_msg_cursor;
+    uint16_t cursor = fdc_info_p->fdc_msg_cursor;
 
-    fdc_info_p->fdc_debug_msg_buffer[cursor] = c;
+    fdc_info_p->fdc_msg_buffer[cursor] = c;
     cursor ++;
-    if (cursor == RTOS_DEBUG_MSG_BUFFER_SIZE - 1) {
+    if (cursor == RTOS_FDC_MSG_BUFFER_SIZE - 1) {
 	cursor = 0;
     }
 
-    fdc_info_p->fdc_debug_msg_cursor = cursor;
+    fdc_info_p->fdc_msg_cursor = cursor;
 }
 
 /**
- * Simplified printf that sends debug messages to the FDC debug message buffer.
+ * Simplified printf that write messages to the FDC message buffer.
  * It only supports the format specifiers supported by embedded_vprintf().
  * No serialization for concurrent calls is provided.
  *
@@ -1507,7 +1507,7 @@ fdc_capture_debug_putchar(
  * @return None
  */
 void
-capture_fdc_debug_printf(const char *fmt, ...)
+capture_fdc_msg_printf(const char *fmt, ...)
 {
     va_list va;
     struct rtos_cpu_controller *cpu_controller_p =
@@ -1517,13 +1517,13 @@ capture_fdc_debug_printf(const char *fmt, ...)
 
     __disable_irq();
 
-    embedded_printf(fdc_capture_debug_putchar, fdc_info_p, "%u ",
-		    fdc_info_p->fdc_debug_msg_seq_num);
+    embedded_printf(fdc_capture_msg_putchar, fdc_info_p, "%u ",
+		    fdc_info_p->fdc_msg_seq_num);
 
     va_start(va, fmt);
-    embedded_vprintf(fdc_capture_debug_putchar, fdc_info_p, fmt, va);
+    embedded_vprintf(fdc_capture_msg_putchar, fdc_info_p, fmt, va);
     va_end(va);
-    fdc_info_p->fdc_debug_msg_seq_num ++;
+    fdc_info_p->fdc_msg_seq_num ++;
 
     if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
         __enable_irq();

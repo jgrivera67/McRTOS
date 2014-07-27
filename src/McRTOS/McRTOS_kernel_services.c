@@ -2588,7 +2588,7 @@ rtos_execution_context_init(
         DBG_ASSERT(cpu_lr_register & 0x1, cpu_lr_register, 0);
         DBG_ASSERT(cpu_pc_register & 0x1, cpu_pc_register, 0);
 
-        DEBUG_PRINTF(
+        capture_fdc_msg_printf(
             "Created execution context \'%s\' (%#p)\n",
             execution_context_p->ctx_name_p,
             execution_context_p);

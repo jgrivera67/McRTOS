@@ -312,6 +312,8 @@ soc_hardware_init(void)
 
     cpu_reset_cause_t reset_cause = find_reset_cause();
 
+    capture_fdc_msg_printf("Last reset cause: %#x\n", reset_cause);
+
     system_clocks_init();
 
 #   ifdef _CPU_CYCLES_MEASURE_
@@ -320,23 +322,14 @@ soc_hardware_init(void)
 
     bool mpu_present = cortex_m_mpu_init();
 
+    capture_fdc_msg_printf("MPU %s present\n", mpu_present ? "" : "not");
+
     cortex_m_nvic_init();
 
     uart_init(
         g_console_serial_port_p,
         CONSOLE_SERIAL_PORT_BAUD_RATE,
         CONSOLE_SERIAL_PORT_MODE);
-
-#   ifdef DEBUG
-    uart_putchar_with_polling(g_console_serial_port_p, '\r');
-    uart_putchar_with_polling(g_console_serial_port_p, '\n');
-    DEBUG_PRINTF("UART0 initialized\n");
-    DEBUG_PRINTF("Last reset cause: %#x\n", reset_cause);
-    DEBUG_PRINTF("MPU %s present\n", mpu_present ? "" : "not");
-#   else
-    uart_putchar(g_console_serial_port_p, '\r');
-    uart_putchar(g_console_serial_port_p, '\n');
-#   endif
 
 #if 0
     i2c_init(g_i2c0_device_p);

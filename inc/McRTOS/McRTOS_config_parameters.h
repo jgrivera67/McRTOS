@@ -125,16 +125,16 @@ C_ASSERT(RTOS_MAX_NUM_INTERRUPTS < SOC_NUM_INTERRUPT_CHANNELS);
 #endif
 
 /**
- * Size of the buffer that holds the most recent output from debug_printf()
+ * Size of the buffer that holds the most recent output from capture_fdc_msg_printf()
  */
 #if defined(LPC2478_SOC)
-#   define RTOS_DEBUG_MSG_BUFFER_SIZE  UINT16_C(1024)
+#   define RTOS_FDC_MSG_BUFFER_SIZE  UINT16_C(1024)
 #elif defined(KL25Z_SOC) || defined(K20D5_SOC)
-#   define RTOS_DEBUG_MSG_BUFFER_SIZE  UINT16_C(256)
+#   define RTOS_FDC_MSG_BUFFER_SIZE  UINT16_C(256)
 #elif defined(K64F_SOC)
-#   define RTOS_DEBUG_MSG_BUFFER_SIZE  UINT16_C(2048)
+#   define RTOS_FDC_MSG_BUFFER_SIZE  UINT16_C(2048)
 #elif defined(LM4F120_SOC)
-#   define RTOS_DEBUG_MSG_BUFFER_SIZE  UINT16_C(512)
+#   define RTOS_FDC_MSG_BUFFER_SIZE  UINT16_C(512)
 #else
 #   error "No system on chip specified"
 #endif

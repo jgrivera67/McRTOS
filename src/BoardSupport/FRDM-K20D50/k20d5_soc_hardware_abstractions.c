@@ -3,8 +3,8 @@
  *
  * Hardware abstraction layer for the KL25Z SoC
  *
- * @author German Rivera 
- */ 
+ * @author German Rivera
+ */
 
 #include "hardware_abstractions.h"
 #include "kl25z_soc.h"
@@ -140,7 +140,7 @@ static void uart_stop(
 static void
 kl25_adc_calibrate(const struct adc_device *adc_device_p);
 
-/* 
+/*
  * Function prototypes for dummy VIC interrupt ISRs
  */
 static isr_function_t dummy_dma0_isr;
@@ -180,7 +180,7 @@ isr_function_t *const g_interrupt_vector_table[] __attribute__ ((section(".vecto
     [INT_Initial_Stack_Pointer] = (void *)&g_cortex_m_exception_stack.es_stack_underflow_marker,
 
     /*
-     * Processor exceptions 
+     * Processor exceptions
      */
     [INT_Initial_Program_Counter] = cortex_m_reset_handler,
     [INT_NMI] = cortex_m_nmi_isr,
@@ -254,9 +254,9 @@ static const struct NV_MemMap nv_cfmconfig __attribute__ ((section(".cfmconfig")
  * McRTOS interrupt object for the UART0 interrupts
  */
 struct rtos_interrupt *g_rtos_interrupt_uart0_p = NULL;
- 
+
 /**
- * Global array of non-const structures for UART devices 
+ * Global array of non-const structures for UART devices
  * (allocated in SRAM space)
  */
 static struct uart_device_var g_uart_devices_var[] =
@@ -366,10 +366,10 @@ static const struct i2c_device g_i2c_devices[] = {
     [0] = {
         .i2c_signature = I2C_DEVICE_SIGNATURE,
         .i2c_var_p = &g_i2c_devices_var[0],
-        .i2c_mmio_registers_p = I2C0_BASE_PTR, 
+        .i2c_mmio_registers_p = I2C0_BASE_PTR,
         .i2c_mmio_scl_port_pcr_p = &PORTE_PCR24,
         .i2c_mmio_sda_port_pcr_p = &PORTE_PCR25,
-        .i2c_clock_gate_mask = SIM_SCGC4_I2C0_MASK, 
+        .i2c_clock_gate_mask = SIM_SCGC4_I2C0_MASK,
         .i2c_pin_mux_selector_mask = PORT_PCR_MUX(0x5) | PORT_PCR_DSE_MASK,
         .i2c_icr_value = 0x1f, /* 100KHz for bus clock of 24 MHz */
         .i2c_rtos_interrupt_params = {
@@ -387,10 +387,10 @@ static const struct i2c_device g_i2c_devices[] = {
     [1] = {
         .i2c_signature = I2C_DEVICE_SIGNATURE,
         .i2c_var_p = &g_i2c_devices_var[1],
-        .i2c_mmio_registers_p = I2C1_BASE_PTR, 
+        .i2c_mmio_registers_p = I2C1_BASE_PTR,
         .i2c_mmio_scl_port_pcr_p = &PORTC_PCR1,
         .i2c_mmio_sda_port_pcr_p = &PORTC_PCR2,
-        .i2c_clock_gate_mask = SIM_SCGC4_I2C1_MASK, 
+        .i2c_clock_gate_mask = SIM_SCGC4_I2C1_MASK,
         .i2c_pin_mux_selector_mask = PORT_PCR_MUX(0x2) | PORT_PCR_DSE_MASK,
         .i2c_icr_value = 0x1f,
     }
@@ -409,7 +409,7 @@ uint64_t __attribute__ ((section(".mtb_buf")))
 #endif
 
 /**
- *  Initializes board hardware. 
+ *  Initializes board hardware.
  *
  *  @pre This function must be called with interrupts disabled.
  */
@@ -417,7 +417,7 @@ cpu_reset_cause_t
 soc_hardware_init(void)
 {
     cpu_status_register_t reg_primask = __get_PRIMASK();
-   
+
     FDC_ASSERT(
         CPU_INTERRUPTS_ARE_DISABLED(reg_primask),
         reg_primask, 0);
@@ -439,16 +439,10 @@ soc_hardware_init(void)
         CONSOLE_SERIAL_PORT_BAUD_RATE,
         CONSOLE_SERIAL_PORT_MODE);
 
-#   ifdef DEBUG
     uart_putchar_with_polling(g_console_serial_port_p, '\r');
     uart_putchar_with_polling(g_console_serial_port_p, '\n');
-    DEBUG_PRINTF("UART0 initialized\n");
-    DEBUG_PRINTF("Last reset cause: %#x\n", reset_cause);
-    DEBUG_PRINTF("MPU %s present\n", mpu_present ? "" : "not");
-#   else
-    uart_putchar(g_console_serial_port_p, '\r');
-    uart_putchar(g_console_serial_port_p, '\n');
-#   endif
+    capture_fdc_msg_printf("Last reset cause: %#x\n", reset_cause);
+    capture_fdc_msg_printf("MPU %s present\n", mpu_present ? "" : "not");
 
     i2c_init(g_i2c0_device_p);
     return reset_cause;
@@ -474,13 +468,13 @@ soc_reset(void)
 
 
 static cpu_reset_cause_t
-find_reset_cause(void) 
+find_reset_cause(void)
 {
     uint8_t generic_cause = GRC_INVALID_RESET_CAUSE;
 
      uint8_t reg_rcm_srs0 = read_8bit_mmio_register(&RCM_SRS0);
     if (reg_rcm_srs0 & RCM_SRS0_POR_MASK) {
-        generic_cause = GRC_POWER_ON_RESET; 
+        generic_cause = GRC_POWER_ON_RESET;
     } else if (reg_rcm_srs0 & RCM_SRS0_PIN_MASK) {
         generic_cause = GRC_EXTERNAL_PIN_RESET;
     } else if (reg_rcm_srs0 & RCM_SRS0_WDOG_MASK) {
@@ -509,13 +503,13 @@ find_reset_cause(void)
 
     SET_BIT_FIELD(
         reset_cause, CPU_RESET_MACHDEP_CAUSE1_MASK,
-        CPU_RESET_MACHDEP_CAUSE1_SHIFT, reg_rcm_srs0); 
+        CPU_RESET_MACHDEP_CAUSE1_SHIFT, reg_rcm_srs0);
 
     SET_BIT_FIELD(
         reset_cause, CPU_RESET_MACHDEP_CAUSE2_MASK,
-        CPU_RESET_MACHDEP_CAUSE2_SHIFT, reg_rcm_srs1); 
+        CPU_RESET_MACHDEP_CAUSE2_SHIFT, reg_rcm_srs1);
 
-    return reset_cause; 
+    return reset_cause;
 }
 
 
@@ -542,19 +536,19 @@ system_clocks_init(void)
                     | SIM_SCGC5_PORTD_MASK
                     | SIM_SCGC5_PORTE_MASK);
     write_32bit_mmio_register(&SIM_SCGC5, reg_value);
-    
+
     /*
      * Set the system dividers:
      *
      * NOTE: This is not really needed, as these are the settings at reset time.
-     */  
+     */
     write_32bit_mmio_register(
         &SIM_CLKDIV1,
         SIM_CLKDIV1_OUTDIV1(0) | SIM_CLKDIV1_OUTDIV4(1));
 
     /*
      * Initialize PLL:
-     * 
+     *
      * NOTE: PLL will be the source for MCG CLKOUT so the core, system, and flash
      * clocks are derived from it
      */
@@ -575,7 +569,7 @@ system_clocks_init(void)
      */
 
     reg_value = read_32bit_mmio_register(&SIM_SOPT2);
-    
+
     /*
      * UART0 transmit and receive clock:
      */
@@ -615,13 +609,13 @@ pll_init(void)
   // configure the MCG_C2 register
   // the RANGE value is determined by the external frequency. Since the RANGE parameter affects the FRDIV divide value
   // it still needs to be set correctly even if the oscillator is not being used
-      
+
   temp_reg = MCG_C2;
   temp_reg &= ~(MCG_C2_RANGE0_MASK | MCG_C2_HGO0_MASK | MCG_C2_EREFS0_MASK); // clear fields before writing new values
-    
+
   temp_reg |= (MCG_C2_RANGE0(1) | (1 << MCG_C2_EREFS0_SHIFT));
   MCG_C2 = temp_reg;
-  
+
   // determine FRDIV based on reference clock frequency
   frdiv_val = 3;
 
@@ -664,7 +658,7 @@ pll_init(void)
   // It is recommended that the clock monitor is enabled when using an external clock as the clock source/reference.
   // It is enabled here but can be removed if this is not required.
   MCG_C6 |= MCG_C6_CME0_MASK;
-  
+
   // Configure PLL
   // Configure MCG_C5
   // If the PLL is to run in STOP mode then the PLLSTEN bit needs to be OR'ed in here or in user code.
@@ -761,7 +755,7 @@ micro_trace_init(void)
      * - POINTER field (bits 31:3) = encoding of __micro_trace_buffer
      * - WRAP bit = 0: No wrap has happened yet
      *
-     * NOTE: POSITION register bits greater than or equal to 15 are RAZ/WI. 
+     * NOTE: POSITION register bits greater than or equal to 15 are RAZ/WI.
      */
     reg_value = 0;
     SET_BIT_FIELD(
@@ -784,7 +778,7 @@ micro_trace_init(void)
     /*
      * Initialize MTB_MASTER register:
      * - EN bit = 0: Enable micro tracing
-     * - Mask field (bits 4:0) = mask to implicitly set the trace buffer size 
+     * - Mask field (bits 4:0) = mask to implicitly set the trace buffer size
      */
     reg_value = read_32bit_mmio_register(&MTB_MASTER);
     reg_value |= MTB_MASTER_EN_MASK;
@@ -851,7 +845,7 @@ micro_trace_get_cursor(uint64_t **mtb_cursor_pp, bool *mtb_cursor_wrapped_p)
     }
 
     /*
-     * NOTE: POSITION register bits greater than or equal to 15 are RAZ/WI. 
+     * NOTE: POSITION register bits greater than or equal to 15 are RAZ/WI.
      */
     *mtb_cursor_pp = (uint64_t *)(
         (uintptr_t)__micro_trace_buffer |
@@ -875,7 +869,7 @@ init_cpu_clock_cycles_counter(void)
      *
      * Bit MIDS = 0: Clock for standard PIT timers is enabled
      * Bit FRZ = 1: Timers are stopped in Debug mode.
-     */ 
+     */
     write_32bit_mmio_register(
         &PIT_MCR,
         PIT_MCR_FRZ_MASK);
@@ -909,21 +903,21 @@ init_cpu_clock_cycles_counter(void)
 }
 
 
-uint64_t 
+uint64_t
 get_cpu_clock_cycles64(void)
 {
     uint32_t low_reg_value = read_32bit_mmio_register(&PIT_LTMR64L);
     uint32_t high_reg_value = read_32bit_mmio_register(&PIT_LTMR64H);
-   
+
     return ((uint64_t)high_reg_value << 32) + low_reg_value;
 }
 
 
-uint32_t 
+uint32_t
 get_cpu_clock_cycles(void)
 {
     uint32_t low_reg_value = read_32bit_mmio_register(&PIT_LTMR64L);
- 
+
     /*
      * TODO: PIT module frequency is half of the CPU frequency, so may
      * need to multiply by 2 to get the accurate number CPU clock cycles.
@@ -969,7 +963,7 @@ activate_output_pin(const struct pin_config_info *pin_info_p)
 #   ifdef DEBUG
     uint32_t reg_value = read_32bit_mmio_register(
                             &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p));
-    
+
     FDC_ASSERT(
         reg_value & pin_info_p->pin_bit_mask,
         pin_info_p, reg_value);
@@ -993,7 +987,7 @@ deactivate_output_pin(const struct pin_config_info *pin_info_p)
 #   ifdef DEBUG
     uint32_t reg_value = read_32bit_mmio_register(
                             &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p));
-    
+
     FDC_ASSERT(
         reg_value & pin_info_p->pin_bit_mask,
         reg_value, pin_info_p->pin_bit_mask);
@@ -1017,7 +1011,7 @@ toggle_output_pin(const struct pin_config_info *pin_info_p)
 #   ifdef DEBUG
     uint32_t reg_value = read_32bit_mmio_register(
                             &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p));
-    
+
     FDC_ASSERT(
         reg_value & pin_info_p->pin_bit_mask,
         pin_info_p, reg_value);
@@ -1103,36 +1097,36 @@ uart_init(
     write_8bit_mmio_register(
         &UART_C1_REG(uart_mmio_registers_p), mode);
 
-    /* 
+    /*
      * Enable Tx pin:
      */
     write_32bit_mmio_register(
         uart_device_p->urt_mmio_tx_port_pcr_p,
         uart_device_p->urt_mmio_pin_mux_selector_mask | PORT_PCR_DSE_MASK);
 
-    /* 
+    /*
      * Enable Rx pin:
      */
     write_32bit_mmio_register(
         uart_device_p->urt_mmio_rx_port_pcr_p,
         uart_device_p->urt_mmio_pin_mux_selector_mask | PORT_PCR_DSE_MASK);
 
-    // Calculate the first baud rate using the lowest OSR value possible.  
+    // Calculate the first baud rate using the lowest OSR value possible.
     //uint32_t uart0clk = CPU_CLOCK_FREQ_IN_HZ / 2;
     uint32_t uart0clk = g_pll_frequency_in_hz / 2;
     uint32_t i = 4;
     uint32_t sbr_val = uart0clk / (baud_rate * i);
     uint32_t calculated_baud = uart0clk / (i * sbr_val);
     uint32_t baud_diff;
-        
+
     if (calculated_baud > baud_rate)
         baud_diff = calculated_baud - baud_rate;
     else
         baud_diff = baud_rate - calculated_baud;
-    
+
     uint32_t osr_val = i;
-       
-    if (uart_device_p == &g_uart_devices[0]) 
+
+    if (uart_device_p == &g_uart_devices[0])
     {
         UART0_MemMapPtr uart0_mmio_registers_p = uart_device_p->urt_mmio_uart0_p;
 
@@ -1143,35 +1137,35 @@ uart_init(
 
             sbr_val = uart0clk / (baud_rate * i);
             calculated_baud = uart0clk / (i * sbr_val);
-            
+
             if (calculated_baud > baud_rate)
                 temp = calculated_baud - baud_rate;
             else
                 temp = baud_rate - calculated_baud;
-            
+
             if (temp <= baud_diff)
             {
                 baud_diff = temp;
-                osr_val = i; 
+                osr_val = i;
             }
         }
-        
+
         FDC_ASSERT(baud_diff < (baud_rate / 100) * 3, baud_diff, baud_rate);
-    
+
         // If the OSR is between 4x and 8x then both
-        // edge sampling MUST be turned on.  
+        // edge sampling MUST be turned on.
         if (osr_val > 3 && osr_val < 9)
         {
             reg_value = read_8bit_mmio_register(&UART0_C5_REG(uart0_mmio_registers_p));
             reg_value |= UART0_C5_BOTHEDGE_MASK;
             write_8bit_mmio_register(&UART0_C5_REG(uart0_mmio_registers_p), reg_value);
         }
-        
-        // Setup OSR value 
+
+        // Setup OSR value
         reg_value = read_8bit_mmio_register(&UART0_C4_REG(uart0_mmio_registers_p));
         SET_BIT_FIELD(reg_value, UART0_C4_OSR_MASK, UART0_C4_OSR_SHIFT, osr_val - 1);
-        write_8bit_mmio_register(&UART0_C4_REG(uart0_mmio_registers_p), reg_value); 
-    
+        write_8bit_mmio_register(&UART0_C4_REG(uart0_mmio_registers_p), reg_value);
+
         DBG_ASSERT(
             (reg_value & UART0_C4_OSR_MASK) + 1 == osr_val,
             reg_value, osr_val);
@@ -1200,7 +1194,7 @@ uart_init(
     write_8bit_mmio_register(
         &UART_BDL_REG(uart_mmio_registers_p),
         sbr_val & UART_BDL_SBR_MASK);
-    
+
     /*
      * Enable UART's transmitter and receiver:
      */
@@ -1230,7 +1224,7 @@ uart_init(
         cpu_id,
         &uart_var_p->urt_receive_queue);
 
-    /* 
+    /*
      * Register McRTOS interrupt handler
      */
     rtos_k_register_interrupt(
@@ -1238,7 +1232,7 @@ uart_init(
         uart_device_p->urt_rtos_interrupt_pp);
 
     DBG_ASSERT(
-        *uart_device_p->urt_rtos_interrupt_pp != NULL, 
+        *uart_device_p->urt_rtos_interrupt_pp != NULL,
         uart_device_p->urt_rtos_interrupt_pp, uart_device_p);
 
     uart_var_p->urt_initialized = true;
@@ -1252,7 +1246,7 @@ uart_stop(
     uint32_t reg_value;
     struct uart_device_var *uart_var_p = uart_device_p->urt_var_p;
     UART_MemMapPtr uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
-   
+
     /*
      * Disable UART's transmitter and receiver:
      */
@@ -1312,7 +1306,7 @@ kl25_uart_interrupt_e_handler(
 
     /*
      * "Transmit data register empty" interrupt:
-     */ 
+     */
     if (s1_reg_value & UART_S1_TDRE_MASK) {
         /*
          * NOTE: This interrupt source will be cleared when
@@ -1340,10 +1334,10 @@ kl25_uart_interrupt_e_handler(
 
     /*
      * "Receive data register full" interrupt:
-     */ 
+     */
     if (s1_reg_value & UART_S1_RDRF_MASK) {
         /*
-         * Read the first byte received to clear the interrupt source. 
+         * Read the first byte received to clear the interrupt source.
          */
         uint8_t byte_received = read_8bit_mmio_register(&UART_D_REG(uart_mmio_registers_p));
 
@@ -1365,7 +1359,7 @@ kl25_uart_interrupt_e_handler(
  */
 void
 uart_putchar(
-    _IN_ const struct uart_device *uart_device_p, 
+    _IN_ const struct uart_device *uart_device_p,
     _IN_ uint8_t c)
 {
     struct uart_device_var *const uart_var_p = uart_device_p->urt_var_p;
@@ -1416,7 +1410,7 @@ uart_putchar(
  */
 void
 uart_putchar_with_polling(
-    _IN_ const struct uart_device *uart_device_p, 
+    _IN_ const struct uart_device *uart_device_p,
     _IN_ uint8_t c)
 {
     struct uart_device_var *const uart_var_p = uart_device_p->urt_var_p;
@@ -1444,7 +1438,7 @@ uart_putchar_with_polling(
         }
     }
 
-    write_8bit_mmio_register(&UART_D_REG(uart_mmio_registers_p), c); 
+    write_8bit_mmio_register(&UART_D_REG(uart_mmio_registers_p), c);
 }
 
 
@@ -1532,7 +1526,7 @@ init_adc(const struct adc_device *adc_device_p)
     struct adc_device_var *adc_var_p = adc_device_p->ad_var_p;
     ADC_MemMapPtr adc_mmio_registers_p = adc_device_p->ad_mmio_registers_p;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
-	
+
     FDC_ASSERT(!adc_var_p->ad_initialized, adc_device_p, 0);
     FDC_ASSERT_CPU_INTERRUPTS_DISABLED();
 
@@ -1555,7 +1549,7 @@ init_adc(const struct adc_device *adc_device_p)
      * - ADLSMP bit = 1: Long sample time
      * - ADIV = 0x2: clock rate is (input clock)/4
      * - MODE = ADC_CFG1_MODE_VALUE
-     * - ADICLK = 0x0: Bus clock 
+     * - ADICLK = 0x0: Bus clock
      */
     reg_value = ADC_CFG1_ADLSMP_MASK;
     SET_BIT_FIELD(
@@ -1574,7 +1568,7 @@ init_adc(const struct adc_device *adc_device_p)
      * - ADHSC bit = 1: High-speed conversion sequence selected with 2
      *   additional ADCK cycles to total conversion time
      * - ADLSTS = 0x0: Default longest sample time; 20 extra ADCK cycles;
-     *   24 ADCK cycles total. 
+     *   24 ADCK cycles total.
      */
     reg_value = ADC_CFG2_ADHSC_MASK;
     SET_BIT_FIELD(
@@ -1587,7 +1581,7 @@ init_adc(const struct adc_device *adc_device_p)
      * - AIEN bit = 1: Conversion complete interrupt is enabled.
      * - DIFF bit = 0: Single-ended conversions and input channels are selected.
      * - ADCH = 0x1F: ADC conversion turned off
-     */ 
+     */
     reg_value = ADC_SC1_AIEN_MASK;
     SET_BIT_FIELD(
         reg_value, ADC_SC1_ADCH_MASK, ADC_SC1_ADCH_SHIFT, 0x1F);
@@ -1606,7 +1600,7 @@ init_adc(const struct adc_device *adc_device_p)
     reg_value = 0x0;
     write_32bit_mmio_register(
         &ADC_SC2_REG(adc_mmio_registers_p), reg_value);
-    
+
     /*
      * Configure ADC_SC3 register:
      * CAL bit = 0: calibration disabled
@@ -1625,7 +1619,7 @@ init_adc(const struct adc_device *adc_device_p)
         adc_device_p->ad_mutex_name,
         cpu_id,
         &adc_var_p->ad_mutex);
-    
+
     for (uint8_t i = 0; i < NUM_ADC_CHANNELS; i ++)
     {
         struct adc_channel *adc_channel_p = &adc_var_p->ad_adc_channels[i];
@@ -1667,7 +1661,7 @@ kl25_adc_calibrate(const struct adc_device *adc_device_p)
      * - ADLSMP bit = 1: Long sample time
      * - ADIV = 0x3: clock rate is (input clock)/8 = 3MHz (<= 4MHz)
      * - MODE = ADC_CFG1_MODE_VALUE
-     * - ADICLK = 0x0: Bus clock 
+     * - ADICLK = 0x0: Bus clock
      */
     reg_value = ADC_CFG1_ADLSMP_MASK;
     SET_BIT_FIELD(
@@ -1686,7 +1680,7 @@ kl25_adc_calibrate(const struct adc_device *adc_device_p)
      * - ADHSC bit = 1: High-speed conversion sequence selected with 2
      *   additional ADCK cycles to total conversion time
      * - ADLSTS = 0x0: Default longest sample time; 20 extra ADCK cycles;
-     *   24 ADCK cycles total. 
+     *   24 ADCK cycles total.
      */
     reg_value = ADC_CFG2_ADHSC_MASK;
     SET_BIT_FIELD(
@@ -1699,7 +1693,7 @@ kl25_adc_calibrate(const struct adc_device *adc_device_p)
      * - AIEN bit = 0: Conversion complete interrupt is enabled.
      * - DIFF bit = 0: Single-ended conversions and input channels are selected.
      * - ADC_SC1_ADCH_MASK = 0x1F: ADC turned off
-     */ 
+     */
     reg_value = 0x0;
     SET_BIT_FIELD(
         reg_value, ADC_SC1_ADCH_MASK, ADC_SC1_ADCH_SHIFT, 0x1F);
@@ -1717,7 +1711,7 @@ kl25_adc_calibrate(const struct adc_device *adc_device_p)
      */
     write_32bit_mmio_register(
         &ADC_SC2_REG(adc_mmio_registers_p), 0x0);
-    
+
     /*
      * Configure ADC_SC3 register:
      * - CAL bit = 1: calibration enabled
@@ -1737,34 +1731,34 @@ kl25_adc_calibrate(const struct adc_device *adc_device_p)
     do {
         reg_value = read_32bit_mmio_register(
                          &ADC_SC1A_REG(adc_mmio_registers_p));
-    } while ((reg_value & ADC_SC1_COCO_MASK) == 0); 
-  
+    } while ((reg_value & ADC_SC1_COCO_MASK) == 0);
+
     reg_value = read_32bit_mmio_register(
                     &ADC_SC3_REG(adc_mmio_registers_p));
-    
+
     if (reg_value & ADC_SC3_CALF_MASK) {
         fdc_error_t fdc_error =
             CAPTURE_FDC_ERROR("ADC calibration failed", 0, 0);
 
         fatal_error_handler(fdc_error);
     }
-    
+
     /*
      * Calculate plus-side calibration:
      */
     uint16_t calibration_var = 0x0;
     calibration_var +=
-        read_32bit_mmio_register(&ADC_CLP0_REG(adc_mmio_registers_p)); 
+        read_32bit_mmio_register(&ADC_CLP0_REG(adc_mmio_registers_p));
     calibration_var +=
-        read_32bit_mmio_register(&ADC_CLP1_REG(adc_mmio_registers_p)); 
+        read_32bit_mmio_register(&ADC_CLP1_REG(adc_mmio_registers_p));
     calibration_var +=
-        read_32bit_mmio_register(&ADC_CLP2_REG(adc_mmio_registers_p)); 
+        read_32bit_mmio_register(&ADC_CLP2_REG(adc_mmio_registers_p));
     calibration_var +=
-        read_32bit_mmio_register(&ADC_CLP3_REG(adc_mmio_registers_p)); 
+        read_32bit_mmio_register(&ADC_CLP3_REG(adc_mmio_registers_p));
     calibration_var +=
-        read_32bit_mmio_register(&ADC_CLP4_REG(adc_mmio_registers_p)); 
+        read_32bit_mmio_register(&ADC_CLP4_REG(adc_mmio_registers_p));
     calibration_var +=
-        read_32bit_mmio_register(&ADC_CLPS_REG(adc_mmio_registers_p)); 
+        read_32bit_mmio_register(&ADC_CLPS_REG(adc_mmio_registers_p));
     calibration_var /= 2;
     calibration_var |= BIT(15); /* Set MSB */
 
@@ -1776,17 +1770,17 @@ kl25_adc_calibrate(const struct adc_device *adc_device_p)
      */
     calibration_var = 0x0;
     calibration_var +=
-        read_32bit_mmio_register(&ADC_CLM0_REG(adc_mmio_registers_p)); 
+        read_32bit_mmio_register(&ADC_CLM0_REG(adc_mmio_registers_p));
     calibration_var +=
-        read_32bit_mmio_register(&ADC_CLM1_REG(adc_mmio_registers_p)); 
+        read_32bit_mmio_register(&ADC_CLM1_REG(adc_mmio_registers_p));
     calibration_var +=
-        read_32bit_mmio_register(&ADC_CLM2_REG(adc_mmio_registers_p)); 
+        read_32bit_mmio_register(&ADC_CLM2_REG(adc_mmio_registers_p));
     calibration_var +=
-        read_32bit_mmio_register(&ADC_CLM3_REG(adc_mmio_registers_p)); 
+        read_32bit_mmio_register(&ADC_CLM3_REG(adc_mmio_registers_p));
     calibration_var +=
-        read_32bit_mmio_register(&ADC_CLM4_REG(adc_mmio_registers_p)); 
+        read_32bit_mmio_register(&ADC_CLM4_REG(adc_mmio_registers_p));
     calibration_var +=
-        read_32bit_mmio_register(&ADC_CLMS_REG(adc_mmio_registers_p)); 
+        read_32bit_mmio_register(&ADC_CLMS_REG(adc_mmio_registers_p));
     calibration_var /= 2;
     calibration_var |= BIT(15); /* Set MSB */
 
@@ -1829,7 +1823,7 @@ kl25_adc_interrupt_e_handler(
         adc_var_p->ad_active_adc_channel, sc1_adch);
 #   endif
 
-    struct adc_channel *adc_channel_p = 
+    struct adc_channel *adc_channel_p =
         &adc_var_p->ad_adc_channels[adc_var_p->ad_active_adc_channel];
 
     DBG_ASSERT(
@@ -1855,7 +1849,7 @@ kl25_adc_interrupt_e_handler(
     adc_var_p->ad_active_adc_channel = ADC_CHANNEL_NONE;
 }
 
- 
+
 /*
  * Starts an A/D conversion for a given ADC channel and then it waits
  * until the A/D conversion is done.
@@ -1877,7 +1871,7 @@ read_adc_channel(
 
     struct adc_device_var *adc_var_p = adc_device_p->ad_var_p;
     ADC_MemMapPtr adc_mmio_registers_p = adc_device_p->ad_mmio_registers_p;
-	
+
     FDC_ASSERT(adc_var_p->ad_initialized, adc_device_p, 0);
 
     adc_channel_p = &adc_var_p->ad_adc_channels[adc_channel];
@@ -1890,7 +1884,7 @@ read_adc_channel(
      * Acquire mutex to serialize software-triggered conversions:
      *
      * NOTE: For the KL25 ADC, only one software-triggered
-     * conversion can be done at one time, regardless of 
+     * conversion can be done at one time, regardless of
      * using different channels.
      */
     rtos_mutex_acquire(&adc_var_p->ad_mutex);
@@ -1910,12 +1904,12 @@ read_adc_channel(
             ADC_MUX_SIDE_A) {
         /*
          * Select channel side A:
-         */ 
+         */
         reg_value &= ~ADC_CFG2_MUXSEL_MASK;
     } else {
         /*
          * Select channel side B:
-         */ 
+         */
         reg_value |= ADC_CFG2_MUXSEL_MASK;
     }
 
@@ -1956,7 +1950,7 @@ read_adc_channel(
 /**
  * Wait until the current PWM cycle completes
  */
-static void 
+static void
 kl25_tpm_wait_pwm_cycle_completion(
     const struct tpm_device *tpm_device_p)
 {
@@ -2001,7 +1995,7 @@ kl25_tpm_set_duty_cycle_internal(
 #ifdef DEBUG
     reg_value = read_32bit_mmio_register(&TPM_MOD_REG(tpm_mmio_registers_p));
     FDC_ASSERT(
-        reg_value == tpm_var_p->tpm_mod_reg_value, 
+        reg_value == tpm_var_p->tpm_mod_reg_value,
         reg_value, tpm_var_p->tpm_mod_reg_value);
 #endif
 
@@ -2022,7 +2016,7 @@ kl25_tpm_set_duty_cycle_internal(
      */
 
     uint32_t tmp = tpm_var_p->tpm_mod_reg_value * pwm_duty_cycle_us;
-   
+
     FDC_ASSERT(
         tmp >= tpm_var_p->tpm_mod_reg_value || pwm_duty_cycle_us == 0,
         tmp, tpm_var_p->tpm_mod_reg_value);
@@ -2049,7 +2043,7 @@ kl25_tpm_init(
      * Enable the Clock to the TPM Module
      */
     reg_value = read_32bit_mmio_register(&SIM_SCGC6);
-    reg_value |= tpm_device_p->tpm_mmio_clock_gate_mask; 
+    reg_value |= tpm_device_p->tpm_mmio_clock_gate_mask;
     write_32bit_mmio_register(&SIM_SCGC6, reg_value);
 
     struct tpm_device_var *const tpm_var_p = tpm_device_p->tpm_var_p;
@@ -2060,7 +2054,7 @@ kl25_tpm_init(
 
     /*
      * Blow away the control registers to ensure that the counter is not running
-     */ 
+     */
     write_32bit_mmio_register(
         &TPM_SC_REG(tpm_mmio_registers_p), 0x0);
     write_32bit_mmio_register(
@@ -2076,7 +2070,7 @@ kl25_tpm_init(
     write_32bit_mmio_register(
         &TPM_SC_REG(tpm_mmio_registers_p), reg_value);
 
-    /* 
+    /*
      * Setup the MOD register to get the correct EPWM Period:
      *
      * NOTE: The EPWM period is determined by (MOD + 0x0001), for all channels.
@@ -2084,7 +2078,7 @@ kl25_tpm_init(
      * MOD must be less than 0xFFFF in order to get a 100% duty cycle EPWM signal.
      */
     reg_value = ((tpm_device_p->tpm_clock_freq_hz /
-                    (UINT32_C(1) << tpm_device_p->tpm_clock_prescale)) / 
+                    (UINT32_C(1) << tpm_device_p->tpm_clock_prescale)) /
                  tpm_device_p->tpm_overflow_freq_hz) - 1;
     DBG_ASSERT(
         reg_value < 0xffff, reg_value, tpm_device_p);
@@ -2096,7 +2090,7 @@ kl25_tpm_init(
     /*
      * Configure PWM channels:
      */
-    for (uint32_t i = 0; 
+    for (uint32_t i = 0;
          i < ARRAY_SIZE(tpm_device_p->tpm_channels);
          i ++) {
         if (tpm_device_p->tpm_channels[i].tpm_mmio_pcr_p != NULL) {
@@ -2106,7 +2100,7 @@ kl25_tpm_init(
             kl25_tpm_set_duty_cycle_internal(
                 tpm_device_p, i, tpm_device_p->tpm_initial_duty_cycle_us, false);
 
-            /* 
+            /*
              * Enable channel pin:
              */
             write_32bit_mmio_register(
@@ -2132,7 +2126,7 @@ kl25_tpm_init(
     tpm_var_p->tpm_pwm_cycle_completed = false;
 
     if (tpm_device_p->tpm_wait_pwm_cycle_completion) {
-        /* 
+        /*
          * Register McRTOS interrupt handler
          */
         rtos_k_register_interrupt(
@@ -2140,14 +2134,14 @@ kl25_tpm_init(
             tpm_device_p->tpm_rtos_interrupt_pp);
 
         DBG_ASSERT(
-            *tpm_device_p->tpm_rtos_interrupt_pp != NULL, 
+            *tpm_device_p->tpm_rtos_interrupt_pp != NULL,
             tpm_device_p->tpm_rtos_interrupt_pp, tpm_device_p);
     }
 
     /*
      * - Enable the TPM Counter:
      *   - CMOD = 01: LPTPM counter increments on every LPTPM counter clock.
-     *   - CPWMS = 0: Up counting is selected. 
+     *   - CPWMS = 0: Up counting is selected.
      * - Enable Interrupts for the Timer Overflow if we are going to wait
      *   for PWM cycle completions.
      */
@@ -2267,7 +2261,7 @@ i2c_end_transaction(
     delay_loop(100);
 }
 
-static uint8_t 
+static uint8_t
 i2c_read_data_byte(
     const struct i2c_device *i2c_device_p,
     bool first_read,
@@ -2285,7 +2279,7 @@ i2c_read_data_byte(
          * Send a NAK signal to the I2C bus:
          */
         reg_value |= I2C_C1_TXAK_MASK;
-    } else { 
+    } else {
         /*
          * Send an ACK signal to the I2C bus:
          */
@@ -2314,7 +2308,7 @@ i2c_read_data_byte(
      *
      * NOTE: If i2c_end_transaction() is not called above, this will also
      * initiate another read transfer.
-     */ 
+     */
     reg_value = read_8bit_mmio_register(&I2C_D_REG(i2c_mmio_registers_p));
 
     return (uint8_t)reg_value;
@@ -2336,7 +2330,7 @@ i2c_start_or_continue_transaction(
 
     if (first_transaction) {
         FDC_ASSERT(
-            (reg_value & (I2C_C1_MST_MASK|I2C_C1_RSTA_MASK|I2C_C1_TX_MASK)) == 0, 
+            (reg_value & (I2C_C1_MST_MASK|I2C_C1_RSTA_MASK|I2C_C1_TX_MASK)) == 0,
             reg_value, i2c_device_p);
         FDC_ASSERT(
             (reg_value2 & I2C_S_BUSY_MASK) == 0, reg_value2, i2c_device_p);
@@ -2357,7 +2351,7 @@ i2c_start_or_continue_transaction(
     uint8_t data_value = 0;
     SET_BIT_FIELD(
         data_value, I2C_SLAVE_ADDR_MASK, I2C_SLAVE_ADDR_SHIFT, i2c_slave_addr);
-    
+
     if (read_transaction) {
         data_value |= I2C_READ_TRANSACTION_MASK;
     }
@@ -2425,12 +2419,12 @@ i2c_init(
      * Enable the Clock to the I2C Module
      */
     reg_value = read_32bit_mmio_register(&SIM_SCGC4);
-    reg_value |= i2c_device_p->i2c_clock_gate_mask; 
+    reg_value |= i2c_device_p->i2c_clock_gate_mask;
     write_32bit_mmio_register(&SIM_SCGC4, reg_value);
 
     /*
      * Configure GPIO pins for I2C functions:
-     */ 
+     */
     write_32bit_mmio_register(
         i2c_device_p->i2c_mmio_scl_port_pcr_p,
         i2c_device_p->i2c_pin_mux_selector_mask);
@@ -2471,10 +2465,10 @@ i2c_init(
      * Enable IIC mode and enable interrupt generation:
      */
     write_8bit_mmio_register(
-        &I2C_C1_REG(i2c_mmio_registers_p), 
+        &I2C_C1_REG(i2c_mmio_registers_p),
         I2C_C1_IICEN_MASK | I2C_C1_IICIE_MASK);
 
-    /* 
+    /*
      * Register McRTOS interrupt handler
      */
     rtos_k_register_interrupt(
@@ -2482,9 +2476,9 @@ i2c_init(
         i2c_device_p->i2c_rtos_interrupt_pp);
 
     DBG_ASSERT(
-        *i2c_device_p->i2c_rtos_interrupt_pp != NULL, 
+        *i2c_device_p->i2c_rtos_interrupt_pp != NULL,
         i2c_device_p->i2c_rtos_interrupt_pp, i2c_device_p);
-    
+
     i2c_var_p->i2c_initialized = true;
 }
 
@@ -2519,7 +2513,7 @@ i2c_shutdown(
      * Disable the Clock to the I2C Module
      */
     reg_value = read_32bit_mmio_register(&SIM_SCGC4);
-    reg_value &= ~i2c_device_p->i2c_clock_gate_mask; 
+    reg_value &= ~i2c_device_p->i2c_clock_gate_mask;
     write_32bit_mmio_register(&SIM_SCGC4, reg_value);
 }
 
@@ -2600,7 +2594,7 @@ kl25_i2c_interrupt_e_handler(
      */
     write_8bit_mmio_register(
         &I2C_S_REG(i2c_mmio_registers_p), I2C_S_IICIF_MASK);
- 
+
 #   ifdef DEBUG
     reg_value =
         read_8bit_mmio_register(&I2C_S_REG(i2c_mmio_registers_p));
@@ -2640,10 +2634,10 @@ notify_interrupt_controller_isr_done(interrupt_channel_t interrupt_channel)
     DBG_ASSERT(
         interrupt_channel >= -1 && interrupt_channel < SOC_NUM_INTERRUPT_CHANNELS,
         interrupt_channel, SOC_NUM_INTERRUPT_CHANNELS);
-} 
+}
 
 
-/* 
+/*
  * Generate dummy NVIC interrupt handler functions
  */
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_dma0_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_DMA0))
@@ -2694,7 +2688,7 @@ GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_port_d_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(I
     {                                                                   \
         FDC_ASSERT_VALID_MMIO_ADDRESS(io_reg_p);                        \
         *io_reg_p = value;                                              \
-    }   
+    }
 
 GEN_READ_MMIO_REGISTER_FUNCTION(read_32bit_mmio_register, uint32_t, uint32_t)
 

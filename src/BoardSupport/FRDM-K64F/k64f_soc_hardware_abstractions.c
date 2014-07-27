@@ -1108,6 +1108,8 @@ soc_hardware_init(void)
 
     cpu_reset_cause_t reset_cause = find_reset_cause();
 
+    capture_fdc_msg_printf("Last reset cause: %#x\n", reset_cause);
+
     system_clocks_init();
 
 #   ifdef _CPU_CYCLES_MEASURE_
@@ -1120,6 +1122,9 @@ soc_hardware_init(void)
 	k64f_mpu_init();
     }
 
+    capture_fdc_msg_printf("Cortex-M MPU %s present\n", mpu_present ? "" : "not");
+    capture_fdc_msg_printf("K64F MPU regions: %u\n", g_mpu.var_p->num_regions);
+
     cortex_m_nvic_init();
 
     uart_init(
@@ -1127,22 +1132,10 @@ soc_hardware_init(void)
         CONSOLE_SERIAL_PORT_BAUD_RATE,
         CONSOLE_SERIAL_PORT_MODE);
 
-    DEBUG_PRINTF("%s initialized (Tx FIFO size: %u, Rx FIFO size: %u)\n",
+    capture_fdc_msg_printf("%s initialized (Tx FIFO size: %u, Rx FIFO size: %u)\n",
 		 g_console_serial_port_p->urt_name,
 		 g_console_serial_port_p->urt_var_p->urt_tx_fifo_size,
 		 g_console_serial_port_p->urt_var_p->urt_rx_fifo_size);
-
-    DEBUG_PRINTF("Last reset cause: %#x\n", reset_cause);
-    DEBUG_PRINTF("Cortex-M MPU %s present\n", mpu_present ? "" : "not");
-    DEBUG_PRINTF("K64F MPU regions: %u\n", g_mpu.var_p->num_regions);
-
-#   ifdef DEBUG
-    uart_putchar_with_polling(g_console_serial_port_p, '\r');
-    uart_putchar_with_polling(g_console_serial_port_p, '\n');
-#   else
-    uart_putchar(g_console_serial_port_p, '\r');
-    uart_putchar(g_console_serial_port_p, '\n');
-#   endif
 
 #if 0 // ???
     i2c_init(g_i2c0_device_p);

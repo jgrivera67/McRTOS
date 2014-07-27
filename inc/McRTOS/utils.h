@@ -88,7 +88,7 @@
 
 #ifdef DEBUG
 #   define DEBUG_PRINTF(_fmt, ...) \
-            capture_fdc_debug_printf("%s:" STRINGIFY_LITERAL(__LINE__) " " _fmt, \
+            capture_fdc_msg_printf("DBG %s:" STRINGIFY_LITERAL(__LINE__) " " _fmt, \
 				     __func__, ##__VA_ARGS__)
 
 #   define DEBUG_BREAK_POINT()  ARTIFICIAL_BREAK_POINT()

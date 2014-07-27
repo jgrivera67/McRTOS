@@ -33,7 +33,7 @@ static void
 rtos_dbg_dump_all_execution_contexts(void);
 
 static void
-rtos_dbg_dump_debug_msg_buffer(void);
+rtos_dbg_dump_fdc_msg_buffer(void);
 
 static void
 rtos_dbg_dump_execution_context(
@@ -91,7 +91,7 @@ rtos_common_fault_exception_handler(
     fdc_info_p->fdc_handling_exception = true;
 #   endif
 
-    DEBUG_PRINTF(
+    capture_fdc_msg_printf(
         "Fault %u exception caught on context %#p\n",
 	exception_vector,
         current_execution_context_p);
@@ -139,7 +139,7 @@ rtos_common_fault_exception_handler(
 #   endif
 
     micro_trace_restart();
-    DEBUG_PRINTF("*** Exiting debugger ***\n");
+    debugger_printf("*** Exiting debugger ***\n");
 }
 
 
@@ -206,7 +206,7 @@ rtos_dbg_parse_command(
             break;
 
         case 'd':
-            rtos_dbg_dump_debug_msg_buffer();
+            rtos_dbg_dump_fdc_msg_buffer();
             break;
 
         case 'e':
@@ -330,17 +330,17 @@ rtos_dbg_dump_all_execution_contexts(void)
 }
 
 static void
-rtos_dbg_dump_debug_msg_buffer(void)
+rtos_dbg_dump_fdc_msg_buffer(void)
 {
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
     struct rtos_cpu_controller *cpu_controller_p =
         &g_McRTOS_p->rts_cpu_controllers[cpu_id];
     struct fdc_info *fdc_info_p = &cpu_controller_p->cpc_failures_info;
 
-    fdc_info_p->fdc_debug_msg_buffer[RTOS_DEBUG_MSG_BUFFER_SIZE - 1] = '\0';
-    debugger_printf("Debug message buffer for CPU: %u\n", cpu_id);
+    fdc_info_p->fdc_msg_buffer[RTOS_FDC_MSG_BUFFER_SIZE - 1] = '\0';
+    debugger_printf("FDC message buffer for CPU: %u\n\n", cpu_id);
 
-    for (char *s = fdc_info_p->fdc_debug_msg_buffer; *s != '\0'; s ++) {
+    for (char *s = fdc_info_p->fdc_msg_buffer; *s != '\0'; s ++) {
         uart_putchar_with_polling(g_console_serial_port_p, *s);
     }
 }
