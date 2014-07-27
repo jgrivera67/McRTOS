@@ -1123,7 +1123,7 @@ soc_hardware_init(void)
     }
 
     capture_fdc_msg_printf("Cortex-M MPU %s present\n", mpu_present ? "" : "not");
-    capture_fdc_msg_printf("K64F MPU regions: %u\n", g_mpu.var_p->num_regions);
+    capture_fdc_msg_printf("K64F MPU present (regions: %u)\n", g_mpu.var_p->num_regions);
 
     cortex_m_nvic_init();
 
