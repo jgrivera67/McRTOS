@@ -1,6 +1,0 @@
-export PLATFORM="FRDM-K64F"
-export APPLICATION="McRTOS_demo"
-export BUILD_FLAVOR=performance
-
-. $HOME/embsys/projects/McRTOS/env/McRTOS_common.ide_env
-

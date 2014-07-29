@@ -2,5 +2,5 @@ export PLATFORM="FRDM-KL25Z"
 export APPLICATION="McRTOS-FRDM"
 export BUILD_FLAVOR=debug
 
-. $HOME/embsys/projects/McRTOS/env/McRTOS_common.ide_env
+. $HOME/embsys/projects/McRTOS/env/McRTOS_common_ide_env.sh
 

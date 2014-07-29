@@ -1,4 +1,4 @@
-export IDE_SHELL_RC_FILE=$IDE_ENV_DIR/${APPLICATION}_${PLATFORM}_${BUILD_FLAVOR}.ide_env
+export IDE_SHELL_RC_FILE=$IDE_ENV_DIR/${APPLICATION}_${PLATFORM}_${BUILD_FLAVOR}_ide_env.sh
 base_dir=$HOME/embsys/projects
 project="McRTOS"
 export SRC_TREE_DIR="$base_dir/$project"
@@ -8,7 +8,7 @@ export CSCOPE_DB="$SRC_DB_DIR/cscope.out"
 export CSCOPE_ROOT_DIR=$SRC_TREE_DIR
 export CSCOPE_ROOT_DIR_EXPORTS=""
 export IDE_ENV_DIR=$base_dir/$project/env
-export IDE_VIM_SESSION="$IDE_ENV_DIR/${project}.vim"
+export IDE_VIM_SESSION="$IDE_ENV_DIR/${APPLICATION}_${PLATFORM}.vim"
 export DEFAULT_OBJ_FLAVOR_SUBDIR="${PLATFORM}-obj-${BUILD_FLAVOR}"
 export BIN_FILE="$DEFAULT_OBJ_FLAVOR_SUBDIR/Applications/$APPLICATION/$APPLICATION.bin"
 export CROSS_COMPILE=$HOME/embsys/tools/gcc-arm-none-eabi-4_8-2013q4
