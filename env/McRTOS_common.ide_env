@@ -1,3 +1,4 @@
+export IDE_SHELL_RC_FILE=$IDE_ENV_DIR/${APPLICATION}_${PLATFORM}_${BUILD_FLAVOR}.ide_env
 base_dir=$HOME/embsys/projects
 project="McRTOS"
 export SRC_TREE_DIR="$base_dir/$project"
@@ -13,7 +14,6 @@ export BIN_FILE="$DEFAULT_OBJ_FLAVOR_SUBDIR/Applications/$APPLICATION/$APPLICATI
 export CROSS_COMPILE=$HOME/embsys/tools/gcc-arm-none-eabi-4_8-2013q4
 export TOOLCHAIN=$CROSS_COMPILE/bin/arm-none-eabi
 export MAKEFILE_DIR="$SRC_TREE_DIR"
-export IDE_SHELL_RC_FILE=$IDE_ENV_DIR/${project}_fsl_k64f_${BUILD_FLAVOR}.ide_env
 
 function my_build_all
 {

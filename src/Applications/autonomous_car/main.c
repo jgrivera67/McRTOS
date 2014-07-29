@@ -5,8 +5,8 @@
  *
  * Copyright (C) 2013 German Rivera
  *
- * @author German Rivera 
- */ 
+ * @author German Rivera
+ */
 
 #include "McRTOS.h"
 #include "McRTOS_kernel_services.h"
@@ -155,7 +155,7 @@ static const struct rtos_console_command g_app_console_commands[] =
 
 /**
  * McRTOS application startup configuration
- */ 
+ */
 static const struct rtos_startup_app_configuration g_rtos_app_config =
 {
     .stc_app_hardware_init_p = autonomous_car_hardware_init,
@@ -198,7 +198,7 @@ static const struct rtos_startup_app_configuration g_rtos_app_config =
 
 /**
  * Number of raw camera frame buffers
- */ 
+ */
 #define NUM_CAMERA_FRAMES    2
 
 /**
@@ -234,7 +234,7 @@ static const struct rtos_startup_app_configuration g_rtos_app_config =
         ((UINT32_C(1) << BATTERY_MEANINGFUL_TOP_BITS) - 1)
 
 C_ASSERT(
-    HOW_MANY(MAX_FILTERED_BATTERY_READING, TFC_NUM_BATTERY_LEDS) == 
+    HOW_MANY(MAX_FILTERED_BATTERY_READING, TFC_NUM_BATTERY_LEDS) ==
     TFC_NUM_BATTERY_LEDS);
 
 #define ASSERT_BREAKPOINT_DIP_SWITCH    0
@@ -243,7 +243,7 @@ C_ASSERT(
 #define DRIVE_FAST_DIP_SWITCH           3
 
 #define TURN_ON_CAR_PUSH_BUTTON     0
-#define TURN_OFF_CAR_PUSH_BUTTON    1 
+#define TURN_OFF_CAR_PUSH_BUTTON    1
 
 #define THROTTLE_INCREMENT_UNIT \
         UINT_DIV_APPROX(                                                \
@@ -261,7 +261,7 @@ C_ASSERT(
 struct autonomous_car {
     /**
      * Flag to enable/disable driving the car
-     */ 
+     */
     volatile bool c_turned_on;
 
     /**
@@ -270,7 +270,7 @@ struct autonomous_car {
     struct rtos_mutex *c_turned_on_mutex_p;
 
     /**
-     * Pointer to condvar to signal threads to be activated when the 
+     * Pointer to condvar to signal threads to be activated when the
      * car is turned on.
      */
     struct rtos_condvar *c_turned_on_condvar_p;
@@ -303,13 +303,13 @@ struct autonomous_car {
     struct tfc_camera_frame c_camera_frames[NUM_CAMERA_FRAMES];
 
     /**
-     * Circular buffer of pointers used to keep track of available camera frame 
+     * Circular buffer of pointers used to keep track of available camera frame
      * buffers.
      */
     struct rtos_circular_buffer c_camera_frame_buffer_pool;
 
     /**
-     * Circular buffer of pointers where pointers to captured camera raw frames 
+     * Circular buffer of pointers where pointers to captured camera raw frames
      * are stored by the camera_frame_reader_thread_f thread, and consumed by
      * the car_driver_thread_f thread
      */
@@ -318,7 +318,7 @@ struct autonomous_car {
     /**
      * Flag to enable/disable dumping of camera frames to the console. It can
      * be changed through a DIP switch.
-     */ 
+     */
     volatile bool c_dump_camera_frames_on;
 
     /**
@@ -350,7 +350,9 @@ struct autonomous_car {
      * Push buttons state
      */
     volatile bool c_push_buttons[TFC_NUM_PUSH_BUTTONS];
-};
+} __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT)));
+
+C_ASSERT(sizeof(struct autonomous_car) % SOC_MPU_REGION_ALIGNMENT == 0);
 
 static struct autonomous_car g_car = {
     .c_turned_on = false,
@@ -373,12 +375,12 @@ static struct autonomous_car g_car = {
  * Application's main()
  *
  * This function is invoked from the Reset exception handler for each CPU core.
- */ 
+ */
 int
 main(void)
 {
     rtos_startup(&g_rtos_app_config);
-    
+
     FDC_ASSERT(false, 0, 0);
 
     return -1;
@@ -483,7 +485,7 @@ void autonomous_car_app_init(void)
 
     /*
      * Get initial trimpot reading:
-     */ 
+     */
     tfc_trimpots_read((tfc_trimpot_reading_t *)g_car.c_last_trimpot_readings);
 
     /*
@@ -548,8 +550,13 @@ camera_frame_reader_thread_f(void *arg)
 
     FDC_ASSERT(arg == NULL, arg, cpu_id);
 
+    fdc_error = rtos_mpu_rw_region_push(&g_car, &g_car + 1);
+    if (fdc_error != 0) {
+	return fdc_error;
+    }
+
     console_printf("Initializing camera frame reader thread ...\n");
-    
+
     for ( ; ; ) {
         rtos_mutex_acquire(g_car.c_turned_on_mutex_p);
         if (!g_car.c_turned_on) {
@@ -614,9 +621,9 @@ camera_frame_reader_thread_f(void *arg)
     return fdc_error;
 }
 
-   
+
 /**
- * Find the middle black spot in a camera frame. 
+ * Find the middle black spot in a camera frame.
  * Pixel 0 is the right-most pixel
  * Pixel 'TFC_NUM_CAMERA_PIXELS - 1' is the left-most pixel.
  *
@@ -633,7 +640,7 @@ find_middle_black_spot(
     bool black_spot_found = false;
     bw_cluster_bit_map_t bw_cluster_bit_map = 0x0;
 
-    /* 
+    /*
      * Form a bit map of "mostly" black and "mostly" white clusters of pixels:
      *
      * NOTE: Each bit in the bitmap represents a B/W cluster of BW_CLUSTER_SIZE
@@ -647,7 +654,7 @@ find_middle_black_spot(
     natural_t black_cluster_count = 0;
 
     for (natural_t i = 0; i < TFC_NUM_CAMERA_PIXELS; i ++) {
-        natural_t filtered_pixel = 
+        natural_t filtered_pixel =
                     FILTER_PIXEL_READING(camera_frame_p->cf_pixels[i]);
 
         if (g_car.c_dump_camera_frames_on) {
@@ -733,7 +740,7 @@ toggle_dump_camera_frames(const char *cmd_line)
 
 static int
 calculate_new_manipulated_var_value(
-    int base_manipulated_var, 
+    int base_manipulated_var,
     int offset_manipulated_var,
     int min_value,
     int max_value)
@@ -793,7 +800,7 @@ steer_wheels(
      *   by setting servo PWM duty cycle <
      *      TFC_STEERING_SERVO_NEUTRAL_DUTY_CYCLE_US
      * - error > 0 means black spot is to the right, so need to steer right
-     *   by setting servo PWM duty cycle > 
+     *   by setting servo PWM duty cycle >
      *      TFC_STEERING_SERVO_NEUTRAL_DUTY_CYCLE_US
      *
      * NOTE: right-most pixel index is 0 and left-most pixel index is
@@ -804,13 +811,13 @@ steer_wheels(
     int derivative_term = error - previous_error;
     previous_error = error;
     integral_term += error;
-   
+
     /*
      * Calculate new steering servo PWM duty cycle:
      */
 
-    int offset_steering_servo_pwm_duty_cycle = 
-             STEERING_SERVO_PROPORTIONAL_GAIN * error + 
+    int offset_steering_servo_pwm_duty_cycle =
+             STEERING_SERVO_PROPORTIONAL_GAIN * error +
              STEERING_SERVO_INTEGRAL_GAIN * integral_term +
              STEERING_SERVO_DERIVATIVE_GAIN * derivative_term;
 
@@ -840,12 +847,12 @@ steer_wheels(
                 TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US) {
             wheel_motor_pwm_duty_cycle_us = base_wheel_motor_pwm_duty_cycle_us;
         }
-        
+
         if (ABS(error) <= PID_ERROR_THRESHOLD_IN_PIXELS) {
-            offset_wheel_motor_pwm_duty_cycle = 
+            offset_wheel_motor_pwm_duty_cycle =
                 WHEEL_MOTOR_PROPORTIONAL_GAIN * ABS(error);
         } else {
-            offset_wheel_motor_pwm_duty_cycle = 
+            offset_wheel_motor_pwm_duty_cycle =
                 -WHEEL_MOTOR_PROPORTIONAL_GAIN * ABS(error);
         }
     } else {
@@ -866,14 +873,14 @@ steer_wheels(
     if (g_car.c_dip_switches_on[ACTIVE_DIFFERENTIAL_DIP_SWITCH] &&
         ABS(error) > PID_ERROR_THRESHOLD_IN_PIXELS &&
         wheel_motor_pwm_duty_cycle_us != TFC_WHEEL_MOTOR_STOPPED_DUTY_CYCLE_US) {
-        int offset_wheel_differential = 
+        int offset_wheel_differential =
                  -(WHEEL_DIFFERENTIAL_PROPORTIONAL_GAIN * ABS(error));
 
         if (error < 0) {
             /*
              * Help steer left by making left wheel spin slower
              */
-            left_wheel_pwm_duty_cycle_us = 
+            left_wheel_pwm_duty_cycle_us =
                 (pwm_duty_cycle_us_t)calculate_new_manipulated_var_value(
                                         wheel_motor_pwm_duty_cycle_us,
                                         offset_wheel_differential,
@@ -898,7 +905,7 @@ steer_wheels(
         left_wheel_pwm_duty_cycle_us = wheel_motor_pwm_duty_cycle_us;
         right_wheel_pwm_duty_cycle_us = wheel_motor_pwm_duty_cycle_us;
     }
-        
+
     /*
      * Send commands to actuators:
      */
@@ -947,7 +954,7 @@ turn_on_car(void)
     rtos_mutex_release(g_car.c_turned_on_mutex_p);
     rtos_condvar_broadcast(g_car.c_turned_on_condvar_p);
 }
-        
+
 
 static fdc_error_t
 car_driver_thread_f(void *arg)
@@ -997,7 +1004,7 @@ car_driver_thread_f(void *arg)
             true);
 
         previous_center_black_spot_position = center_black_spot_position;
-        bool black_spot_found = 
+        bool black_spot_found =
                 find_middle_black_spot(
                     camera_frame_p,
                     white_threshold,
@@ -1024,7 +1031,7 @@ car_driver_thread_f(void *arg)
 #endif
         } else {
             //center_black_spot_position = CENTER_PIXEL_INDEX;
-            center_black_spot_position = 
+            center_black_spot_position =
                 (previous_center_black_spot_position + CENTER_PIXEL_INDEX) / 2;
 #if 0
             base_wheel_motor_pwm_duty_cycle_us =
@@ -1086,9 +1093,9 @@ trimpot_reader_thread_f(void *arg)
                 g_car.c_last_trimpot_readings[i] = trimpot_readings[i];
             }
         }
-        
+
         rtos_thread_delay(TRIMPOTS_SAMPLING_PERIOD_MS);
-    }   
+    }
 
     fdc_error = CAPTURE_FDC_ERROR(
         "thread should not have terminated",
@@ -1116,7 +1123,7 @@ switches_and_buttons_reader_thread_f(void *arg)
     for ( ; ; ) {
         /*
          * Read DIP switches:
-         */ 
+         */
         tfc_dip_switches_read(dip_switches);
 
         fdc_setting_changed = false;
@@ -1161,7 +1168,7 @@ switches_and_buttons_reader_thread_f(void *arg)
 
         /*
          * Read push buttons:
-         */ 
+         */
         tfc_push_buttons_read(push_buttons);
 
         for (natural_t i = 0; i < TFC_NUM_PUSH_BUTTONS; i++) {
@@ -1179,7 +1186,7 @@ switches_and_buttons_reader_thread_f(void *arg)
         }
 
         rtos_thread_delay(SWITCHES_AND_BUTTONS_READER_THREAD_PERIOD_MS);
-    } 
+    }
 
     fdc_error = CAPTURE_FDC_ERROR(
         "thread should not have terminated",
@@ -1207,9 +1214,9 @@ battery_monitor_thread_f(void *arg)
     for ( ; ; )
     {
         tfc_battery_reading_t battery_reading = tfc_battery_sensor_read();
-      
+
         if (battery_reading != last_battery_reading) {
-            natural_t battery_level = 
+            natural_t battery_level =
                 HOW_MANY(
                     FILTER_BATTERY_READING(battery_reading),
                     4);
@@ -1230,7 +1237,7 @@ battery_monitor_thread_f(void *arg)
         }
 
         rtos_thread_delay(BATTERY_SAMPLING_PERIOD_MS);
-    }   
+    }
 
     fdc_error = CAPTURE_FDC_ERROR(
         "thread should not have terminated",

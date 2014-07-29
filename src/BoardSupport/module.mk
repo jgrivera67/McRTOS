@@ -17,8 +17,7 @@ ifeq "$(PLATFORM)" "FRDM-KL25Z"
     local_src := \
                  $(subdirectory)/$(PLATFORM)/kl25z_soc_hardware_abstractions.c \
                  $(subdirectory)/$(PLATFORM)/kl25z_interrupt_service_routines.s \
-                 $(subdirectory)/$(PLATFORM)/frdm_board_hardware_abstractions.c \
-                 $(subdirectory)/$(PLATFORM)/tfc_board_hardware_abstractions.c
+                 $(subdirectory)/$(PLATFORM)/frdm_board_hardware_abstractions.c
 endif
 
 ifeq "$(PLATFORM)" "FRDM-K20D5"

@@ -3,12 +3,10 @@
  *
  * Hardware abstraction layer for the TFC add-on board
  *
- * @author German Rivera 
- */ 
+ * @author German Rivera
+ */
 #include "hardware_abstractions.h"
-#include "kl25z_soc.h"
 #include "McRTOS_arm_cortex_m.h"
-#include "MKL25Z4.h"
 #include "failure_data_capture.h"
 #include "utils.h"
 #include "McRTOS_config_parameters.h"
@@ -283,7 +281,7 @@ static struct adc_device_var g_adc_device_var = {
 static const struct adc_device g_adc0_device = {
     .ad_signature = ADC_DEVICE_SIGNATURE,
     .ad_var_p = &g_adc_device_var,
-    .ad_mmio_registers_p = ADC0_BASE_PTR, 
+    .ad_mmio_registers_p = ADC0_BASE_PTR,
     .ad_rtos_interrupt_params = {
         .irp_name_p = "ADC Interrupt",
         .irp_isr_function_p = kl25_adc0_isr,
@@ -572,7 +570,7 @@ tfc_wheel_motors_set(
 
 
 static void
-tfc_camera_init(void) 
+tfc_camera_init(void)
 {
     /*
      * Setup GPIO pins for camera signals:
@@ -615,7 +613,7 @@ tfc_camera_read_frame(
         delay_loop(TFC_CAMERA_CLK_PULSE_DELAY);
     }
 
-    /* 
+    /*
      * Complete N+1 clock cycle
      */
     delay_loop(TFC_CAMERA_CLK_PULSE_DELAY / 4);
@@ -625,7 +623,7 @@ tfc_camera_read_frame(
 
 
 static void
-tfc_trimpots_init(void) 
+tfc_trimpots_init(void)
 {
 
 }
@@ -641,7 +639,7 @@ tfc_trimpots_read(
 
 
 static void
-tfc_battery_sensor_init(void) 
+tfc_battery_sensor_init(void)
 {
     /*
      * Initialize battery level LEDs:
@@ -658,14 +656,14 @@ tfc_battery_sensor_init(void)
 
 
 tfc_battery_reading_t
-tfc_battery_sensor_read(void) 
+tfc_battery_sensor_read(void)
 {
     return read_adc_channel(g_adc0_device_p, TFC_BATTERY_SENSE_CHANNEL);
 }
 
 
 void
-tfc_battery_leds_set(natural_t battery_level) 
+tfc_battery_leds_set(natural_t battery_level)
 {
     natural_t i;
 
@@ -682,7 +680,7 @@ tfc_battery_leds_set(natural_t battery_level)
 
 
 static void
-tfc_push_buttons_init(void) 
+tfc_push_buttons_init(void)
 {
     for (int i = 0; i < TFC_NUM_PUSH_BUTTONS; i++) {
         configure_pin(&g_tfc_push_button_pins[i], false);
@@ -701,7 +699,7 @@ tfc_push_buttons_read(
 
 
 static void
-tfc_dip_switches_init(void) 
+tfc_dip_switches_init(void)
 {
     for (int i = 0; i < TFC_NUM_DIP_SWITCHES; i++) {
         configure_pin(&g_tfc_dip_switch_pins[i], false);
