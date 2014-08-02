@@ -33,9 +33,7 @@ static void app_software_init(void);
 static void dummy_command(const char *cmd_line);
 static fdc_error_t hello_world_thread_thread_f(void *arg);
 
-#if 0 // ???
 static fdc_error_t accelerometer_thread_f(void *arg);
-#endif
 
 struct app_state_vars {
     /**
@@ -87,7 +85,6 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
         .p_thread_pp = NULL,
     },
 
-#if 0 // ???
     [1] =
     {
         .p_name_p = "accelerometer thread",
@@ -96,7 +93,6 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
         .p_priority = ACCELEROMETER_THREAD_PRIORITY,
         .p_thread_pp = NULL,
     },
-#endif
 };
 
 C_ASSERT(
@@ -222,7 +218,6 @@ exit:
     return fdc_error;
 }
 
-#if 0 // ???
 /**
  * Accelerometer thread
  */
@@ -278,4 +273,3 @@ accelerometer_thread_f(void *arg)
 
     return fdc_error;
 }
-#endif // ???

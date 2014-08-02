@@ -1,4 +1,3 @@
-export IDE_SHELL_RC_FILE=$IDE_ENV_DIR/${APPLICATION}_${PLATFORM}_${BUILD_FLAVOR}_ide_env.sh
 base_dir=$HOME/embsys/projects
 project="McRTOS"
 export SRC_TREE_DIR="$base_dir/$project"
@@ -8,6 +7,7 @@ export CSCOPE_DB="$SRC_DB_DIR/cscope.out"
 export CSCOPE_ROOT_DIR=$SRC_TREE_DIR
 export CSCOPE_ROOT_DIR_EXPORTS=""
 export IDE_ENV_DIR=$base_dir/$project/env
+export IDE_SHELL_RC_FILE=$IDE_ENV_DIR/${APPLICATION}_${PLATFORM}_${BUILD_FLAVOR}_ide_env.sh
 export IDE_VIM_SESSION="$IDE_ENV_DIR/${APPLICATION}_${PLATFORM}.vim"
 export DEFAULT_OBJ_FLAVOR_SUBDIR="${PLATFORM}-obj-${BUILD_FLAVOR}"
 export BIN_FILE="$DEFAULT_OBJ_FLAVOR_SUBDIR/Applications/$APPLICATION/$APPLICATION.bin"
@@ -80,6 +80,50 @@ function my_update_flash
 }
 
 function my_gdb
+{
+    typeset init_script
+    typeset gdb_log_file
+    typeset gdb_history_file
+    typeset gdb_commands
+    typeset openocd_cfg_file
+    typeset openocd_log_file
+    typeset bin_file_prefix
+
+    bin_file_prefix=$DEFAULT_OBJ_FLAVOR_SUBDIR/Applications/$APPLICATION/$APPLICATION
+    init_script=$bin_file_prefix.gdb
+    gdb_log_file=~/tmp/gdb.log
+    gdb_history_file=~/tmp/gdb_history.txt
+    openocd_cfg_file=~/embsys/tools/openocd/share/openocd/scripts/target/kinetis.cfg
+    openocd_log_file=~/tmp/openocd.log
+
+    echo "$FUNCNAME: Generating $init_script ..."
+    echo "
+target remote localhost:3333
+symbol-file $bin_file_prefix.elf
+set print pretty on
+set print array on
+set print array-indexes on
+set radix 16
+set logging file $gdb_log_file
+set logging overwrite on
+set logging on
+show logging
+set history expansion on
+set history file $gdb_history_file
+set history save on
+show history
+#load
+continue
+" > $init_script
+
+    #sudo python ~/embsys/tools/pyOCD/test/gdb_server.py &
+
+    #ddd --gdb --trace --debugger "gdb --command=$init_script $bin_file_prefix.elf"
+    gdb --command=$init_script #$bin_file_prefix.elf
+
+}
+
+function my_gdb_old
 {
     typeset init_script
     typeset gdb_log_file
