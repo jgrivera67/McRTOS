@@ -168,7 +168,15 @@ set_rgb_led_color(uint32_t led_color_mask)
 void
 accelerometer_init(void)
 {
+    fdc_error_t error;
+
+    fdc_error = rtos_mpu_rw_region_push(g_i2c0_device_p, g_i2c0_device_p + 1);
+    if (fdc_error != 0) {
+        fatal_error_handler(fdc_error);
+    }
+
     struct i2c_device_var *const i2c_var_p = g_i2c0_device_p->i2c_var_p;
+
     FDC_ASSERT(i2c_var_p->i2c_initialized, g_i2c0_device_p, i2c_var_p);
 
     uint8_t accel_reg_value;

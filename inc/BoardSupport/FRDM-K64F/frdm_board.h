@@ -23,8 +23,8 @@ enum {
 /*
  * GPIO PORT A Pins
  */
-#define FRDM_ACCELEROMETER_INT1_PIN_INDEX   14
-#define FRDM_ACCELEROMETER_INT2_PIN_INDEX   15
+#define FRDM_ACCELEROMETER_INT1_PIN_INDEX   6
+#define FRDM_ACCELEROMETER_INT2_PIN_INDEX   13
 
 
 /*
@@ -52,7 +52,9 @@ void frdm_board_init(void);
 void frdm_board_stop(void);
 
 void accelerometer_init(void);
+
 void accelerometer_stop(void);
+
 bool accelerometer_read_status(
     int16_t *x_p,
     int16_t *y_p,

@@ -11,7 +11,6 @@
 #include <stdint.h>
 #include "utils.h"
 
-// TODO: Get info from ~/embsys/tmp/KSDK_1.0.0-Beta/boards/frdmk64f120m/board.h
 /*
  * I2C slave address for the accelerometer
  */
@@ -39,7 +38,7 @@
 /**
  * Expected value for ACCEL_WHO_AM_I register
  */
-#define ACCEL_DEVICE_ID         0x1A
+#define ACCEL_DEVICE_ID         0xC7
 
 /*
  * Bit-masks for ACCEL_CTRL_REG1 register fields

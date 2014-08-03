@@ -13,11 +13,15 @@
 .global rtos_k_restore_execution_context
 .global rtos_k_synchronous_context_switch
 .global rtos_k_enter_debugger_saving_current_context
+.global rtos_enter_privileged_mode
+.global rtos_exit_privileged_mode
 
 .extern fdc_trace_rtos_context_switch
 .extern rtos_start_interrupts_disabled_time_measure
 .extern rtos_stop_interrupts_disabled_time_measure
 .extern check_synchronous_context_switch_preconditions
+.extern rtos_k_enter_privileged_mode
+.extern rtos_k_exit_privileged_mode
 
 .text
 .thumb
@@ -318,6 +322,76 @@ rtos_k_synchronous_context_switch:
     bx      lr
 
 .endfunc
+
+
+/**
+ * Enter privilege mode
+ *
+ * void
+ * rtos_enter_privileged_mode(void)
+ *
+ * NOTE: This function is to be invoked from hardware driver functions
+ * that are invoked from unprivileged threads
+ */
+.thumb_func
+.func rtos_enter_privileged_mode
+
+rtos_enter_privileged_mode:
+    svc     #RTOS_ENTER_PRIVILEGED_MODE_SVC_CODE
+
+    /*
+     * We return here in privileged mode now.
+     */
+    push    {lr}
+
+    /*
+     * Call rtos_k_enter_privileged_mode(RTOS_ENTER_PRIVILEGED_MODE_SVC_CODE):
+     */
+    mov	    r0, #RTOS_ENTER_PRIVILEGED_MODE_SVC_CODE
+    bl      rtos_k_enter_privileged_mode
+
+    pop     {pc}
+.endfunc
+
+
+/**
+ * Exit privilege mode
+ *
+ * void
+ * rtos_exit_privileged_mode(void)
+ *
+ * NOTE: This function is to be invoked from hardware driver functions
+ * that are invoked from unprivileged threads
+ */
+.thumb_func
+.func rtos_exit_privileged_mode
+
+rtos_exit_privileged_mode:
+    push    {lr}
+
+    /*
+     * Call rtos_k_exit_privileged_mode():
+     */
+    bl      rtos_k_exit_privileged_mode
+
+    /*
+     * Restore saved lr
+     */
+    pop	    {r0}
+    mov	    lr, r0
+
+    /*
+     * Set nPRIV bit in control register to return to unprivileged mode
+     */
+    mrs	    r0, control
+    mov	    r1, #CPU_REG_CONTROL_nPRIV_MASK
+    orr	    r0, r0, r1
+    msr	    control, r0
+    isb
+
+    bx	    lr
+.endfunc
+
 
 .end
 

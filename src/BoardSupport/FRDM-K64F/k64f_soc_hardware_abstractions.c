@@ -75,7 +75,7 @@ C_ASSERT(
 /**
  * MPU region index for the first data region for threads
  */
-#define FIRST_MPU_THREAD_RW_REGION   (RTOS_NUM_GLOBAL_MPU_REGIONS + 1)
+#define FIRST_MPU_THREAD_DATA_REGION   (RTOS_NUM_GLOBAL_MPU_REGIONS + 1)
 
 /**
  * Const fields of a MPU device
@@ -173,7 +173,6 @@ static isr_function_t dummy_read_collision_isr;
 static isr_function_t dummy_lvd_lvw_isr;
 static isr_function_t dummy_llw_isr;
 static isr_function_t dummy_watchdog_isr;
-static isr_function_t dummy_i2c0_isr;
 static isr_function_t dummy_i2c1_isr;
 static isr_function_t dummy_spi0_isr;
 static isr_function_t dummy_spi1_isr;
@@ -279,7 +278,7 @@ isr_function_t *const g_interrupt_vector_table[] __attribute__ ((section(".vecto
     [INT_LVD_LVW] = dummy_lvd_lvw_isr, /* Low Voltage Detect, Low Voltage Warning */
     [INT_LLW] = dummy_llw_isr, /* Low Leakage Wake-up */
     [INT_Watchdog] = dummy_watchdog_isr, /*  WDOG Interrupt */
-    [INT_I2C0] = dummy_i2c0_isr, /* I2C0 interrupt */
+    [INT_I2C0] = k64f_i2c0_isr, /* I2C0 interrupt */
     [INT_I2C1] = dummy_i2c1_isr, /* I2C1 interrupt */
     [INT_SPI0] = dummy_spi0_isr, /* SPI0 Interrupt */
     [INT_SPI1] = dummy_spi1_isr, /* SPI1 Interrupt */
@@ -401,19 +400,11 @@ static struct uart_device_var g_uart_devices_var[] =
         .urt_transmit_bytes_dropped = 0,
         },
 
-#if 0 // ???
-    [1] = {
+    [4] = {
         .urt_initialized = false,
         .urt_received_bytes_dropped = 0,
         .urt_transmit_bytes_dropped = 0,
         },
-
-    [2] = {
-        .urt_initialized = false,
-        .urt_received_bytes_dropped = 0,
-        .urt_transmit_bytes_dropped = 0,
-        },
-#endif
 };
 
 static uint8_t uart0_transmit_queue_storage[UART_TRANSMIT_QUEUE_SIZE_IN_BYTES];
@@ -464,72 +455,18 @@ static const struct uart_device g_uart_devices[] =
         .urt_receive_queue_storage_p = uart0_receive_queue_storage,
     },
 
-#if 0 // ???
-    [1] = {
-        .urt_signature = UART_DEVICE_SIGNATURE,
-	.urt_name = "UART1",
-        .urt_var_p = &g_uart_devices_var[1],
-        .urt_mmio_uart_p = UART1_BASE_PTR,
-        .urt_mmio_tx_port_pcr_p = &PORTC_PCR4,
-        .urt_mmio_rx_port_pcr_p = &PORTC_PCR3,
-        .urt_mmio_pin_mux_selector_mask = PORT_PCR_MUX(0x3),
-        .urt_mmio_clock_gate_reg_p = &SIM_SCGC4,
-        .urt_mmio_clock_gate_mask = SIM_SCGC4_UART1_MASK,
-	.urt_source_clock_freq_in_hz = CPU_CLOCK_FREQ_IN_HZ,
-    },
-
-    [2] = {
-        .urt_signature = UART_DEVICE_SIGNATURE,
-	.urt_name = "UART2",
-        .urt_var_p = &g_uart_devices_var[2],
-        .urt_mmio_uart_p = UART2_BASE_PTR,
-        .urt_mmio_tx_port_pcr_p = &PORTD_PCR3,
-        .urt_mmio_rx_port_pcr_p = &PORTD_PCR2,
-        .urt_mmio_pin_mux_selector_mask = PORT_PCR_MUX(0x3),
-        .urt_mmio_clock_gate_reg_p = &SIM_SCGC4,
-        .urt_mmio_clock_gate_mask = SIM_SCGC4_UART2_MASK,
-	.urt_source_clock_freq_in_hz = CPU_CLOCK_FREQ_IN_HZ / 2,
-    },
-
-    [3] = {
-        .urt_signature = UART_DEVICE_SIGNATURE,
-	.urt_name = "UART3",
-        .urt_var_p = &g_uart_devices_var[3],
-        .urt_mmio_uart_p = UART2_BASE_PTR,
-        .urt_mmio_tx_port_pcr_p = &PORTD_PCR3,
-        .urt_mmio_rx_port_pcr_p = &PORTD_PCR2,
-        .urt_mmio_pin_mux_selector_mask = PORT_PCR_MUX(0x3),
-        .urt_mmio_clock_gate_reg_p = &SIM_SCGC4,
-        .urt_mmio_clock_gate_mask = SIM_SCGC4_UART3_MASK,
-	.urt_source_clock_freq_in_hz = CPU_CLOCK_FREQ_IN_HZ / 2,
-    },
-
     [4] = {
         .urt_signature = UART_DEVICE_SIGNATURE,
 	.urt_name = "UART4",
         .urt_var_p = &g_uart_devices_var[4],
         .urt_mmio_uart_p = UART2_BASE_PTR,
-        .urt_mmio_tx_port_pcr_p = &PORTD_PCR3,
-        .urt_mmio_rx_port_pcr_p = &PORTD_PCR2,
+        .urt_mmio_tx_port_pcr_p = &PORTC_PCR14,
+        .urt_mmio_rx_port_pcr_p = &PORTC_PCR15,
         .urt_mmio_pin_mux_selector_mask = PORT_PCR_MUX(0x3),
         .urt_mmio_clock_gate_reg_p = &SIM_SCGC1,
         .urt_mmio_clock_gate_mask = SIM_SCGC1_UART4_MASK,
 	.urt_source_clock_freq_in_hz = CPU_CLOCK_FREQ_IN_HZ / 2,
     },
-
-    [5] = {
-        .urt_signature = UART_DEVICE_SIGNATURE,
-	.urt_name = "UART5",
-        .urt_var_p = &g_uart_devices_var[5],
-        .urt_mmio_uart_p = UART2_BASE_PTR,
-        .urt_mmio_tx_port_pcr_p = &PORTD_PCR3,
-        .urt_mmio_rx_port_pcr_p = &PORTD_PCR2,
-        .urt_mmio_pin_mux_selector_mask = PORT_PCR_MUX(0x3),
-        .urt_mmio_clock_gate_reg_p = &SIM_SCGC1,
-        .urt_mmio_clock_gate_mask = SIM_SCGC1_UART5_MASK,
-	.urt_source_clock_freq_in_hz = CPU_CLOCK_FREQ_IN_HZ / 2,
-    },
-#endif
 };
 
 C_ASSERT(
@@ -537,7 +474,6 @@ C_ASSERT(
 
 const struct uart_device *const g_console_serial_port_p = &g_uart_devices[0];
 
-#if 0 // ???
 /**
  * McRTOS interrupt object for the I2C0 controller interrupts
  */
@@ -569,7 +505,8 @@ static const struct i2c_device g_i2c_devices[] = {
         .i2c_mmio_scl_port_pcr_p = &PORTE_PCR24,
         .i2c_mmio_sda_port_pcr_p = &PORTE_PCR25,
         .i2c_clock_gate_mask = SIM_SCGC4_I2C0_MASK,
-        .i2c_pin_mux_selector_mask = PORT_PCR_MUX(0x5) | PORT_PCR_DSE_MASK,
+	/* Pin Mux Control: Alternative 5, Open Drain Enable */
+        .i2c_pin_mux_selector_mask = PORT_PCR_MUX(0x5) | PORT_PCR_ODE_MASK,
         .i2c_icr_value = 0x1f, /* 100KHz for bus clock of 24 MHz */
         .i2c_rtos_interrupt_params = {
             .irp_name_p = "I2C0 Interrupt",
@@ -587,10 +524,11 @@ static const struct i2c_device g_i2c_devices[] = {
         .i2c_signature = I2C_DEVICE_SIGNATURE,
         .i2c_var_p = &g_i2c_devices_var[1],
         .i2c_mmio_registers_p = I2C1_BASE_PTR,
-        .i2c_mmio_scl_port_pcr_p = &PORTC_PCR1,
-        .i2c_mmio_sda_port_pcr_p = &PORTC_PCR2,
+        .i2c_mmio_scl_port_pcr_p = &PORTC_PCR10,
+        .i2c_mmio_sda_port_pcr_p = &PORTC_PCR11,
         .i2c_clock_gate_mask = SIM_SCGC4_I2C1_MASK,
-        .i2c_pin_mux_selector_mask = PORT_PCR_MUX(0x2) | PORT_PCR_DSE_MASK,
+	/* Pin Mux Control: Alternative 2, Open Drain Enable */
+        .i2c_pin_mux_selector_mask = PORT_PCR_MUX(0x2) | PORT_PCR_ODE_MASK,
         .i2c_icr_value = 0x1f,
     }
 };
@@ -598,7 +536,6 @@ static const struct i2c_device g_i2c_devices[] = {
 C_ASSERT(ARRAY_SIZE(g_i2c_devices) == ARRAY_SIZE(g_i2c_devices_var));
 
 const struct i2c_device *const g_i2c0_device_p = &g_i2c_devices[0];
-#endif // ???
 
 /**
  * Hardware Micro trace buffer (MTB)
@@ -857,7 +794,8 @@ k64f_set_mpu_region(
 
 
 static void
-k64f_mpu_init(void) {
+k64f_mpu_init(void)
+{
     C_ASSERT2(assert_soc_flash_base_aligned, SOC_FLASH_BASE % 32 == 0);
     C_ASSERT2(assert_soc_sram_base_aligned, SOC_SRAM_BASE % 32 == 0);
     C_ASSERT2(assert_soc_mmio_base1_aligned, SOC_PERIPHERAL_BRIDGE_MIN_ADDR % 32 == 0);
@@ -965,16 +903,16 @@ k64f_mpu_init(void) {
 
 /*
  *
- * Set all the r/w regions for the current thread, including the stack region.
+ * Set all the data regions for the current thread, including the stack region.
  *
  * NOTE: This function is to be invoked as part of a thread context switch
  */
 void
-mpu_set_thread_rw_regions(
+mpu_set_thread_data_regions(
     cpu_id_t cpu_id,
     bool privileged,
     struct mpu_region_range regions[],
-    uint8_t num_mpu_rw_regions)
+    uint8_t num_regions)
 {
     DBG_ASSERT(
         g_mpu.signature == MPU_DEVICE_SIGNATURE,
@@ -985,24 +923,39 @@ mpu_set_thread_rw_regions(
 
     volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
 
-    DBG_ASSERT(num_mpu_rw_regions <= RTOS_MAX_MPU_THREAD_RW_REGIONS,
-	num_mpu_rw_regions, RTOS_MAX_MPU_THREAD_RW_REGIONS);
+    DBG_ASSERT(num_regions <= RTOS_MAX_MPU_THREAD_DATA_REGIONS,
+	num_regions, RTOS_MAX_MPU_THREAD_DATA_REGIONS);
 
-    uint32_t privileged_permissions;
-    uint32_t unprivileged_permissions;
+    uint_fast8_t region_index = FIRST_MPU_THREAD_DATA_REGION;
 
-    if (privileged) {
-	privileged_permissions = 0x2;   /* rw- */
-	unprivileged_permissions = 0x0; /* --- */
-    } else {
-	unprivileged_permissions = 0x6; /* rw- */
-	privileged_permissions = 0x2;   /* rw- */
-    }
+    for (uint_fast8_t i = 0; i < num_regions; i++) {
+	uint32_t privileged_permissions;
+	uint32_t unprivileged_permissions;
 
-    uint_fast8_t region_index = FIRST_MPU_THREAD_RW_REGION;
-
-    for (uint_fast8_t i = 0; i < num_mpu_rw_regions; i++) {
 	DBG_ASSERT(regions[i].start_addr != NULL, i, 0);
+
+	if (privileged) {
+	    if (regions[i].read_only) {
+		/*
+		 * NOTE: privileged permissions should be r--, but there is no
+		 * way to encode that, without also having unprivileged r--
+		 */
+		privileged_permissions = 0x1; /* r-x */
+	    } else {
+		privileged_permissions = 0x2; /* rw- */
+	    }
+
+	    unprivileged_permissions = 0x0; /* --- */
+	} else {
+	    if (regions[i].read_only) {
+		unprivileged_permissions = 0x4; /* r-- */
+		privileged_permissions = 0x3;   /* r-- */
+	    } else {
+		unprivileged_permissions = 0x6; /* rw- */
+		privileged_permissions = 0x2;   /* rw- */
+	    }
+	}
+
 	k64f_set_mpu_region(mpu_var_p, mpu_regs_p, cpu_id, region_index,
 			    regions[i].start_addr, regions[i].end_addr,
 			    privileged_permissions, unprivileged_permissions);
@@ -1013,7 +966,7 @@ mpu_set_thread_rw_regions(
     /*
      * Set remaining regions as invalid
      */
-    for ( ; region_index < RTOS_MAX_MPU_THREAD_RW_REGIONS; region_index ++) {
+    for ( ; region_index < RTOS_MAX_MPU_THREAD_DATA_REGIONS; region_index ++) {
 	write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][3],
 				  ~MPU_WORD_VLD_MASK);
     }
@@ -1021,12 +974,13 @@ mpu_set_thread_rw_regions(
 
 
 void
-mpu_set_rw_region(
+mpu_set_thread_data_region(
     cpu_id_t cpu_id,
     bool privileged,
-    uint8_t thread_rw_region_index,
+    uint8_t thread_region_index,
     void *start_addr,
-    void *end_addr)
+    void *end_addr,
+    bool read_only)
 {
     uint32_t privileged_permissions;
     uint32_t unprivileged_permissions;
@@ -1042,11 +996,11 @@ mpu_set_rw_region(
 
     FDC_ASSERT(start_addr != NULL, start_addr, end_addr);
     FDC_ASSERT(start_addr <= end_addr, start_addr, end_addr);
-    FDC_ASSERT(thread_rw_region_index < RTOS_MAX_MPU_THREAD_RW_REGIONS,
-	       thread_rw_region_index, RTOS_MAX_MPU_THREAD_RW_REGIONS);
+    FDC_ASSERT(thread_region_index < RTOS_MAX_MPU_THREAD_DATA_REGIONS,
+	       thread_region_index, RTOS_MAX_MPU_THREAD_DATA_REGIONS);
 
-    mpu_region_index_t region_index = FIRST_MPU_THREAD_RW_REGION +
-				      thread_rw_region_index;
+    mpu_region_index_t region_index = FIRST_MPU_THREAD_DATA_REGION +
+				      thread_region_index;
 
     if (privileged) {
 	privileged_permissions = 0x2;	/* rw- */
@@ -1063,7 +1017,7 @@ mpu_set_rw_region(
 
 
 void
-mpu_unset_rw_region(mpu_thread_rw_region_index_t thread_rw_region_index)
+mpu_unset_thread_data_region(mpu_thread_data_region_index_t thread_region_index)
 {
     FDC_ASSERT(
         g_mpu.signature == MPU_DEVICE_SIGNATURE,
@@ -1076,11 +1030,11 @@ mpu_unset_rw_region(mpu_thread_rw_region_index_t thread_rw_region_index)
 
     volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
 
-    mpu_region_index_t region_index = FIRST_MPU_THREAD_RW_REGION +
-				      thread_rw_region_index;
+    mpu_region_index_t region_index = FIRST_MPU_THREAD_DATA_REGION +
+				      thread_region_index;
 
-    FDC_ASSERT(region_index < RTOS_MAX_MPU_THREAD_RW_REGIONS,
-	       region_index, RTOS_MAX_MPU_THREAD_RW_REGIONS);
+    FDC_ASSERT(region_index < RTOS_MAX_MPU_THREAD_DATA_REGIONS,
+	       region_index, RTOS_MAX_MPU_THREAD_DATA_REGIONS);
 
     /*
      * Set region as invalid
@@ -1137,10 +1091,7 @@ soc_hardware_init(void)
 		 g_console_serial_port_p->urt_var_p->urt_tx_fifo_size,
 		 g_console_serial_port_p->urt_var_p->urt_rx_fifo_size);
 
-#if 0 // ???
     i2c_init(g_i2c0_device_p);
-#endif
-
     return reset_cause;
 }
 
@@ -1153,9 +1104,7 @@ soc_reset(void)
     /*
      * Stop all peripherals:
      */
-#if 0 //???
     i2c_shutdown(g_i2c0_device_p);
-#endif
     uart_stop(g_console_serial_port_p);
 
     /*
@@ -2897,7 +2846,7 @@ k64f_ftm_set_duty_cycle(
         pwm_duty_cycle_us,
         ftm_device_p->ftm_wait_pwm_cycle_completion);
 }
-
+#endif // ???
 
 /**
  * Wait until the current I2C byte transfer completes
@@ -3301,7 +3250,6 @@ k64f_i2c_interrupt_e_handler(
     i2c_var_p->i2c_byte_transfer_completed = true;
     rtos_k_condvar_signal(&i2c_var_p->i2c_condvar);
 }
-#endif // ???
 
 
 void
@@ -3403,7 +3351,6 @@ GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_ftm3_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_dac1_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_DAC1))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_adc0_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_ADC0))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_adc1_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_ADC1))
-GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_i2c0_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_I2C0))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_i2c2_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_I2C2))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_can0_ored_message_buffer_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_CAN0_ORed_Message_buffer))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_can0_bus_off_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_CAN0_Bus_Off))

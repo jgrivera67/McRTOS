@@ -113,9 +113,9 @@ const void *const g_rtos_system_call_dispatch_table[] =
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
         RTOS_CALLER_IS_THREAD_SYSTEM_CALL, rtos_k_caller_is_thread),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
-        RTOS_MPU_RW_REGION_PUSH_SYSTEM_CALL, rtos_k_mpu_rw_region_push),
+        RTOS_MPU_ADD_THREAD_DATA_REGION_SYSTEM_CALL, rtos_k_mpu_add_thread_data_region),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
-        RTOS_MPU_RW_REGION_POP_SYSTEM_CALL, rtos_k_mpu_rw_region_pop),
+        RTOS_MPU_REMOVE_THREAD_DATA_REGION_SYSTEM_CALL, rtos_k_mpu_remove_thread_data_region),
 };
 
 C_ASSERT(ARRAY_SIZE(g_rtos_system_call_dispatch_table) == RTOS_NUM_SYSTEM_CALLS);
@@ -341,11 +341,12 @@ rtos_k_thread_init(
     rtos_thread_p->thr_execution_stack_p = thread_stack_p;
 
     /*
-     * Initialize thread's MPU regions:
+     * Initialize thread's MPU regions, with the stack region:
      */
-    rtos_thread_p->thr_mpu_rw_regions[0].start_addr = thread_stack_p;
-    rtos_thread_p->thr_mpu_rw_regions[0].end_addr = thread_stack_p + 1;
-    rtos_thread_p->thr_num_mpu_rw_regions = 1;
+    rtos_thread_p->thr_mpu_data_regions[0].start_addr = thread_stack_p;
+    rtos_thread_p->thr_mpu_data_regions[0].end_addr = thread_stack_p + 1;
+    rtos_thread_p->thr_mpu_data_regions[0].read_only = false;
+    rtos_thread_p->thr_num_mpu_data_regions = 1;
 
     /*
      * Initialize the thread's execution context:
@@ -2277,7 +2278,7 @@ rtos_k_exit_interrupt(void)
 
 
 fdc_error_t
-rtos_k_enter_system_call(
+rtos_k_enter_privileged_mode(
     _IN_ rtos_system_call_number_t system_call_number)
 {
     fdc_error_t fdc_error = 0;
@@ -2297,19 +2298,21 @@ rtos_k_enter_system_call(
         current_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
         current_context_p->ctx_context_type, current_context_p);
 
-    if (system_call_number >= RTOS_NUM_SYSTEM_CALLS)
-    {
+    DBG_ASSERT_PRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED();
+
+    if (system_call_number < RTOS_NUM_SYSTEM_CALLS) {
+	DBG_ASSERT_VALID_FUNCTION_POINTER(
+	    g_rtos_system_call_dispatch_table[system_call_number]);
+
+    } else if (system_call_number != RTOS_ENTER_PRIVILEGED_MODE_SVC_CODE) {
         fdc_error = CAPTURE_FDC_ERROR("Invalid system call number",
                         system_call_number, current_context_p);
         goto Exit;
     }
 
-    DBG_ASSERT_VALID_FUNCTION_POINTER(
-        g_rtos_system_call_dispatch_table[system_call_number]);
-
     FDC_ASSERT(
         current_context_p->ctx_cpu_mode == RTOS_UNPRIVILEGED_THREAD_MODE,
-        current_context_p->ctx_cpu_mode, current_context_p);
+        current_context_p->ctx_cpu_mode, system_call_number);
 
     current_context_p->ctx_cpu_mode = RTOS_PRIVILEGED_THREAD_MODE;
 
@@ -2319,7 +2322,7 @@ Exit:
 
 
 void
-rtos_k_exit_system_call(void)
+rtos_k_exit_privileged_mode(void)
 {
     struct rtos_cpu_controller *cpu_controller_p =
         &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
@@ -2353,14 +2356,7 @@ rtos_k_app_system_call(
 {
     FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
 
-    fdc_error_t fdc_error = 0;
-
-    /*
-     * TODO: implement this
-     */
-    TODO_IMPLEMENT_THIS();
-
-    return fdc_error;
+    return rtos_app_system_call_function_p(arg_p);
 }
 
 
@@ -2784,12 +2780,13 @@ rtos_k_lcd_draw_tile(
 #endif  /*  LCD_SUPPORTED */
 
 /**
- * Add a new MPU R/W region to the calling thread
+ * Add a new MPU data region to the calling thread
  */
 fdc_error_t
-rtos_k_mpu_rw_region_push(
+rtos_k_mpu_add_thread_data_region(
     void *start_addr,
-    void *end_addr)
+    void *end_addr,
+    bool read_only)
 {
     FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
 
@@ -2816,18 +2813,19 @@ rtos_k_mpu_rw_region_push(
      * Disable interrupts in the ARM core
      */
     cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
-    uint_fast8_t num_rw_regions = current_thread_p->thr_num_mpu_rw_regions;
+    uint_fast8_t num_data_regions = current_thread_p->thr_num_mpu_data_regions;
 
-    if (num_rw_regions < RTOS_MAX_MPU_THREAD_RW_REGIONS) {
-	    current_thread_p->thr_mpu_rw_regions[num_rw_regions].start_addr = start_addr;
-	    current_thread_p->thr_mpu_rw_regions[num_rw_regions].end_addr = end_addr;
-	    mpu_set_rw_region(cpu_id,
-			      current_thread_p->thr_privileged,
-			      num_rw_regions,
-			      start_addr,
-			      end_addr);
+    if (num_data_regions < RTOS_MAX_MPU_THREAD_DATA_REGIONS) {
+	    current_thread_p->thr_mpu_data_regions[num_data_regions].start_addr = start_addr;
+	    current_thread_p->thr_mpu_data_regions[num_data_regions].end_addr = end_addr;
+	    mpu_set_thread_data_region(cpu_id,
+				       current_thread_p->thr_privileged,
+				       num_data_regions,
+				       start_addr,
+				       end_addr,
+				       read_only);
 
-	    current_thread_p->thr_num_mpu_rw_regions ++;
+	    current_thread_p->thr_num_mpu_data_regions ++;
     } else {
 	   fdc_error = CAPTURE_FDC_ERROR(
                         "MPU region could not be added to thread",
@@ -2843,11 +2841,11 @@ rtos_k_mpu_rw_region_push(
 
 
 /**
- * Remove the last MPU R/W region that was added to the calling thread
- * by a previous call to rtos_k_mpu_rw_region_push().
+ * Remove the last MPU data region that was added to the calling thread
+ * by a previous call to rtos_k_thread_mpu_region_push().
  */
 void
-rtos_k_mpu_rw_region_pop(void)
+rtos_k_mpu_remove_thread_data_region(void)
 {
     FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
 
@@ -2869,19 +2867,19 @@ rtos_k_mpu_rw_region_pop(void)
      * Disable interrupts in the ARM core
      */
     cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
-    uint_fast8_t num_rw_regions = current_thread_p->thr_num_mpu_rw_regions;
+    uint_fast8_t num_data_regions = current_thread_p->thr_num_mpu_data_regions;
 
     /*
-     * If there is only one region left, it cannot be removed as it is used for
-     * the thread's stack.
+     * If there is only one data region left, it cannot be removed as it is used
+     * for the thread's stack.
      */
-    if (num_rw_regions > 1) {
-	    mpu_unset_rw_region(num_rw_regions);
-	    current_thread_p->thr_num_mpu_rw_regions --;
+    if (num_data_regions > 1) {
+	    mpu_unset_thread_data_region(num_data_regions);
+	    current_thread_p->thr_num_mpu_data_regions --;
     } else {
 	   (void)CAPTURE_FDC_ERROR(
 		    "MPU region could not be removed from thread",
-		    current_thread_p, num_rw_regions);
+		    current_thread_p, num_data_regions);
     }
 
     /*

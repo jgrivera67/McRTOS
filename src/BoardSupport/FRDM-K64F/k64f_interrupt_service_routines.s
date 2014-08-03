@@ -48,13 +48,13 @@ GEN_ISR_FUNCTION k64f_ftm0_isr, g_rtos_interrupt_ftm0_p, \
  */
 GEN_ISR_FUNCTION k64f_tpm1_isr, g_rtos_interrupt_ftm1_p, \
                  k64f_ftm_interrupt_e_handler
+#endif // ???
 
 /**
  * I2C0 ISR
  */
 GEN_ISR_FUNCTION k64f_i2c0_isr, g_rtos_interrupt_i2c0_p, \
                  k64f_i2c_interrupt_e_handler
-#endif // ???
 
 .end
 

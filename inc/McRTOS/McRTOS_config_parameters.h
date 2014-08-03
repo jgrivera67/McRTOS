@@ -167,17 +167,17 @@ C_ASSERT(RTOS_MAX_NUM_INTERRUPTS < SOC_NUM_INTERRUPT_CHANNELS);
 #define RTOS_NUM_GLOBAL_MPU_REGIONS UINT8_C(6)
 
 /**
- * Maximum number of MPU red/write regions used by the current
+ * Maximum number of MPU data regions used by the current
  * thread, including the thread's stack region.
  */
-#define RTOS_MAX_MPU_THREAD_RW_REGIONS   UINT8_C(5)
+#define RTOS_MAX_MPU_THREAD_DATA_REGIONS   UINT8_C(5)
 
 /**
  * Number of MPU regions required by McRTOS, including one
  * region for the stack of the current thread
   */
 #define RTOS_MAX_MPU_REGIONS \
-	(RTOS_NUM_GLOBAL_MPU_REGIONS + RTOS_MAX_MPU_THREAD_RW_REGIONS)
+	(RTOS_NUM_GLOBAL_MPU_REGIONS + RTOS_MAX_MPU_THREAD_DATA_REGIONS)
 
 /**
  * Maximum time (microseconds) that interrupts are expected to be disabled

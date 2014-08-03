@@ -398,19 +398,24 @@
 #define  RTOS_THREAD_CONDVAR_WAIT_INTERRUPT_SYSTEM_CALL 0x19
 #define  RTOS_THREAD_YIELD_SYSTEM_CALL                  0x1a
 #define  RTOS_CALLER_IS_THREAD_SYSTEM_CALL		0x1b
-#define  RTOS_MPU_RW_REGION_PUSH_SYSTEM_CALL		0x1c
-#define  RTOS_MPU_RW_REGION_POP_SYSTEM_CALL		0x1d
+#define  RTOS_MPU_ADD_THREAD_DATA_REGION_SYSTEM_CALL	0x1c
+#define  RTOS_MPU_REMOVE_THREAD_DATA_REGION_SYSTEM_CALL	0x1d
 
 /*
  * CAUTION: This macro needs to be updated when new system
  * calls are added.
  */
-#define __LAST_RTOS_SYSTEM_CALL	RTOS_MPU_RW_REGION_POP_SYSTEM_CALL
+#define __LAST_RTOS_SYSTEM_CALL	RTOS_MPU_REMOVE_THREAD_DATA_REGION_SYSTEM_CALL
 
 /**
  * Number of system calls supported:
  */
 #define RTOS_NUM_SYSTEM_CALLS   (__LAST_RTOS_SYSTEM_CALL + 1)
+
+/**
+ * SVC operand value used by rtos_enter_privileged_mode()
+ */
+#define RTOS_ENTER_PRIVILEGED_MODE_SVC_CODE		0xff
 
 /*
  * McRTOS CPU execution modes

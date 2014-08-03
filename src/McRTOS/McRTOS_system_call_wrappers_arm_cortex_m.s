@@ -11,6 +11,8 @@
 #include "McRTOS_arm_cortex_m_macros.s"
 
 .extern g_rtos_system_call_dispatch_table
+.extern rtos_k_enter_privileged_mode
+.extern rtos_k_exit_privileged_mode
 
 .text
 .thumb
@@ -128,14 +130,14 @@ rtos_invoke_system_call:
     push    {r0-r3}
 
     /*
-     * Call rtos_k_enter_system_call():
+     * Call rtos_k_enter_privileged_mode():
      * r4 == system call number
      */
     mov	    r0, r4
-    bl      rtos_k_enter_system_call
+    bl      rtos_k_enter_privileged_mode
 
     /*
-     * Save return value from rtos_k_enter_system_call() in r5 and
+     * Save return value from rtos_k_enter_privileged_mode() in r5 and
      * restore r0-r3 from the stack:
      */
     mov	    r5, r0
@@ -156,10 +158,10 @@ rtos_invoke_system_call:
 
     /*
      * Save return value from the system call in r5 and
-     * call rtos_k_exit_system_call()
+     * call rtos_k_exit_privileged_mode()
      */
     mov     r5, r0
-    bl      rtos_k_exit_system_call
+    bl      rtos_k_exit_privileged_mode
 
 L_exit_rtos_invoke_system_call:
     /*
@@ -271,10 +273,10 @@ GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_THREAD_YIELD_SYSTEM_CALL, \
 GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_CALLER_IS_THREAD_SYSTEM_CALL, \
                                  rtos_caller_is_thread
 
-GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_MPU_RW_REGION_PUSH_SYSTEM_CALL, \
-                                 rtos_mpu_rw_region_push
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_MPU_ADD_THREAD_DATA_REGION_SYSTEM_CALL, \
+                                 rtos_mpu_add_thread_data_region
 
-GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_MPU_RW_REGION_POP_SYSTEM_CALL, \
-                                 rtos_mpu_rw_region_pop
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_MPU_REMOVE_THREAD_DATA_REGION_SYSTEM_CALL, \
+                                 rtos_mpu_remove_thread_data_region
 
 .end

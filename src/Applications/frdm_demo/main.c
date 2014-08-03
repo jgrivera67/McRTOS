@@ -44,17 +44,17 @@ struct app_state_vars {
     /**
      * Latest X-axis acceleration reading
      */
-    volatile int16_t x_acceleration;
+    int16_t x_acceleration;
 
     /**
      * Latest Y-axis acceleration reading
      */
-    volatile int16_t y_acceleration;
+    int16_t y_acceleration;
 
     /**
      * Latest Z-axis acceleration reading
      */
-    volatile int16_t z_acceleration;
+    int16_t z_acceleration;
 } __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT)));
 
 C_ASSERT(sizeof(struct app_state_vars) % SOC_MPU_REGION_ALIGNMENT == 0);
@@ -85,7 +85,7 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
         .p_thread_pp = NULL,
     },
 
-    [1] =
+    [2] =
     {
         .p_name_p = "accelerometer thread",
         .p_function_p = accelerometer_thread_f,
@@ -197,13 +197,16 @@ hello_world_thread_thread_f(void *arg)
 {
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
+    bool mpu_region_added = false;
 
     FDC_ASSERT(arg != NULL, arg, cpu_id);
 
-    fdc_error = rtos_mpu_rw_region_push(&g_app, &g_app + 1);
+    fdc_error = rtos_mpu_add_thread_data_region(&g_app, &g_app + 1, false);
     if (fdc_error != 0) {
 	    goto exit;
     }
+
+    mpu_region_added = true;
 
     for ( ; ; ) {
 	console_printf("%s: %s\n", __func__, arg);
@@ -215,6 +218,10 @@ hello_world_thread_thread_f(void *arg)
         cpu_id, rtos_thread_self());
 
 exit:
+    if (mpu_region_added) {
+	rtos_mpu_remove_thread_data_region();
+    }
+
     return fdc_error;
 }
 
@@ -227,27 +234,61 @@ accelerometer_thread_f(void *arg)
 #   define ACCELEROMETER_SAMPLING_PERIOD_MS  50
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
+    bool mpu_region_added = false;
+    bool accelerometer_started = false;
 
     FDC_ASSERT(arg == NULL, arg, cpu_id);
+    console_printf("Initializing accelerometer sensing thread ...\n");
 
-    console_printf("Initializing accelerometer thread ...\n");
+    fdc_error = rtos_mpu_add_thread_data_region(&g_app, &g_app + 1, false);
+        if (fdc_error != 0) {
+	    goto exit;
+    }
 
+    mpu_region_added = true;
     accelerometer_init();
+    accelerometer_started = true;
+
+    g_app.x_acceleration = 0;
+    g_app.y_acceleration = 0;
+    g_app.z_acceleration = 0;
+
     for ( ; ; )
     {
 #if 1
+	int16_t x_acceleration;
+	int16_t y_acceleration;
+	int16_t z_acceleration;
+	bool motion_detected;
+
         bool read_ok = accelerometer_read_status(
-                        (int16_t *)&g_app.x_acceleration,
-                        (int16_t *)&g_app.y_acceleration,
-                        (int16_t *)&g_app.z_acceleration);
+				&x_acceleration,
+				&y_acceleration,
+				&z_acceleration);
 
         if (read_ok) {
-//#           if 0
-            console_printf("x_accel: %#x, y_accel: %#x, z_accel: %#x\n",
-                g_app.x_acceleration & ~0x3f,
-                g_app.y_acceleration & ~0x3f,
-                g_app.z_acceleration & ~0x3f);
-//#           endif
+	    motion_detected = false;
+	    if ((g_app.x_acceleration & ~0x3f) != (x_acceleration & ~0x3f)) {
+	        g_app.x_acceleration = x_acceleration;
+		motion_detected = true;
+	    }
+
+	    if ((g_app.y_acceleration & ~0x3f) != (y_acceleration & ~0x3f)) {
+	        g_app.y_acceleration = y_acceleration;
+		motion_detected = true;
+	    }
+
+	    if ((g_app.z_acceleration & ~0x3f) != (z_acceleration & ~0x3f)) {
+	        g_app.z_acceleration = z_acceleration;
+		//??? motion_detected = true;
+	    }
+
+	    if (motion_detected) {
+		console_printf("x_accel: %#x, y_accel: %#x, z_accel: %#x\n",
+		    g_app.x_acceleration & ~0x3f,
+		    g_app.y_acceleration & ~0x3f,
+		    g_app.z_acceleration & ~0x3f);
+	    }
         }
 #else
         bool read_ok = accelerometer_detect_motion(
@@ -270,6 +311,15 @@ accelerometer_thread_f(void *arg)
     fdc_error = CAPTURE_FDC_ERROR(
         "thread should not have terminated",
         cpu_id, rtos_thread_self());
+
+exit:
+    if (accelerometer_started) {
+	accelerometer_stop();
+    }
+
+    if (mpu_region_added) {
+	rtos_mpu_remove_thread_data_region();
+    }
 
     return fdc_error;
 }

@@ -49,7 +49,6 @@ C_ASSERT(ARRAY_SIZE(g_frdm_rgb_led_pins) == FRDM_NUM_RGB_LED_PINS);
 
 static uint32_t g_rgb_led_current_mask = 0x0;
 
-#if 0 //???
 /**
  * FRDM board accelerometer INT1 pin
  */
@@ -58,9 +57,8 @@ static struct pin_config_info g_frdm_accelerometer_int1_pin =
             FRDM_ACCELEROMETER_INT1_PIN_INDEX,
             PORT_PCR_MUX(1),
             false,
-            PORTA_BASE_PTR,
-            PTA_BASE_PTR);
-#endif //???
+            PORTC_BASE_PTR,
+            PTC_BASE_PTR);
 
 void
 frdm_board_init(void)
@@ -161,7 +159,36 @@ set_rgb_led_color(uint32_t led_color_mask)
 }
 
 
-#if 0 // ???
+static void
+accelerometer_stop_internal(void)
+{
+    struct i2c_device_var *const i2c_var_p = g_i2c0_device_p->i2c_var_p;
+
+    FDC_ASSERT(i2c_var_p->i2c_initialized, g_i2c0_device_p, i2c_var_p);
+
+    uint8_t accel_reg_value;
+
+    i2c_read(
+        g_i2c0_device_p,
+        ACCELEROMETER_I2C_ADDR,
+        ACCEL_CTRL_REG1,
+        &accel_reg_value,
+        1);
+
+    FDC_ASSERT(
+        (accel_reg_value & ACCEL_CTRL_REG1_ACTIVE_MASK) != 0,
+        accel_reg_value, 0);
+
+    accel_reg_value &= ~ACCEL_CTRL_REG1_ACTIVE_MASK;
+    i2c_write(
+        g_i2c0_device_p,
+        ACCELEROMETER_I2C_ADDR,
+        ACCEL_CTRL_REG1,
+        &accel_reg_value,
+        1);
+}
+
+
 /**
  * Initializes FXOS8700CQ accelerometer
  *
@@ -171,12 +198,15 @@ set_rgb_led_color(uint32_t led_color_mask)
 void
 accelerometer_init(void)
 {
+    rtos_enter_privileged_mode();
+
     struct i2c_device_var *const i2c_var_p = g_i2c0_device_p->i2c_var_p;
+
     FDC_ASSERT(i2c_var_p->i2c_initialized, g_i2c0_device_p, i2c_var_p);
 
-    uint8_t accel_reg_value;
-
     configure_pin(&g_frdm_accelerometer_int1_pin, false);
+
+    uint8_t accel_reg_value;
 
     i2c_read(
         g_i2c0_device_p,
@@ -193,6 +223,7 @@ accelerometer_init(void)
         ACCEL_F_SETUP,
         &accel_reg_value,
         1);
+
     FDC_ASSERT(accel_reg_value == 0, accel_reg_value, 0);
 
     i2c_read(
@@ -203,7 +234,7 @@ accelerometer_init(void)
         1);
 
     if ((accel_reg_value & ACCEL_CTRL_REG1_ACTIVE_MASK) != 0) {
-        accelerometer_stop();
+        accelerometer_stop_internal();
         i2c_read(
             g_i2c0_device_p,
             ACCELEROMETER_I2C_ADDR,
@@ -276,6 +307,8 @@ accelerometer_init(void)
         ACCEL_CTRL_REG1,
         &accel_reg_value,
         1);
+
+    rtos_exit_privileged_mode();
 }
 
 
@@ -288,29 +321,9 @@ accelerometer_init(void)
 void
 accelerometer_stop(void)
 {
-    struct i2c_device_var *const i2c_var_p = g_i2c0_device_p->i2c_var_p;
-    FDC_ASSERT(i2c_var_p->i2c_initialized, g_i2c0_device_p, i2c_var_p);
-
-    uint8_t accel_reg_value;
-
-    i2c_read(
-        g_i2c0_device_p,
-        ACCELEROMETER_I2C_ADDR,
-        ACCEL_CTRL_REG1,
-        &accel_reg_value,
-        1);
-
-    FDC_ASSERT(
-        (accel_reg_value & ACCEL_CTRL_REG1_ACTIVE_MASK) != 0,
-        accel_reg_value, 0);
-
-    accel_reg_value &= ~ACCEL_CTRL_REG1_ACTIVE_MASK;
-    i2c_write(
-        g_i2c0_device_p,
-        ACCELEROMETER_I2C_ADDR,
-        ACCEL_CTRL_REG1,
-        &accel_reg_value,
-        1);
+    rtos_enter_privileged_mode();
+    accelerometer_stop_internal();
+    rtos_exit_privileged_mode();
 }
 
 
@@ -334,6 +347,9 @@ accelerometer_read_status(
 
     uint8_t accel_reg_value;
     uint8_t i2c_buf[6];
+    bool read_ok;
+
+    rtos_enter_privileged_mode();
 
     i2c_read(
         g_i2c0_device_p,
@@ -365,10 +381,13 @@ accelerometer_read_status(
         DBG_ASSERT(IN_RANGE_14_BIT_SIGNED(*x_p), *x_p, 0);
         DBG_ASSERT(IN_RANGE_14_BIT_SIGNED(*y_p), *y_p, 0);
         DBG_ASSERT(IN_RANGE_14_BIT_SIGNED(*z_p), *z_p, 0);
-        return true;
+        read_ok = true;
     } else {
-        return false;
+        read_ok = false;
     }
+
+    rtos_exit_privileged_mode();
+    return read_ok;
 }
 
 
@@ -385,7 +404,9 @@ accelerometer_detect_motion(
     int8_t *z_p)
 {
     uint8_t accel_reg_value;
+    bool read_ok;
 
+    rtos_enter_privileged_mode();
     i2c_read(
         g_i2c0_device_p,
         ACCELEROMETER_I2C_ADDR,
@@ -423,10 +444,13 @@ accelerometer_detect_motion(
         } else {
             *z_p = 0;
         }
-        return true;
+
+        read_ok = true;
     } else {
-        return false;
+        read_ok = false;
     }
+
+    rtos_exit_privileged_mode();
+    return read_ok;
 }
-#endif // ???
 
