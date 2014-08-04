@@ -56,6 +56,12 @@ GEN_ISR_FUNCTION k64f_tpm1_isr, g_rtos_interrupt_ftm1_p, \
 GEN_ISR_FUNCTION k64f_i2c0_isr, g_rtos_interrupt_i2c0_p, \
                  k64f_i2c_interrupt_e_handler
 
+/**
+ * GPIO PORT C ISR
+ */
+GEN_ISR_FUNCTION k64f_port_c_isr, g_rtos_interrupt_port_c_p, \
+                 k64f_port_c_interrupt_e_handler
+
 .end
 
 

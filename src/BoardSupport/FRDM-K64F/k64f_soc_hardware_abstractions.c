@@ -205,7 +205,6 @@ static isr_function_t dummy_mcg_isr;
 static isr_function_t dummy_lptimer_isr;
 static isr_function_t dummy_port_a_isr;
 static isr_function_t dummy_port_b_isr;
-static isr_function_t dummy_port_c_isr;
 static isr_function_t dummy_port_d_isr;
 static isr_function_t dummy_port_e_isr;
 static isr_function_t dummy_swi_isr;
@@ -314,7 +313,7 @@ isr_function_t *const g_interrupt_vector_table[] __attribute__ ((section(".vecto
     [INT_LPTimer] = dummy_lptimer_isr, /* LPTimer interrupt */
     [INT_PORTA] = dummy_port_a_isr, /* Port A interrupt */
     [INT_PORTB] = dummy_port_b_isr, /* Port B interrupt */
-    [INT_PORTC] = dummy_port_c_isr, /* Port C interrupt */
+    [INT_PORTC] = k64f_port_c_isr, /* Port C interrupt */
     [INT_PORTD] = dummy_port_d_isr, /* Port D interrupt */
     [INT_PORTE] = dummy_port_e_isr, /* Port E interrupt */
     [INT_SWI] = dummy_swi_isr, /* Software interrupt */
@@ -497,7 +496,7 @@ static struct i2c_device_var g_i2c_devices_var[] = {
  * Global const structure for the I2C controller devices
  * (allocated in flash space)
  */
-static const struct i2c_device g_i2c_devices[] = {
+const struct i2c_device g_i2c_devices[] = {
     [0] = {
         .i2c_signature = I2C_DEVICE_SIGNATURE,
         .i2c_var_p = &g_i2c_devices_var[0],
@@ -534,8 +533,6 @@ static const struct i2c_device g_i2c_devices[] = {
 };
 
 C_ASSERT(ARRAY_SIZE(g_i2c_devices) == ARRAY_SIZE(g_i2c_devices_var));
-
-const struct i2c_device *const g_i2c0_device_p = &g_i2c_devices[0];
 
 /**
  * Hardware Micro trace buffer (MTB)
@@ -1091,7 +1088,7 @@ soc_hardware_init(void)
 		 g_console_serial_port_p->urt_var_p->urt_tx_fifo_size,
 		 g_console_serial_port_p->urt_var_p->urt_rx_fifo_size);
 
-    i2c_init(g_i2c0_device_p);
+    i2c_init(&g_i2c_devices[0]);
     return reset_cause;
 }
 
@@ -1104,7 +1101,7 @@ soc_reset(void)
     /*
      * Stop all peripherals:
      */
-    i2c_shutdown(g_i2c0_device_p);
+    i2c_shutdown(&g_i2c_devices[0]);
     uart_stop(g_console_serial_port_p);
 
     /*
@@ -3252,6 +3249,17 @@ k64f_i2c_interrupt_e_handler(
 }
 
 
+/**
+ * GPIO Port C interrupt handler with interrupts enabled
+ */
+void
+k64f_port_c_interrupt_e_handler(
+    struct rtos_interrupt *rtos_interrupt_p)
+{
+    FDC_ASSERT_RTOS_INTERRUPT_E_HANDLER_PRECONDITIONS(rtos_interrupt_p);
+}
+
+
 void
 assert_interrupt_source_is_set(interrupt_channel_t interrupt_channel)
 {
@@ -3337,7 +3345,6 @@ GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_mcg_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_lptimer_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_LPTimer))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_port_a_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_PORTA))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_port_b_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_PORTB))
-GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_port_c_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_PORTC))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_port_d_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_PORTD))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_port_e_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_PORTE))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_swi_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_SWI))

@@ -38,6 +38,7 @@
 #define ADC_INTERRUPT_PRIORITY      (SOC_LOWEST_INTERRUPT_PRIORITY - 2)
 #define I2C_INTERRUPT_PRIORITY      (SOC_LOWEST_INTERRUPT_PRIORITY - 2)
 #define FTM_INTERRUPT_PRIORITY      (SOC_LOWEST_INTERRUPT_PRIORITY - 2)
+#define PORT_C_INTERRUPT_PRIORITY   (SOC_LOWEST_INTERRUPT_PRIORITY - 2)
 
 C_ASSERT(ADC_INTERRUPT_PRIORITY > SOC_HIGHEST_INTERRUPT_PRIORITY);
 
@@ -306,7 +307,5 @@ void micro_trace_get_cursor(uint64_t **mtb_cursor_pp, bool *mtb_cursor_wrapped_p
  */
 extern uint64_t __micro_trace_buffer[];
 extern uint64_t __micro_trace_buffer_end[];
-
-extern const struct i2c_device *const g_i2c0_device_p;
 
 #endif /* __K64F_SOC_PUBLIC_H */

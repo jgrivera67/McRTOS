@@ -229,6 +229,8 @@ extern isr_function_t k64f_ftm1_isr;
 
 extern isr_function_t k64f_i2c0_isr;
 
+extern isr_function_t k64f_port_c_isr;
+
 void k64f_uart_rx_tx_interrupt_e_handler(
     struct rtos_interrupt *rtos_interrupt_p);
 
@@ -244,5 +246,11 @@ void k64f_ftm_interrupt_e_handler(
 void
 k64f_i2c_interrupt_e_handler(
     struct rtos_interrupt *rtos_interrupt_p);
+
+void
+k64f_port_c_interrupt_e_handler(
+    struct rtos_interrupt *rtos_interrupt_p);
+
+extern const struct i2c_device g_i2c_devices[];
 
 #endif /* __K64F_SOC_H */
