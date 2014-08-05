@@ -145,6 +145,10 @@
     } while (0)
 
 
+#define CONSOLE_POS_PRINTF(_row, _col, _fmt, ...) \
+	console_printf("\x1b[s\x1b[%u;%uH" _fmt "\x1b[u", _row, _col, \
+		       ##__VA_ARGS__)
+
 /**
  * ASCII codes of common control characters
  */
@@ -214,7 +218,5 @@ uint32_t convert_string_to_decimal(
 
 char * signature_to_string(
         _IN_ uint32_t signature);
-
-extern const char g_clear_console_control_string[];
 
 #endif /* __UTILS_H */

@@ -226,7 +226,7 @@ set_rgb_led_color(uint32_t led_color_mask)
 
 
 static void
-accelerometer_device_stop(const struct accelerometer_device *accel_device_p)
+accelerometer_device_deactivate(const struct accelerometer_device *accel_device_p)
 {
     FDC_ASSERT(
         accel_device_p->acc_signature == ACCEL_DEVICE_SIGNATURE,
@@ -270,6 +270,46 @@ accelerometer_device_stop(const struct accelerometer_device *accel_device_p)
 }
 
 
+static void accelerometer_device_activate(const struct accelerometer_device *accel_device_p)
+{
+    FDC_ASSERT(
+        accel_device_p->acc_signature == ACCEL_DEVICE_SIGNATURE,
+        accel_device_p->acc_signature, 0);
+
+    struct accelerometer_device_var *const accel_var_p = accel_device_p->acc_var_p;
+
+    FDC_ASSERT(accel_var_p->acc_initialized, accel_device_p, accel_var_p);
+
+    uint8_t accel_reg_value;
+
+    i2c_read(
+	accel_device_p->acc_i2c_device_p,
+	ACCELEROMETER_I2C_ADDR,
+	ACCEL_CTRL_REG1,
+	&accel_reg_value,
+	1);
+
+    accel_reg_value |= ACCEL_CTRL_REG1_ACTIVE_MASK;
+    i2c_write(
+        accel_device_p->acc_i2c_device_p,
+        ACCELEROMETER_I2C_ADDR,
+        ACCEL_CTRL_REG1,
+        &accel_reg_value,
+        1);
+
+    i2c_read(
+	accel_device_p->acc_i2c_device_p,
+	ACCELEROMETER_I2C_ADDR,
+	ACCEL_CTRL_REG1,
+	&accel_reg_value,
+	1);
+
+    FDC_ASSERT(
+	(accel_reg_value & ACCEL_CTRL_REG1_ACTIVE_MASK) != 0,
+	accel_reg_value, 0);
+}
+
+
 static void
 accelerometer_device_init(const struct accelerometer_device *accel_device_p)
 {
@@ -310,9 +350,9 @@ accelerometer_device_init(const struct accelerometer_device *accel_device_p)
     accel_var_p->acc_initialized = true;
 
     /*
-     * Go to standby mode:
+     * Deactivate accelerometer to configure it:
      */
-    accelerometer_device_stop(accel_device_p);
+    accelerometer_device_deactivate(accel_device_p);
 
     /*
      * Disable the FIFO
@@ -485,14 +525,22 @@ accelerometer_device_init(const struct accelerometer_device *accel_device_p)
         &accel_reg_value,
         1);
 
+    accel_reg_value = 0;
+    i2c_write(
+        accel_device_p->acc_i2c_device_p,
+        ACCELEROMETER_I2C_ADDR,
+        ACCEL_XYZ_DATA_CFG,
+        &accel_reg_value,
+        1);
+
     /*
-     * Set sampling rates and activate accelerometer:
+     * Set sampling rates accelerometer:
      * - ASLP rate: every 640ms (1.56 HZ)
-     * - data rate: 200 HZ (every 5ms)
+     * - data rate: 100 HZ (every 10ms)
      * - FSR=2g
      */
 
-    accel_reg_value = 0;
+    accel_reg_value = ACCEL_CTRL_REG1_LNOISE_MASK;
     SET_BIT_FIELD(
         accel_reg_value,
         ACCEL_CTRL_REG1_ASLP_RATE_MASK,
@@ -503,9 +551,7 @@ accelerometer_device_init(const struct accelerometer_device *accel_device_p)
         accel_reg_value,
         ACCEL_CTRL_REG1_DR_MASK,
         ACCEL_CTRL_REG1_DR_SHIFT,
-        ACCEL_CTRL_REG1_DR_200HZ);
-
-    accel_reg_value |= ACCEL_CTRL_REG1_ACTIVE_MASK;
+        ACCEL_CTRL_REG1_DR_100HZ);
 
     i2c_write(
         accel_device_p->acc_i2c_device_p,
@@ -514,16 +560,7 @@ accelerometer_device_init(const struct accelerometer_device *accel_device_p)
         &accel_reg_value,
         1);
 
-    i2c_read(
-	accel_device_p->acc_i2c_device_p,
-	ACCELEROMETER_I2C_ADDR,
-	ACCEL_CTRL_REG1,
-	&accel_reg_value,
-	1);
-
-    FDC_ASSERT(
-	(accel_reg_value & ACCEL_CTRL_REG1_ACTIVE_MASK) != 0,
-	accel_reg_value, 0);
+    accelerometer_device_activate(accel_device_p);
 
     DEBUG_PRINTF("Accelerometer initialized\n");
 }
@@ -554,10 +591,26 @@ void
 accelerometer_stop(void)
 {
     rtos_enter_privileged_mode();
-    accelerometer_device_stop(&g_accelerometer);
+    accelerometer_device_deactivate(&g_accelerometer);
     rtos_exit_privileged_mode();
 }
 
+static int16_t
+build_14bit_signed_value(uint8_t msb, uint8_t lsb)
+{
+    uint16_t u16_val = ((uint16_t)msb << 6) | (lsb >> 2);
+
+    DBG_ASSERT(u16_val < BIT(14), u16_val, BIT(14));
+
+    if (u16_val & BIT(13)) {
+	/*
+	 * Sign extend to 16 bits 14-bit negative value
+	 */
+	u16_val |= MULTI_BIT_MASK(15, 14);
+    }
+
+    return (int16_t)u16_val;
+}
 
 /**
  * Read FXOS8700CQ accelerometer status
@@ -572,12 +625,6 @@ accelerometer_device_read_status(
     int16_t *y_p,
     int16_t *z_p)
 {
-#   define BUILD_14_BIT_SIGNED(_msb, _lsb) \
-            (((int8_t)(_msb) << 6) | ((uint8_t)(_lsb) >> 2))
-
-#   define IN_RANGE_14_BIT_SIGNED(_num) \
-            ((_num) >= -(int16_t)BIT(13) && (_num) <= (int16_t)(BIT(13) - 1))
-
     uint8_t accel_reg_value;
     uint8_t i2c_buf[6];
     bool read_ok;
@@ -605,13 +652,10 @@ accelerometer_device_read_status(
             i2c_buf,
             sizeof i2c_buf);
 
-        *x_p = BUILD_14_BIT_SIGNED(i2c_buf[0], i2c_buf[1]);
-        *y_p = BUILD_14_BIT_SIGNED(i2c_buf[2], i2c_buf[3]);
-        *z_p = BUILD_14_BIT_SIGNED(i2c_buf[4], i2c_buf[5]);
+        *x_p = build_14bit_signed_value(i2c_buf[0], i2c_buf[1]);
+        *y_p = build_14bit_signed_value(i2c_buf[2], i2c_buf[3]);
+        *z_p = build_14bit_signed_value(i2c_buf[4], i2c_buf[5]);
 
-        DBG_ASSERT(IN_RANGE_14_BIT_SIGNED(*x_p), *x_p, 0);
-        DBG_ASSERT(IN_RANGE_14_BIT_SIGNED(*y_p), *y_p, 0);
-        DBG_ASSERT(IN_RANGE_14_BIT_SIGNED(*z_p), *z_p, 0);
         read_ok = true;
     } else {
         read_ok = false;

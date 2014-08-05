@@ -41,6 +41,9 @@
 /*
  * Magnetometer Registers:
  */
+#define MAGNET_OUT_X_MSB    0x33
+#define MAGNET_OUT_Y_MSB    0x35
+#define MAGNET_OUT_Z_MSB    0x37
 #define MAGNET_CTRL_REG1    0x5B
 #define MAGNET_CTRL_REG2    0x5C
 

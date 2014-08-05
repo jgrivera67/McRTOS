@@ -71,7 +71,7 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
     {
 	.p_name_p = "Hello World thread 1",
         .p_function_p = hello_world_thread_thread_f,
-        .p_function_arg_p = "first thread",
+        .p_function_arg_p = (void *)1,
         .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 2,
         .p_thread_pp = NULL,
     },
@@ -80,7 +80,7 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
     {
 	.p_name_p = "Hello World thread 2",
         .p_function_p = hello_world_thread_thread_f,
-        .p_function_arg_p = "second thread",
+        .p_function_arg_p = (void *)2,
         .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 2,
         .p_thread_pp = NULL,
     },
@@ -201,6 +201,8 @@ hello_world_thread_thread_f(void *arg)
 
     FDC_ASSERT(arg != NULL, arg, cpu_id);
 
+    int thread_id = (intptr_t)arg;
+
     fdc_error = rtos_mpu_add_thread_data_region(&g_app, &g_app + 1, false);
     if (fdc_error != 0) {
 	    goto exit;
@@ -209,8 +211,10 @@ hello_world_thread_thread_f(void *arg)
     mpu_region_added = true;
 
     for ( ; ; ) {
-	console_printf("%s: %s\n", __func__, arg);
-	rtos_thread_delay(2000);
+	CONSOLE_POS_PRINTF(24, 60 + thread_id * 20, "Hello thread %1d", arg);
+	rtos_thread_delay(500);
+	CONSOLE_POS_PRINTF(24, 60 + thread_id * 20, "              ");
+	rtos_thread_delay(thread_id * 1000);
     }
 
     fdc_error = CAPTURE_FDC_ERROR(
@@ -268,26 +272,26 @@ accelerometer_thread_f(void *arg)
 
         if (read_ok) {
 	    motion_detected = false;
-	    if ((g_app.x_acceleration & ~0x3f) != (x_acceleration & ~0x3f)) {
+	    if (g_app.x_acceleration != x_acceleration) {
 	        g_app.x_acceleration = x_acceleration;
 		motion_detected = true;
 	    }
 
-	    if ((g_app.y_acceleration & ~0x3f) != (y_acceleration & ~0x3f)) {
+	    if (g_app.y_acceleration != y_acceleration) {
 	        g_app.y_acceleration = y_acceleration;
 		motion_detected = true;
 	    }
 
-	    if ((g_app.z_acceleration & ~0x3f) != (z_acceleration & ~0x3f)) {
+	    if (g_app.z_acceleration != z_acceleration) {
 	        g_app.z_acceleration = z_acceleration;
-		//??? motion_detected = true;
+		motion_detected = true;
 	    }
 
 	    if (motion_detected) {
-		console_printf("x_accel: %#x, y_accel: %#x, z_accel: %#x\n",
-		    g_app.x_acceleration & ~0x3f,
-		    g_app.y_acceleration & ~0x3f,
-		    g_app.z_acceleration & ~0x3f);
+		CONSOLE_POS_PRINTF(24, 1, "x_accel: %8d  y_accel: %8d  z_accel: %8d",
+		    g_app.x_acceleration,
+		    g_app.y_acceleration,
+		    g_app.z_acceleration);
 	    }
         }
 #else

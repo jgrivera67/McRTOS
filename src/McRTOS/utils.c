@@ -47,11 +47,6 @@ print_string(
 C_ASSERT(sizeof(uintptr_t) == sizeof(uint32_t));
 
 /**
- * Clear screen control sequence for VT100 terminals
- */
-const char g_clear_console_control_string[] = "\x1b[2J\x1b[H";
-
-/**
  * Mutex to serialize printf output to the console
  */
 static struct rtos_mutex g_console_printf_mutex;
@@ -380,7 +375,10 @@ console_printf_init(void)
 void
 console_clear(void)
 {
-    console_printf(g_clear_console_control_string);
+    /*
+     * Send clear screen control sequence for VT100 terminals
+     */
+    console_printf("\x1b[2J\x1b[H");
 }
 
 
