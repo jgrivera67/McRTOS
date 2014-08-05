@@ -266,7 +266,13 @@
      * negative priority values, always have higher priority than any
      * other exception.
      */
-#   define SOC_NUM_INTERRUPT_PRIORITIES 4
+#   if defined(KL25Z_SOC)
+#	define SOC_NUM_INTERRUPT_PRIORITIES 4
+#   elif defined(K64F_SOC)
+#	define SOC_NUM_INTERRUPT_PRIORITIES 16
+#   else
+#	error "SOC not supported"
+#   endif
 
     /**
      * Base interrupt vector number for external IRQs
