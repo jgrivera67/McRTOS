@@ -499,6 +499,7 @@ static struct i2c_device_var g_i2c_devices_var[] = {
 const struct i2c_device g_i2c_devices[] = {
     [0] = {
         .i2c_signature = I2C_DEVICE_SIGNATURE,
+	.i2c_name = "I2C0",
         .i2c_var_p = &g_i2c_devices_var[0],
         .i2c_mmio_registers_p = I2C0_BASE_PTR,
         .i2c_mmio_scl_port_pcr_p = &PORTE_PCR24,
@@ -506,7 +507,8 @@ const struct i2c_device g_i2c_devices[] = {
         .i2c_clock_gate_mask = SIM_SCGC4_I2C0_MASK,
 	/* Pin Mux Control: Alternative 5, Open Drain Enable */
         .i2c_pin_mux_selector_mask = PORT_PCR_MUX(0x5) | PORT_PCR_ODE_MASK,
-        .i2c_icr_value = 0x1f, /* 100KHz for bus clock of 24 MHz */
+        //???.i2c_icr_value = 0x1f, /* 100KHz for bus clock of 24 MHz */
+        .i2c_icr_value = 0x2d, /* 100KHz for bus clock of 60 MHz */
         .i2c_rtos_interrupt_params = {
             .irp_name_p = "I2C0 Interrupt",
             .irp_isr_function_p = k64f_i2c0_isr,
@@ -521,6 +523,7 @@ const struct i2c_device g_i2c_devices[] = {
 
     [1] = {
         .i2c_signature = I2C_DEVICE_SIGNATURE,
+	.i2c_name = "I2C1",
         .i2c_var_p = &g_i2c_devices_var[1],
         .i2c_mmio_registers_p = I2C1_BASE_PTR,
         .i2c_mmio_scl_port_pcr_p = &PORTC_PCR10,
@@ -528,7 +531,7 @@ const struct i2c_device g_i2c_devices[] = {
         .i2c_clock_gate_mask = SIM_SCGC4_I2C1_MASK,
 	/* Pin Mux Control: Alternative 2, Open Drain Enable */
         .i2c_pin_mux_selector_mask = PORT_PCR_MUX(0x2) | PORT_PCR_ODE_MASK,
-        .i2c_icr_value = 0x1f,
+        .i2c_icr_value = 0x2d, /* 100KHz for bus clock of 60 MHz */
     }
 };
 
@@ -667,12 +670,22 @@ system_clocks_init(void)
 
     /*
      * Set the system dividers:
-     * SIM->CLKDIV1: OUTDIV1=0,OUTDIV2=1,OUTDIV3=1,OUTDIV4=4
+     * SIM->CLKDIV1: OUTDIV1=0 (divide by 1)
+     *		     OUTDIV2=1 (divide by 2)
+     *		     OUTDIV3=1 (divide by 2)
+     *		     OUTDIV4=4 (divide by 5)
+     *
+     * Core clock: MCG CLKOUT divided by OUTDIV1
+     * System clock: MCG CLKOUT divided by OUTDIV1
+     * Bus clock: MCG CLKOUT divided by OUTDIV2
+     *
+     * NOTE: To see which clocks are used for which devices see table 5-2,
+     * page 191, section 5.7, K64 Sub-Family Reference Manual
      */
     reg_value = SIM_CLKDIV1_OUTDIV1(0x00) |
 	        SIM_CLKDIV1_OUTDIV2(0x01) |
                 SIM_CLKDIV1_OUTDIV3(0x02) |
-                SIM_CLKDIV1_OUTDIV4(0x04); /* Update system prescalers */
+                SIM_CLKDIV1_OUTDIV4(0x04);
 
     write_32bit_mmio_register(&SIM_CLKDIV1, reg_value);
 
@@ -3119,6 +3132,7 @@ i2c_init(
         i2c_device_p->i2c_rtos_interrupt_pp, i2c_device_p);
 
     i2c_var_p->i2c_initialized = true;
+    DEBUG_PRINTF("Initialized device %s\n", i2c_device_p->i2c_name);
 }
 
 void
@@ -3154,6 +3168,8 @@ i2c_shutdown(
     reg_value = read_32bit_mmio_register(&SIM_SCGC4);
     reg_value &= ~i2c_device_p->i2c_clock_gate_mask;
     write_32bit_mmio_register(&SIM_SCGC4, reg_value);
+
+    DEBUG_PRINTF("Stopped device %s\n", i2c_device_p->i2c_name);
 }
 
 void i2c_read(
@@ -3161,6 +3177,10 @@ void i2c_read(
     uint8_t i2c_slave_addr, uint8_t i2c_slave_reg_addr,
     uint8_t *buffer_p, size_t num_bytes)
 {
+    DBG_ASSERT(
+        i2c_device_p->i2c_signature == I2C_DEVICE_SIGNATURE,
+        i2c_device_p->i2c_signature, i2c_device_p);
+
     struct i2c_device_var *const i2c_var_p = i2c_device_p->i2c_var_p;
     DBG_ASSERT(i2c_var_p->i2c_initialized, i2c_device_p, i2c_var_p);
     DBG_ASSERT_VALID_RAM_POINTER(buffer_p, 1);

@@ -30,6 +30,19 @@ struct rtos_interrupt *g_rtos_interrupt_systick_p = NULL;
 struct cortex_m_exception_stack
     g_cortex_m_exception_stack __attribute__ ((section(".resetstack")));
 
+
+static void
+cortex_m_set_ccr(void)
+{
+    uint32_t reg_value = read_32bit_mmio_register(&SCB->CCR);
+
+    reg_value |= (SCB_CCR_UNALIGN_TRP_Msk |
+		  SCB_CCR_DIV_0_TRP_Msk);
+
+    write_32bit_mmio_register(&SCB->CCR, reg_value);
+}
+
+
 /**
  * Reset exception handler
  */
@@ -49,6 +62,8 @@ cortex_m_reset_handler(void)
     for (uint32_t i = 0; i < RTOS_INTERRUPT_STACK_NUM_ENTRIES; ++ i) {
         g_cortex_m_exception_stack.es_stack[i] = RTOS_STACK_UNUSED_SIGNATURE;
     }
+
+    cortex_m_set_ccr();
 
     main();
 

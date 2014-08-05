@@ -176,6 +176,7 @@ struct adc_device_var {
 struct i2c_device {
 #   define I2C_DEVICE_SIGNATURE  GEN_SIGNATURE('I', '2', 'C', 'C')
     uint32_t i2c_signature;
+    char *i2c_name;
     struct i2c_device_var *i2c_var_p;
     I2C_MemMapPtr i2c_mmio_registers_p;
     volatile uint32_t *i2c_mmio_scl_port_pcr_p;

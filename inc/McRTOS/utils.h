@@ -126,24 +126,24 @@
 
 
 /**
- * Unaligned access to force a data abort on classic ARM and a
- * hard fault exception on Cortex-M.
+ * Artificial break point by triggering a "divide by 0" exception.
  *
  * NOTE:
  * Ideally, we should be able to use break instruction (e.g., __BKPT()).
- * However, for the Cortex-M0+, the processor goes to lockup state if
- * a debugger is not attached, rather than generating a hard fault
- * exception. So, we need to force an "artificial fault" here,
+ * However, the processor goes to lockup state if a debugger is not
+ * attached, rather than generating an exception.
+ * So, we need to force an "artificial fault" here,
  * by doing an unaligned memory access.
  */
 #define ARTIFICIAL_BREAK_POINT() \
     do {                                                                \
         asm volatile (                                                  \
-            "mov    r0, #0x1\n\t"                                       \
-            "ldr    r0, [r0]"                                           \
+            "mov    r0, #0x0\n\t"                                       \
+            "udiv   r0, r0, r0"                                         \
             : : : "r0"                                                  \
         );                                                              \
     } while (0)
+
 
 /**
  * ASCII codes of common control characters

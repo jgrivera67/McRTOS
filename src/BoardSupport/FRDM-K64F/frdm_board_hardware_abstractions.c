@@ -264,6 +264,8 @@ accelerometer_device_stop(const struct accelerometer_device *accel_device_p)
 	FDC_ASSERT(
 	    (accel_reg_value & ACCEL_CTRL_REG1_ACTIVE_MASK) == 0,
 	    accel_reg_value, 0);
+
+	DEBUG_PRINTF("Accelerometer stopped\n");
     }
 }
 
@@ -273,7 +275,7 @@ accelerometer_device_init(const struct accelerometer_device *accel_device_p)
 {
     FDC_ASSERT(
         accel_device_p->acc_signature == ACCEL_DEVICE_SIGNATURE,
-        accel_device_p->acc_signature, 0);
+        accel_device_p->acc_signature, accel_device_p);
 
     struct accelerometer_device_var *const accel_var_p = accel_device_p->acc_var_p;
 
@@ -290,10 +292,10 @@ accelerometer_device_init(const struct accelerometer_device *accel_device_p)
 
     FDC_ASSERT(accel_reg_value == ACCEL_DEVICE_ID, accel_reg_value, ACCEL_DEVICE_ID);
 
+#if 0 //???
     /*
      * Reset FXOS chip:
      */
-
     accel_reg_value = ACCEL_CTRL_REG2_RST_MASK;
     i2c_write(
         accel_device_p->acc_i2c_device_p,
@@ -303,6 +305,9 @@ accelerometer_device_init(const struct accelerometer_device *accel_device_p)
         1);
 
     rtos_thread_delay(50);
+#endif
+
+    accel_var_p->acc_initialized = true;
 
     /*
      * Go to standby mode:
@@ -368,7 +373,7 @@ accelerometer_device_init(const struct accelerometer_device *accel_device_p)
         1);
 
     /*
-     * Enable hyrid mode auto increment
+     * Enable hybrid mode auto increment
      */
     accel_reg_value = MAGNET_CTRL_REG2_HYB_AUTOINC_MASK;
     i2c_write(
@@ -426,6 +431,7 @@ accelerometer_device_init(const struct accelerometer_device *accel_device_p)
         &accel_reg_value,
         1);
 
+#if 0 //???
     /*
      * Register McRTOS interrupt handler
      */
@@ -438,21 +444,11 @@ accelerometer_device_init(const struct accelerometer_device *accel_device_p)
         accel_device_p->acc_rtos_interrupt_pp, accel_device_p);
 
     /*
-     * Configure INT1 and INT2 interrupt pins:
-     */
-    configure_pin(&accel_device_p->acc_int1_pin, false);
-    configure_pin(&accel_device_p->acc_int2_pin, false);
-
-    /*
      * Enable data-ready, auto-sleep and motion detection interrupts:
      */
-#if 0
     accel_reg_value = (ACCEL_CTRL_REG4_INT_EN_DRDY_MASK |
 		       ACCEL_CTRL_REG4_INT_EN_ASLP_MASK |
 		       ACCEL_CTRL_REG4_INT_EN_FF_MT_MASK);
-#else
-    accel_reg_value = 0;
-#endif
     i2c_write(
         accel_device_p->acc_i2c_device_p,
         ACCELEROMETER_I2C_ADDR,
@@ -470,6 +466,13 @@ accelerometer_device_init(const struct accelerometer_device *accel_device_p)
         ACCEL_CTRL_REG5,
         &accel_reg_value,
         1);
+
+    /*
+     * Configure INT1 and INT2 interrupt pins:
+     */
+    configure_pin(&accel_device_p->acc_int1_pin, false);
+    configure_pin(&accel_device_p->acc_int2_pin, false);
+#endif //???
 
     /*
      * Enable ffmt as a wake-up source
@@ -521,6 +524,8 @@ accelerometer_device_init(const struct accelerometer_device *accel_device_p)
     FDC_ASSERT(
 	(accel_reg_value & ACCEL_CTRL_REG1_ACTIVE_MASK) != 0,
 	accel_reg_value, 0);
+
+    DEBUG_PRINTF("Accelerometer initialized\n");
 }
 
 
