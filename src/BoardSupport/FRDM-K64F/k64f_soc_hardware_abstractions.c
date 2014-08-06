@@ -2883,6 +2883,7 @@ i2c_write_data_byte(
     uint8_t data_byte)
 {
     uint32_t reg_value;
+    fdc_error_t fdc_error;
     I2C_MemMapPtr i2c_mmio_registers_p = i2c_device_p->i2c_mmio_registers_p;
 
     write_8bit_mmio_register(&I2C_D_REG(i2c_mmio_registers_p), data_byte);
@@ -2890,11 +2891,17 @@ i2c_write_data_byte(
     i2c_wait_transfer_completion(i2c_device_p);
 
     /*
-     * Receive ACK/NAK signal from the I2C bus, and assume it is an ACK:
+     * Receive ACK/NAK signal from the I2C bus:
      */
     reg_value = read_8bit_mmio_register(&I2C_S_REG(i2c_mmio_registers_p));
-    FDC_ASSERT((reg_value & I2C_S_RXAK_MASK) == 0, reg_value, i2c_device_p);
+    if ((reg_value & I2C_S_RXAK_MASK) != 0) {
+        fdc_error = CAPTURE_FDC_ERROR("NAK received from the I2C bus",
+                                      i2c_device_p, data_byte);
+
+        fatal_error_handler(fdc_error);
+    }
 }
+
 
 static void
 i2c_end_transaction(
@@ -2974,11 +2981,14 @@ i2c_start_or_continue_transaction(
     bool read_transaction)
 {
     uint32_t reg_value;
-    uint32_t reg_value2;
     I2C_MemMapPtr i2c_mmio_registers_p = i2c_device_p->i2c_mmio_registers_p;
 
     reg_value = read_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p));
-    reg_value2 = read_8bit_mmio_register(&I2C_S_REG(i2c_mmio_registers_p));
+
+#   ifdef _RELIABILITY_CHECKS_
+    uint32_t reg_value2 =
+        read_8bit_mmio_register(&I2C_S_REG(i2c_mmio_registers_p));
+#   endif    
 
     if (first_transaction) {
         FDC_ASSERT(
@@ -3181,8 +3191,12 @@ void i2c_read(
         i2c_device_p->i2c_signature == I2C_DEVICE_SIGNATURE,
         i2c_device_p->i2c_signature, i2c_device_p);
 
+#   ifdef DEBUG
     struct i2c_device_var *const i2c_var_p = i2c_device_p->i2c_var_p;
+
     DBG_ASSERT(i2c_var_p->i2c_initialized, i2c_device_p, i2c_var_p);
+#   endif
+
     DBG_ASSERT_VALID_RAM_POINTER(buffer_p, 1);
     DBG_ASSERT(num_bytes != 0, 0, 0);
 
@@ -3238,8 +3252,10 @@ k64f_i2c_interrupt_e_handler(
         !i2c_var_p->i2c_byte_transfer_completed,
         i2c_device_p, i2c_var_p);
 
+#   ifdef _RELIABILITY_CHECKS_
     uint32_t reg_value =
         read_8bit_mmio_register(&I2C_S_REG(i2c_mmio_registers_p));
+#   endif
 
     FDC_ASSERT(
         (reg_value & I2C_S_IICIF_MASK) != 0, reg_value, i2c_device_p);

@@ -232,7 +232,9 @@ accelerometer_device_deactivate(const struct accelerometer_device *accel_device_
         accel_device_p->acc_signature == ACCEL_DEVICE_SIGNATURE,
         accel_device_p->acc_signature, 0);
 
+#   ifdef _RELIABILITY_CHECKS_    
     struct accelerometer_device_var *const accel_var_p = accel_device_p->acc_var_p;
+#   endif
 
     FDC_ASSERT(accel_var_p->acc_initialized, accel_device_p, accel_var_p);
 
@@ -276,7 +278,9 @@ static void accelerometer_device_activate(const struct accelerometer_device *acc
         accel_device_p->acc_signature == ACCEL_DEVICE_SIGNATURE,
         accel_device_p->acc_signature, 0);
 
+#   ifdef _RELIABILITY_CHECKS_    
     struct accelerometer_device_var *const accel_var_p = accel_device_p->acc_var_p;
+#   endif
 
     FDC_ASSERT(accel_var_p->acc_initialized, accel_device_p, accel_var_p);
 
