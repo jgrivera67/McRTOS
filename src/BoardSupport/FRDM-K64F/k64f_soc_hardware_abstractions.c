@@ -2985,10 +2985,8 @@ i2c_start_or_continue_transaction(
 
     reg_value = read_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p));
 
-#   ifdef _RELIABILITY_CHECKS_
     uint32_t reg_value2 =
         read_8bit_mmio_register(&I2C_S_REG(i2c_mmio_registers_p));
-#   endif    
 
     if (first_transaction) {
         FDC_ASSERT(
@@ -3252,10 +3250,8 @@ k64f_i2c_interrupt_e_handler(
         !i2c_var_p->i2c_byte_transfer_completed,
         i2c_device_p, i2c_var_p);
 
-#   ifdef _RELIABILITY_CHECKS_
     uint32_t reg_value =
         read_8bit_mmio_register(&I2C_S_REG(i2c_mmio_registers_p));
-#   endif
 
     FDC_ASSERT(
         (reg_value & I2C_S_IICIF_MASK) != 0, reg_value, i2c_device_p);
@@ -3274,9 +3270,9 @@ k64f_i2c_interrupt_e_handler(
     reg_value =
         read_8bit_mmio_register(&I2C_S_REG(i2c_mmio_registers_p));
 
-    FDC_ASSERT(
+    DBG_ASSERT(
         (reg_value & I2C_S_IICIF_MASK) == 0, reg_value, i2c_device_p);
-    FDC_ASSERT(
+    DBG_ASSERT(
         (reg_value & I2C_S_ARBL_MASK) == 0, reg_value, i2c_device_p);
 #   endif
 
