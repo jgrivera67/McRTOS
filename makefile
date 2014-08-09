@@ -59,6 +59,10 @@ rebuild: create_object_dir
 create_object_dir:
 	$(shell test -d $(OBJECT_DIR) || mkdir $(OBJECT_DIR))
 
+update_flash: build
+	cp $(BIN_FILE) /media/$(USER)/MBED
+	sync
+
 run_tests:
 	$(RUN_TESTS_MAKEFILE) COMMON_CFLAGS='$(COMMON_CFLAGS)'
 
