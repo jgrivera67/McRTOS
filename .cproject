@@ -1,0 +1,265 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<?fileVersion 4.0.0?><cproject storage_type_id="org.eclipse.cdt.core.XmlProjectDescriptionStorage">
+	<storageModule moduleId="org.eclipse.cdt.core.settings">
+		<cconfiguration id="0.1405100457">
+			<storageModule buildSystemId="org.eclipse.cdt.managedbuilder.core.configurationDataProvider" id="0.1405100457" moduleId="org.eclipse.cdt.core.settings" name="Default">
+				<externalSettings/>
+				<extensions>
+					<extension id="org.eclipse.cdt.core.VCErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.GmakeErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.CWDLocator" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.GCCErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.GASErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.GLDErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+				</extensions>
+			</storageModule>
+			<storageModule moduleId="cdtBuildSystem" version="4.0.0">
+				<configuration buildProperties="" description="" id="0.1405100457" name="Default" parent="org.eclipse.cdt.build.core.prefbase.cfg">
+					<folderInfo id="0.1405100457." name="/" resourcePath="">
+						<toolChain id="org.eclipse.cdt.build.core.prefbase.toolchain.1501504763" name="No ToolChain" resourceTypeBasedDiscovery="false" superClass="org.eclipse.cdt.build.core.prefbase.toolchain">
+							<targetPlatform id="org.eclipse.cdt.build.core.prefbase.toolchain.1501504763.822142359" name=""/>
+							<builder id="org.eclipse.cdt.build.core.settings.default.builder.333761050" keepEnvironmentInBuildfile="false" managedBuildOn="false" name="Gnu Make Builder" superClass="org.eclipse.cdt.build.core.settings.default.builder"/>
+							<tool id="org.eclipse.cdt.build.core.settings.holder.libs.946344575" name="holder for library settings" superClass="org.eclipse.cdt.build.core.settings.holder.libs"/>
+							<tool id="org.eclipse.cdt.build.core.settings.holder.756227204" name="Assembly" superClass="org.eclipse.cdt.build.core.settings.holder">
+								<option id="org.eclipse.cdt.build.core.settings.holder.incpaths.428765254" name="Include Paths" superClass="org.eclipse.cdt.build.core.settings.holder.incpaths" valueType="includePath">
+									<listOptionValue builtIn="false" value="/home/b46482/embsys/tools/gcc-arm-none-eabi-4_8-2013q4/lib/gcc/arm-none-eabi/4.8.3/include"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/McRTOS/inc/BoardSupport}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/McRTOS/inc/BoardSupport/CMSIS}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/McRTOS/inc/BoardSupport/FRDM-K64F}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/McRTOS/inc/McRTOS}&quot;"/>
+									<listOptionValue builtIn="false" value="/home/b46482/embsys/tools/gcc-arm-none-eabi-4_8-2013q4/arm-none-eabi/include"/>
+								</option>
+								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.729016235" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
+									<listOptionValue builtIn="false" value="K64F_SOC"/>
+									<listOptionValue builtIn="false" value="__ARM_ARCH_7EM__"/>
+									<listOptionValue builtIn="false" value="_RELIABILITY_CHECKS_"/>
+									<listOptionValue builtIn="false" value="_CPU_CYCLES_MEASURE_"/>
+								</option>
+								<inputType id="org.eclipse.cdt.build.core.settings.holder.inType.1051773155" languageId="org.eclipse.cdt.core.assembly" languageName="Assembly" sourceContentType="org.eclipse.cdt.core.asmSource" superClass="org.eclipse.cdt.build.core.settings.holder.inType"/>
+							</tool>
+							<tool id="org.eclipse.cdt.build.core.settings.holder.428205502" name="GNU C++" superClass="org.eclipse.cdt.build.core.settings.holder">
+								<option id="org.eclipse.cdt.build.core.settings.holder.incpaths.1590780493" name="Include Paths" superClass="org.eclipse.cdt.build.core.settings.holder.incpaths" valueType="includePath">
+									<listOptionValue builtIn="false" value="/home/b46482/embsys/tools/gcc-arm-none-eabi-4_8-2013q4/lib/gcc/arm-none-eabi/4.8.3/include"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/McRTOS/inc/BoardSupport}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/McRTOS/inc/BoardSupport/CMSIS}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/McRTOS/inc/BoardSupport/FRDM-K64F}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/McRTOS/inc/McRTOS}&quot;"/>
+									<listOptionValue builtIn="false" value="/home/b46482/embsys/tools/gcc-arm-none-eabi-4_8-2013q4/arm-none-eabi/include"/>
+								</option>
+								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.43067377" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
+									<listOptionValue builtIn="false" value="K64F_SOC"/>
+									<listOptionValue builtIn="false" value="__ARM_ARCH_7EM__"/>
+									<listOptionValue builtIn="false" value="_RELIABILITY_CHECKS_"/>
+									<listOptionValue builtIn="false" value="_CPU_CYCLES_MEASURE_"/>
+								</option>
+								<inputType id="org.eclipse.cdt.build.core.settings.holder.inType.2063312772" languageId="org.eclipse.cdt.core.g++" languageName="GNU C++" sourceContentType="org.eclipse.cdt.core.cxxSource,org.eclipse.cdt.core.cxxHeader" superClass="org.eclipse.cdt.build.core.settings.holder.inType"/>
+							</tool>
+							<tool id="org.eclipse.cdt.build.core.settings.holder.1345773774" name="GNU C" superClass="org.eclipse.cdt.build.core.settings.holder">
+								<option id="org.eclipse.cdt.build.core.settings.holder.incpaths.542712718" name="Include Paths" superClass="org.eclipse.cdt.build.core.settings.holder.incpaths" valueType="includePath">
+									<listOptionValue builtIn="false" value="/home/b46482/embsys/tools/gcc-arm-none-eabi-4_8-2013q4/lib/gcc/arm-none-eabi/4.8.3/include"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/McRTOS/inc/BoardSupport}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/McRTOS/inc/BoardSupport/CMSIS}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/McRTOS/inc/BoardSupport/FRDM-K64F}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/McRTOS/inc/McRTOS}&quot;"/>
+									<listOptionValue builtIn="false" value="/home/b46482/embsys/tools/gcc-arm-none-eabi-4_8-2013q4/arm-none-eabi/include"/>
+								</option>
+								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.860075557" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
+									<listOptionValue builtIn="false" value="K64F_SOC"/>
+									<listOptionValue builtIn="false" value="__ARM_ARCH_7EM__"/>
+									<listOptionValue builtIn="false" value="_RELIABILITY_CHECKS_"/>
+									<listOptionValue builtIn="false" value="_CPU_CYCLES_MEASURE_"/>
+								</option>
+								<inputType id="org.eclipse.cdt.build.core.settings.holder.inType.1009139953" languageId="org.eclipse.cdt.core.gcc" languageName="GNU C" sourceContentType="org.eclipse.cdt.core.cSource,org.eclipse.cdt.core.cHeader" superClass="org.eclipse.cdt.build.core.settings.holder.inType"/>
+							</tool>
+						</toolChain>
+					</folderInfo>
+					<folderInfo id="0.1405100457.2102893524" name="/" resourcePath="FRDM-K64F-obj-reliability">
+						<toolChain id="org.eclipse.cdt.build.core.prefbase.toolchain.1790498492" name="No ToolChain" superClass="org.eclipse.cdt.build.core.prefbase.toolchain" unusedChildren="">
+							<tool id="org.eclipse.cdt.build.core.settings.holder.libs.1314192196" name="holder for library settings" superClass="org.eclipse.cdt.build.core.settings.holder.libs.946344575"/>
+							<tool id="org.eclipse.cdt.build.core.settings.holder.81179901" name="Assembly" superClass="org.eclipse.cdt.build.core.settings.holder.756227204">
+								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.444164608" name="Symbols" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
+									<listOptionValue builtIn="false" value="_RELIABILITY_CHECKS_"/>
+								</option>
+								<inputType id="org.eclipse.cdt.build.core.settings.holder.inType.1795606243" languageId="org.eclipse.cdt.core.assembly" languageName="Assembly" sourceContentType="org.eclipse.cdt.core.asmSource" superClass="org.eclipse.cdt.build.core.settings.holder.inType"/>
+							</tool>
+							<tool id="org.eclipse.cdt.build.core.settings.holder.1427265163" name="GNU C++" superClass="org.eclipse.cdt.build.core.settings.holder.756227204">
+								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.937854826" name="Symbols" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
+									<listOptionValue builtIn="false" value="_RELIABILITY_CHECKS_"/>
+								</option>
+								<inputType id="org.eclipse.cdt.build.core.settings.holder.inType.2105403835" languageId="org.eclipse.cdt.core.g++" languageName="GNU C++" sourceContentType="org.eclipse.cdt.core.cxxSource,org.eclipse.cdt.core.cxxHeader" superClass="org.eclipse.cdt.build.core.settings.holder.inType"/>
+							</tool>
+							<tool id="org.eclipse.cdt.build.core.settings.holder.74716786" name="GNU C" superClass="org.eclipse.cdt.build.core.settings.holder.756227204">
+								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.608439375" name="Symbols" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
+									<listOptionValue builtIn="false" value="__ARM_ARCH_7EM__"/>
+									<listOptionValue builtIn="false" value="_RELIABILITY_CHECKS_"/>
+									<listOptionValue builtIn="false" value="K64F_SOC"/>
+									<listOptionValue builtIn="false" value="_CPU_CYCLES_MEASURE_"/>
+								</option>
+								<inputType id="org.eclipse.cdt.build.core.settings.holder.inType.227299897" languageId="org.eclipse.cdt.core.gcc" languageName="GNU C" sourceContentType="org.eclipse.cdt.core.cSource,org.eclipse.cdt.core.cHeader" superClass="org.eclipse.cdt.build.core.settings.holder.inType"/>
+							</tool>
+						</toolChain>
+					</folderInfo>
+					<fileInfo id="0.1405100457.1565524968" name="main.c" rcbsApplicability="disable" resourcePath="src/Applications/frdm_demo/main.c" toolsToInvoke="org.eclipse.cdt.build.core.settings.holder.1345773774.536001245">
+						<tool id="org.eclipse.cdt.build.core.settings.holder.1345773774.536001245" name="GNU C" superClass="org.eclipse.cdt.build.core.settings.holder.756227204">
+							<option id="org.eclipse.cdt.build.core.settings.holder.symbols.20633549" name="Symbols" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
+								<listOptionValue builtIn="false" value="K64F_SOC"/>
+								<listOptionValue builtIn="false" value="__ARM_ARCH_7EM__"/>
+								<listOptionValue builtIn="false" value="_RELIABILITY_CHECKS_"/>
+								<listOptionValue builtIn="false" value="_CPU_CYCLES_MEASURE_"/>
+							</option>
+							<inputType id="org.eclipse.cdt.build.core.settings.holder.inType.209847591" languageId="org.eclipse.cdt.core.gcc" languageName="GNU C" sourceContentType="org.eclipse.cdt.core.cSource,org.eclipse.cdt.core.cHeader" superClass="org.eclipse.cdt.build.core.settings.holder.inType"/>
+						</tool>
+					</fileInfo>
+				</configuration>
+			</storageModule>
+			<storageModule moduleId="org.eclipse.cdt.core.externalSettings"/>
+		</cconfiguration>
+		<cconfiguration id="0.1405100457.14792529">
+			<storageModule buildSystemId="org.eclipse.cdt.managedbuilder.core.configurationDataProvider" id="0.1405100457.14792529" moduleId="org.eclipse.cdt.core.settings" name="Debug">
+				<externalSettings/>
+				<extensions>
+					<extension id="org.eclipse.cdt.core.VCErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.GmakeErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.CWDLocator" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.GCCErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.GASErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.GLDErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+				</extensions>
+			</storageModule>
+			<storageModule moduleId="cdtBuildSystem" version="4.0.0">
+				<configuration artifactName="${ProjName}" buildProperties="" description="" id="0.1405100457.14792529" name="Debug" parent="org.eclipse.cdt.build.core.prefbase.cfg">
+					<folderInfo id="0.1405100457.14792529." name="/" resourcePath="">
+						<toolChain id="org.eclipse.cdt.build.core.prefbase.toolchain.142070160" name="No ToolChain" resourceTypeBasedDiscovery="false" superClass="org.eclipse.cdt.build.core.prefbase.toolchain">
+							<targetPlatform id="org.eclipse.cdt.build.core.prefbase.toolchain.142070160.1878521557" name=""/>
+							<builder autoBuildTarget="build" enableAutoBuild="false" enabledIncrementalBuild="true" id="org.eclipse.cdt.build.core.settings.default.builder.1083638328" incrementalBuildTarget="build" keepEnvironmentInBuildfile="false" managedBuildOn="false" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" superClass="org.eclipse.cdt.build.core.settings.default.builder"/>
+							<tool id="org.eclipse.cdt.build.core.settings.holder.libs.1967254999" name="holder for library settings" superClass="org.eclipse.cdt.build.core.settings.holder.libs"/>
+							<tool id="org.eclipse.cdt.build.core.settings.holder.2141972586" name="Assembly" superClass="org.eclipse.cdt.build.core.settings.holder">
+								<option id="org.eclipse.cdt.build.core.settings.holder.incpaths.418829276" name="Include Paths" superClass="org.eclipse.cdt.build.core.settings.holder.incpaths" valueType="includePath">
+									<listOptionValue builtIn="false" value="/home/b46482/embsys/tools/gcc-arm-none-eabi-4_8-2013q4/lib/gcc/arm-none-eabi/4.8.3/include"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/McRTOS/inc/BoardSupport}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/McRTOS/inc/BoardSupport/CMSIS}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/McRTOS/inc/BoardSupport/FRDM-K64F}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/McRTOS/inc/McRTOS}&quot;"/>
+									<listOptionValue builtIn="false" value="/home/b46482/embsys/tools/gcc-arm-none-eabi-4_8-2013q4/arm-none-eabi/include"/>
+								</option>
+								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.1105836871" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
+									<listOptionValue builtIn="false" value="K64F_SOC"/>
+									<listOptionValue builtIn="false" value="__ARM_ARCH_7EM__"/>
+									<listOptionValue builtIn="false" value="_RELIABILITY_CHECKS_"/>
+									<listOptionValue builtIn="false" value="_CPU_CYCLES_MEASURE_"/>
+								</option>
+								<inputType id="org.eclipse.cdt.build.core.settings.holder.inType.1632213098" languageId="org.eclipse.cdt.core.assembly" languageName="Assembly" sourceContentType="org.eclipse.cdt.core.asmSource" superClass="org.eclipse.cdt.build.core.settings.holder.inType"/>
+							</tool>
+							<tool id="org.eclipse.cdt.build.core.settings.holder.488495929" name="GNU C++" superClass="org.eclipse.cdt.build.core.settings.holder">
+								<option id="org.eclipse.cdt.build.core.settings.holder.incpaths.871673612" name="Include Paths" superClass="org.eclipse.cdt.build.core.settings.holder.incpaths" valueType="includePath">
+									<listOptionValue builtIn="false" value="/home/b46482/embsys/tools/gcc-arm-none-eabi-4_8-2013q4/lib/gcc/arm-none-eabi/4.8.3/include"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/McRTOS/inc/BoardSupport}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/McRTOS/inc/BoardSupport/CMSIS}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/McRTOS/inc/BoardSupport/FRDM-K64F}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/McRTOS/inc/McRTOS}&quot;"/>
+									<listOptionValue builtIn="false" value="/home/b46482/embsys/tools/gcc-arm-none-eabi-4_8-2013q4/arm-none-eabi/include"/>
+								</option>
+								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.2003601928" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
+									<listOptionValue builtIn="false" value="K64F_SOC"/>
+									<listOptionValue builtIn="false" value="__ARM_ARCH_7EM__"/>
+									<listOptionValue builtIn="false" value="_RELIABILITY_CHECKS_"/>
+									<listOptionValue builtIn="false" value="_CPU_CYCLES_MEASURE_"/>
+								</option>
+								<inputType id="org.eclipse.cdt.build.core.settings.holder.inType.961096154" languageId="org.eclipse.cdt.core.g++" languageName="GNU C++" sourceContentType="org.eclipse.cdt.core.cxxSource,org.eclipse.cdt.core.cxxHeader" superClass="org.eclipse.cdt.build.core.settings.holder.inType"/>
+							</tool>
+							<tool id="org.eclipse.cdt.build.core.settings.holder.40423176" name="GNU C" superClass="org.eclipse.cdt.build.core.settings.holder">
+								<option id="org.eclipse.cdt.build.core.settings.holder.incpaths.1858914550" name="Include Paths" superClass="org.eclipse.cdt.build.core.settings.holder.incpaths" valueType="includePath">
+									<listOptionValue builtIn="false" value="/home/b46482/embsys/tools/gcc-arm-none-eabi-4_8-2013q4/arm-none-eabi/include"/>
+									<listOptionValue builtIn="false" value="/home/b46482/embsys/tools/gcc-arm-none-eabi-4_8-2013q4/lib/gcc/arm-none-eabi/4.8.3/include"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/McRTOS/inc/BoardSupport}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/McRTOS/inc/BoardSupport/CMSIS}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/McRTOS/inc/BoardSupport/FRDM-K64F}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/McRTOS/inc/McRTOS}&quot;"/>
+								</option>
+								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.1613210731" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
+									<listOptionValue builtIn="false" value="K64F_SOC"/>
+									<listOptionValue builtIn="false" value="__ARM_ARCH_7EM__"/>
+									<listOptionValue builtIn="false" value="_RELIABILITY_CHECKS_"/>
+									<listOptionValue builtIn="false" value="_CPU_CYCLES_MEASURE_"/>
+								</option>
+								<inputType id="org.eclipse.cdt.build.core.settings.holder.inType.1902508411" languageId="org.eclipse.cdt.core.gcc" languageName="GNU C" sourceContentType="org.eclipse.cdt.core.cSource,org.eclipse.cdt.core.cHeader" superClass="org.eclipse.cdt.build.core.settings.holder.inType"/>
+							</tool>
+						</toolChain>
+					</folderInfo>
+					<folderInfo id="0.1405100457.14792529.484766844" name="/" resourcePath="FRDM-K64F-obj-reliability">
+						<toolChain id="org.eclipse.cdt.build.core.prefbase.toolchain.1951906206" name="No ToolChain" superClass="org.eclipse.cdt.build.core.prefbase.toolchain" unusedChildren="">
+							<tool id="org.eclipse.cdt.build.core.settings.holder.libs.212479646" name="holder for library settings" superClass="org.eclipse.cdt.build.core.settings.holder.libs.1967254999"/>
+							<tool id="org.eclipse.cdt.build.core.settings.holder.2094291946" name="Assembly" superClass="org.eclipse.cdt.build.core.settings.holder.2141972586">
+								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.952653641" name="Symbols" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
+									<listOptionValue builtIn="false" value="_RELIABILITY_CHECKS_"/>
+								</option>
+								<inputType id="org.eclipse.cdt.build.core.settings.holder.inType.1951775043" languageId="org.eclipse.cdt.core.assembly" languageName="Assembly" sourceContentType="org.eclipse.cdt.core.asmSource" superClass="org.eclipse.cdt.build.core.settings.holder.inType"/>
+							</tool>
+							<tool id="org.eclipse.cdt.build.core.settings.holder.1488574220" name="GNU C++" superClass="org.eclipse.cdt.build.core.settings.holder.2141972586">
+								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.1708563974" name="Symbols" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
+									<listOptionValue builtIn="false" value="_RELIABILITY_CHECKS_"/>
+								</option>
+								<inputType id="org.eclipse.cdt.build.core.settings.holder.inType.228788873" languageId="org.eclipse.cdt.core.g++" languageName="GNU C++" sourceContentType="org.eclipse.cdt.core.cxxSource,org.eclipse.cdt.core.cxxHeader" superClass="org.eclipse.cdt.build.core.settings.holder.inType"/>
+							</tool>
+							<tool id="org.eclipse.cdt.build.core.settings.holder.1605399329" name="GNU C" superClass="org.eclipse.cdt.build.core.settings.holder.2141972586">
+								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.261366333" name="Symbols" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
+									<listOptionValue builtIn="false" value="__ARM_ARCH_7EM__"/>
+									<listOptionValue builtIn="false" value="_RELIABILITY_CHECKS_"/>
+									<listOptionValue builtIn="false" value="K64F_SOC"/>
+									<listOptionValue builtIn="false" value="_CPU_CYCLES_MEASURE_"/>
+								</option>
+								<inputType id="org.eclipse.cdt.build.core.settings.holder.inType.715058826" languageId="org.eclipse.cdt.core.gcc" languageName="GNU C" sourceContentType="org.eclipse.cdt.core.cSource,org.eclipse.cdt.core.cHeader" superClass="org.eclipse.cdt.build.core.settings.holder.inType"/>
+							</tool>
+						</toolChain>
+					</folderInfo>
+					<fileInfo id="0.1405100457.14792529.1139834505" name="main.c" rcbsApplicability="disable" resourcePath="src/Applications/frdm_demo/main.c" toolsToInvoke="org.eclipse.cdt.build.core.settings.holder.40423176.1713193563">
+						<tool id="org.eclipse.cdt.build.core.settings.holder.40423176.1713193563" name="GNU C" superClass="org.eclipse.cdt.build.core.settings.holder.2141972586">
+							<option id="org.eclipse.cdt.build.core.settings.holder.symbols.812833065" name="Symbols" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
+								<listOptionValue builtIn="false" value="K64F_SOC"/>
+								<listOptionValue builtIn="false" value="__ARM_ARCH_7EM__"/>
+								<listOptionValue builtIn="false" value="_RELIABILITY_CHECKS_"/>
+								<listOptionValue builtIn="false" value="_CPU_CYCLES_MEASURE_"/>
+							</option>
+							<inputType id="org.eclipse.cdt.build.core.settings.holder.inType.202922442" languageId="org.eclipse.cdt.core.gcc" languageName="GNU C" sourceContentType="org.eclipse.cdt.core.cSource,org.eclipse.cdt.core.cHeader" superClass="org.eclipse.cdt.build.core.settings.holder.inType"/>
+						</tool>
+					</fileInfo>
+				</configuration>
+			</storageModule>
+			<storageModule moduleId="org.eclipse.cdt.core.externalSettings"/>
+		</cconfiguration>
+	</storageModule>
+	<storageModule moduleId="cdtBuildSystem" version="4.0.0">
+		<project id="McRTOS.null.2075742610" name="McRTOS"/>
+	</storageModule>
+	<storageModule moduleId="org.eclipse.cdt.core.LanguageSettingsProviders"/>
+	<storageModule moduleId="refreshScope" versionNumber="2">
+		<configuration configurationName="Default">
+			<resource resourceType="PROJECT" workspacePath="/McRTOS"/>
+		</configuration>
+		<configuration configurationName="Debug">
+			<resource resourceType="PROJECT" workspacePath="/McRTOS"/>
+		</configuration>
+	</storageModule>
+	<storageModule moduleId="org.eclipse.cdt.make.core.buildtargets">
+		<buildTargets>
+			<target name="update_flash" path="" targetID="org.eclipse.cdt.build.MakeTargetBuilder">
+				<buildCommand>make</buildCommand>
+				<buildArguments/>
+				<buildTarget>update_flash</buildTarget>
+				<stopOnError>true</stopOnError>
+				<useDefaultCommand>false</useDefaultCommand>
+				<runAllBuilders>false</runAllBuilders>
+			</target>
+		</buildTargets>
+	</storageModule>
+	<storageModule moduleId="scannerConfiguration">
+		<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
+		<scannerConfigBuildInfo instanceId="0.1405100457.14792529">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
+		</scannerConfigBuildInfo>
+		<scannerConfigBuildInfo instanceId="0.1405100457">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
+		</scannerConfigBuildInfo>
+	</storageModule>
+	<storageModule moduleId="org.eclipse.cdt.internal.ui.text.commentOwnerProjectMappings"/>
+</cproject>

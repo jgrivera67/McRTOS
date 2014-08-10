@@ -1,6 +1,8 @@
 base_dir=$HOME/embsys/projects
 project="McRTOS"
 export SRC_TREE_DIR="$base_dir/$project"
+export EXTERNAL_INCLUDE_DIRS="$HOME/embsys/tools/gcc-arm-none-eabi-4_8-2013q4/arm-none-eabi/include
+			      $HOME/embsys/tools/gcc-arm-none-eabi-4_8-2013q4/lib/gcc/arm-none-eabi/4.8.3/include"
 export SRC_DB_DIR="$base_dir/${project}_src_database"
 export SRC_SUBDIRS=""
 export CSCOPE_DB="$SRC_DB_DIR/cscope.out"
