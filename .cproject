@@ -142,7 +142,7 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/McRTOS/inc/McRTOS}&quot;"/>
 									<listOptionValue builtIn="false" value="/home/b46482/embsys/tools/gcc-arm-none-eabi-4_8-2013q4/arm-none-eabi/include"/>
 								</option>
-								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.1105836871" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
+								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.1105836871" name="Symbols" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="K64F_SOC"/>
 									<listOptionValue builtIn="false" value="__ARM_ARCH_7EM__"/>
 									<listOptionValue builtIn="false" value="_RELIABILITY_CHECKS_"/>
@@ -159,7 +159,7 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/McRTOS/inc/McRTOS}&quot;"/>
 									<listOptionValue builtIn="false" value="/home/b46482/embsys/tools/gcc-arm-none-eabi-4_8-2013q4/arm-none-eabi/include"/>
 								</option>
-								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.2003601928" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
+								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.2003601928" name="Symbols" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="K64F_SOC"/>
 									<listOptionValue builtIn="false" value="__ARM_ARCH_7EM__"/>
 									<listOptionValue builtIn="false" value="_RELIABILITY_CHECKS_"/>
@@ -176,7 +176,7 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/McRTOS/inc/BoardSupport/FRDM-K64F}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/McRTOS/inc/McRTOS}&quot;"/>
 								</option>
-								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.1613210731" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
+								<option id="org.eclipse.cdt.build.core.settings.holder.symbols.1613210731" name="Symbols" superClass="org.eclipse.cdt.build.core.settings.holder.symbols" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="K64F_SOC"/>
 									<listOptionValue builtIn="false" value="__ARM_ARCH_7EM__"/>
 									<listOptionValue builtIn="false" value="_RELIABILITY_CHECKS_"/>

@@ -14,6 +14,14 @@
 #define SYSTICK_COUNTER_RELOAD_VALUE \
         (CPU_CLOCK_FREQ_IN_HZ / RTOS_TICK_TIMER_FREQUENCY)
 
+/*
+ * Coprocessor CP10 and CP11 fields in the SCB->CPACR register:
+ */
+#define CPACR_CP10_MASK		MULTI_BIT_MASK(21, 20)
+#define CPACR_CP10_SHIFT	20
+#define CPACR_CP11_MASK		MULTI_BIT_MASK(23, 22)
+#define CPACR_CP11_SHIFT	22
+
 static void copy_initialized_data_section_from_flash_to_ram(void);
 static void zero_fill_uninitialized_data_section(void);
 
@@ -43,6 +51,95 @@ cortex_m_set_ccr(void)
 }
 
 
+void
+cortex_m_enable_fpu(void)
+{
+    uint32_t reg_value = read_32bit_mmio_register(&SCB->CPACR);
+
+    /* set CP10, CP11 Full Access */
+    SET_BIT_FIELD(reg_value, CPACR_CP10_MASK, CPACR_CP10_SHIFT, 0x3);
+    SET_BIT_FIELD(reg_value, CPACR_CP11_MASK, CPACR_CP11_SHIFT, 0x3);
+
+    write_32bit_mmio_register(&SCB->CPACR, reg_value);
+    __DSB();
+    __ISB();
+}
+
+
+void
+cortex_m_disable_fpu(void)
+{
+    __DSB();
+    __ISB();
+    uint32_t reg_value = read_32bit_mmio_register(&SCB->CPACR);
+
+    SET_BIT_FIELD(reg_value, CPACR_CP10_MASK, CPACR_CP10_SHIFT, 0x0);
+    SET_BIT_FIELD(reg_value, CPACR_CP11_MASK, CPACR_CP11_SHIFT, 0x0);
+
+    write_32bit_mmio_register(&SCB->CPACR, reg_value);
+}
+
+
+/**
+ * Initializes floating point unit
+ */
+static void
+cortex_m_fpu_init(void)
+{
+    uint32_t reg_value;
+
+    /**
+     * FPU is initialized as disabled upon reset
+     */
+    reg_value = read_32bit_mmio_register(&SCB->CPACR);
+
+    FDC_ASSERT((reg_value & (CPACR_CP10_MASK|CPACR_CP10_MASK)) == 0,
+	       reg_value, 0);
+
+    /*
+     * Configure FPCCR:
+     * - Disable automatic saving of floating point registers on exception entry
+     * - Disable automatic lazy stacking of floating point registers
+     */
+    reg_value = read_32bit_mmio_register(&FPU->FPCCR);
+
+    reg_value &= ~(FPU_FPCCR_ASPEN_Msk | FPU_FPCCR_LSPEN_Msk);
+    write_32bit_mmio_register(&FPU->FPCCR, reg_value);
+}
+
+
+void
+cortex_m_save_fpu_context(struct fpu_context *fpu_context_p)
+{
+    asm volatile (
+	"mov		r0, %[fpu_context_p]\t\n"
+	"vstmia.32	r0!, {s0-s15}\n\t"
+	"vstmia.32	r0!, {s16-s31}\n\t"
+	"vmrs		r1, fpscr\t\n"
+	"str		r1, [r0]\t\n"
+	:
+	: [fpu_context_p] "r" (fpu_context_p)
+	: "r0", "r1"
+    );
+}
+
+
+void
+cortex_m_restore_fpu_context(const struct fpu_context *fpu_context_p)
+{
+    asm volatile (
+	"mov		r0, %[fpu_context_p]\t\n"
+	"vldmia.32	r0!, {s0-s15}\n\t"
+	"vldmia.32	r0!, {s16-s31}\n\t"
+	"ldr		r1, [r0]\t\n"
+	"vmsr		fpscr, r1\t\n"
+	:
+	: [fpu_context_p] "r" (fpu_context_p)
+	: "r0", "r1"
+    );
+}
+
+
 /**
  * Reset exception handler
  */
@@ -64,6 +161,7 @@ cortex_m_reset_handler(void)
     }
 
     cortex_m_set_ccr();
+    cortex_m_fpu_init();
 
     main();
 

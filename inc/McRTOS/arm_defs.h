@@ -185,6 +185,11 @@
 #   define CPU_NUM_SAVED_REGISTERS  (8 + 4)
 
     /**
+     * Number of 32-bit FPU registers
+     */
+#   define FPU_NUM_SINGLE_REGISTERS 32
+
+    /**
      * Values that LR can be set to, to return from an exception:
      */
 #   define CPU_EXC_RETURN_TO_HANDLER_MODE          0xFFFFFFF1
@@ -406,12 +411,14 @@
 #define  RTOS_CALLER_IS_THREAD_SYSTEM_CALL		0x1b
 #define  RTOS_MPU_ADD_THREAD_DATA_REGION_SYSTEM_CALL	0x1c
 #define  RTOS_MPU_REMOVE_THREAD_DATA_REGION_SYSTEM_CALL	0x1d
+#define  RTOS_THREAD_ENABLE_FPU_SYSTEM_CALL		0x1e
+#define  RTOS_THREAD_DISABLE_FPU_SYSTEM_CALL		0x1f
 
 /*
  * CAUTION: This macro needs to be updated when new system
  * calls are added.
  */
-#define __LAST_RTOS_SYSTEM_CALL	RTOS_MPU_REMOVE_THREAD_DATA_REGION_SYSTEM_CALL
+#define __LAST_RTOS_SYSTEM_CALL	RTOS_THREAD_DISABLE_FPU_SYSTEM_CALL
 
 /**
  * Number of system calls supported:

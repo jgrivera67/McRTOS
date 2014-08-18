@@ -33,6 +33,7 @@ enum system_thread_priorities
             .cpc_cpu_id = (_cpu_id),                                    \
             .cpc_current_execution_context_p = NULL,                    \
             .cpc_current_thread_p = NULL,                               \
+            .cpc_last_fpu_thread_p = NULL,                              \
             .cpc_runnable_thread_priorities = 0,                        \
             .cpc_active_internal_interrupts =  { 0 },                   \
             .cpc_active_external_interrupts = { 0 },                    \

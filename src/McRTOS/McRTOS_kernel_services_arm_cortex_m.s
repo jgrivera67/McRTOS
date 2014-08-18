@@ -25,6 +25,7 @@
 
 .text
 .thumb
+.syntax unified
 
 /**
  * Restores the given McRTOS execution context CPU registers on the calling
@@ -391,7 +392,6 @@ rtos_exit_privileged_mode:
 
     bx	    lr
 .endfunc
-
 
 .end
 

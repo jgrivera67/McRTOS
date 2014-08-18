@@ -116,6 +116,10 @@ const void *const g_rtos_system_call_dispatch_table[] =
         RTOS_MPU_ADD_THREAD_DATA_REGION_SYSTEM_CALL, rtos_k_mpu_add_thread_data_region),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
         RTOS_MPU_REMOVE_THREAD_DATA_REGION_SYSTEM_CALL, rtos_k_mpu_remove_thread_data_region),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_THREAD_ENABLE_FPU_SYSTEM_CALL, rtos_k_thread_enable_fpu),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_THREAD_DISABLE_FPU_SYSTEM_CALL, rtos_k_thread_disable_fpu),
 };
 
 C_ASSERT(ARRAY_SIZE(g_rtos_system_call_dispatch_table) == RTOS_NUM_SYSTEM_CALLS);
@@ -287,6 +291,7 @@ rtos_k_thread_init(
     rtos_thread_p->thr_preempted_by_other_thread_count = 0;
     rtos_thread_p->thr_self_preempted_count = 0;
     rtos_thread_p->thr_owned_mutexes_count = 0;
+    rtos_thread_p->thr_fpu_enable_count = 0;
     rtos_thread_p->thr_blocked_on_p = NULL;
 
     GLIST_NODE_INIT(&rtos_thread_p->thr_list_node);
@@ -705,6 +710,99 @@ rtos_k_thread_name(
 
     return rtos_thread_p->thr_execution_context.ctx_name_p;
 }
+
+
+void
+rtos_k_thread_enable_fpu(void)
+{
+    FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
+
+    struct rtos_execution_context *current_execution_context_p =
+        RTOS_GET_CURRENT_EXECUTION_CONTEXT();
+
+    FDC_ASSERT(
+        current_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
+        current_execution_context_p->ctx_context_type,
+        current_execution_context_p);
+
+    struct rtos_thread *current_thread_p =
+         RTOS_EXECUTION_CONTEXT_GET_THREAD(current_execution_context_p);
+
+
+    FDC_ASSERT(current_thread_p->thr_fpu_enable_count < UINT8_MAX,
+	       current_thread_p->thr_fpu_enable_count,
+	       current_thread_p);
+
+    struct rtos_cpu_controller *cpu_controller_p =
+	&g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
+    struct rtos_thread *last_fpu_thread_p =
+	    cpu_controller_p->cpc_last_fpu_thread_p;
+
+    if (current_thread_p->thr_fpu_enable_count == 0) {
+        cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
+
+        cortex_m_enable_fpu();
+	if (last_fpu_thread_p != NULL) {
+            FDC_ASSERT(last_fpu_thread_p->thr_signature == RTOS_THREAD_SIGNATURE,
+                       last_fpu_thread_p->thr_signature, last_fpu_thread_p);
+
+            FDC_ASSERT(last_fpu_thread_p != current_thread_p,
+		       last_fpu_thread_p, current_thread_p);
+
+	    cortex_m_save_fpu_context(&last_fpu_thread_p->thr_saved_fpu_context);
+	}
+
+        cpu_controller_p->cpc_last_fpu_thread_p = current_thread_p;
+        rtos_k_restore_cpu_interrupts(cpu_status_register);
+    } else {
+	FDC_ASSERT(last_fpu_thread_p == current_thread_p,
+		   last_fpu_thread_p, current_thread_p);
+    }
+
+    current_thread_p->thr_fpu_enable_count ++;
+}
+
+
+void
+rtos_k_thread_disable_fpu(void)
+{
+
+    FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
+
+    struct rtos_execution_context *current_execution_context_p =
+        RTOS_GET_CURRENT_EXECUTION_CONTEXT();
+
+    FDC_ASSERT(
+        current_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
+        current_execution_context_p->ctx_context_type,
+        current_execution_context_p);
+
+    struct rtos_thread *current_thread_p =
+         RTOS_EXECUTION_CONTEXT_GET_THREAD(current_execution_context_p);
+
+    FDC_ASSERT(current_thread_p->thr_fpu_enable_count > 0,
+ 	       current_thread_p->thr_fpu_enable_count,
+ 	       current_thread_p);
+
+    struct rtos_cpu_controller *cpu_controller_p =
+	&g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
+
+    FDC_ASSERT(cpu_controller_p->cpc_last_fpu_thread_p == current_thread_p,
+               cpu_controller_p->cpc_last_fpu_thread_p,
+               current_thread_p);
+
+    current_thread_p->thr_fpu_enable_count --;
+    if (current_thread_p->thr_fpu_enable_count == 0) {
+        cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
+        struct rtos_cpu_controller *cpu_controller_p =
+            &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
+
+	cortex_m_disable_fpu();
+	cpu_controller_p->cpc_last_fpu_thread_p = NULL;
+        rtos_k_restore_cpu_interrupts(cpu_status_register);
+    }
+}
+
 
 void
 rtos_k_thread_condvar_wait(

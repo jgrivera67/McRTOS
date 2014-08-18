@@ -16,6 +16,7 @@
 
 .text
 .thumb
+.syntax unified
 
 /**
  * Macro that generates a system call wrapper function
@@ -278,5 +279,11 @@ GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_MPU_ADD_THREAD_DATA_REGION_SYSTEM_CALL, \
 
 GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_MPU_REMOVE_THREAD_DATA_REGION_SYSTEM_CALL, \
                                  rtos_mpu_remove_thread_data_region
+
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_THREAD_ENABLE_FPU_SYSTEM_CALL, \
+                                 rtos_thread_enable_fpu
+
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_THREAD_DISABLE_FPU_SYSTEM_CALL, \
+                                 rtos_thread_disable_fpu
 
 .end

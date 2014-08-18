@@ -615,6 +615,22 @@ struct rtos_object_pool
 C_ASSERT(sizeof(struct rtos_object_pool) % SOC_CACHE_LINE_SIZE_IN_BYTES == 0);
 
 /**
+  * FPU context saved for a thread that is using the FPU when it is
+  * switched out
+  */
+ struct fpu_context {
+     /**
+      * Saved FPU single-precision registers
+      */
+     uint32_t fpu_registers[FPU_NUM_SINGLE_REGISTERS];
+
+     /**
+      * Saved FPU status register
+      */
+     uint32_t fpscr;
+ };
+
+/**
  * McRTOS thread object
  */
 struct rtos_thread
@@ -730,6 +746,18 @@ struct rtos_thread
      */
     uint32_t thr_owned_mutexes_count;
 
+    /**
+     * Number of rtos_k_thread_enable_fpu() calls unpaired with
+     * corresponding rtos_k_thread_disable_fpu()
+     *
+     * NOTE: A count is used instead of a boolean flag, to allow
+     * nested calls to rtos_k_thread_enable_fpu()/rtos_k_thread_disable_fpu()
+     */
+    uint8_t thr_fpu_enable_count;
+
+    uint8_t thr_reserved1;
+    uint16_t thr_reserved2;
+
     union
     {
         /**
@@ -769,6 +797,11 @@ struct rtos_thread
      */
     struct mpu_region_range
 	    thr_mpu_data_regions[RTOS_MAX_MPU_THREAD_DATA_REGIONS];
+
+    /**
+     * Saved FPU context on last context switch, if the thread was using the FPU
+     */
+    struct fpu_context thr_saved_fpu_context;
 
 } __attribute__ ((aligned(SOC_CACHE_LINE_SIZE_IN_BYTES)));
 
@@ -817,6 +850,14 @@ rtos_k_thread_name(
 _THREAD_CALLERS_ONLY_
 void
 rtos_k_thread_yield(void);
+
+_THREAD_CALLERS_ONLY_
+void
+rtos_k_thread_enable_fpu(void);
+
+_THREAD_CALLERS_ONLY_
+void
+rtos_k_thread_disable_fpu(void);
 
 _THREAD_CALLERS_ONLY_
 void

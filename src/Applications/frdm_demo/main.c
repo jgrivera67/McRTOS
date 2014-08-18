@@ -210,6 +210,13 @@ hello_world_thread_thread_f(void *arg)
 
     mpu_region_added = true;
 
+    //???
+    rtos_thread_enable_fpu();
+    float x = 0.1;
+
+    x *= 0.2;
+    //???rtos_thread_disable_fpu();
+    //???
     for ( ; ; ) {
 	CONSOLE_POS_PRINTF(24, 60 + thread_id * 20, "Hello thread %1d", arg);
 	rtos_thread_delay(500);

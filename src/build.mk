@@ -44,14 +44,16 @@ RANLIB      = $(TOOLCHAIN)-ranlib
 ifeq "$(PLATFORM)" "LPC2478-STK"
     SYSTEM_ON_CHIP = LPC2478_SOC
     CPU_ARCHITECTURE = armv4
-    MCU  = arm7tdmi
+    ARM_ARCH = armv4
+    ARM_CORE  = arm7tdmi
     CODETYPE = arm
 endif
 
 ifeq "$(PLATFORM)" "LM4F120-LaunchPad"
     SYSTEM_ON_CHIP = LM4F120_SOC
     CPU_ARCHITECTURE = arm_cortex_m
-    MCU  = cortex-m4
+    ARM_ARCH = armv7e-m
+    ARM_CORE  = cortex-m4
     CODETYPE = thumb
     # To enable code generation for hard FP:
     #EXTRA_MCFLAGS = -mfloat-abi=hard -mfpu=fpv4-sp-d16
@@ -60,22 +62,28 @@ endif
 ifeq "$(PLATFORM)" "FRDM-KL25Z"
     SYSTEM_ON_CHIP = KL25Z_SOC
     CPU_ARCHITECTURE = arm_cortex_m
-    MCU = cortex-m0plus
+    ARM_ARCH = armv6-m
+    ARM_CORE = cortex-m0plus
     CODETYPE = thumb
 endif
 
 ifeq "$(PLATFORM)" "FRDM-K20D5"
     SYSTEM_ON_CHIP = K20D5_SOC
     CPU_ARCHITECTURE = arm_cortex_m
-    MCU  = cortex-m4
+    ARM_ARCH = armv7e-m
+    ARM_CORE = cortex-m4
     CODETYPE = thumb
 endif
 
 ifeq "$(PLATFORM)" "FRDM-K64F"
     SYSTEM_ON_CHIP = K64F_SOC
     CPU_ARCHITECTURE = arm_cortex_m
-    MCU  = cortex-m4
+    ARM_ARCH = armv7e-m
+    ARM_CORE = cortex-m4
     CODETYPE = thumb
+    # See https://gcc.gnu.org/onlinedocs/gcc/ARM-Options.html
+    EXTRA_MCFLAGS = -mfloat-abi=softfp \
+                    -mtpcs-frame -mtpcs-leaf-frame
 endif
 
 ifndef CPU_ARCHITECTURE
@@ -165,10 +173,11 @@ ifeq "$(BUILD_FLAVOR)" "performance"
 endif
 
 # optimisation level here -O0, -O1, -O2, -Os, or -03
-MCFLAGS = 	-mcpu=$(MCU) -m$(CODETYPE) $(EXTRA_MCFLAGS)
+#MCFLAGS = 	-mcpu=$(ARM_CORE) -m$(CODETYPE) $(EXTRA_MCFLAGS)
+MCFLAGS = 	-march=$(ARM_ARCH) -mtune=$(ARM_CORE) -m$(CODETYPE) $(EXTRA_MCFLAGS)
 ASFLAGS = 	$(MCFLAGS) -g -gdwarf-2 -Wa,-amhls=$(<:.s=.lst) \
 		$(CPPFLAGS)
-CFLAGS  = 	$(MCFLAGS) $(OPT) -gdwarf-2 -fomit-frame-pointer \
+CFLAGS  = 	$(MCFLAGS) $(OPT) -gdwarf-2 \
 		-Wmissing-prototypes \
 		-Wpointer-arith \
 		-Winline \

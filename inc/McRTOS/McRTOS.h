@@ -544,12 +544,14 @@ rtos_lcd_draw_tile(
     _IN_ lcd_y_t y,
     _IN_ lcd_color_t fill_color);
 
+_THREAD_CALLERS_ONLY_
 fdc_error_t
 rtos_mpu_add_thread_data_region(
     void *start_addr,
     void *end_addr,
     bool read_only);
 
+_THREAD_CALLERS_ONLY_
 void
 rtos_mpu_remove_thread_data_region(void);
 
@@ -558,10 +560,20 @@ rtos_app_system_call(
     _IN_ rtos_app_system_call_function_t *rtos_app_system_call_function_p,
     _INOUT_ void *arg_p);
 
+_THREAD_CALLERS_ONLY_
 void
 rtos_enter_privileged_mode(void);
 
+_THREAD_CALLERS_ONLY_
 void
 rtos_exit_privileged_mode(void);
+
+_THREAD_CALLERS_ONLY_
+void
+rtos_thread_enable_fpu(void);
+
+_THREAD_CALLERS_ONLY_
+void
+rtos_thread_disable_fpu(void);
 
 #endif /* _McRTOS */

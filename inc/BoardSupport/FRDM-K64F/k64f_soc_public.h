@@ -55,11 +55,17 @@ C_ASSERT(ADC_INTERRUPT_PRIORITY > SOC_HIGHEST_INTERRUPT_PRIORITY);
 #error "core_cm4.h should not be included before here"
 #endif
 
+#ifndef __VFP_FP__
+#error "Hardware floating point code not being generated"
+#endif
+
 /*
- * NOTE: CMSIS paramtetric #defines were done in MK64F12.h
+ * NOTE: CMSIS parametric #defines were done in MK64F12.h
  */
 #define __CHECK_DEVICE_DEFINES
 #include "core_cm4.h"
+
+C_ASSERT(__FPU_USED == 1);
 
 #pragma GCC diagnostic pop
 

@@ -269,6 +269,12 @@ struct rtos_cpu_controller
     struct rtos_thread *cpc_current_thread_p;
 
     /**
+     * Pointer to the last thread that was preempted while using the FPU
+     * (had an unpaired call to rtos_k_thread_enable_fpu(), when it got preempted)
+     */
+    struct rtos_thread *cpc_last_fpu_thread_p;
+
+    /**
      * Runnable thread priorities bit map
      */
     rtos_thread_prio_bitmap_t cpc_runnable_thread_priorities;
@@ -334,7 +340,7 @@ struct rtos_cpu_controller
     struct glist_node cpc_preemption_chain_anchor;
 
     /**
-     * McRTOS executon context for the reset handler
+     * McRTOS execution context for the reset handler
      */
     struct rtos_execution_context cpc_reset_execution_context;
 

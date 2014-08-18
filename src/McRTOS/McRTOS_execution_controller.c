@@ -114,6 +114,13 @@ void rtos_thread_scheduler(
         FDC_ASSERT(
             GLIST_NODE_IS_LINKED(&current_thread_p->thr_list_node),
             &current_thread_p->thr_list_node, current_thread_p);
+
+        if (current_thread_p->thr_fpu_enable_count != 0) {
+            FDC_ASSERT(current_thread_p == cpu_controller_p->cpc_last_fpu_thread_p,
+                       current_thread_p, cpu_controller_p->cpc_last_fpu_thread_p);
+
+            cortex_m_disable_fpu();
+        }
     }
 
     /*
@@ -286,10 +293,34 @@ void rtos_thread_scheduler(
     chosen_context_p->ctx_last_switched_in_time_stamp = get_cpu_clock_cycles();
 #   endif
 
+    /*
+     * Set MPU regions for the chosen thread:
+     */
     mpu_set_thread_data_regions(SOC_GET_CURRENT_CPU_ID(),
 			        chosen_thread_p->thr_privileged,
 			        chosen_thread_p->thr_mpu_data_regions,
 			        chosen_thread_p->thr_num_mpu_data_regions);
+
+    /*
+     * Do PFU context switch if necessary
+     */
+    if (chosen_thread_p->thr_fpu_enable_count != 0) {
+	struct rtos_thread *last_fpu_thread_p =
+		cpu_controller_p->cpc_last_fpu_thread_p;
+
+	cortex_m_enable_fpu();
+	if (chosen_thread_p != last_fpu_thread_p) {
+	    if (last_fpu_thread_p != NULL) {
+                FDC_ASSERT(last_fpu_thread_p->thr_signature == RTOS_THREAD_SIGNATURE,
+                           last_fpu_thread_p->thr_signature, last_fpu_thread_p);
+
+                cortex_m_save_fpu_context(&last_fpu_thread_p->thr_saved_fpu_context);
+            }
+
+            cortex_m_restore_fpu_context(&chosen_thread_p->thr_saved_fpu_context);
+            cpu_controller_p->cpc_last_fpu_thread_p = chosen_thread_p;
+	}
+    }
 
     rtos_k_restore_execution_context(chosen_context_p, ctx_switch_type);
 
