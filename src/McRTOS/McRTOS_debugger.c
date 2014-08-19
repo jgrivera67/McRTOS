@@ -105,7 +105,10 @@ rtos_common_fault_exception_handler(
      */
     if (current_execution_context_p->
             ctx_cpu_saved_registers.cpu_reg_lr_on_exc_entry ==
-        CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP) {
+        CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP ||
+	current_execution_context_p->
+            ctx_cpu_saved_registers.cpu_reg_lr_on_exc_entry ==
+        CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP_FPU) {
         before_exception_stack_p = (rtos_execution_stack_entry_t *)
                     current_execution_context_p->ctx_cpu_saved_registers.cpu_reg_psp;
     } else {
@@ -290,6 +293,28 @@ rtos_dbg_dump_exception_info(
         before_exception_stack_p[CPU_REG_PC],
         before_exception_stack_p[CPU_REG_PSR]);
 
+    debugger_printf(
+	"Fault status registers:\n"
+	"\tSCB CFSR: %#x\n"
+	"\tSCB HFSR: %#x\n"
+	"\tSCB DFSR: %#x\n"
+	"\tSCB MMFAR: %#x\n"
+	"\tSCB BFAR: %#x\n"
+	"\tSCB AFSR: %#x\n",
+	SCB->CFSR,
+	SCB->HFSR,
+	SCB->DFSR,
+	SCB->MMFAR,
+	SCB->BFAR,
+	SCB->AFSR);
+
+    debugger_printf(
+	"Control registers:\n"
+	"\tSCB CPACR: %#x\n"
+	"\tControl: %#x\n",
+	SCB->CPACR,
+	__get_CONTROL());
+
     debug_dump_captured_registers();
 
 #if defined(KL25Z_SOC)
@@ -467,7 +492,8 @@ rtos_dbg_dump_execution_context(
         "\t\tpsr:       %#x\n"
         "\t\tmsp:       %#x\n"
         "\t\tpsp:       %#x\n"
-        "\t\tlre_on_exc:%#x\n",
+        "\t\tcontrol:   %#x\n"
+        "\t\tlr_on_exc:	%#x\n",
         execution_context_p->ctx_cpu_saved_registers.cpu_reg_r10,
         execution_context_p->ctx_cpu_saved_registers.cpu_reg_r11,
         context_stack_p[CPU_REG_R12],
@@ -477,6 +503,8 @@ rtos_dbg_dump_execution_context(
         context_stack_p[CPU_REG_PSR],
         execution_context_p->ctx_cpu_saved_registers.cpu_reg_msp,
         execution_context_p->ctx_cpu_saved_registers.cpu_reg_psp,
+        execution_context_p->
+            ctx_cpu_saved_registers.cpu_reg_control,
         execution_context_p->
             ctx_cpu_saved_registers.cpu_reg_lr_on_exc_entry);
 #else
@@ -754,7 +782,8 @@ debug_dump_micro_trace_buffer(void)
                 dest_func_name = "Exception return to handler mode";
             } else if (dest_addr == CPU_EXC_RETURN_TO_THREAD_MODE_USING_MSP) {
                 dest_func_name = "Exception return to thread mode using MSP";
-            } else if (dest_addr == CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP) {
+            } else if (dest_addr == CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP ||
+                       dest_addr == CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP_FPU) {
                 dest_func_name = "Exception return to thread mode using PSP";
             } else {
                 dest_func_name = "Unexpected destination address";

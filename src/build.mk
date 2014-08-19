@@ -82,7 +82,7 @@ ifeq "$(PLATFORM)" "FRDM-K64F"
     ARM_CORE = cortex-m4
     CODETYPE = thumb
     # See https://gcc.gnu.org/onlinedocs/gcc/ARM-Options.html
-    EXTRA_MCFLAGS = -mfloat-abi=softfp \
+    EXTRA_MCFLAGS = -mfloat-abi=softfp -mfpu=fpv4-sp-d16 \
                     -mtpcs-frame -mtpcs-leaf-frame
 endif
 

@@ -728,7 +728,6 @@ rtos_k_thread_enable_fpu(void)
     struct rtos_thread *current_thread_p =
          RTOS_EXECUTION_CONTEXT_GET_THREAD(current_execution_context_p);
 
-
     FDC_ASSERT(current_thread_p->thr_fpu_enable_count < UINT8_MAX,
 	       current_thread_p->thr_fpu_enable_count,
 	       current_thread_p);
@@ -2117,7 +2116,10 @@ rtos_k_enter_interrupt(
 
         if (interrupted_context_p->
                 ctx_cpu_saved_registers.cpu_reg_lr_on_exc_entry ==
-            CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP)
+            CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP ||
+	    interrupted_context_p->
+                ctx_cpu_saved_registers.cpu_reg_lr_on_exc_entry ==
+            CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP_FPU)
         {
             /*
              * Add current thread at the beginning of the corresponding runnable
@@ -2322,7 +2324,10 @@ rtos_k_exit_interrupt(void)
 
         if (preempted_context_p->
                 ctx_cpu_saved_registers.cpu_reg_lr_on_exc_entry ==
-            CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP)
+            CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP ||
+	    preempted_context_p->
+                ctx_cpu_saved_registers.cpu_reg_lr_on_exc_entry ==
+            CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP_FPU)
         {
             /*
              * Call thread scheduler to ensure that the highest-priority

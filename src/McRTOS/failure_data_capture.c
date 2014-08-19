@@ -871,25 +871,30 @@ check_rtos_execution_context_cpu_registers(
             CPU_MODE_IS_THREAD(cpu_status_register),
             cpu_status_register, rtos_execution_context_p);
 
-        cpu_register_t expected_lr_on_exc_entry;
-
         if (ctx_switch_type == RTOS_CSW_THREAD_TO_EARLY_NESTED_INTERRUPT ||
             ctx_switch_type == RTOS_CSW_EXITING_EARLY_NESTED_INTERRUPT)
         {
-            expected_lr_on_exc_entry = CPU_EXC_RETURN_TO_HANDLER_MODE;
+	    FDC_ASSERT(
+		rtos_execution_context_p->
+		    ctx_cpu_saved_registers.cpu_reg_lr_on_exc_entry ==
+		CPU_EXC_RETURN_TO_HANDLER_MODE,
+		rtos_execution_context_p->
+		    ctx_cpu_saved_registers.cpu_reg_lr_on_exc_entry,
+		rtos_execution_context_p);
         }
         else
         {
-            expected_lr_on_exc_entry = CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP;
-        }
-
-        FDC_ASSERT(
-            rtos_execution_context_p->
-                ctx_cpu_saved_registers.cpu_reg_lr_on_exc_entry ==
-            expected_lr_on_exc_entry,
-            rtos_execution_context_p->
-                ctx_cpu_saved_registers.cpu_reg_lr_on_exc_entry,
-            rtos_execution_context_p);
+	    FDC_ASSERT(
+		rtos_execution_context_p->
+		    ctx_cpu_saved_registers.cpu_reg_lr_on_exc_entry ==
+		CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP ||
+		rtos_execution_context_p->
+		    ctx_cpu_saved_registers.cpu_reg_lr_on_exc_entry ==
+		CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP_FPU,
+		rtos_execution_context_p->
+		    ctx_cpu_saved_registers.cpu_reg_lr_on_exc_entry,
+		rtos_execution_context_p);
+	}
     }
     else
     {

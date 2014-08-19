@@ -192,9 +192,10 @@
     /**
      * Values that LR can be set to, to return from an exception:
      */
-#   define CPU_EXC_RETURN_TO_HANDLER_MODE          0xFFFFFFF1
-#   define CPU_EXC_RETURN_TO_THREAD_MODE_USING_MSP 0xFFFFFFF9
-#   define CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP 0xFFFFFFFD
+#   define CPU_EXC_RETURN_TO_HANDLER_MODE		0xFFFFFFF1
+#   define CPU_EXC_RETURN_TO_THREAD_MODE_USING_MSP	0xFFFFFFF9
+#   define CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP	0xFFFFFFFD
+#   define CPU_EXC_RETURN_TO_THREAD_MODE_USING_PSP_FPU	0xFFFFFFED
 
     /**
      * Bitmasks to decode the op-code and operand fields of a THUMB instruction
@@ -233,25 +234,26 @@
 #   define  BX_LR_INSTRUCTION       0x4770
 
     /*
-     * Bit masks  for the IPSR register
+     * Bit masks for the IPSR register
      */
 #   define CPU_REG_IPSR_EXCEPTION_NUMBER_MASK   0x3F
 
     /*
-     * Bit masks  for the EPSR register
+     * Bit masks for the EPSR register
      */
 #   define CPU_REG_EPSR_THUMB_STATE_MASK    (0x1 << 24)
 
     /*
-     * Bit masks  for the PRIMASK register
+     * Bit masks for the PRIMASK register
      */
 #   define CPU_REG_PRIMASK_PM_MASK   0x1
 
     /*
-     * Bit masks  for the CONTROL register
+     * Bit masks for the CONTROL register
      */
-#   define CPU_REG_CONTROL_SPSEL_MASK   0x2
-#   define CPU_REG_CONTROL_nPRIV_MASK   0x1
+#   define CPU_REG_CONTROL_nPRIV_MASK   (0x1 << 0)
+#   define CPU_REG_CONTROL_SPSEL_MASK   (0x1 << 1)
+#   define CPU_REG_CONTROL_FPCA_MASK	(0x1 << 2)
 
     /*
      * Cortex-M SCB ICSR register address

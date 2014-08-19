@@ -54,13 +54,24 @@ cortex_m_set_ccr(void)
 void
 cortex_m_enable_fpu(void)
 {
-    uint32_t reg_value = read_32bit_mmio_register(&SCB->CPACR);
+    uint32_t reg_value;
 
-    /* set CP10, CP11 Full Access */
+    /*
+     * Enable full access (privileged and unprivileged access) for
+     * CP10, CP11 coprocessors
+     */
+    reg_value = read_32bit_mmio_register(&SCB->CPACR);
     SET_BIT_FIELD(reg_value, CPACR_CP10_MASK, CPACR_CP10_SHIFT, 0x3);
     SET_BIT_FIELD(reg_value, CPACR_CP11_MASK, CPACR_CP11_SHIFT, 0x3);
-
     write_32bit_mmio_register(&SCB->CPACR, reg_value);
+
+    /*
+     * Set CONTROL.FPCA bit
+     */
+    reg_value = __get_CONTROL();
+    reg_value |= CPU_REG_CONTROL_FPCA_MASK;
+    __set_CONTROL(reg_value);
+
     __DSB();
     __ISB();
 }
@@ -69,13 +80,24 @@ cortex_m_enable_fpu(void)
 void
 cortex_m_disable_fpu(void)
 {
+    uint32_t reg_value;
+
     __DSB();
     __ISB();
-    uint32_t reg_value = read_32bit_mmio_register(&SCB->CPACR);
 
+    /*
+     * Clear CONTROL.FPCA bit
+     */
+    reg_value = __get_CONTROL();
+    reg_value &= ~CPU_REG_CONTROL_FPCA_MASK;
+    __set_CONTROL(reg_value);
+
+    /*
+     * Disable access to CP10, CP11 coprocessors
+     */
+    reg_value = read_32bit_mmio_register(&SCB->CPACR);
     SET_BIT_FIELD(reg_value, CPACR_CP10_MASK, CPACR_CP10_SHIFT, 0x0);
     SET_BIT_FIELD(reg_value, CPACR_CP11_MASK, CPACR_CP11_SHIFT, 0x0);
-
     write_32bit_mmio_register(&SCB->CPACR, reg_value);
 }
 
@@ -105,6 +127,15 @@ cortex_m_fpu_init(void)
 
     reg_value &= ~(FPU_FPCCR_ASPEN_Msk | FPU_FPCCR_LSPEN_Msk);
     write_32bit_mmio_register(&FPU->FPCCR, reg_value);
+
+#if 0
+    /*
+     * Disables automatic update of CONTROL.FPCA:
+     */
+    reg_value = read_32bit_mmio_register(&SCnSCB->ACTLR);
+    reg_value |= SCnSCB_ACTLR_DISFPCA_Msk;
+    write_32bit_mmio_register(&SCnSCB->ACTLR, reg_value);
+#endif
 }
 
 

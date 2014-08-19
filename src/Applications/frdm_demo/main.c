@@ -212,9 +212,11 @@ hello_world_thread_thread_f(void *arg)
 
     //???
     rtos_thread_enable_fpu();
+
     float x = 0.1;
 
     x *= 0.2;
+
     //???rtos_thread_disable_fpu();
     //???
     for ( ; ; ) {
