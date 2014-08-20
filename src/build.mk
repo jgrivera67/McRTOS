@@ -82,12 +82,17 @@ ifeq "$(PLATFORM)" "FRDM-K64F"
     ARM_CORE = cortex-m4
     CODETYPE = thumb
     # See https://gcc.gnu.org/onlinedocs/gcc/ARM-Options.html
-    EXTRA_MCFLAGS = -mfloat-abi=softfp -mfpu=fpv4-sp-d16 \
-                    -mtpcs-frame -mtpcs-leaf-frame
+    EXTRA_MCFLAGS = -mfloat-abi=softfp -mfpu=fpv4-sp-d16
 endif
 
 ifndef CPU_ARCHITECTURE
     $(error unsupported platform $(PLATFORM))
+endif
+
+ifeq "$(CPU_ARCHITECTURE)" "arm_cortex_m"
+    EXTRA_MCFLAGS += -mtpcs-frame #-mtpcs-leaf-frame
+else
+    EXTRA_MCFLAGS += -mapcs-frame
 endif
 
 LDSCRIPT = $(PROJECT_DIR)/$(SYSTEM_ON_CHIP)-flash.ld
@@ -173,8 +178,8 @@ ifeq "$(BUILD_FLAVOR)" "performance"
 endif
 
 # optimisation level here -O0, -O1, -O2, -Os, or -03
-#MCFLAGS = 	-mcpu=$(ARM_CORE) -m$(CODETYPE) $(EXTRA_MCFLAGS)
-MCFLAGS = 	-march=$(ARM_ARCH) -mtune=$(ARM_CORE) -m$(CODETYPE) $(EXTRA_MCFLAGS)
+#MCFLAGS = 	-march=$(ARM_ARCH) -mtune=$(ARM_CORE) -m$(CODETYPE) $(EXTRA_MCFLAGS)
+MCFLAGS = 	-mcpu=$(ARM_CORE) -m$(CODETYPE) $(EXTRA_MCFLAGS)
 ASFLAGS = 	$(MCFLAGS) -g -gdwarf-2 -Wa,-amhls=$(<:.s=.lst) \
 		$(CPPFLAGS)
 CFLAGS  = 	$(MCFLAGS) $(OPT) -gdwarf-2 \
@@ -185,6 +190,7 @@ CFLAGS  = 	$(MCFLAGS) $(OPT) -gdwarf-2 \
 		-Werror \
 		-Wstack-usage=112 \
 		-Wundef \
+		-Wdouble-promotion \
 		$(CPPFLAGS) \
 		${COMMON_CFLAGS} ${CMD_LINE_CFLAGS}
 

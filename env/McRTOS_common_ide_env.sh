@@ -1,8 +1,6 @@
 base_dir=$HOME/embsys/projects
 project="McRTOS"
 export SRC_TREE_DIR="$base_dir/$project"
-export EXTERNAL_INCLUDE_DIRS="$HOME/embsys/tools/gcc-arm-none-eabi-4_8-2013q4/arm-none-eabi/include
-			      $HOME/embsys/tools/gcc-arm-none-eabi-4_8-2013q4/lib/gcc/arm-none-eabi/4.8.3/include"
 export SRC_DB_DIR="$base_dir/${project}_src_database"
 export SRC_SUBDIRS=""
 export CSCOPE_DB="$SRC_DB_DIR/cscope.out"
@@ -13,8 +11,12 @@ export IDE_SHELL_RC_FILE=$IDE_ENV_DIR/${APPLICATION}_${PLATFORM}_${BUILD_FLAVOR}
 export IDE_VIM_SESSION="$IDE_ENV_DIR/${APPLICATION}_${PLATFORM}.vim"
 export DEFAULT_OBJ_FLAVOR_SUBDIR="${PLATFORM}-obj-${BUILD_FLAVOR}"
 export BIN_FILE="$DEFAULT_OBJ_FLAVOR_SUBDIR/Applications/$APPLICATION/$APPLICATION.bin"
-export CROSS_COMPILE=$HOME/embsys/tools/gcc-arm-none-eabi-4_8-2013q4
+#export CROSS_COMPILE=$HOME/embsys/tools/gcc-arm-none-eabi-4_8-2013q4
+export CROSS_COMPILE=$HOME/embsys/tools/gcc-arm-none-eabi-4_8-2014q2
+export GCC_VERSION=4.8.4
 export TOOLCHAIN=$CROSS_COMPILE/bin/arm-none-eabi
+export EXTERNAL_INCLUDE_DIRS="$CROSS_COMPILE/arm-none-eabi/include
+			      $CROSS_COMPILE/lib/gcc/arm-none-eabi/$GCC_VERSION/include"
 export MAKEFILE_DIR="$SRC_TREE_DIR"
 
 function my_build_all

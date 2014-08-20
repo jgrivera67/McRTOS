@@ -198,6 +198,7 @@ hello_world_thread_thread_f(void *arg)
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
     bool mpu_region_added = false;
+    bool fpu_enabled = false;
 
     FDC_ASSERT(arg != NULL, arg, cpu_id);
 
@@ -210,15 +211,16 @@ hello_world_thread_thread_f(void *arg)
 
     mpu_region_added = true;
 
-    //???
     rtos_thread_enable_fpu();
+    fpu_enabled = true;
 
-    float x = 0.1;
+    float x = 0.1f;
 
-    x *= 0.2;
+    x += 0.2f;
+    x -= 0.2f;
+    x *= 0.2f;
+    x /= 0.2f;
 
-    //???rtos_thread_disable_fpu();
-    //???
     for ( ; ; ) {
 	CONSOLE_POS_PRINTF(24, 60 + thread_id * 20, "Hello thread %1d", arg);
 	rtos_thread_delay(500);
@@ -231,6 +233,10 @@ hello_world_thread_thread_f(void *arg)
         cpu_id, rtos_thread_self());
 
 exit:
+    if (fpu_enabled) {
+	rtos_thread_disable_fpu();
+    }
+
     if (mpu_region_added) {
 	rtos_mpu_remove_thread_data_region();
     }

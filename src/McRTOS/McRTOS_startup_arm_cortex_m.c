@@ -143,14 +143,14 @@ void
 cortex_m_save_fpu_context(struct fpu_context *fpu_context_p)
 {
     asm volatile (
-	"mov		r0, %[fpu_context_p]\t\n"
-	"vstmia.32	r0!, {s0-s15}\n\t"
-	"vstmia.32	r0!, {s16-s31}\n\t"
-	"vmrs		r1, fpscr\t\n"
-	"str		r1, [r0]\t\n"
+	"mov		r1, %[fpu_context_p]\t\n"
+	"vstmia.32	r1!, {s0-s15}\n\t"
+	"vstmia.32	r1!, {s16-s31}\n\t"
+	"vmrs		r2, fpscr\t\n"
+	"str		r2, [r1]\t\n"
 	:
 	: [fpu_context_p] "r" (fpu_context_p)
-	: "r0", "r1"
+	: "r1", "r2"
     );
 }
 
@@ -159,14 +159,14 @@ void
 cortex_m_restore_fpu_context(const struct fpu_context *fpu_context_p)
 {
     asm volatile (
-	"mov		r0, %[fpu_context_p]\t\n"
-	"vldmia.32	r0!, {s0-s15}\n\t"
-	"vldmia.32	r0!, {s16-s31}\n\t"
-	"ldr		r1, [r0]\t\n"
-	"vmsr		fpscr, r1\t\n"
+	"mov		r1, %[fpu_context_p]\t\n"
+	"vldmia.32	r1!, {s0-s15}\n\t"
+	"vldmia.32	r1!, {s16-s31}\n\t"
+	"ldr		r2, [r1]\t\n"
+	"vmsr		fpscr, r2\t\n"
 	:
 	: [fpu_context_p] "r" (fpu_context_p)
-	: "r0", "r1"
+	: "r1", "r2"
     );
 }
 
