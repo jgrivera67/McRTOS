@@ -74,7 +74,7 @@ static void rtos_parse_command_line(const char *cmd_line);
 static void McRTOS_display_help(void);
 static void McRTOS_display_stats(void);
 
-static const char g_McRTOS_version[] = "McRTOS v0.8 (" RTOS_BUILD_FLAVOR ")";
+static const char g_McRTOS_version[] = "McRTOS v0.9 (" RTOS_BUILD_FLAVOR ")";
 
 static const char g_McRTOS_build_timestamp[] = "built "__DATE__ " " __TIME__;
 
@@ -797,7 +797,7 @@ McRTOS_display_stats(void)
     console_printf("Longest interrupts disabled time: %u us\n",
          CPU_CLOCK_CYCLES_TO_MICROSECONDS(cpu_controller_p->cpc_longest_time_interrupts_disabled));
 
-    console_printf("FPU context switches: %u\n",
+    console_printf("FPU lazy context switches: %u\n",
         cpu_controller_p->cpc_fpu_context_switch_count);
 
     console_printf("Stop CPU in idle thread: %s\n\n",
