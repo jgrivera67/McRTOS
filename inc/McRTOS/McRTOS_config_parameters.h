@@ -183,13 +183,13 @@ C_ASSERT(RTOS_MAX_NUM_INTERRUPTS < SOC_NUM_INTERRUPT_CHANNELS);
  * Maximum time (microseconds) that interrupts are expected to be disabled
  */
 #ifdef DEBUG
-#   define RTOS_MAX_TIME_INTERRUPTS_DISABLED UINT32_C(100)
+#   define RTOS_MAX_TIME_INTERRUPTS_DISABLED UINT32_C(128)
 #   define RTOS_BUILD_FLAVOR   "debug"
 #elif defined(_RELIABILITY_CHECKS_)
-#   define RTOS_MAX_TIME_INTERRUPTS_DISABLED UINT32_C(50)
+#   define RTOS_MAX_TIME_INTERRUPTS_DISABLED UINT32_C(64)
 #   define RTOS_BUILD_FLAVOR   "reliability"
 #else
-#   define RTOS_MAX_TIME_INTERRUPTS_DISABLED UINT32_C(25)
+#   define RTOS_MAX_TIME_INTERRUPTS_DISABLED UINT32_C(32)
 #   define RTOS_BUILD_FLAVOR   "performance"
 #endif
 

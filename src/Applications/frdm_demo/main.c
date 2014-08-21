@@ -211,20 +211,24 @@ hello_world_thread_thread_f(void *arg)
 
     mpu_region_added = true;
 
-    rtos_thread_enable_fpu();
-    fpu_enabled = true;
+    if (thread_id == 1) {
+	rtos_thread_enable_fpu();
+	fpu_enabled = true;
+    }
 
     float x = 0.1f;
-
-    x += 0.2f;
-    x -= 0.2f;
-    x *= 0.2f;
-    x /= 0.2f;
 
     for ( ; ; ) {
 	CONSOLE_POS_PRINTF(24, 60 + thread_id * 20, "Hello thread %1d", arg);
 	rtos_thread_delay(500);
 	CONSOLE_POS_PRINTF(24, 60 + thread_id * 20, "              ");
+	if (thread_id == 1) {
+	    x += 0.2f;
+	    x -= 0.2f;
+	    x *= 0.2f;
+	    x /= 0.2f;
+	}
+
 	rtos_thread_delay(thread_id * 1000);
     }
 

@@ -39,6 +39,7 @@ enum system_thread_priorities
             .cpc_active_external_interrupts = { 0 },                    \
             .cpc_nested_interrupts_count = 0,                           \
             .cpc_thread_scheduler_calls = 0,                            \
+            .cpc_fpu_context_switch_count = 0,                          \
             .cpc_accumulated_thread_scheduler_overhead = 0,             \
             .cpc_interrupts_disabled_being_measured_count = 0,          \
             .cpc_measure_interrupts_disabled_time = false,		\
@@ -796,17 +797,18 @@ McRTOS_display_stats(void)
     console_printf("Longest interrupts disabled time: %u us\n",
          CPU_CLOCK_CYCLES_TO_MICROSECONDS(cpu_controller_p->cpc_longest_time_interrupts_disabled));
 
+    console_printf("FPU context switches: %u\n",
+        cpu_controller_p->cpc_fpu_context_switch_count);
+
     console_printf("Stop CPU in idle thread: %s\n\n",
         g_McRTOS_p->rts_stop_idle_cpu ? "On" : "Off");
-
 
     struct glist_node *context_node_p;
 
     console_printf(
-	"Context    Name                           Priority Switched-out Preempted  CPU        CPU under 1ms  Tstamp last  Switched-out\n"
-	"address                                            count        count      usage (ms) usage (cycles) switched-out history\n"
-	"========== ============================== ======== ============ ========== ========== ============== ============ ============\n");
-
+	"Context    Name                           Priority Switched-out Preempted  CPU        CPU under 1ms  Tstamp last  FPU     Switched-out\n"
+	"address                                            count        count      usage (ms) usage (cycles) switched-out enabled history     \n"
+	"========== ============================== ======== ============ ========== ========== ============== ============ ======= ============\n");
 
     GLIST_FOR_EACH_NODE(
         context_node_p,
@@ -818,6 +820,7 @@ McRTOS_display_stats(void)
 
         uint8_t context_type_symbol = '?';
         uint32_t priority = UINT32_MAX;
+	char *fpu_enabled = "no";
 
         switch (context_p->ctx_context_type)
         {
@@ -829,6 +832,9 @@ McRTOS_display_stats(void)
         case RTOS_THREAD_CONTEXT:
             context_type_symbol = 'T';
             priority =  RTOS_EXECUTION_CONTEXT_GET_THREAD(context_p)->thr_current_priority;
+	    if (RTOS_EXECUTION_CONTEXT_GET_THREAD(context_p)->thr_fpu_enable_count != 0) {
+		    fpu_enabled = "yes";
+	    }
             break;
 
         case RTOS_INTERRUPT_CONTEXT:
@@ -841,7 +847,7 @@ McRTOS_display_stats(void)
         }
 
         console_printf(
-	    "%#8p %30s %c%7u %12u %10u %10u %14u %12u %#x%x\n",
+	    "%#8p %30s %c%7u %12u %10u %10u %14u %12u %7s %#x%x\n",
             context_p,
             context_p->ctx_name_p,
             context_type_symbol,
@@ -851,6 +857,7 @@ McRTOS_display_stats(void)
 	    context_p->ctx_accumulated_cpu_usage_milliseconds,
 	    context_p->ctx_accumulated_cpu_usage_cycles,
             context_p->ctx_last_switched_out_time_stamp_in_ticks,
+	    fpu_enabled,
             context_p->ctx_switched_out_reason_history,
             context_p->ctx_last_switched_out_reason
         );

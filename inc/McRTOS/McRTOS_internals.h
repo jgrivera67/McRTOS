@@ -300,6 +300,11 @@ struct rtos_cpu_controller
     uint32_t cpc_thread_scheduler_calls;
 
     /**
+     * Total number of FPU context switches
+     */
+    uint32_t cpc_fpu_context_switch_count;
+
+    /**
      * Accumulated overhead of the thread scheduler in CPU clock cycles
      */
     cpu_clock_cycles_t cpc_accumulated_thread_scheduler_overhead;

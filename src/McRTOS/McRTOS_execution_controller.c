@@ -314,6 +314,7 @@ void rtos_thread_scheduler(
                 FDC_ASSERT(last_fpu_thread_p->thr_signature == RTOS_THREAD_SIGNATURE,
                            last_fpu_thread_p->thr_signature, last_fpu_thread_p);
 
+		cpu_controller_p->cpc_fpu_context_switch_count ++;
                 cortex_m_save_fpu_context(&last_fpu_thread_p->thr_saved_fpu_context);
             }
 
