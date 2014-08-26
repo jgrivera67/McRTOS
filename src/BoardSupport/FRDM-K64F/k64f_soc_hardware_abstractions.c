@@ -77,62 +77,6 @@ C_ASSERT(
  */
 #define FIRST_MPU_THREAD_DATA_REGION   (RTOS_NUM_GLOBAL_MPU_REGIONS + 1)
 
-/**
- * Const fields of a MPU device
- */
-struct mpu_device {
-#   define MPU_DEVICE_SIGNATURE  GEN_SIGNATURE('M', 'P', 'U', ' ')
-    uint32_t signature;
-    volatile MPU_Type *mmio_regs_p;
-    struct mpu_device_var *var_p;
-};
-
-struct mpu_device_var {
-    bool initialized;
-    uint8_t num_regions;
-};
-
-/**
- * Const fields of a UART device (to be placed in flash)
- */
-struct uart_device {
-#   define UART_DEVICE_SIGNATURE  GEN_SIGNATURE('U', 'A', 'R', 'T')
-    uint32_t urt_signature;
-    const char *urt_name;
-    struct uart_device_var *urt_var_p;
-    UART_MemMapPtr urt_mmio_uart_p;
-    volatile uint32_t *urt_mmio_tx_port_pcr_p;
-    volatile uint32_t *urt_mmio_rx_port_pcr_p;
-    uint32_t urt_mmio_pin_mux_selector_mask;
-    volatile uint32_t *urt_mmio_clock_gate_reg_p;
-    uint32_t urt_mmio_clock_gate_mask;
-    uint32_t urt_source_clock_freq_in_hz;
-
-    struct rtos_interrupt_registration_params urt_rtos_interrupt_rx_tx_params;
-    struct rtos_interrupt **urt_rtos_interrupt_rx_tx_pp;
-    struct rtos_interrupt_registration_params urt_rtos_interrupt_err_params;
-    struct rtos_interrupt **urt_rtos_interrupt_err_pp;
-    const char *urt_transmit_queue_name_p;
-    const char *urt_receive_queue_name_p;
-    uint8_t *urt_transmit_queue_storage_p;
-    uint8_t *urt_receive_queue_storage_p;
-};
-
-/**
- * Non-const fields of a UART device (to be placed in SRAM)
- */
-struct uart_device_var {
-    bool urt_initialized;
-    uint32_t urt_received_bytes_dropped;
-    uint32_t urt_transmit_bytes_dropped;
-    struct rtos_circular_buffer urt_transmit_queue;
-    struct rtos_circular_buffer urt_receive_queue;
-    uint8_t urt_tx_fifo_size;
-    uint8_t urt_rx_fifo_size;
-    bool urt_fifos_enabled;
-};
-
-
 static cpu_reset_cause_t find_reset_cause(void);
 
 #ifdef _CPU_CYCLES_MEASURE_
@@ -505,8 +449,8 @@ const struct i2c_device g_i2c_devices[] = {
         .i2c_mmio_scl_port_pcr_p = &PORTE_PCR24,
         .i2c_mmio_sda_port_pcr_p = &PORTE_PCR25,
         .i2c_clock_gate_mask = SIM_SCGC4_I2C0_MASK,
-	/* Pin Mux Control: Alternative 5, Open Drain Enable */
-        .i2c_pin_mux_selector_mask = PORT_PCR_MUX(0x5) | PORT_PCR_ODE_MASK,
+	/* Pin Mux Control: Alternative 5 */
+        .i2c_pin_mux_selector_mask = PORT_PCR_MUX(0x5),
         //???.i2c_icr_value = 0x1f, /* 100KHz for bus clock of 24 MHz */
         .i2c_icr_value = 0x2d, /* 100KHz for bus clock of 60 MHz */
         .i2c_rtos_interrupt_params = {
@@ -529,13 +473,43 @@ const struct i2c_device g_i2c_devices[] = {
         .i2c_mmio_scl_port_pcr_p = &PORTC_PCR10,
         .i2c_mmio_sda_port_pcr_p = &PORTC_PCR11,
         .i2c_clock_gate_mask = SIM_SCGC4_I2C1_MASK,
-	/* Pin Mux Control: Alternative 2, Open Drain Enable */
-        .i2c_pin_mux_selector_mask = PORT_PCR_MUX(0x2) | PORT_PCR_ODE_MASK,
+	/* Pin Mux Control: Alternative 2 */
+        .i2c_pin_mux_selector_mask = PORT_PCR_MUX(0x2),
         .i2c_icr_value = 0x2d, /* 100KHz for bus clock of 60 MHz */
     }
 };
 
 C_ASSERT(ARRAY_SIZE(g_i2c_devices) == ARRAY_SIZE(g_i2c_devices_var));
+
+static struct enet_device_var g_enet_var = {
+    .initialized = false,
+};
+
+static const struct enet_device g_enet_device = {
+    .signature = ENET_DEVICE_SIGNATURE,
+    .var_p = &g_enet_var,
+    .mmio_registers_p = (volatile ENET_Type *)ENET_BASE,
+    .mmio_rmii_mdio_port_pcr_p = &PORTB_PCR0,
+    .mmio_rmii_mdc_port_pcr_p = &PORTB_PCR1,
+    .mmio_rmii_rxd0_port_pcr_p = &PORTA_PCR13,
+    .mmio_rmii_rxd1_port_pcr_p = &PORTA_PCR12,
+    .mmio_rmii_crs_dv_port_pcr_p = &PORTA_PCR14,
+    .mmio_rmii_rxer_port_pcr_p = &PORTA_PCR5,
+    .mmio_rmii_txen_port_pcr_p = &PORTA_PCR15,
+    .mmio_rmii_txd0_port_pcr_p = &PORTA_PCR16,
+    .mmio_rmii_txd1_port_pcr_p = &PORTA_PCR17,
+    .mmio_mii_txer_port_pcr_p = &PORTA_PCR28,
+    .mmio_enet_1588_tmr_port_pcr_p = {
+	[0] = &PORTC_PCR16,
+	[1] = &PORTC_PCR17,
+	[2] = &PORTC_PCR18,
+	[3] = &PORTC_PCR19,
+    },
+
+    .clock_gate_mask = SIM_SCGC2_ENET_MASK,
+    /* Pin Mux Control: Alternative 4 */
+    .pin_mux_selector_mask = PORT_PCR_MUX(0x4),
+};
 
 /**
  * Hardware Micro trace buffer (MTB)
@@ -1102,6 +1076,7 @@ soc_hardware_init(void)
 		 g_console_serial_port_p->urt_var_p->urt_rx_fifo_size);
 
     i2c_init(&g_i2c_devices[0]);
+    enet_init(&g_enet_device);
     return reset_cause;
 }
 
@@ -3084,13 +3059,14 @@ i2c_init(
 
     /*
      * Configure GPIO pins for I2C functions:
+     * - Set "Open Drain Enabled" for both the SCL and SDA pins
      */
     write_32bit_mmio_register(
         i2c_device_p->i2c_mmio_scl_port_pcr_p,
-        i2c_device_p->i2c_pin_mux_selector_mask);
+        i2c_device_p->i2c_pin_mux_selector_mask | PORT_PCR_ODE_MASK);
     write_32bit_mmio_register(
         i2c_device_p->i2c_mmio_sda_port_pcr_p,
-        i2c_device_p->i2c_pin_mux_selector_mask);
+        i2c_device_p->i2c_pin_mux_selector_mask | PORT_PCR_ODE_MASK);
 
     /*
      * Set baud rate:
@@ -3278,6 +3254,87 @@ k64f_i2c_interrupt_e_handler(
 
     i2c_var_p->i2c_byte_transfer_completed = true;
     rtos_k_condvar_signal(&i2c_var_p->i2c_condvar);
+}
+
+
+void
+enet_init(const struct enet_device *enet_device_p)
+{
+    uint32_t reg_value;
+
+    FDC_ASSERT(
+        enet_device_p->signature == ENET_DEVICE_SIGNATURE,
+        enet_device_p->signature, enet_device_p);
+
+    struct enet_device_var *const enet_var_p = enet_device_p->var_p;
+    //volatile ENET_Type *enet_mmio_registers_p = enet_device_p->mmio_registers_p;
+
+    FDC_ASSERT(!enet_var_p->initialized, enet_device_p, enet_var_p);
+    FDC_ASSERT_CPU_INTERRUPTS_DISABLED();
+
+    /*
+     * Enable the Clock to the ENET Module
+     */
+    reg_value = read_32bit_mmio_register(&SIM_SCGC2);
+    reg_value |= enet_device_p->clock_gate_mask;
+    write_32bit_mmio_register(&SIM_SCGC2, reg_value);
+
+    /*
+     * Configure GPIO pins for Ethernet PHY functions:
+     * - Set "open drain enabled", "pull-up resistor enabled" and
+     *   "internal pull resistor enabled" for rmii_mdio pin
+     */
+    write_32bit_mmio_register(
+        enet_device_p->mmio_rmii_mdio_port_pcr_p,
+        enet_device_p->pin_mux_selector_mask |
+	PORT_PCR_ODE_MASK |
+	PORT_PCR_PE_MASK |
+	PORT_PCR_PS_MASK);
+
+    write_32bit_mmio_register(
+        enet_device_p->mmio_rmii_mdc_port_pcr_p,
+        enet_device_p->pin_mux_selector_mask);
+
+    write_32bit_mmio_register(
+        enet_device_p->mmio_rmii_rxd0_port_pcr_p,
+        enet_device_p->pin_mux_selector_mask);
+
+    write_32bit_mmio_register(
+        enet_device_p->mmio_rmii_rxd1_port_pcr_p,
+        enet_device_p->pin_mux_selector_mask);
+
+    write_32bit_mmio_register(
+        enet_device_p->mmio_rmii_crs_dv_port_pcr_p,
+        enet_device_p->pin_mux_selector_mask);
+
+    write_32bit_mmio_register(
+        enet_device_p->mmio_rmii_rxer_port_pcr_p,
+        enet_device_p->pin_mux_selector_mask);
+
+    write_32bit_mmio_register(
+        enet_device_p->mmio_rmii_txen_port_pcr_p,
+        enet_device_p->pin_mux_selector_mask);
+
+    write_32bit_mmio_register(
+        enet_device_p->mmio_rmii_txd0_port_pcr_p,
+        enet_device_p->pin_mux_selector_mask);
+
+    write_32bit_mmio_register(
+        enet_device_p->mmio_rmii_txd1_port_pcr_p,
+        enet_device_p->pin_mux_selector_mask);
+
+    write_32bit_mmio_register(
+        enet_device_p->mmio_mii_txer_port_pcr_p,
+        enet_device_p->pin_mux_selector_mask);
+
+    for (uint_fast8_t i = 0; i < ARRAY_SIZE(enet_device_p->mmio_enet_1588_tmr_port_pcr_p);
+	 ++ i) {
+	write_32bit_mmio_register(
+	    enet_device_p->mmio_enet_1588_tmr_port_pcr_p[i],
+	    enet_device_p->pin_mux_selector_mask);
+    }
+
+    enet_var_p->initialized = true;
 }
 
 

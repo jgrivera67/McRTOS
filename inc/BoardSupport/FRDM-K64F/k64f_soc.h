@@ -15,6 +15,64 @@
 struct rtos_interrupt;  /* opaque type */
 
 /**
+ * Const fields of a MPU device
+ */
+struct mpu_device {
+#   define MPU_DEVICE_SIGNATURE  GEN_SIGNATURE('M', 'P', 'U', ' ')
+    uint32_t signature;
+    volatile MPU_Type *mmio_regs_p;
+    struct mpu_device_var *var_p;
+};
+
+/**
+ * Non-const fields of a MPU device
+ */
+struct mpu_device_var {
+    bool initialized;
+    uint8_t num_regions;
+};
+
+/**
+ * Const fields of a UART device (to be placed in flash)
+ */
+struct uart_device {
+#   define UART_DEVICE_SIGNATURE  GEN_SIGNATURE('U', 'A', 'R', 'T')
+    uint32_t urt_signature;
+    const char *urt_name;
+    struct uart_device_var *urt_var_p;
+    UART_MemMapPtr urt_mmio_uart_p;
+    volatile uint32_t *urt_mmio_tx_port_pcr_p;
+    volatile uint32_t *urt_mmio_rx_port_pcr_p;
+    uint32_t urt_mmio_pin_mux_selector_mask;
+    volatile uint32_t *urt_mmio_clock_gate_reg_p;
+    uint32_t urt_mmio_clock_gate_mask;
+    uint32_t urt_source_clock_freq_in_hz;
+
+    struct rtos_interrupt_registration_params urt_rtos_interrupt_rx_tx_params;
+    struct rtos_interrupt **urt_rtos_interrupt_rx_tx_pp;
+    struct rtos_interrupt_registration_params urt_rtos_interrupt_err_params;
+    struct rtos_interrupt **urt_rtos_interrupt_err_pp;
+    const char *urt_transmit_queue_name_p;
+    const char *urt_receive_queue_name_p;
+    uint8_t *urt_transmit_queue_storage_p;
+    uint8_t *urt_receive_queue_storage_p;
+};
+
+/**
+ * Non-const fields of a UART device (to be placed in SRAM)
+ */
+struct uart_device_var {
+    bool urt_initialized;
+    uint32_t urt_received_bytes_dropped;
+    uint32_t urt_transmit_bytes_dropped;
+    struct rtos_circular_buffer urt_transmit_queue;
+    struct rtos_circular_buffer urt_receive_queue;
+    uint8_t urt_tx_fifo_size;
+    uint8_t urt_rx_fifo_size;
+    bool urt_fifos_enabled;
+};
+
+/**
  * Const fields of a K64F FTM device (to be placed in flash)
  */
 struct ftm_device {
@@ -207,6 +265,36 @@ struct i2c_device_var {
      * Condvar to signal a thread waiting for an I2C byte transfer
      */
     struct rtos_condvar i2c_condvar;
+};
+
+/**
+ * Const fields of an Ethernet MAC device (to be placed in flash)
+ */
+struct enet_device {
+#   define ENET_DEVICE_SIGNATURE  GEN_SIGNATURE('E', 'N', 'E', 'T')
+    uint32_t signature;
+    struct enet_device_var *var_p;
+    volatile ENET_Type *mmio_registers_p;
+    volatile uint32_t *mmio_rmii_mdio_port_pcr_p;
+    volatile uint32_t *mmio_rmii_mdc_port_pcr_p;
+    volatile uint32_t *mmio_rmii_rxd0_port_pcr_p;
+    volatile uint32_t *mmio_rmii_rxd1_port_pcr_p;
+    volatile uint32_t *mmio_rmii_crs_dv_port_pcr_p;
+    volatile uint32_t *mmio_rmii_rxer_port_pcr_p;
+    volatile uint32_t *mmio_rmii_txen_port_pcr_p;
+    volatile uint32_t *mmio_rmii_txd0_port_pcr_p;
+    volatile uint32_t *mmio_rmii_txd1_port_pcr_p;
+    volatile uint32_t *mmio_mii_txer_port_pcr_p;
+    volatile uint32_t *mmio_enet_1588_tmr_port_pcr_p[4];
+    uint32_t clock_gate_mask;
+    uint32_t pin_mux_selector_mask;
+};
+
+/**
+ * Non-const fields of an Ethernet MAC device (to be placed in SRAM)
+ */
+struct enet_device_var {
+    bool initialized;
 };
 
 

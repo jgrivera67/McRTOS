@@ -236,6 +236,7 @@ struct ssp_controller;
 struct buttons_device;
 struct adc_device;
 struct i2c_device;
+struct enet_device;
 
 typedef void app_hardware_init_t(void);
 typedef void app_hardware_stop_t(void);
@@ -445,6 +446,8 @@ void i2c_write(
     const struct i2c_device *i2c_device_p,
     uint8_t i2c_slave_addr, uint8_t i2c_slave_reg_addr,
     uint8_t *buffer_p, size_t num_bytes);
+
+void enet_init(const struct enet_device *enet_device_p);
 
 void wait_for_interrupts(void);
 
