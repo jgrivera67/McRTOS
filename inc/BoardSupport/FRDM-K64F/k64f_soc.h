@@ -41,9 +41,8 @@ struct uart_device {
     const char *urt_name;
     struct uart_device_var *urt_var_p;
     UART_MemMapPtr urt_mmio_uart_p;
-    volatile uint32_t *urt_mmio_tx_port_pcr_p;
-    volatile uint32_t *urt_mmio_rx_port_pcr_p;
-    uint32_t urt_mmio_pin_mux_selector_mask;
+    struct pin_info urt_tx_pin;
+    struct pin_info urt_rx_pin;
     volatile uint32_t *urt_mmio_clock_gate_reg_p;
     uint32_t urt_mmio_clock_gate_mask;
     uint32_t urt_source_clock_freq_in_hz;
@@ -237,10 +236,9 @@ struct i2c_device {
     char *i2c_name;
     struct i2c_device_var *i2c_var_p;
     I2C_MemMapPtr i2c_mmio_registers_p;
-    volatile uint32_t *i2c_mmio_scl_port_pcr_p;
-    volatile uint32_t *i2c_mmio_sda_port_pcr_p;
+    struct pin_info i2c_scl_pin;
+    struct pin_info i2c_sda_pin;
     uint32_t i2c_clock_gate_mask;
-    uint32_t i2c_pin_mux_selector_mask;
     uint8_t i2c_icr_value;
     struct rtos_interrupt_registration_params i2c_rtos_interrupt_params;
     struct rtos_interrupt **i2c_rtos_interrupt_pp;
@@ -275,19 +273,18 @@ struct enet_device {
     uint32_t signature;
     struct enet_device_var *var_p;
     volatile ENET_Type *mmio_registers_p;
-    volatile uint32_t *mmio_rmii_mdio_port_pcr_p;
-    volatile uint32_t *mmio_rmii_mdc_port_pcr_p;
-    volatile uint32_t *mmio_rmii_rxd0_port_pcr_p;
-    volatile uint32_t *mmio_rmii_rxd1_port_pcr_p;
-    volatile uint32_t *mmio_rmii_crs_dv_port_pcr_p;
-    volatile uint32_t *mmio_rmii_rxer_port_pcr_p;
-    volatile uint32_t *mmio_rmii_txen_port_pcr_p;
-    volatile uint32_t *mmio_rmii_txd0_port_pcr_p;
-    volatile uint32_t *mmio_rmii_txd1_port_pcr_p;
-    volatile uint32_t *mmio_mii_txer_port_pcr_p;
-    volatile uint32_t *mmio_enet_1588_tmr_port_pcr_p[4];
+    struct pin_info rmii_mdio_pin;
+    struct pin_info rmii_mdc_pin;
+    struct pin_info rmii_rxd0_pin;
+    struct pin_info rmii_rxd1_pin;
+    struct pin_info rmii_crs_dv_pin;
+    struct pin_info rmii_rxer_pin;
+    struct pin_info rmii_txen_pin;
+    struct pin_info rmii_txd0_pin;
+    struct pin_info rmii_txd1_pin;
+    struct pin_info mii_txer_pin;
+    struct pin_info enet_1588_tmr_pins[4];
     uint32_t clock_gate_mask;
-    uint32_t pin_mux_selector_mask;
 };
 
 /**

@@ -177,9 +177,10 @@ C_ASSERT(sizeof(adc_result_t) * 8 >= ADC_RESOLUTION);
  * Pin configuration parameters
  */
 struct pin_config_info {
-    PORT_MemMapPtr pin_port_base_p;
-    GPIO_MemMapPtr pin_gpio_base_p;
-    uint32_t pin_pcr_value;
+    enum pin_ports pin_port;
+    pin_index_t pin_index;
+    pin_function_t pin_function;
+    uint32_t pin_flags;
     uint32_t pin_bit_mask;
     uint8_t pin_bit_index;
     uint8_t pin_is_active_high; /*  false - low, true - high */

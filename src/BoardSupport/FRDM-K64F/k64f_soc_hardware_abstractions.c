@@ -310,6 +310,42 @@ static const NV_Type nv_cfmconfig __attribute__ ((section(".cfmconfig"))) = {
     .FDPROT = 0xff
 };
 
+/**
+ * Configuration registers for all pin ports
+ */
+static const struct pin_config_registers g_pin_config_registers[NUM_PIN_PORTS] = {
+    [PIN_PORT_A] = {
+	    .pin_port_regs_p = PORTA,
+	    .pin_gpio_regs_p = PTA,
+    },
+
+    [PIN_PORT_B] = {
+	    .pin_port_regs_p = PORTB,
+	    .pin_gpio_regs_p = PTB,
+    },
+
+    [PIN_PORT_C] = {
+	    .pin_port_regs_p = PORTC,
+	    .pin_gpio_regs_p = PTC,
+    },
+
+    [PIN_PORT_D] = {
+	    .pin_port_regs_p = PORTD,
+	    .pin_gpio_regs_p = PTD,
+    },
+
+    [PIN_PORT_E] = {
+	    .pin_port_regs_p = PORTE,
+	    .pin_gpio_regs_p = PTE,
+    },
+};
+
+/**
+ * Matrix to keep track of what pins are currently in use. If a pin is not in
+ * use (set_pin_function() has not been called for it), its entry is NULL.
+ */
+static const struct pin_info *g_pins_in_use_map[NUM_PIN_PORTS][NUM_PINS_PER_PORT];
+
 static struct mpu_device_var g_mpu_var = {
     .initialized = false,
     .num_regions = 0,
@@ -354,7 +390,7 @@ static uint8_t uart0_transmit_queue_storage[UART_TRANSMIT_QUEUE_SIZE_IN_BYTES];
 static uint8_t uart0_receive_queue_storage[UART_RECEIVE_QUEUE_SIZE_IN_BYTES];
 
 /**
- * Global array of const structures for UART devices for the KL25Z SoC
+ * Global array of const structures for UART devices for the K64F SoC
  * (allocated in flash space)
  */
 static const struct uart_device g_uart_devices[] =
@@ -364,9 +400,8 @@ static const struct uart_device g_uart_devices[] =
 	.urt_name = "UART0",
         .urt_var_p = &g_uart_devices_var[0],
         .urt_mmio_uart_p = UART0_BASE_PTR,
-        .urt_mmio_tx_port_pcr_p = &PORTB_PCR16,
-        .urt_mmio_rx_port_pcr_p = &PORTB_PCR17,
-        .urt_mmio_pin_mux_selector_mask = PORT_PCR_MUX(0x3),
+        .urt_tx_pin = PIN_INITIALIZER(PIN_PORT_B, 16, PIN_FUNCTION_ALT3),
+        .urt_rx_pin = PIN_INITIALIZER(PIN_PORT_B, 17, PIN_FUNCTION_ALT3),
         .urt_mmio_clock_gate_reg_p = &SIM_SCGC4,
         .urt_mmio_clock_gate_mask = SIM_SCGC4_UART0_MASK,
 	.urt_source_clock_freq_in_hz = CPU_CLOCK_FREQ_IN_HZ,
@@ -403,9 +438,8 @@ static const struct uart_device g_uart_devices[] =
 	.urt_name = "UART4",
         .urt_var_p = &g_uart_devices_var[4],
         .urt_mmio_uart_p = UART2_BASE_PTR,
-        .urt_mmio_tx_port_pcr_p = &PORTC_PCR14,
-        .urt_mmio_rx_port_pcr_p = &PORTC_PCR15,
-        .urt_mmio_pin_mux_selector_mask = PORT_PCR_MUX(0x3),
+        .urt_tx_pin = PIN_INITIALIZER(PIN_PORT_C, 14, PIN_FUNCTION_ALT3),
+        .urt_rx_pin = PIN_INITIALIZER(PIN_PORT_C, 15, PIN_FUNCTION_ALT3),
         .urt_mmio_clock_gate_reg_p = &SIM_SCGC1,
         .urt_mmio_clock_gate_mask = SIM_SCGC1_UART4_MASK,
 	.urt_source_clock_freq_in_hz = CPU_CLOCK_FREQ_IN_HZ / 2,
@@ -446,12 +480,9 @@ const struct i2c_device g_i2c_devices[] = {
 	.i2c_name = "I2C0",
         .i2c_var_p = &g_i2c_devices_var[0],
         .i2c_mmio_registers_p = I2C0_BASE_PTR,
-        .i2c_mmio_scl_port_pcr_p = &PORTE_PCR24,
-        .i2c_mmio_sda_port_pcr_p = &PORTE_PCR25,
+        .i2c_scl_pin = PIN_INITIALIZER(PIN_PORT_E, 24, PIN_FUNCTION_ALT5),
+        .i2c_sda_pin = PIN_INITIALIZER(PIN_PORT_E, 25, PIN_FUNCTION_ALT5),
         .i2c_clock_gate_mask = SIM_SCGC4_I2C0_MASK,
-	/* Pin Mux Control: Alternative 5 */
-        .i2c_pin_mux_selector_mask = PORT_PCR_MUX(0x5),
-        //???.i2c_icr_value = 0x1f, /* 100KHz for bus clock of 24 MHz */
         .i2c_icr_value = 0x2d, /* 100KHz for bus clock of 60 MHz */
         .i2c_rtos_interrupt_params = {
             .irp_name_p = "I2C0 Interrupt",
@@ -470,11 +501,9 @@ const struct i2c_device g_i2c_devices[] = {
 	.i2c_name = "I2C1",
         .i2c_var_p = &g_i2c_devices_var[1],
         .i2c_mmio_registers_p = I2C1_BASE_PTR,
-        .i2c_mmio_scl_port_pcr_p = &PORTC_PCR10,
-        .i2c_mmio_sda_port_pcr_p = &PORTC_PCR11,
+        .i2c_scl_pin = PIN_INITIALIZER(PIN_PORT_C, 10, PIN_FUNCTION_ALT2),
+        .i2c_sda_pin = PIN_INITIALIZER(PIN_PORT_C, 11, PIN_FUNCTION_ALT2),
         .i2c_clock_gate_mask = SIM_SCGC4_I2C1_MASK,
-	/* Pin Mux Control: Alternative 2 */
-        .i2c_pin_mux_selector_mask = PORT_PCR_MUX(0x2),
         .i2c_icr_value = 0x2d, /* 100KHz for bus clock of 60 MHz */
     }
 };
@@ -489,26 +518,24 @@ static const struct enet_device g_enet_device = {
     .signature = ENET_DEVICE_SIGNATURE,
     .var_p = &g_enet_var,
     .mmio_registers_p = (volatile ENET_Type *)ENET_BASE,
-    .mmio_rmii_mdio_port_pcr_p = &PORTB_PCR0,
-    .mmio_rmii_mdc_port_pcr_p = &PORTB_PCR1,
-    .mmio_rmii_rxd0_port_pcr_p = &PORTA_PCR13,
-    .mmio_rmii_rxd1_port_pcr_p = &PORTA_PCR12,
-    .mmio_rmii_crs_dv_port_pcr_p = &PORTA_PCR14,
-    .mmio_rmii_rxer_port_pcr_p = &PORTA_PCR5,
-    .mmio_rmii_txen_port_pcr_p = &PORTA_PCR15,
-    .mmio_rmii_txd0_port_pcr_p = &PORTA_PCR16,
-    .mmio_rmii_txd1_port_pcr_p = &PORTA_PCR17,
-    .mmio_mii_txer_port_pcr_p = &PORTA_PCR28,
-    .mmio_enet_1588_tmr_port_pcr_p = {
-	[0] = &PORTC_PCR16,
-	[1] = &PORTC_PCR17,
-	[2] = &PORTC_PCR18,
-	[3] = &PORTC_PCR19,
+    .rmii_mdio_pin = PIN_INITIALIZER(PIN_PORT_B, 0, PIN_FUNCTION_ALT4),
+    .rmii_mdc_pin = PIN_INITIALIZER(PIN_PORT_B, 1, PIN_FUNCTION_ALT4),
+    .rmii_rxd0_pin = PIN_INITIALIZER(PIN_PORT_A, 13, PIN_FUNCTION_ALT4),
+    .rmii_rxd1_pin = PIN_INITIALIZER(PIN_PORT_A, 12, PIN_FUNCTION_ALT4),
+    .rmii_crs_dv_pin = PIN_INITIALIZER(PIN_PORT_A, 14, PIN_FUNCTION_ALT4),
+    .rmii_rxer_pin = PIN_INITIALIZER(PIN_PORT_A, 5, PIN_FUNCTION_ALT4),
+    .rmii_txen_pin = PIN_INITIALIZER(PIN_PORT_A, 15, PIN_FUNCTION_ALT4),
+    .rmii_txd0_pin = PIN_INITIALIZER(PIN_PORT_A, 16, PIN_FUNCTION_ALT4),
+    .rmii_txd1_pin = PIN_INITIALIZER(PIN_PORT_A, 17, PIN_FUNCTION_ALT4),
+    .mii_txer_pin = PIN_INITIALIZER(PIN_PORT_A, 28, PIN_FUNCTION_ALT4),
+    .enet_1588_tmr_pins = {
+	[0] = PIN_INITIALIZER(PIN_PORT_C, 16, PIN_FUNCTION_ALT4),
+	[1] = PIN_INITIALIZER(PIN_PORT_C, 17, PIN_FUNCTION_ALT4),
+	[2] = PIN_INITIALIZER(PIN_PORT_C, 18, PIN_FUNCTION_ALT4),
+	[3] = PIN_INITIALIZER(PIN_PORT_C, 19, PIN_FUNCTION_ALT4),
     },
 
     .clock_gate_mask = SIM_SCGC2_ENET_MASK,
-    /* Pin Mux Control: Alternative 4 */
-    .pin_mux_selector_mask = PORT_PCR_MUX(0x4),
 };
 
 /**
@@ -1349,110 +1376,130 @@ get_cpu_clock_cycles(void)
 }
 #endif /* _CPU_CYCLES_MEASURE_ */
 
+void set_pin_function(const struct pin_info *pin_p, uint32_t pin_flags)
+{
+    const struct pin_info **pins_in_use_entry_p =
+	&g_pins_in_use_map[pin_p->pin_port][pin_p->pin_index];
+
+    FDC_ASSERT_CPU_INTERRUPTS_DISABLED();
+    if (*pins_in_use_entry_p != NULL) {
+	fdc_error_t fdc_error =
+            CAPTURE_FDC_ERROR("Pin already allocated", pin_p->pin_port,
+			      pin_p->pin_index);
+
+        fatal_error_handler(fdc_error);
+    }
+
+    volatile PORT_Type *port_regs_p =
+	g_pin_config_registers[pin_p->pin_port].pin_port_regs_p;
+
+    write_32bit_mmio_register(
+        &port_regs_p->PCR[pin_p->pin_index],
+        PORT_PCR_MUX(pin_p->pin_function) | pin_flags);
+
+    *pins_in_use_entry_p = pin_p;
+}
+
 
 /**
- * It configures a GPIO pin of the KL25 SoC
+ * It configures a GPIO pin of the K64F SoC
  */
 void
-configure_pin(const struct pin_config_info *pin_info_p, bool is_output)
+configure_gpio_pin(const struct gpio_pin *gpio_pin_p, uint32_t pin_flags,
+		   bool is_output)
 {
     uint32_t reg_value;
 
-    write_32bit_mmio_register(
-        &PORT_PCR_REG(pin_info_p->pin_port_base_p, pin_info_p->pin_bit_index),
-        pin_info_p->pin_pcr_value);
+    set_pin_function(&gpio_pin_p->pin_info, pin_flags);
 
-    if (is_output) {
-        reg_value = read_32bit_mmio_register(
-                        &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p));
-        reg_value |= pin_info_p->pin_bit_mask;
-        write_32bit_mmio_register(
-            &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p), reg_value);
-    }
-    else
-    {
-        reg_value = read_32bit_mmio_register(
-                        &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p));
-        reg_value &= ~pin_info_p->pin_bit_mask;
-        write_32bit_mmio_register(
-            &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p), reg_value);
+    volatile GPIO_Type *gpio_regs_p =
+	g_pin_config_registers[gpio_pin_p->pin_info.pin_port].pin_gpio_regs_p;
+
+   if (is_output) {
+        reg_value = read_32bit_mmio_register(&gpio_regs_p->PDDR);
+        reg_value |= gpio_pin_p->pin_bit_mask;
+        write_32bit_mmio_register(&gpio_regs_p->PDDR, reg_value);
+    } else {
+        reg_value = read_32bit_mmio_register(&gpio_regs_p->PDDR);
+        reg_value &= ~gpio_pin_p->pin_bit_mask;
+        write_32bit_mmio_register(&gpio_regs_p->PDDR, reg_value);
     }
 }
 
 
 void
-activate_output_pin(const struct pin_config_info *pin_info_p)
+activate_output_pin(const struct gpio_pin *gpio_pin_p)
 {
+    volatile GPIO_Type *gpio_regs_p =
+	g_pin_config_registers[gpio_pin_p->pin_info.pin_port].pin_gpio_regs_p;
+
 #   ifdef DEBUG
-    uint32_t reg_value = read_32bit_mmio_register(
-                            &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p));
+    uint32_t reg_value = read_32bit_mmio_register(&gpio_regs_p->PDDR);
 
     FDC_ASSERT(
-        reg_value & pin_info_p->pin_bit_mask,
-        pin_info_p, reg_value);
+        reg_value & gpio_pin_p->pin_bit_mask,
+        gpio_pin_p, reg_value);
 #   endif
 
-    if (pin_info_p->pin_is_active_high) {
-        write_32bit_mmio_register(
-            &GPIO_PSOR_REG(pin_info_p->pin_gpio_base_p),
-            pin_info_p->pin_bit_mask);
+    if (gpio_pin_p->pin_is_active_high) {
+        write_32bit_mmio_register(&gpio_regs_p->PSOR, gpio_pin_p->pin_bit_mask);
     } else {
         write_32bit_mmio_register(
-            &GPIO_PCOR_REG(pin_info_p->pin_gpio_base_p),
-            pin_info_p->pin_bit_mask);
+            &gpio_regs_p->PCOR, gpio_pin_p->pin_bit_mask);
     }
 }
 
 
 void
-deactivate_output_pin(const struct pin_config_info *pin_info_p)
+deactivate_output_pin(const struct gpio_pin *gpio_pin_p)
 {
+    volatile GPIO_Type *gpio_regs_p =
+	g_pin_config_registers[gpio_pin_p->pin_info.pin_port].pin_gpio_regs_p;
+
 #   ifdef DEBUG
-    uint32_t reg_value = read_32bit_mmio_register(
-                            &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p));
+    uint32_t reg_value = read_32bit_mmio_register(&gpio_regs_p->PDDR);
 
     FDC_ASSERT(
-        reg_value & pin_info_p->pin_bit_mask,
-        reg_value, pin_info_p->pin_bit_mask);
+        reg_value & gpio_pin_p->pin_bit_mask,
+        reg_value, gpio_pin_p->pin_bit_mask);
 #   endif
 
-    if (pin_info_p->pin_is_active_high) {
-        write_32bit_mmio_register(
-            &GPIO_PCOR_REG(pin_info_p->pin_gpio_base_p),
-            pin_info_p->pin_bit_mask);
+    if (gpio_pin_p->pin_is_active_high) {
+        write_32bit_mmio_register(&gpio_regs_p->PCOR, gpio_pin_p->pin_bit_mask);
     } else {
-        write_32bit_mmio_register(
-            &GPIO_PSOR_REG(pin_info_p->pin_gpio_base_p),
-            pin_info_p->pin_bit_mask);
+        write_32bit_mmio_register(&gpio_regs_p->PSOR, gpio_pin_p->pin_bit_mask);
     }
 }
 
 
 void
-toggle_output_pin(const struct pin_config_info *pin_info_p)
+toggle_output_pin(const struct gpio_pin *gpio_pin_p)
 {
+    volatile GPIO_Type *gpio_regs_p =
+	g_pin_config_registers[gpio_pin_p->pin_info.pin_port].pin_gpio_regs_p;
+
 #   ifdef DEBUG
-    uint32_t reg_value = read_32bit_mmio_register(
-                            &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p));
+    uint32_t reg_value = read_32bit_mmio_register(&gpio_regs_p->PDDR);
 
     FDC_ASSERT(
-        reg_value & pin_info_p->pin_bit_mask,
-        pin_info_p, reg_value);
+        reg_value & gpio_pin_p->pin_bit_mask,
+        gpio_pin_p, reg_value);
 #   endif
 
     write_32bit_mmio_register(
-        &GPIO_PTOR_REG(pin_info_p->pin_gpio_base_p),
-        pin_info_p->pin_bit_mask);
+        &gpio_regs_p->PTOR, gpio_pin_p->pin_bit_mask);
 }
 
 
 bool
-read_input_pin(const struct pin_config_info *pin_info_p)
+read_input_pin(const struct gpio_pin *gpio_pin_p)
 {
-    uint32_t reg_value = read_32bit_mmio_register(
-        &GPIO_PDIR_REG(pin_info_p->pin_gpio_base_p));
+    volatile GPIO_Type *gpio_regs_p =
+	g_pin_config_registers[gpio_pin_p->pin_info.pin_port].pin_gpio_regs_p;
 
-    return (reg_value & pin_info_p->pin_bit_mask) != 0;
+    uint32_t reg_value = read_32bit_mmio_register(&gpio_regs_p->PDIR);
+
+    return (reg_value & gpio_pin_p->pin_bit_mask) != 0;
 }
 
 
@@ -1566,18 +1613,10 @@ uart_init(
     uart_var_p->urt_fifos_enabled = true;
 
     /*
-     * Enable Tx pin:
+     * Configure Tx and Rx pins:
      */
-    write_32bit_mmio_register(
-        uart_device_p->urt_mmio_tx_port_pcr_p,
-        uart_device_p->urt_mmio_pin_mux_selector_mask | PORT_PCR_DSE_MASK);
-
-    /*
-     * Enable Rx pin:
-     */
-    write_32bit_mmio_register(
-        uart_device_p->urt_mmio_rx_port_pcr_p,
-        uart_device_p->urt_mmio_pin_mux_selector_mask | PORT_PCR_DSE_MASK);
+    set_pin_function(&uart_device_p->urt_tx_pin, PORT_PCR_DSE_MASK);
+    set_pin_function(&uart_device_p->urt_rx_pin, PORT_PCR_DSE_MASK);
 
     /*
     * Calculate baud rate settings:
@@ -3061,12 +3100,8 @@ i2c_init(
      * Configure GPIO pins for I2C functions:
      * - Set "Open Drain Enabled" for both the SCL and SDA pins
      */
-    write_32bit_mmio_register(
-        i2c_device_p->i2c_mmio_scl_port_pcr_p,
-        i2c_device_p->i2c_pin_mux_selector_mask | PORT_PCR_ODE_MASK);
-    write_32bit_mmio_register(
-        i2c_device_p->i2c_mmio_sda_port_pcr_p,
-        i2c_device_p->i2c_pin_mux_selector_mask | PORT_PCR_ODE_MASK);
+    set_pin_function(&i2c_device_p->i2c_scl_pin, PORT_PCR_ODE_MASK);
+    set_pin_function(&i2c_device_p->i2c_sda_pin, PORT_PCR_ODE_MASK);
 
     /*
      * Set baud rate:
@@ -3284,54 +3319,23 @@ enet_init(const struct enet_device *enet_device_p)
      * - Set "open drain enabled", "pull-up resistor enabled" and
      *   "internal pull resistor enabled" for rmii_mdio pin
      */
-    write_32bit_mmio_register(
-        enet_device_p->mmio_rmii_mdio_port_pcr_p,
-        enet_device_p->pin_mux_selector_mask |
-	PORT_PCR_ODE_MASK |
-	PORT_PCR_PE_MASK |
-	PORT_PCR_PS_MASK);
+    set_pin_function(&enet_device_p->rmii_mdio_pin,
+		     PORT_PCR_ODE_MASK |
+		     PORT_PCR_PE_MASK |
+		     PORT_PCR_PS_MASK);
 
-    write_32bit_mmio_register(
-        enet_device_p->mmio_rmii_mdc_port_pcr_p,
-        enet_device_p->pin_mux_selector_mask);
+    set_pin_function(&enet_device_p->rmii_mdc_pin, 0);
+    set_pin_function(&enet_device_p->rmii_rxd0_pin, 0);
+    set_pin_function(&enet_device_p->rmii_rxd1_pin, 0);
+    set_pin_function(&enet_device_p->rmii_rxer_pin, 0);
+    set_pin_function(&enet_device_p->rmii_txen_pin, 0);
+    set_pin_function(&enet_device_p->rmii_txd0_pin, 0);
+    set_pin_function(&enet_device_p->rmii_txd1_pin, 0);
+    set_pin_function(&enet_device_p->mii_txer_pin, 0);
 
-    write_32bit_mmio_register(
-        enet_device_p->mmio_rmii_rxd0_port_pcr_p,
-        enet_device_p->pin_mux_selector_mask);
-
-    write_32bit_mmio_register(
-        enet_device_p->mmio_rmii_rxd1_port_pcr_p,
-        enet_device_p->pin_mux_selector_mask);
-
-    write_32bit_mmio_register(
-        enet_device_p->mmio_rmii_crs_dv_port_pcr_p,
-        enet_device_p->pin_mux_selector_mask);
-
-    write_32bit_mmio_register(
-        enet_device_p->mmio_rmii_rxer_port_pcr_p,
-        enet_device_p->pin_mux_selector_mask);
-
-    write_32bit_mmio_register(
-        enet_device_p->mmio_rmii_txen_port_pcr_p,
-        enet_device_p->pin_mux_selector_mask);
-
-    write_32bit_mmio_register(
-        enet_device_p->mmio_rmii_txd0_port_pcr_p,
-        enet_device_p->pin_mux_selector_mask);
-
-    write_32bit_mmio_register(
-        enet_device_p->mmio_rmii_txd1_port_pcr_p,
-        enet_device_p->pin_mux_selector_mask);
-
-    write_32bit_mmio_register(
-        enet_device_p->mmio_mii_txer_port_pcr_p,
-        enet_device_p->pin_mux_selector_mask);
-
-    for (uint_fast8_t i = 0; i < ARRAY_SIZE(enet_device_p->mmio_enet_1588_tmr_port_pcr_p);
+    for (uint_fast8_t i = 0; i < ARRAY_SIZE(enet_device_p->enet_1588_tmr_pins);
 	 ++ i) {
-	write_32bit_mmio_register(
-	    enet_device_p->mmio_enet_1588_tmr_port_pcr_p[i],
-	    enet_device_p->pin_mux_selector_mask);
+	set_pin_function(&enet_device_p->enet_1588_tmr_pins[i], 0);
     }
 
     enet_var_p->initialized = true;

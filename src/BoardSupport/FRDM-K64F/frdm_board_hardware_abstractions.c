@@ -25,8 +25,8 @@ struct accelerometer_device {
     uint32_t acc_signature;
     struct accelerometer_device_var *acc_var_p;
     const struct i2c_device *acc_i2c_device_p;
-    struct pin_config_info acc_int1_pin;
-    struct pin_config_info acc_int2_pin;
+    struct gpio_pin acc_int1_pin;
+    struct gpio_pin acc_int2_pin;
     struct rtos_interrupt_registration_params acc_rtos_interrupt_params;
     struct rtos_interrupt **acc_rtos_interrupt_pp;
 };
@@ -46,27 +46,24 @@ static void rgb_led_init(void);
 /**
  * FRDM board RGB LED pins
  */
-static const struct pin_config_info g_frdm_rgb_led_pins[] = {
-    [FRDM_RED_LED] = PIN_COFIG_INFO_INITIALIZER(
+static const struct gpio_pin g_frdm_rgb_led_pins[] = {
+    [FRDM_RED_LED] = GPIO_PIN_INITIALIZER(
+	    PIN_PORT_B,
             FRDM_RGB_LED_RED_PIN_INDEX,
-            PORT_PCR_MUX(1),
-            false,
-            PORTB_BASE_PTR,
-            PTB_BASE_PTR),
+            PIN_FUNCTION_ALT1,
+	    false),
 
-    [FRDM_GREEN_LED] = PIN_COFIG_INFO_INITIALIZER(
+    [FRDM_GREEN_LED] = GPIO_PIN_INITIALIZER(
+	    PIN_PORT_E,
             FRDM_RGB_LED_GREEN_PIN_INDEX,
-            PORT_PCR_MUX(1),
-            false,
-            PORTE_BASE_PTR,
-            PTE_BASE_PTR),
+            PIN_FUNCTION_ALT1,
+	    false),
 
-    [FRDM_BLUE_LED] = PIN_COFIG_INFO_INITIALIZER(
+    [FRDM_BLUE_LED] = GPIO_PIN_INITIALIZER(
+	    PIN_PORT_B,
             FRDM_RGB_LED_BLUE_PIN_INDEX,
-            PORT_PCR_MUX(1),
-            false,
-            PORTB_BASE_PTR,
-            PTB_BASE_PTR)
+            PIN_FUNCTION_ALT1,
+            false),
 };
 
 C_ASSERT(ARRAY_SIZE(g_frdm_rgb_led_pins) == FRDM_NUM_RGB_LED_PINS);
@@ -96,22 +93,18 @@ static const struct accelerometer_device g_accelerometer = {
 	.acc_i2c_device_p = &g_i2c_devices[0],
 
 	.acc_int1_pin =
-	    PIN_COFIG_INFO_INITIALIZER(
+	    GPIO_PIN_INITIALIZER(
+		PIN_PORT_C,
 		FRDM_ACCELEROMETER_INT1_PIN_INDEX,
-		/* Pin Mux Control: Alternative 1, Interrupt when logical 1 */
-		PORT_PCR_MUX(1) | PORT_PCR_IRQC(0xC),
-		false,
-		PORTC_BASE_PTR,
-		PTC_BASE_PTR),
+		PIN_FUNCTION_ALT1,
+		false),
 
 	.acc_int2_pin =
-	    PIN_COFIG_INFO_INITIALIZER(
+	    GPIO_PIN_INITIALIZER(
+		PIN_PORT_C,
 		FRDM_ACCELEROMETER_INT2_PIN_INDEX,
-		/* Pin Mux Control: Alternative 1, Interrupt when logical 1 */
-		PORT_PCR_MUX(1) | PORT_PCR_IRQC(0xC),
-		false,
-		PORTC_BASE_PTR,
-		PTC_BASE_PTR),
+		PIN_FUNCTION_ALT1,
+		false),
 
 	.acc_rtos_interrupt_params = {
             .irp_name_p = "Port C Interrupts (Accelerometer INT1, INT2)",
@@ -158,7 +151,7 @@ static void
 rgb_led_init(void)
 {
     for (int i = 0; i < FRDM_NUM_RGB_LED_PINS; i++) {
-        configure_pin(&g_frdm_rgb_led_pins[i], true);
+        configure_gpio_pin(&g_frdm_rgb_led_pins[i], 0, true);
         deactivate_output_pin(&g_frdm_rgb_led_pins[i]);
     }
 }
@@ -232,7 +225,7 @@ accelerometer_device_deactivate(const struct accelerometer_device *accel_device_
         accel_device_p->acc_signature == ACCEL_DEVICE_SIGNATURE,
         accel_device_p->acc_signature, 0);
 
-#   ifdef _RELIABILITY_CHECKS_    
+#   ifdef _RELIABILITY_CHECKS_
     struct accelerometer_device_var *const accel_var_p = accel_device_p->acc_var_p;
 #   endif
 
@@ -278,7 +271,7 @@ static void accelerometer_device_activate(const struct accelerometer_device *acc
         accel_device_p->acc_signature == ACCEL_DEVICE_SIGNATURE,
         accel_device_p->acc_signature, 0);
 
-#   ifdef _RELIABILITY_CHECKS_    
+#   ifdef _RELIABILITY_CHECKS_
     struct accelerometer_device_var *const accel_var_p = accel_device_p->acc_var_p;
 #   endif
 
@@ -513,9 +506,12 @@ accelerometer_device_init(const struct accelerometer_device *accel_device_p)
 
     /*
      * Configure INT1 and INT2 interrupt pins:
+     * (interrupt when logical 1)
      */
-    configure_pin(&accel_device_p->acc_int1_pin, false);
-    configure_pin(&accel_device_p->acc_int2_pin, false);
+    configure_gpio_pin(&accel_device_p->acc_int1_pin, PORT_PCR_IRQC(0xC),
+		       false);
+    configure_gpio_pin(&accel_device_p->acc_int2_pin, PORT_PCR_IRQC(0xC),
+		       false);
 #endif //???
 
     /*

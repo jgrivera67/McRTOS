@@ -229,7 +229,8 @@ typedef _RANGE_(0, RTOS_MAX_MPU_THREAD_DATA_REGIONS - 1)
 /*
  * Opaque Types
  */
-struct pin_config_info;
+struct pin_info;
+struct gpio_pin;
 struct timer_device;
 struct uart_device;
 struct ssp_controller;
@@ -302,15 +303,18 @@ uint32_t get_cpu_clock_cycles(void);
 
 void turn_on_power(uint32_t pconp_mask);
 
-void configure_pin(const struct pin_config_info *pin_info_p, bool is_output);
+void set_pin_function(const struct pin_info *pin_p, uint32_t pin_flags);
 
-void activate_output_pin(const struct pin_config_info *pin_info_p);
+void configure_gpio_pin(const struct gpio_pin *gpio_pin_p, uint32_t pin_flags,
+			bool is_output);
 
-void deactivate_output_pin(const struct pin_config_info *pin_info_p);
+void activate_output_pin(const struct gpio_pin *gpio_pin_p);
 
-void toggle_output_pin(const struct pin_config_info *pin_info_p);
+void deactivate_output_pin(const struct gpio_pin *gpio_pin_p);
 
-bool read_input_pin(const struct pin_config_info *pin_info_p);
+void toggle_output_pin(const struct gpio_pin *gpio_pin_p);
+
+bool read_input_pin(const struct gpio_pin *gpio_pin_p);
 
 void uart_init(
         _IN_ const struct uart_device *uart_device_p,

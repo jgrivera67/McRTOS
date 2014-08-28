@@ -180,10 +180,9 @@ struct i2c_device {
     uint32_t i2c_signature;
     struct i2c_device_var *i2c_var_p;
     I2C_MemMapPtr i2c_mmio_registers_p;
-    volatile uint32_t *i2c_mmio_scl_port_pcr_p;
-    volatile uint32_t *i2c_mmio_sda_port_pcr_p;
+    struct pin_info i2c_scl_pin;
+    struct pin_info i2c_sda_pin;
     uint32_t i2c_clock_gate_mask;
-    uint32_t i2c_pin_mux_selector_mask;
     uint8_t i2c_icr_value;
     struct rtos_interrupt_registration_params i2c_rtos_interrupt_params;
     struct rtos_interrupt **i2c_rtos_interrupt_pp;
