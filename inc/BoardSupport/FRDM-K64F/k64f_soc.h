@@ -339,4 +339,6 @@ k64f_port_c_interrupt_e_handler(
 
 extern const struct i2c_device g_i2c_devices[];
 
+extern const struct enet_device g_enet_device;
+
 #endif /* __K64F_SOC_H */

@@ -30,6 +30,7 @@ endif
 ifeq "$(PLATFORM)" "FRDM-K64F"
     local_src := \
                  $(subdirectory)/$(PLATFORM)/k64f_soc_hardware_abstractions.c \
+                 $(subdirectory)/$(PLATFORM)/k64f_soc_enet.c \
                  $(subdirectory)/$(PLATFORM)/k64f_interrupt_service_routines.s \
                  $(subdirectory)/$(PLATFORM)/frdm_board_hardware_abstractions.c
 endif

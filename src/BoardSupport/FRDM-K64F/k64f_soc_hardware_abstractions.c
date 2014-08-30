@@ -510,34 +510,6 @@ const struct i2c_device g_i2c_devices[] = {
 
 C_ASSERT(ARRAY_SIZE(g_i2c_devices) == ARRAY_SIZE(g_i2c_devices_var));
 
-static struct enet_device_var g_enet_var = {
-    .initialized = false,
-};
-
-static const struct enet_device g_enet_device = {
-    .signature = ENET_DEVICE_SIGNATURE,
-    .var_p = &g_enet_var,
-    .mmio_registers_p = (volatile ENET_Type *)ENET_BASE,
-    .rmii_mdio_pin = PIN_INITIALIZER(PIN_PORT_B, 0, PIN_FUNCTION_ALT4),
-    .rmii_mdc_pin = PIN_INITIALIZER(PIN_PORT_B, 1, PIN_FUNCTION_ALT4),
-    .rmii_rxd0_pin = PIN_INITIALIZER(PIN_PORT_A, 13, PIN_FUNCTION_ALT4),
-    .rmii_rxd1_pin = PIN_INITIALIZER(PIN_PORT_A, 12, PIN_FUNCTION_ALT4),
-    .rmii_crs_dv_pin = PIN_INITIALIZER(PIN_PORT_A, 14, PIN_FUNCTION_ALT4),
-    .rmii_rxer_pin = PIN_INITIALIZER(PIN_PORT_A, 5, PIN_FUNCTION_ALT4),
-    .rmii_txen_pin = PIN_INITIALIZER(PIN_PORT_A, 15, PIN_FUNCTION_ALT4),
-    .rmii_txd0_pin = PIN_INITIALIZER(PIN_PORT_A, 16, PIN_FUNCTION_ALT4),
-    .rmii_txd1_pin = PIN_INITIALIZER(PIN_PORT_A, 17, PIN_FUNCTION_ALT4),
-    .mii_txer_pin = PIN_INITIALIZER(PIN_PORT_A, 28, PIN_FUNCTION_ALT4),
-    .enet_1588_tmr_pins = {
-	[0] = PIN_INITIALIZER(PIN_PORT_C, 16, PIN_FUNCTION_ALT4),
-	[1] = PIN_INITIALIZER(PIN_PORT_C, 17, PIN_FUNCTION_ALT4),
-	[2] = PIN_INITIALIZER(PIN_PORT_C, 18, PIN_FUNCTION_ALT4),
-	[3] = PIN_INITIALIZER(PIN_PORT_C, 19, PIN_FUNCTION_ALT4),
-    },
-
-    .clock_gate_mask = SIM_SCGC2_ENET_MASK,
-};
-
 /**
  * Hardware Micro trace buffer (MTB)
  */
@@ -3289,56 +3261,6 @@ k64f_i2c_interrupt_e_handler(
 
     i2c_var_p->i2c_byte_transfer_completed = true;
     rtos_k_condvar_signal(&i2c_var_p->i2c_condvar);
-}
-
-
-void
-enet_init(const struct enet_device *enet_device_p)
-{
-    uint32_t reg_value;
-
-    FDC_ASSERT(
-        enet_device_p->signature == ENET_DEVICE_SIGNATURE,
-        enet_device_p->signature, enet_device_p);
-
-    struct enet_device_var *const enet_var_p = enet_device_p->var_p;
-    //volatile ENET_Type *enet_mmio_registers_p = enet_device_p->mmio_registers_p;
-
-    FDC_ASSERT(!enet_var_p->initialized, enet_device_p, enet_var_p);
-    FDC_ASSERT_CPU_INTERRUPTS_DISABLED();
-
-    /*
-     * Enable the Clock to the ENET Module
-     */
-    reg_value = read_32bit_mmio_register(&SIM_SCGC2);
-    reg_value |= enet_device_p->clock_gate_mask;
-    write_32bit_mmio_register(&SIM_SCGC2, reg_value);
-
-    /*
-     * Configure GPIO pins for Ethernet PHY functions:
-     * - Set "open drain enabled", "pull-up resistor enabled" and
-     *   "internal pull resistor enabled" for rmii_mdio pin
-     */
-    set_pin_function(&enet_device_p->rmii_mdio_pin,
-		     PORT_PCR_ODE_MASK |
-		     PORT_PCR_PE_MASK |
-		     PORT_PCR_PS_MASK);
-
-    set_pin_function(&enet_device_p->rmii_mdc_pin, 0);
-    set_pin_function(&enet_device_p->rmii_rxd0_pin, 0);
-    set_pin_function(&enet_device_p->rmii_rxd1_pin, 0);
-    set_pin_function(&enet_device_p->rmii_rxer_pin, 0);
-    set_pin_function(&enet_device_p->rmii_txen_pin, 0);
-    set_pin_function(&enet_device_p->rmii_txd0_pin, 0);
-    set_pin_function(&enet_device_p->rmii_txd1_pin, 0);
-    set_pin_function(&enet_device_p->mii_txer_pin, 0);
-
-    for (uint_fast8_t i = 0; i < ARRAY_SIZE(enet_device_p->enet_1588_tmr_pins);
-	 ++ i) {
-	set_pin_function(&enet_device_p->enet_1588_tmr_pins[i], 0);
-    }
-
-    enet_var_p->initialized = true;
 }
 
 
