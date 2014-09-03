@@ -65,5 +65,6 @@ bool accelerometer_detect_motion(
     int8_t *y_p,
     int8_t *z_p);
 
+void ethernet_phy_init(const struct enet_device *enet_device_p);
 
 #endif /* __FRDM_BOARD_H */

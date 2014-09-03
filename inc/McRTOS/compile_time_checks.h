@@ -20,6 +20,8 @@
 #define C_ASSERT2(_assertName, _cond) \
         typedef char c_assert__ ## _assertName[(_cond) ? 1 : -1]
 
+C_ASSERT(sizeof(uintptr_t) == sizeof(uint32_t));
+
 /*
  * Annotation macros to be used to "annotate" function parameters
  * and typedefs. These annotations can be used by a static analysis tool.

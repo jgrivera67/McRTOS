@@ -65,6 +65,8 @@
 
 #define HOW_MANY(_m, _n)  (((size_t)(_m) - 1) / (_n) + 1)
 
+#define ROUND_UP(_m, _n)  (HOW_MANY(_m, _n) * _n)
+
 #define UINT_DIV_APPROX(_m, _n) \
         ((natural_t)(_m) / (natural_t)(_n) +                            \
          ((natural_t)(_m) % (natural_t)(_n) > (natural_t)(_n) / 2 ?     \

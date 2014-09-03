@@ -265,6 +265,15 @@ struct i2c_device_var {
     struct rtos_condvar i2c_condvar;
 };
 
+/*
+ * Ethernet frame buffer alignment in bytes
+ */
+#define ENET_FRAME_BUFFER_ALIGNMENT UINT32_C(16)
+
+#define ENET_MAX_RX_FRAME_BUFFERS   8
+
+#define ENET_MAX_TX_FRAME_BUFFERS   8
+
 /**
  * Const fields of an Ethernet MAC device (to be placed in flash)
  */
@@ -285,13 +294,104 @@ struct enet_device {
     struct pin_info mii_txer_pin;
     struct pin_info enet_1588_tmr_pins[4];
     uint32_t clock_gate_mask;
+    /* MAC address in big-endian byte order */
+    uint8_t mac_address[6];
 };
+
+struct enet_rx_buffer_descriptor {
+    uint16_t  data_length;
+    uint16_t  control;
+#   define  ENET_RX_BD_EMPTY_MASK			BIT(15)
+#   define  ENET_RX_BD_SOFTWARE_OWNERSHIP1_MASK		BIT(14)
+#   define  ENET_RX_BD_WRAP_MASK			BIT(13)
+#   define  ENET_RX_BD_SOFTWARE_OWNERSHIP2_MASK		BIT(12)
+#   define  ENET_RX_BD_LAST_IN_FRAME_MASK		BIT(11)
+#   define  ENET_RX_BD_MISS_MASK			BIT(8)
+#   define  ENET_RX_BD_BROADCAST_MASK			BIT(7)
+#   define  ENET_RX_BD_MULTICAST_MASK			BIT(6)
+#   define  ENET_RX_BD_LENGTH_VIOLATION_MASK		BIT(5)
+#   define  ENET_RX_BD_NON_OCTET_ALIGNED_FRAME_MASK	BIT(4)
+#   define  ENET_RX_BD_CRC_ERROR_MASK			BIT(2)
+#   define  ENET_RX_BD_FIFO_OVERRRUN_MASK		BIT(1)
+#   define  ENET_RX_BD_FRAME_TRUNCATED_MASK		BIT(0)
+
+    void      *data_buffer;
+    uint16_t  control_extend0;
+#   define  ENET_RX_BD_VLAN_PRIORITY_CODE_POINT_MASK	MULTI_BIT_MASK(15, 13)
+#   define  ENET_RX_BD_VLAN_PRIORITY_CODE_POINT_SHIFT	13
+#   define  ENET_RX_BD_IP_HEADER_CHECKSUM_ERROR_MASK	BIT(5)
+#   define  ENET_RX_BD_PROTOCOL_CHECKSUM_ERROR_MASK	BIT(4)
+#   define  ENET_RX_BD_VLAN_FRAME_MASK			BIT(2)
+#   define  ENET_RX_BD_IPv6_FRAME_MASK			BIT(1)
+#   define  ENET_RX_BD_IPv4_FRAGMENT_MASK		BIT(0)
+
+    uint16_t  control_extend1;
+#   define  ENET_RX_BD_GENERATE_INTERRUPT_MASK		BIT(7)
+#   define  ENET_RX_BD_UNICAST_FRAME_MASK		BIT(8)
+#   define  ENET_RX_BD_COLLISION_MASK			BIT(9)
+#   define  ENET_RX_BD_PHY_ERROR_MASK			BIT(10)
+#   define  ENET_RX_BD_MAC_ERROR_MASK			BIT(15)
+
+    uint16_t  payload_checksum;
+    uint8_t   header_length;
+    uint8_t   protocol_type;
+    uint16_t  reserved0;
+    uint16_t  control_extend2;
+#   define  ENET_RX_BD_LAST_DESCRIPTOR_UPDATE_DONE_MASK	BIT(15)
+
+    uint32_t  timestamp;
+    uint16_t  reserved1;
+    uint16_t  reserved2;
+    uint16_t  reserved3;
+    uint16_t  reserved4;
+} __attribute__ ((aligned(ENET_FRAME_BUFFER_ALIGNMENT)));
+
+struct enet_tx_buffer_descriptor {
+    uint16_t  data_length;
+    uint16_t  control;
+#   define  ENET_TX_BD_READY_MASK			BIT(15)
+#   define  ENET_TX_BD_SOFTWARE_OWNER1_MASK		BIT(14)
+#   define  ENET_TX_BD_WRAP_MASK			BIT(13)
+#   define  ENET_TX_BD_SOFTWARE_OWNER2_MASK		BIT(12)
+#   define  ENET_TX_BD_LAST_IN_FRAME_MASK		BIT(11)
+#   define  ENET_TX_BD_CRC_MASK				BIT(10)
+
+    void      *data_buffer;
+    uint16_t  control_extend0;
+#   define  ENET_TX_BD_ERROR_MASK			BIT(15)
+#   define  ENET_TX_BD_UNDERFLOW_MASK			BIT(13)
+#   define  ENET_TX_BD_EXCESS_COLLISION_ERROR_MASK	BIT(12)
+#   define  ENET_TX_BD_FRAME_ERROR_MASK			BIT(11)
+#   define  ENET_TX_BD_LATE_COLLISION_ERROR_MASK	BIT(10)
+#   define  ENET_TX_BD_FIFO_OVERFLOW_ERROR_MASK		BIT(9)
+#   define  ENET_TX_BD_TMESTAMP_ERROR_MASK		BIT(8)
+
+    uint16_t  control_extend1;
+#   define  ENET_TX_BD_INTERRUPT_MASK			BIT(14)
+#   define  ENET_TX_BD_TIMESTAMP_MASK			BIT(13)
+#   define  ENET_TX_BD_INSERT_PROTOCOL_CHECKSUM_MASK	BIT(12)
+#   define  ENET_TX_BD_INSERT_IP_HEADER_CHECKSUM_MASK	BIT(11)
+
+    uint16_t  reserved0;
+    uint16_t  reserved1;
+    uint16_t  reserved2;
+    uint16_t  control_extend2;
+#   define  ENET_TX_BD_LAST_DESCRIPTOR_UPDATE_DONE_MASK	BIT(15)
+
+    uint32_t  timestamp;
+    uint16_t  reserved3;
+    uint16_t  reserved4;
+    uint16_t  reserved5;
+    uint16_t  reserved6;
+} __attribute__ ((aligned(ENET_FRAME_BUFFER_ALIGNMENT)));
 
 /**
  * Non-const fields of an Ethernet MAC device (to be placed in SRAM)
  */
 struct enet_device_var {
     bool initialized;
+    struct enet_rx_buffer_descriptor rx_buffer_descriptors[ENET_MAX_RX_FRAME_BUFFERS];
+    struct enet_tx_buffer_descriptor tx_buffer_descriptors[ENET_MAX_TX_FRAME_BUFFERS];
 };
 
 

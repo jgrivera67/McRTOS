@@ -745,3 +745,14 @@ accelerometer_detect_motion(
 }
 #endif
 
+/**
+ * Initializes the Ethernet PHY chip (Micrel KSZ8081RNA)
+ */
+void
+ethernet_phy_init(const struct enet_device *enet_device_p)
+{
+    FDC_ASSERT(
+        enet_device_p->signature == ENET_DEVICE_SIGNATURE,
+        enet_device_p->signature, enet_device_p);
+}
+
