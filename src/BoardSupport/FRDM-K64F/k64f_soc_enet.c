@@ -39,18 +39,39 @@ C_ASSERT(ENET_ALIGNED_MAX_FRAME_SIZE >= 256 &&
  */
 #define ENET_MAX_FRAME_DATA_SIZE    1500
 
+/**
+ * Ethernet Tx data buffers
+ */
+static uint8_t g_enet_tx_data_buffers[ENET_MAX_TX_FRAME_BUFFERS][ENET_ALIGNED_MAX_FRAME_SIZE]
+__attribute__ ((aligned(ENET_FRAME_BUFFER_ALIGNMENT)));
+
+/**
+ * Ethernet Rx data buffers
+ */
+static uint8_t g_enet_rx_data_buffers[ENET_MAX_RX_FRAME_BUFFERS][ENET_ALIGNED_MAX_FRAME_SIZE]
+__attribute__ ((aligned(ENET_FRAME_BUFFER_ALIGNMENT)));
+
+/**
+ * McRTOS interrupt objects for ENET Tx/Rx interrupts
+ */
+struct rtos_interrupt *g_rtos_interrupt_enet_tx_p = NULL;
+struct rtos_interrupt *g_rtos_interrupt_enet_rx_p = NULL;
+
+/**
+ * Global non-const structure for ENET MAC device
+ * (allocated in SRAM space)
+ */
 static struct enet_device_var g_enet_var = {
     .initialized = false,
 };
 
-static uint8_t g_enet_rx_data_buffers[ENET_MAX_RX_FRAME_BUFFERS][ENET_ALIGNED_MAX_FRAME_SIZE]
-__attribute__ ((aligned(ENET_FRAME_BUFFER_ALIGNMENT)));
-
-static uint8_t g_enet_tx_data_buffers[ENET_MAX_TX_FRAME_BUFFERS][ENET_ALIGNED_MAX_FRAME_SIZE]
-__attribute__ ((aligned(ENET_FRAME_BUFFER_ALIGNMENT)));
-
+/**
+ * Global const structure for the ENET MAC devices
+ * (allocated in flash space)
+ */
 const struct enet_device g_enet_device = {
     .signature = ENET_DEVICE_SIGNATURE,
+    .name = "enet0",
     .var_p = &g_enet_var,
     .mmio_registers_p = (volatile ENET_Type *)ENET_BASE,
     .rmii_mdio_pin = PIN_INITIALIZER(PIN_PORT_B, 0, PIN_FUNCTION_ALT4),
@@ -63,6 +84,28 @@ const struct enet_device g_enet_device = {
     .rmii_txd0_pin = PIN_INITIALIZER(PIN_PORT_A, 16, PIN_FUNCTION_ALT4),
     .rmii_txd1_pin = PIN_INITIALIZER(PIN_PORT_A, 17, PIN_FUNCTION_ALT4),
     .mii_txer_pin = PIN_INITIALIZER(PIN_PORT_A, 28, PIN_FUNCTION_ALT4),
+    .tx_rtos_interrupt_params = {
+            .irp_name_p = "ENET Transmit Interrupt",
+            .irp_isr_function_p = k64f_enet_transmit_isr,
+            .irp_arg_p =  (void *)&g_enet_device,
+            .irp_channel = VECTOR_NUMBER_TO_IRQ_NUMBER(INT_ENET_Transmit),
+            .irp_priority = ENET_INTERRUPT_PRIORITY,
+            .irp_cpu_id = 0,
+        },
+
+    .tx_rtos_interrupt_pp = &g_rtos_interrupt_enet_tx_p,
+
+    .rx_rtos_interrupt_params = {
+            .irp_name_p = "ENET Receive Interrupt",
+            .irp_isr_function_p = k64f_enet_receive_isr,
+            .irp_arg_p =  (void *)&g_enet_device,
+            .irp_channel = VECTOR_NUMBER_TO_IRQ_NUMBER(INT_ENET_Receive),
+            .irp_priority = ENET_INTERRUPT_PRIORITY,
+            .irp_cpu_id = 0,
+        },
+
+    .rx_rtos_interrupt_pp = &g_rtos_interrupt_enet_rx_p,
+
     .enet_1588_tmr_pins = {
 	[0] = PIN_INITIALIZER(PIN_PORT_C, 16, PIN_FUNCTION_ALT4),
 	[1] = PIN_INITIALIZER(PIN_PORT_C, 17, PIN_FUNCTION_ALT4),
@@ -339,6 +382,44 @@ ethernet_mac_init(const struct enet_device *enet_device_p)
 
     enet_buffer_descriptor_rings_init(enet_device_p);
 
+    /*
+     * Enable generation of Tx/Rx interrupts:
+     * - Generate Tx interrupt when a Tx buffer has been transmitted (the
+     *   Tx buffer descriptor has been updated)
+     * - Generate Rx interrupt when last Rx buffer of a frame has been received
+     *   (the frame has been received ands the last Rx buffer of the frame has
+     *    been updated)
+     */
+    write_32bit_mmio_register(&enet_regs_p->EIMR,
+			      ENET_EIMR_TXB_MASK |
+			      ENET_EIMR_RXF_MASK);
+
+    /*
+     * Register McRTOS interrupt handlers
+     */
+    rtos_k_register_interrupt(
+        &enet_device_p->tx_rtos_interrupt_params,
+        enet_device_p->tx_rtos_interrupt_pp);
+
+    DBG_ASSERT(
+        *enet_device_p->tx_rtos_interrupt_pp != NULL,
+        enet_device_p->tx_rtos_interrupt_pp, enet_device_p);
+
+    rtos_k_register_interrupt(
+        &enet_device_p->rx_rtos_interrupt_params,
+        enet_device_p->rx_rtos_interrupt_pp);
+
+    DBG_ASSERT(
+        *enet_device_p->rx_rtos_interrupt_pp != NULL,
+        enet_device_p->rx_rtos_interrupt_pp, enet_device_p);
+
+    /*
+     * Enable Ethernet module:
+     */
+
+    /*
+     * Activate Rx buffer descriptor ring:
+     */
 }
 
 
@@ -399,5 +480,25 @@ enet_init(const struct enet_device *enet_device_p)
     ethernet_phy_init(enet_device_p);
 
     enet_var_p->initialized = true;
+    DEBUG_PRINTF("Initialized device %s\n", enet_device_p->name);
 }
+
+
+void
+k64f_enet_transmit_interrupt_e_handler(
+    struct rtos_interrupt *rtos_interrupt_p)
+{
+    FDC_ASSERT_RTOS_INTERRUPT_E_HANDLER_PRECONDITIONS(rtos_interrupt_p);
+
+}
+
+
+void
+k64f_enet_receive_interrupt_e_handler(
+    struct rtos_interrupt *rtos_interrupt_p)
+{
+    FDC_ASSERT_RTOS_INTERRUPT_E_HANDLER_PRECONDITIONS(rtos_interrupt_p);
+
+}
+
 

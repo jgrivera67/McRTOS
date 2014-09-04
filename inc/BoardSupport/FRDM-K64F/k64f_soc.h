@@ -233,7 +233,7 @@ struct adc_device_var {
 struct i2c_device {
 #   define I2C_DEVICE_SIGNATURE  GEN_SIGNATURE('I', '2', 'C', 'C')
     uint32_t i2c_signature;
-    char *i2c_name;
+    const char *i2c_name;
     struct i2c_device_var *i2c_var_p;
     I2C_MemMapPtr i2c_mmio_registers_p;
     struct pin_info i2c_scl_pin;
@@ -280,6 +280,7 @@ struct i2c_device_var {
 struct enet_device {
 #   define ENET_DEVICE_SIGNATURE  GEN_SIGNATURE('E', 'N', 'E', 'T')
     uint32_t signature;
+    const char *name;
     struct enet_device_var *var_p;
     volatile ENET_Type *mmio_registers_p;
     struct pin_info rmii_mdio_pin;
@@ -292,6 +293,10 @@ struct enet_device {
     struct pin_info rmii_txd0_pin;
     struct pin_info rmii_txd1_pin;
     struct pin_info mii_txer_pin;
+    struct rtos_interrupt_registration_params tx_rtos_interrupt_params;
+    struct rtos_interrupt **tx_rtos_interrupt_pp;
+    struct rtos_interrupt_registration_params rx_rtos_interrupt_params;
+    struct rtos_interrupt **rx_rtos_interrupt_pp;
     struct pin_info enet_1588_tmr_pins[4];
     uint32_t clock_gate_mask;
     /* MAC address in big-endian byte order */
@@ -417,6 +422,10 @@ extern isr_function_t k64f_i2c0_isr;
 
 extern isr_function_t k64f_port_c_isr;
 
+extern isr_function_t k64f_enet_transmit_isr;
+
+extern isr_function_t k64f_enet_receive_isr;
+
 void k64f_uart_rx_tx_interrupt_e_handler(
     struct rtos_interrupt *rtos_interrupt_p);
 
@@ -435,6 +444,14 @@ k64f_i2c_interrupt_e_handler(
 
 void
 k64f_port_c_interrupt_e_handler(
+    struct rtos_interrupt *rtos_interrupt_p);
+
+void
+k64f_enet_transmit_interrupt_e_handler(
+    struct rtos_interrupt *rtos_interrupt_p);
+
+void
+k64f_enet_receive_interrupt_e_handler(
     struct rtos_interrupt *rtos_interrupt_p);
 
 extern const struct i2c_device g_i2c_devices[];

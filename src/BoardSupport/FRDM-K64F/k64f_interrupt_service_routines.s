@@ -12,7 +12,7 @@
 
 .text
 .thumb
-//.syntax unified
+.syntax unified
 
 /*
  * Generate ISR functions:
@@ -61,6 +61,18 @@ GEN_ISR_FUNCTION k64f_i2c0_isr, g_rtos_interrupt_i2c0_p, \
  */
 GEN_ISR_FUNCTION k64f_port_c_isr, g_rtos_interrupt_port_c_p, \
                  k64f_port_c_interrupt_e_handler
+
+/**
+ * ENET Tx ISR
+ */
+GEN_ISR_FUNCTION k64f_enet_transmit_isr, g_rtos_interrupt_enet_tx_p, \
+                 k64f_enet_transmit_interrupt_e_handler
+
+/**
+ * ENET Rx ISR
+ */
+GEN_ISR_FUNCTION k64f_enet_receive_isr, g_rtos_interrupt_enet_rx_p, \
+                 k64f_enet_receive_interrupt_e_handler
 
 .end
 
