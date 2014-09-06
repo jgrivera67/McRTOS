@@ -399,6 +399,14 @@ struct enet_device_var {
     struct enet_tx_buffer_descriptor tx_buffer_descriptors[ENET_MAX_TX_FRAME_BUFFERS];
 };
 
+#define ENET_PHY_ADDRESS    0x0
+
+enum enet_mmfr_op_values {
+    ENET_MMFR_OP_WRITE_NON_MII_COMPLIANT_FRAME = 0x0,
+    ENET_MMFR_OP_WRITE_VALID_MII_MANAGEMENT_FRAME = 0x1,
+    ENET_MMFR_OP_READ_VALID_MII_MANAGEMENT_FRAME = 0x2,
+    ENET_MMFR_OP_READ_NON_MII_COMPLIANT_FRAME = 0x3,
+};
 
 void k64f_ftm_init(
     const struct ftm_device *ftm_device_p);
@@ -407,6 +415,12 @@ void k64f_ftm_set_duty_cycle(
     const struct ftm_device *ftm_device_p,
     pwm_channel_t pwm_channel,
     pwm_duty_cycle_us_t pwm_duty_cycle_us);
+
+void enet_phy_write(const struct enet_device *enet_device_p, uint32_t phy_reg,
+		    uint32_t data);
+
+uint32_t enet_phy_read(const struct enet_device *enet_device_p,
+		       uint32_t phy_reg);
 
 extern isr_function_t k64f_uart0_rx_tx_isr;
 

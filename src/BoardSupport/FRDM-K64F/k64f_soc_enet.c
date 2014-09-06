@@ -39,6 +39,44 @@ C_ASSERT(ENET_ALIGNED_MAX_FRAME_SIZE >= 256 &&
  */
 #define ENET_MAX_FRAME_DATA_SIZE    1500
 
+/*
+ * ENET PHY Registers
+ */
+enum enet_phy_registers
+{
+    ENET_PHY_CONTROL_REG =  0x0, /* basic control register */
+    ENET_PHY_STATUS_REG =   0x1, /* basic status register */
+    ENET_PHY_ID1_REG =	    0x2, /* identification register 1*/
+    ENET_PHY_ID2_REG =	    0x3, /* identification register 2*/
+    ENET_PHY_CONTROL1_REG = 0x1e, /* control register 1 */
+    ENET_PHY_CONTROL2_REG = 0x1f, /* control register 2*/
+};
+
+/*
+ * Bit masks for ENET_PHY_CONTROL_REG register flags
+ */
+#define ENET_PHY_RESET_MASK		BIT(15)
+#define ENET_PHY_LOOP_MASK		BIT(14)
+#define ENET_PHY_100_MBPS_SPEED_MASK    BIT(13)
+#define ENET_PHY_AUTO_NEGOTIATION_MASK  BIT(12)
+#define ENET_PHY_POWER_DOWN_MASK	BIT(11)
+#define ENET_PHY_ISOLATE_MASK		BIT(10)
+#define ENET_PHY_RESTART_AUTO_NEG_MASK  BIT(9)
+#define ENET_PHY_FULL_DUPLEX_MODE_MASK  BIT(8)
+#define ENET_PHY_COLLISION_TEST_MASK    BIT(7)
+
+/*
+ * Bit masks for ENET_PHY_STATUS_REG register flags
+ */
+#define ENET_PHY_AUTO_NEG_COMPLETE_MASK	BIT(5)
+#define ENET_PHY_AUTO_NEG_CAPABLE_MASK	BIT(3)
+#define ENET_PHY_LINK_UP_MASK		BIT(2)
+
+/**
+ * Maximum number of iterations for a polling loop
+ */
+#define MAX_POLLING_COUNT   UINT16_MAX
+
 /**
  * Ethernet Tx data buffers
  */
@@ -205,7 +243,7 @@ ethernet_mac_init(const struct enet_device *enet_device_p)
 {
     volatile ENET_Type *enet_regs_p = enet_device_p->mmio_registers_p;
     uint32_t reg_value;
-    uint16_t polling_count = UINT16_MAX;
+    uint16_t polling_count = MAX_POLLING_COUNT;
 
     /*
      * Reset Ethernet MAC module:
@@ -415,11 +453,206 @@ ethernet_mac_init(const struct enet_device *enet_device_p)
 
     /*
      * Enable Ethernet module:
+     *
+     * - TODO: Enable buffer descriptor byte swapping for little-endian system???
      */
+    reg_value = read_32bit_mmio_register(&enet_regs_p->ECR);
+    reg_value |= ENET_ECR_ETHEREN_MASK;
+#if 0 /* TODO: Do we need this? */
+    reg_value |= ENET_ECR_DBSWP_MASK;
+#endif
+    write_32bit_mmio_register(&enet_regs_p->ECR, reg_value);
 
     /*
      * Activate Rx buffer descriptor ring:
+     * (the Rx descriptor ring must have at least one descriptor with the "empty"
+     *  bit set in its control field)
      */
+    write_32bit_mmio_register(&enet_regs_p->RDAR, ENET_RDAR_RDAR_MASK);
+}
+
+
+void
+enet_phy_write(const struct enet_device *enet_device_p, uint32_t phy_reg, uint32_t data)
+{
+    volatile ENET_Type *enet_regs_p = enet_device_p->mmio_registers_p;
+    uint32_t reg_value;
+    uint16_t polling_count = MAX_POLLING_COUNT;
+
+    reg_value = read_32bit_mmio_register(&enet_regs_p->MSCR);
+    FDC_ASSERT((reg_value & ENET_MSCR_MII_SPEED_MASK) != 0,
+	       reg_value, enet_device_p);
+
+    reg_value = read_32bit_mmio_register(&enet_regs_p->EIR);
+    FDC_ASSERT((reg_value & ENET_EIR_MII_MASK) == 0,
+	       reg_value, enet_device_p);
+
+    /*
+     * Set write command
+     */
+    reg_value = 0;
+    SET_BIT_FIELD(reg_value, ENET_MMFR_ST_MASK, ENET_MMFR_ST_SHIFT,
+		  0x1);
+    SET_BIT_FIELD(reg_value, ENET_MMFR_OP_MASK, ENET_MMFR_OP_SHIFT,
+		  ENET_MMFR_OP_WRITE_VALID_MII_MANAGEMENT_FRAME);
+    SET_BIT_FIELD(reg_value, ENET_MMFR_PA_MASK, ENET_MMFR_PA_SHIFT,
+		  ENET_PHY_ADDRESS);
+    SET_BIT_FIELD(reg_value, ENET_MMFR_RA_MASK, ENET_MMFR_RA_SHIFT,
+		  phy_reg);
+    SET_BIT_FIELD(reg_value, ENET_MMFR_TA_MASK, ENET_MMFR_TA_SHIFT,
+		  0x2);
+    SET_BIT_FIELD(reg_value, ENET_MMFR_DATA_MASK, ENET_MMFR_DATA_SHIFT,
+		  data);
+    write_32bit_mmio_register(&enet_regs_p->MMFR, reg_value);
+
+    /*
+     * Wait for SMI write to complete
+     * (the MMI interrupt event bit is set in the EIR, when
+     *  an SMI data transfer is completed)
+     */
+    do {
+	reg_value = read_32bit_mmio_register(&enet_regs_p->EIR);
+	polling_count --;
+    } while ((reg_value & ENET_EIR_MII_MASK) == 0 && polling_count != 0);
+
+    if ((reg_value & ENET_EIR_MII_MASK) == 0) {
+	fdc_error_t fdc_error =
+            CAPTURE_FDC_ERROR("SMI write failed", enet_device_p, reg_value);
+
+        fatal_error_handler(fdc_error);
+    }
+
+    /*
+     * Clear the MII interrupt event in the EIR register
+     * (EIR is a w1c register)
+     */
+    write_32bit_mmio_register(&enet_regs_p->EIR, ENET_EIR_MII_MASK);
+}
+
+
+uint32_t
+enet_phy_read(const struct enet_device *enet_device_p, uint32_t phy_reg)
+{
+    volatile ENET_Type *enet_regs_p = enet_device_p->mmio_registers_p;
+    uint32_t reg_value;
+    uint16_t polling_count = MAX_POLLING_COUNT;
+
+    reg_value = read_32bit_mmio_register(&enet_regs_p->MSCR);
+    FDC_ASSERT((reg_value & ENET_MSCR_MII_SPEED_MASK) != 0,
+	       reg_value, enet_device_p);
+
+    reg_value = read_32bit_mmio_register(&enet_regs_p->EIR);
+    FDC_ASSERT((reg_value & ENET_EIR_MII_MASK) == 0,
+	       reg_value, enet_device_p);
+
+    /*
+     * Set write command
+     */
+    reg_value = 0;
+    SET_BIT_FIELD(reg_value, ENET_MMFR_ST_MASK, ENET_MMFR_ST_SHIFT,
+		  0x1);
+    SET_BIT_FIELD(reg_value, ENET_MMFR_OP_MASK, ENET_MMFR_OP_SHIFT,
+		  ENET_MMFR_OP_READ_VALID_MII_MANAGEMENT_FRAME);
+    SET_BIT_FIELD(reg_value, ENET_MMFR_PA_MASK, ENET_MMFR_PA_SHIFT,
+		  ENET_PHY_ADDRESS);
+    SET_BIT_FIELD(reg_value, ENET_MMFR_RA_MASK, ENET_MMFR_RA_SHIFT,
+		  phy_reg);
+    SET_BIT_FIELD(reg_value, ENET_MMFR_TA_MASK, ENET_MMFR_TA_SHIFT,
+		  0x2);
+    write_32bit_mmio_register(&enet_regs_p->MMFR, reg_value);
+
+    /*
+     * Wait for SMI read to complete
+     * (the MMI interrupt event bit is set in the EIR, when
+     *  an SMI data transfer is completed)
+     */
+    do {
+	reg_value = read_32bit_mmio_register(&enet_regs_p->EIR);
+	polling_count --;
+    } while ((reg_value & ENET_EIR_MII_MASK) == 0 && polling_count != 0);
+
+    if ((reg_value & ENET_EIR_MII_MASK) == 0) {
+	fdc_error_t fdc_error =
+            CAPTURE_FDC_ERROR("SMI read failed", enet_device_p, reg_value);
+
+        fatal_error_handler(fdc_error);
+    }
+
+    reg_value = read_32bit_mmio_register(&enet_regs_p->MMFR);
+
+    /*
+     * Clear the MII interrupt event in the EIR register
+     * (EIR is a w1c register)
+     */
+    write_32bit_mmio_register(&enet_regs_p->EIR, ENET_EIR_MII_MASK);
+
+    return GET_BIT_FIELD(reg_value, ENET_MMFR_DATA_MASK, ENET_MMFR_DATA_SHIFT);
+}
+
+
+/**
+ * Initializes the Ethernet PHY chip (Micrel KSZ8081RNA)
+ */
+static void
+ethernet_phy_init(const struct enet_device *enet_device_p)
+{
+    uint32_t reg_value;
+    uint16_t polling_count;
+    fdc_error_t fdc_error;
+
+    FDC_ASSERT(
+        enet_device_p->signature == ENET_DEVICE_SIGNATURE,
+        enet_device_p->signature, enet_device_p);
+
+    /*
+     * Reset Phy
+     */
+    enet_phy_write(enet_device_p, ENET_PHY_CONTROL_REG, ENET_PHY_RESET_MASK);
+
+    /*
+     * Wait for reset to complete:
+     */
+    polling_count = MAX_POLLING_COUNT;
+    do {
+	reg_value = enet_phy_read(enet_device_p, ENET_PHY_CONTROL_REG);
+	polling_count --;
+    } while ((reg_value & ENET_PHY_RESET_MASK) != 0 && polling_count != 0);
+
+    if ((reg_value & ENET_PHY_RESET_MASK) != 0) {
+	fdc_error =
+            CAPTURE_FDC_ERROR("Enet PHY reset failed", enet_device_p, reg_value);
+
+        fatal_error_handler(fdc_error);
+    }
+
+    reg_value = enet_phy_read(enet_device_p, ENET_PHY_STATUS_REG);
+    if ((reg_value & ENET_PHY_AUTO_NEG_CAPABLE_MASK) != 0 &&
+	(reg_value & ENET_PHY_AUTO_NEG_COMPLETE_MASK) == 0) {
+	/*
+	 * Set auto-negotiation:
+	 */
+	reg_value = enet_phy_read(enet_device_p, ENET_PHY_CONTROL_REG);
+	reg_value |= ENET_PHY_AUTO_NEGOTIATION_MASK;
+	enet_phy_write(enet_device_p, ENET_PHY_CONTROL_REG, reg_value);
+
+	/*
+	 * Wait for auto-negotiation completion:
+	 */
+	polling_count = MAX_POLLING_COUNT;
+	do {
+	    reg_value = enet_phy_read(enet_device_p, ENET_PHY_STATUS_REG);
+	    polling_count --;
+	} while ((reg_value & ENET_PHY_AUTO_NEG_COMPLETE_MASK) == 0 &&
+		 polling_count != 0);
+
+	if ((reg_value & ENET_PHY_RESET_MASK) != 0) {
+	    fdc_error =
+		CAPTURE_FDC_ERROR("Enet PHY auto-negotiation failed",
+				  enet_device_p, reg_value);
+
+	    fatal_error_handler(fdc_error);
+	}
+    }
 }
 
 
@@ -476,9 +709,7 @@ enet_init(const struct enet_device *enet_device_p)
     }
 
     ethernet_mac_init(enet_device_p);
-
     ethernet_phy_init(enet_device_p);
-
     enet_var_p->initialized = true;
     DEBUG_PRINTF("Initialized device %s\n", enet_device_p->name);
 }
@@ -500,5 +731,4 @@ k64f_enet_receive_interrupt_e_handler(
     FDC_ASSERT_RTOS_INTERRUPT_E_HANDLER_PRECONDITIONS(rtos_interrupt_p);
 
 }
-
 
