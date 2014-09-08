@@ -13,6 +13,7 @@
 #include "failure_data_capture.h"
 #include "utils.h"
 #include "frdm_board.h"
+#include <networking.h>
 
 TODO("Remove these pragmas")
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -184,6 +185,7 @@ void app_software_init(void)
         g_app_version, g_app_build_timestamp);
 
     g_app.led_color_mask = LED_COLOR_RED;
+    networking_init();
 }
 
 static void
@@ -219,9 +221,9 @@ hello_world_thread_thread_f(void *arg)
     float x = 0.1f;
 
     for ( ; ; ) {
-	CONSOLE_POS_PRINTF(24, 60 + thread_id * 20, "Hello thread %1d", arg);
+	CONSOLE_POS_PRINTF(28, 60 + thread_id * 20, "Hello thread %1d", arg);
 	rtos_thread_delay(500);
-	CONSOLE_POS_PRINTF(24, 60 + thread_id * 20, "              ");
+	CONSOLE_POS_PRINTF(28, 60 + thread_id * 20, "              ");
 	if (thread_id == 1) {
 	    x += 0.2f;
 	    x -= 0.2f;
@@ -307,7 +309,7 @@ accelerometer_thread_f(void *arg)
 	    }
 
 	    if (motion_detected) {
-		CONSOLE_POS_PRINTF(24, 1, "x_accel: %8d  y_accel: %8d  z_accel: %8d",
+		CONSOLE_POS_PRINTF(28, 1, "x_accel: %8d  y_accel: %8d  z_accel: %8d",
 		    g_app.x_acceleration,
 		    g_app.y_acceleration,
 		    g_app.z_acceleration);

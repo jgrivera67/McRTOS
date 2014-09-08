@@ -119,6 +119,7 @@ endef
 modules      := \
 		McRTOS \
 		BoardSupport \
+		Networking \
 		Applications/$(APPLICATION)
 
 #
@@ -149,6 +150,8 @@ lst_files = 	$(subst .elf,.lst,$(programs))
 include_dirs := $(INCLUDE_DIR)/McRTOS \
 	        $(INCLUDE_DIR)/BoardSupport \
 	        $(INCLUDE_DIR)/BoardSupport/$(PLATFORM) \
+	        $(INCLUDE_DIR)/Networking \
+	        $(SOURCE_DIR)/Networking/lwip/src/include/posix \
 
 ifeq "$(CPU_ARCHITECTURE)" "arm_cortex_m"
     include_dirs += $(INCLUDE_DIR)/BoardSupport/CMSIS

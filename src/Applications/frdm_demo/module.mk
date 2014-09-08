@@ -1,8 +1,8 @@
 #
-# McRTOS application-specific module-level build makefile 
+# McRTOS application-specific module-level build makefile
 #
 # Copyright (C) 2013 German Rivera
-# 
+#
 local_pgm  := $(subdirectory)/$(APPLICATION).elf
 local_src  := $(subdirectory)/main.c \
 

@@ -31,8 +31,8 @@ UNIT_TESTS_DIR := unit_tests
 SCRIPTS_DIR := scripts
 DOC_DIR := doc
 
-RUN_BUILD_MAKEFILE := $(MAKE) --file=../$(SOURCE_DIR)/build.mk \
-			      --directory=$(OBJECT_DIR) \
+RUN_BUILD_MAKEFILE := $(MAKE) --directory=$(OBJECT_DIR) \
+			      --file=../$(SOURCE_DIR)/build.mk \
 			      $(BUILD_TARGET) \
 			      APPLICATION='$(APPLICATION)' \
 			      PLATFORM='$(PLATFORM)' \
