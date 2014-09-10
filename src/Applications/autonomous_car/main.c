@@ -429,7 +429,7 @@ void autonomous_car_app_init(void)
     rtos_k_pointer_circular_buffer_init(
         "Raw camera frame buffer pool",
         NUM_CAMERA_FRAMES,
-        (void **)g_car.c_captured_camera_frames_queue_entries,
+        (void **)g_car.c_camera_frame_buffer_pool_entries,
         g_car.c_camera_frame_buffer_pool_mutex_p,
         cpu_id,
         &g_car.c_camera_frame_buffer_pool);
