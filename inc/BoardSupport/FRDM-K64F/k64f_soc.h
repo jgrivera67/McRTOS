@@ -281,6 +281,7 @@ struct enet_device {
 #   define ENET_DEVICE_SIGNATURE  GEN_SIGNATURE('E', 'N', 'E', 'T')
     uint32_t signature;
     const char *name;
+    const char *tx_buffer_pool_name;
     struct enet_device_var *var_p;
     volatile ENET_Type *mmio_registers_p;
     struct pin_info rmii_mdio_pin;
@@ -395,8 +396,26 @@ struct enet_tx_buffer_descriptor {
  */
 struct enet_device_var {
     bool initialized;
-    struct enet_rx_buffer_descriptor rx_buffer_descriptors[ENET_MAX_RX_FRAME_BUFFERS];
+
+    /**
+     * Tx buffer descriptor ring accessed by the Ethernet MAC
+     */
     struct enet_tx_buffer_descriptor tx_buffer_descriptors[ENET_MAX_TX_FRAME_BUFFERS];
+
+    /**
+     * Rx buffer descriptor ring accessed by the Ethernet MAC
+     */
+    struct enet_rx_buffer_descriptor rx_buffer_descriptors[ENET_MAX_RX_FRAME_BUFFERS];
+
+    /**
+     * Circular buffer of pointers used to keep track of free Tx buffers
+     */
+    struct rtos_circular_buffer tx_buffer_pool;
+
+    /**
+     * Array of entries for tx_buffer_pool
+     */
+    struct enet_tx_buffer_descriptor *tx_buffer_pool_entries[ENET_MAX_TX_FRAME_BUFFERS];
 };
 
 #define ENET_PHY_ADDRESS    0x0

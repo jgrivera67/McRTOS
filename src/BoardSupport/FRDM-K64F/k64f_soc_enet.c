@@ -14,16 +14,19 @@
 #include "utils.h"
 #include "McRTOS_config_parameters.h"
 #include "McRTOS_kernel_services.h"
+#include <Networking/networking.h>
+
+C_ASSERT(NETWORK_MTU == 1500);
 
 /**
  * Maximum Ethernet frame size (in bytes) including CRC
  */
-#define ENET_MAX_FRAME_SIZE	    1518
+#define ENET_MAX_FRAME_SIZE	    (NETWORK_MTU + 18)
 
 /**
  * Maximum Ethernet VLAN frame size (in bytes)
  */
-#define ENET_MAX_FRAME_VLAN_SIZE    1522
+#define ENET_MAX_FRAME_VLAN_SIZE    (NETWORK_MTU + 22)
 
 /**
  * Maximum Ethernet frame size rounded-up to the required alignment
@@ -110,6 +113,7 @@ static struct enet_device_var g_enet_var = {
 const struct enet_device g_enet_device = {
     .signature = ENET_DEVICE_SIGNATURE,
     .name = "enet0",
+    .tx_buffer_pool_name = "enet0 Tx buffer pool",
     .var_p = &g_enet_var,
     .mmio_registers_p = (volatile ENET_Type *)ENET_BASE,
     .rmii_mdio_pin = PIN_INITIALIZER(PIN_PORT_B, 0, PIN_FUNCTION_ALT4),
@@ -224,7 +228,16 @@ enet_buffer_descriptor_rings_init(const struct enet_device *enet_device_p)
 
 	buffer_desc_p->data_buffer = g_enet_tx_data_buffers[i];
 	buffer_desc_p->data_length = 0;
-	buffer_desc_p->control = 0;
+
+	/*
+	 * Tx buffers are large enough to always hold entire frames, so a
+	 * frame is never fragmented into multiple buffers.
+	 * Frames smaller than 60 bytes are automatically padded.
+	 * The minimum Ethernet frame length transmitted on the wire
+	 * is 64 bytes, including the CRC.
+	 */
+	buffer_desc_p->control = ENET_TX_BD_LAST_IN_FRAME_MASK |
+				 ENET_TX_BD_CRC_MASK;
 
 	/*
 	 * Set the wrap flag for the last buffer of the ring:
@@ -284,11 +297,16 @@ ethernet_mac_init(const struct enet_device *enet_device_p)
     write_32bit_mmio_register(&enet_regs_p->IAUR, 0x0);
 
     /*
-     * Configure MAC registers to default reset values:
-     *
-     * TODO: This is redundant, as we reset the MAC above.
-     * This could be replaced to FDC_ASSERTs
+     * Program the MAC address:
      */
+    reg_value = enet_device_p->mac_address[5] << 24 |
+		enet_device_p->mac_address[4] << 16 |
+		enet_device_p->mac_address[3] << 8 |
+		enet_device_p->mac_address[2];
+    write_32bit_mmio_register(&enet_regs_p->PALR, reg_value);
+    reg_value = enet_device_p->mac_address[1] << 24 |
+		enet_device_p->mac_address[0] << 16;
+    write_32bit_mmio_register(&enet_regs_p->PAUR, reg_value);
 
     /*
      * - Enable normal operating mode (disable sleep mode)
@@ -300,6 +318,7 @@ ethernet_mac_init(const struct enet_device *enet_device_p)
     write_32bit_mmio_register(&enet_regs_p->ECR, reg_value);
 
     /*
+     * Configure receive control register:
      * - Enable stripping of CRC field for incoming frames
      * - Configure RMII interface to the Ethernet PHY
      * - Enable 100Mbps operation
@@ -312,18 +331,24 @@ ethernet_mac_init(const struct enet_device *enet_device_p)
     reg_value &= ~ENET_RCR_RMII_10T_MASK;
     reg_value &= ~ENET_RCR_LOOP_MASK;
     SET_BIT_FIELD(reg_value, ENET_RCR_MAX_FL_MASK, ENET_RCR_MAX_FL_SHIFT,
-		  1518);
+		  ENET_MAX_FRAME_SIZE);
     write_32bit_mmio_register(&enet_regs_p->RCR, reg_value);
 
     /*
-     * Enable duplex mode:
+     * Configure transmit control register:
+     * - Automatically write the source MAC address (SA) to Ethernet frame
+     *   header in the Tx buffer, using the address programmed in the PALR/PAUR
+     *   registers
+     * - Enable full duplex mode
      */
     reg_value = read_32bit_mmio_register(&enet_regs_p->TCR);
-    reg_value |= ENET_TCR_FDEN_MASK;
+    reg_value |= ENET_TCR_ADDINS_MASK | ENET_TCR_FDEN_MASK;
     write_32bit_mmio_register(&enet_regs_p->TCR, reg_value);
 
     /*
-     * Set receive frame truncate length:
+     * Set receive frame truncate length (use reset value 0x7ff):
+     *
+     * TODO: Should this be changed to ENET_MAX_FRAME_SIZE?
      */
     reg_value = read_32bit_mmio_register(&enet_regs_p->FTRL);
     SET_BIT_FIELD(reg_value, ENET_FTRL_TRUNC_FL_MASK, ENET_FTRL_TRUNC_FL_SHIFT,
@@ -346,7 +371,6 @@ ethernet_mac_init(const struct enet_device *enet_device_p)
 		  0);
     write_32bit_mmio_register(&enet_regs_p->OPD, reg_value);
 
-#if 0  /* TODO: Enable this after initial testing */
     /*
      * Set Tx accelerators:
      */
@@ -364,7 +388,6 @@ ethernet_mac_init(const struct enet_device *enet_device_p)
 		ENET_RACC_LINEDIS_MASK |
 		ENET_RACC_SHIFT16_MASK;
     write_32bit_mmio_register(&enet_regs_p->RACC, reg_value);
-#endif
 
     /**
      * Initialize the Serial Management Interface (SMI) between the Ethernet MAC
@@ -381,18 +404,6 @@ ethernet_mac_init(const struct enet_device *enet_device_p)
     SET_BIT_FIELD(reg_value, ENET_MSCR_MII_SPEED_MASK, ENET_MSCR_MII_SPEED_SHIFT,
 		  SOC_CPU_CLOCK_FREQ_IN_MEGA_HZ/ 5);
     write_32bit_mmio_register(&enet_regs_p->MSCR, reg_value);
-
-    /*
-     * Program the MAC address:
-     */
-    reg_value = enet_device_p->mac_address[5] << 24 |
-		enet_device_p->mac_address[4] << 16 |
-		enet_device_p->mac_address[3] << 8 |
-		enet_device_p->mac_address[2];
-    write_32bit_mmio_register(&enet_regs_p->PALR, reg_value);
-    reg_value = enet_device_p->mac_address[1] << 24 |
-		enet_device_p->mac_address[0] << 16;
-    write_32bit_mmio_register(&enet_regs_p->PAUR, reg_value);
 
     /*
      * Configure Tx FIFO:
@@ -422,14 +433,13 @@ ethernet_mac_init(const struct enet_device *enet_device_p)
 
     /*
      * Enable generation of Tx/Rx interrupts:
-     * - Generate Tx interrupt when a Tx buffer has been transmitted (the
-     *   Tx buffer descriptor has been updated)
-     * - Generate Rx interrupt when last Rx buffer of a frame has been received
-     *   (the frame has been received ands the last Rx buffer of the frame has
-     *    been updated)
+     * - Generate Tx interrupt when a frame has been transmitted (the
+     *   last and only Tx buffer descriptor of the frame has been updated)
+     * - Generate Rx interrupt when a frame has been received (the
+     *   (last and only Rx buffer descriptor of the frame has been updated)
      */
     write_32bit_mmio_register(&enet_regs_p->EIMR,
-			      ENET_EIMR_TXB_MASK |
+			      ENET_EIMR_TXF_MASK |
 			      ENET_EIMR_RXF_MASK);
 
     /*
@@ -452,15 +462,12 @@ ethernet_mac_init(const struct enet_device *enet_device_p)
         enet_device_p->rx_rtos_interrupt_pp, enet_device_p);
 
     /*
-     * Enable Ethernet module:
-     *
-     * - TODO: Enable buffer descriptor byte swapping for little-endian system???
+     * Enable ENET module and enable buffer descriptor byte swapping
+     * (since ARM Cortex-M is little-endian):
      */
     reg_value = read_32bit_mmio_register(&enet_regs_p->ECR);
-    reg_value |= ENET_ECR_ETHEREN_MASK;
-#if 0 /* TODO: Do we need this? */
-    reg_value |= ENET_ECR_DBSWP_MASK;
-#endif
+    reg_value |= ENET_ECR_ETHEREN_MASK |
+		 ENET_ECR_DBSWP_MASK;
     write_32bit_mmio_register(&enet_regs_p->ECR, reg_value);
 
     /*
@@ -710,6 +717,29 @@ enet_init(const struct enet_device *enet_device_p)
 
     ethernet_mac_init(enet_device_p);
     ethernet_phy_init(enet_device_p);
+
+    /*
+     * McRTOS-related initialization of the ENET device:
+     * - Initialize and populate Tx buffer pool
+     */
+
+    rtos_k_pointer_circular_buffer_init(
+        enet_device_p->tx_buffer_pool_name,
+        ENET_MAX_TX_FRAME_BUFFERS,
+        (void **)enet_var_p->tx_buffer_pool_entries,
+        NULL,
+        SOC_GET_CURRENT_CPU_ID(),
+        &enet_var_p->tx_buffer_pool);
+
+    for (unsigned int i = 0; i < ENET_MAX_TX_FRAME_BUFFERS; i ++) {
+        bool write_ok = rtos_k_pointer_circular_buffer_write(
+                            &enet_var_p->tx_buffer_pool,
+                            &enet_var_p->tx_buffer_descriptors[i],
+                            false);
+
+        DBG_ASSERT(write_ok, 0, 0);
+    }
+
     enet_var_p->initialized = true;
     DEBUG_PRINTF("Initialized device %s\n", enet_device_p->name);
 }

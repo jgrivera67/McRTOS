@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file    lwipopts.h
-  * This file is based on \src\include\lwip\opt.h 
+  * This file is based on \src\include\lwip\opt.h
   ******************************************************************************
    * Copyright (c) 2013 - 2014, Freescale Semiconductor, Inc.
    * All rights reserved.
@@ -32,27 +32,32 @@
    * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    */
 
-
 #ifndef __LWIPOPTS_H__
 #define __LWIPOPTS_H__
-/*include fsl os abstraction header file to judge whether OS is used*/
-#include "fsl_os_abstraction.h"
+
+#include <Networking/networking.h>
+#include <McRTOS/McRTOS.h>
+
 /**
  * SYS_LIGHTWEIGHT_PROT==1: if you want inter-task protection for certain
  * critical regions during buffer allocation, deallocation and memory
  * allocation and deallocation.
  */
 #define SYS_LIGHTWEIGHT_PROT    0
-#if USE_RTOS
 
+#define USE_RTOS    1
+
+#if USE_RTOS
 /**
  * NO_SYS==0: Use RTOS
  */
 #define NO_SYS                 0
+
 /**
  * LWIP_NETCONN==1: Enable Netconn API (require to use api_lib.c)
  */
 #define LWIP_NETCONN                    1
+
 /**
  * LWIP_SOCKET==1: Enable Socket API (require to use sockets.c)
  */
@@ -73,6 +78,8 @@
 #define LWIP_SOCKET                     0
 
 #endif
+
+
 /* ---------- Memory options ---------- */
 /**
  * MEM_ALIGNMENT: should be set to the alignment of the CPU
@@ -93,18 +100,23 @@
    sends a lot of data out of ROM (or other static memory), this
    should be set high. */
 #define MEMP_NUM_PBUF           10
+
 /* MEMP_NUM_UDP_PCB: the number of UDP protocol control blocks. One
    per active UDP "connection". */
 #define MEMP_NUM_UDP_PCB        6
+
 /* MEMP_NUM_TCP_PCB: the number of simulatenously active TCP
    connections. */
 #define MEMP_NUM_TCP_PCB        10
+
 /* MEMP_NUM_TCP_PCB_LISTEN: the number of listening TCP
    connections. */
 #define MEMP_NUM_TCP_PCB_LISTEN 6
+
 /* MEMP_NUM_TCP_SEG: the number of simultaneously queued TCP
    segments. */
 #define MEMP_NUM_TCP_SEG        12
+
 /* MEMP_NUM_SYS_TIMEOUT: the number of simulateously active
    timeouts. */
 #define MEMP_NUM_SYS_TIMEOUT    10
@@ -115,7 +127,7 @@
 #define PBUF_POOL_SIZE          10
 
 /* PBUF_POOL_BUFSIZE: the size of each pbuf in the pbuf pool. */
-#define PBUF_POOL_BUFSIZE       1518
+#define PBUF_POOL_BUFSIZE       (NETWORK_MTU + 18)
 
 
 /* ---------- TCP options ---------- */
@@ -127,7 +139,7 @@
 #define TCP_QUEUE_OOSEQ         0
 
 /* TCP Maximum segment size. */
-#define TCP_MSS                 (1500 - 40)	  /* TCP_MSS = (Ethernet MTU - IP header size - TCP header size) */
+#define TCP_MSS                 (NETWORK_MTU - 40)	  /* TCP_MSS = (Ethernet MTU - IP header size - TCP header size) */
 
 /* TCP sender buffer space (bytes). */
 #define TCP_SND_BUF             (2*TCP_MSS)
@@ -167,12 +179,12 @@
    --------------------------------------
 */
 
-/* 
+/*
 Some MCU allow computing and verifying the IP, UDP, TCP and ICMP checksums by hardware:
  - To use this feature let the following define uncommented.
- - To disable it and process by CPU comment the  the checksum.
+ - To disable it and process by CPU comment the checksum.
 */
-//#define CHECKSUM_BY_HARDWARE 
+#define CHECKSUM_BY_HARDWARE
 
 
 #ifdef CHECKSUM_BY_HARDWARE
@@ -181,7 +193,7 @@ Some MCU allow computing and verifying the IP, UDP, TCP and ICMP checksums by ha
   /* CHECKSUM_GEN_UDP==0: Generate checksums by hardware for outgoing UDP packets.*/
   #define CHECKSUM_GEN_UDP                0
   /* CHECKSUM_GEN_TCP==0: Generate checksums by hardware for outgoing TCP packets.*/
-  #define CHECKSUM_GEN_TCP                0 
+  #define CHECKSUM_GEN_TCP                0
   /* CHECKSUM_CHECK_IP==0: Check checksums by hardware for incoming IP packets.*/
   #define CHECKSUM_CHECK_IP               0
   /* CHECKSUM_CHECK_UDP==0: Check checksums by hardware for incoming UDP packets.*/
@@ -221,11 +233,11 @@ Some MCU allow computing and verifying the IP, UDP, TCP and ICMP checksums by ha
 #define S32_F "d"
 #define X32_F "x"
 
-#endif 
+#endif
 
 #define TCPIP_MBOX_SIZE                 32
 #define TCPIP_THREAD_STACKSIZE	        1024
-#define TCPIP_THREAD_PRIO	             2
+#define TCPIP_THREAD_PRIO	        (RTOS_HIGHEST_THREAD_PRIORITY + 2)
 
 /**
  * DEFAULT_RAW_RECVMBOX_SIZE: The mailbox size for the incoming packets on a

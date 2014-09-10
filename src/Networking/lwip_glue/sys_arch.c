@@ -28,27 +28,19 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "sys.h"
-#include <assert.h>
-#if NO_SYS
-#include "fsl_hwtimer.h"
-extern const hwtimer_devif_t kSystickDevif;
-extern const hwtimer_devif_t kPitDevif;
-#endif
-
 /*
  * Prints an assertion messages and aborts execution.
  */
 void
 sys_assert( const char *msg )
-{	
+{
 
 //FSL:only needed for debugging
 #ifdef LWIP_DEBUG
     printf(msg);
     printf("\n\r");
 #endif
-	
+
     OSA_EnterCritical(kCriticalDisableInt);
     for(;;);
 }
@@ -59,21 +51,21 @@ sys_assert( const char *msg )
 void _mbox_create(msg_queue_handler_t *queueHandle, int size)
 {
 #ifdef FSL_RTOS_UCOSII
-    void * msgTbl = OSA_MemAlloc(size * sizeof(void*));              
-    uint32_t * msgs = OSA_MemAlloc(size * sizeof(uint32_t));        
+    void * msgTbl = OSA_MemAlloc(size * sizeof(void*));
+    uint32_t * msgs = OSA_MemAlloc(size * sizeof(uint32_t));
     msg_queue_t *queue = (msg_queue_t*)OSA_MemAlloc(sizeof(msg_queue_t));
     queue->msgTbl = msgTbl;
     queue->msgs = msgs;
-    
+
 #elif defined(FSL_RTOS_UCOSIII)
-    uint32_t * msgs = OSA_MemAlloc(size * sizeof(uint32_t));                                                                     
+    uint32_t * msgs = OSA_MemAlloc(size * sizeof(uint32_t));
     msg_queue_t *queue = (msg_queue_t*)OSA_MemAlloc(sizeof(msg_queue_t));
     queue->msgs = msgs;
-   
+
 #elif defined (FSL_RTOS_MQX)
     msg_queue_t *queue = (msg_queue_t*)OSA_MemAlloc((SIZE_IN_MMT_UNITS(sizeof(LWMSGQ_STRUCT)) + SIZE_IN_MMT_UNITS(4) * size)*sizeof(msg_queue_t));
 #else
-   MSG_QUEUE_DECLARE(queue,size,1); 
+   MSG_QUEUE_DECLARE(queue,size,1);
 #endif
    *queueHandle = OSA_MsgQCreate(queue,size,1);
 }
@@ -86,10 +78,10 @@ err_t sys_mbox_new(sys_mbox_t *mbox, int size)
     _mbox_create(&queueHandle,size);
     error = OSA_SemaCreate (&(mbox->_semSync) , (uint8_t)0);
     if(error != kStatus_OSA_Success)
-        return ERR_MEM;     
+        return ERR_MEM;
     OSA_EnterCritical(kCriticalDisableInt);
     mbox->queueHandler = queueHandle ;
-    OSA_ExitCritical(kCriticalDisableInt);	
+    OSA_ExitCritical(kCriticalDisableInt);
     if(queueHandle == (msg_queue_handler_t)0)
         return ERR_MEM;
     else
@@ -127,7 +119,7 @@ sys_mbox_post(sys_mbox_t *mbox, void *msg)
 
 
 /*FSL*/
-/*  
+/*
  *Try to post the "msg" to the mailbox. Returns ERR_MEM if this one
  *is full, else, ERR_OK if the "msg" is posted.
  */
@@ -168,7 +160,7 @@ u32_t sys_arch_mbox_fetch(sys_mbox_t *mbox, void **msg, u32_t timeout)
         timeout = OSA_WAIT_FOREVER ;
     if( msg == 0)
         msg = &dummyptr;
-		
+
     timeStart = OSA_TimeGetMsec();
     error = OSA_MsgQGet(mbox->queueHandler,&(*msg),(uint32_t)timeout);
     timeEnd = OSA_TimeGetMsec();
@@ -193,7 +185,7 @@ sys_sem_new(sys_sem_t *sem,u8_t count)
         return ERR_OK;
     else
 	return ERR_VAL;
-	
+
 }
 
 
@@ -386,8 +378,8 @@ void sys_sem_set_invalid(sys_sem_t *sem)
 #elif defined(FSL_RTOS_MQX)
     sem->VALID = 0;
 #else
-    *sem = 0;	
-#endif   
+    *sem = 0;
+#endif
 }
 int sys_mbox_valid(sys_mbox_t *mbox)
 {

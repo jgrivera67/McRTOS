@@ -44,8 +44,9 @@ local_src :=	$(subdirectory)/networking.c \
 		$(subdirectory)/lwip/src/core/ipv6/ip6_addr.c \
 		$(subdirectory)/lwip/src/netif/etharp.c \
 
-include_dirs += $(subdirectory)/lwip_glue \
-	        $(subdirectory)/lwip/src/include \
+include_dirs += $(SOURCE_DIR)/$(subdirectory)/lwip_glue \
+	        $(SOURCE_DIR)/$(subdirectory)/lwip/src/include \
+	        $(SOURCE_DIR)/$(subdirectory)/lwip/src/include/ipv4 \
 
 local_subdirs := $(subdirectory)/lwip/src/api \
 		 $(subdirectory)/lwip/src/core \

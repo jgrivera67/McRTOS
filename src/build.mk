@@ -147,7 +147,8 @@ hex_files = 	$(subst .elf,.hex,$(programs))
 bin_files = 	$(subst .elf,.bin,$(programs))
 lst_files = 	$(subst .elf,.lst,$(programs))
 
-include_dirs := $(INCLUDE_DIR)/McRTOS \
+include_dirs := $(INCLUDE_DIR) \
+		$(INCLUDE_DIR)/McRTOS \
 	        $(INCLUDE_DIR)/BoardSupport \
 	        $(INCLUDE_DIR)/BoardSupport/$(PLATFORM) \
 	        $(INCLUDE_DIR)/Networking \

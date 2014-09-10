@@ -1,3 +1,6 @@
 [submodule "src/Networking/lwip"]
 	path = src/Networking/lwip
 	url = git://git.sv.gnu.org/lwip.git
+[submodule "src/Networking/fnet"]
+	path = src/Networking/fnet
+	url = http://git.code.sf.net/p/fnet/gitcode
