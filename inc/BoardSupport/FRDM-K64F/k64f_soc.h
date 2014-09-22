@@ -281,7 +281,6 @@ struct enet_device {
 #   define ENET_DEVICE_SIGNATURE  GEN_SIGNATURE('E', 'N', 'E', 'T')
     uint32_t signature;
     const char *name;
-    const char *tx_buffer_pool_name;
     struct enet_device_var *var_p;
     volatile ENET_Type *mmio_registers_p;
     struct pin_info rmii_mdio_pin;
@@ -305,8 +304,8 @@ struct enet_device {
 };
 
 struct enet_rx_buffer_descriptor {
-    uint16_t  data_length;
-    uint16_t  control;
+    uint16_t data_length;
+    uint16_t control;
 #   define  ENET_RX_BD_EMPTY_MASK			BIT(15)
 #   define  ENET_RX_BD_SOFTWARE_OWNERSHIP1_MASK		BIT(14)
 #   define  ENET_RX_BD_WRAP_MASK			BIT(13)
@@ -321,8 +320,8 @@ struct enet_rx_buffer_descriptor {
 #   define  ENET_RX_BD_FIFO_OVERRRUN_MASK		BIT(1)
 #   define  ENET_RX_BD_FRAME_TRUNCATED_MASK		BIT(0)
 
-    void      *data_buffer;
-    uint16_t  control_extend0;
+    void *data_buffer;
+    uint16_t control_extend0;
 #   define  ENET_RX_BD_VLAN_PRIORITY_CODE_POINT_MASK	MULTI_BIT_MASK(15, 13)
 #   define  ENET_RX_BD_VLAN_PRIORITY_CODE_POINT_SHIFT	13
 #   define  ENET_RX_BD_IP_HEADER_CHECKSUM_ERROR_MASK	BIT(5)
@@ -331,30 +330,30 @@ struct enet_rx_buffer_descriptor {
 #   define  ENET_RX_BD_IPv6_FRAME_MASK			BIT(1)
 #   define  ENET_RX_BD_IPv4_FRAGMENT_MASK		BIT(0)
 
-    uint16_t  control_extend1;
+    uint16_t control_extend1;
 #   define  ENET_RX_BD_GENERATE_INTERRUPT_MASK		BIT(7)
 #   define  ENET_RX_BD_UNICAST_FRAME_MASK		BIT(8)
 #   define  ENET_RX_BD_COLLISION_MASK			BIT(9)
 #   define  ENET_RX_BD_PHY_ERROR_MASK			BIT(10)
 #   define  ENET_RX_BD_MAC_ERROR_MASK			BIT(15)
 
-    uint16_t  payload_checksum;
-    uint8_t   header_length;
-    uint8_t   protocol_type;
-    uint16_t  reserved0;
-    uint16_t  control_extend2;
+    uint16_t payload_checksum;
+    uint8_t header_length;
+    uint8_t protocol_type;
+    uint16_t reserved0;
+    uint16_t control_extend2;
 #   define  ENET_RX_BD_LAST_DESCRIPTOR_UPDATE_DONE_MASK	BIT(15)
 
-    uint32_t  timestamp;
-    uint16_t  reserved1;
-    uint16_t  reserved2;
-    uint16_t  reserved3;
-    uint16_t  reserved4;
+    uint32_t timestamp;
+    uint16_t reserved1;
+    uint16_t reserved2;
+    uint16_t reserved3;
+    uint16_t reserved4;
 } __attribute__ ((aligned(ENET_FRAME_BUFFER_ALIGNMENT)));
 
 struct enet_tx_buffer_descriptor {
-    uint16_t  data_length;
-    uint16_t  control;
+    uint16_t data_length;
+    uint16_t control;
 #   define  ENET_TX_BD_READY_MASK			BIT(15)
 #   define  ENET_TX_BD_SOFTWARE_OWNER1_MASK		BIT(14)
 #   define  ENET_TX_BD_WRAP_MASK			BIT(13)
@@ -362,8 +361,8 @@ struct enet_tx_buffer_descriptor {
 #   define  ENET_TX_BD_LAST_IN_FRAME_MASK		BIT(11)
 #   define  ENET_TX_BD_CRC_MASK				BIT(10)
 
-    void      *data_buffer;
-    uint16_t  control_extend0;
+    void *data_buffer;
+    uint16_t control_extend0;
 #   define  ENET_TX_BD_ERROR_MASK			BIT(15)
 #   define  ENET_TX_BD_UNDERFLOW_MASK			BIT(13)
 #   define  ENET_TX_BD_EXCESS_COLLISION_ERROR_MASK	BIT(12)
@@ -372,23 +371,23 @@ struct enet_tx_buffer_descriptor {
 #   define  ENET_TX_BD_FIFO_OVERFLOW_ERROR_MASK		BIT(9)
 #   define  ENET_TX_BD_TMESTAMP_ERROR_MASK		BIT(8)
 
-    uint16_t  control_extend1;
+    uint16_t control_extend1;
 #   define  ENET_TX_BD_INTERRUPT_MASK			BIT(14)
 #   define  ENET_TX_BD_TIMESTAMP_MASK			BIT(13)
 #   define  ENET_TX_BD_INSERT_PROTOCOL_CHECKSUM_MASK	BIT(12)
 #   define  ENET_TX_BD_INSERT_IP_HEADER_CHECKSUM_MASK	BIT(11)
 
-    uint16_t  reserved0;
-    uint16_t  reserved1;
-    uint16_t  reserved2;
-    uint16_t  control_extend2;
+    uint16_t reserved0;
+    uint16_t reserved1;
+    uint16_t reserved2;
+    uint16_t control_extend2;
 #   define  ENET_TX_BD_LAST_DESCRIPTOR_UPDATE_DONE_MASK	BIT(15)
 
-    uint32_t  timestamp;
-    uint16_t  reserved3;
-    uint16_t  reserved4;
-    uint16_t  reserved5;
-    uint16_t  reserved6;
+    uint32_t timestamp;
+    uint16_t reserved3;
+    uint16_t reserved4;
+    uint16_t reserved5;
+    uint16_t reserved6;
 } __attribute__ ((aligned(ENET_FRAME_BUFFER_ALIGNMENT)));
 
 /**
@@ -413,9 +412,20 @@ struct enet_device_var {
     struct rtos_circular_buffer tx_buffer_pool;
 
     /**
+     * Circular buffer of pointers used to represent the queue of received
+     * frames (non-empty Rx buffers)
+     */
+    struct rtos_circular_buffer rx_buffer_queue;
+
+    /**
      * Array of entries for tx_buffer_pool
      */
     struct enet_tx_buffer_descriptor *tx_buffer_pool_entries[ENET_MAX_TX_FRAME_BUFFERS];
+
+    /**
+     * Array of entries for rx_buffer_queue
+     */
+    struct enet_rx_buffer_descriptor *rx_buffer_queue_entries[ENET_MAX_RX_FRAME_BUFFERS];
 };
 
 #define ENET_PHY_ADDRESS    0x0

@@ -32,7 +32,7 @@ static void app_hardware_init(void);
 static void app_hardware_stop(void);
 static void app_software_init(void);
 static void dummy_command(const char *cmd_line);
-static fdc_error_t hello_world_thread_thread_f(void *arg);
+static fdc_error_t hello_world_thread_f(void *arg);
 
 static fdc_error_t accelerometer_thread_f(void *arg);
 
@@ -71,7 +71,7 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
     [0] =
     {
 	.p_name_p = "Hello World thread 1",
-        .p_function_p = hello_world_thread_thread_f,
+        .p_function_p = hello_world_thread_f,
         .p_function_arg_p = (void *)1,
         .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 2,
         .p_thread_pp = NULL,
@@ -80,7 +80,7 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
     [1] =
     {
 	.p_name_p = "Hello World thread 2",
-        .p_function_p = hello_world_thread_thread_f,
+        .p_function_p = hello_world_thread_f,
         .p_function_arg_p = (void *)2,
         .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 2,
         .p_thread_pp = NULL,
@@ -195,7 +195,7 @@ dummy_command(const char *cmd_line)
 }
 
 static fdc_error_t
-hello_world_thread_thread_f(void *arg)
+hello_world_thread_f(void *arg)
 {
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
