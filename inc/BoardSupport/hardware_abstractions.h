@@ -453,7 +453,7 @@ void i2c_write(
 
 void enet_init(const struct enet_device *enet_device_p);
 
-void *enet_alloc_tx_buffer(const struct enet_device *enet_device_p);
+void *enet_allocate_tx_buffer(const struct enet_device *enet_device_p);
 
 void enet_free_tx_buffer(const struct enet_device *enet_device_p,
 			 void *tx_payload_buf);
