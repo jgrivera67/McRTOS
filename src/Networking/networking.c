@@ -49,8 +49,7 @@ static err_t
 ethernet_link_output(struct netif *netif_p, struct pbuf *pbuf_p)
 {
     uint8_t *tx_payload_buf;
-    struct enet_device *enet_device_p =
-	(struct enet_device *)netif_p->state;
+    struct enet_device *enet_device_p = (struct enet_device *)netif_p->state;
 
     /*
      * TODO: Change this for zero-copy
@@ -65,6 +64,9 @@ ethernet_link_output(struct netif *netif_p, struct pbuf *pbuf_p)
     FDC_ASSERT(pbuf_p->next == NULL,
 	       pbuf_p->next, pbuf_p);
 
+    /*
+     * TODO: remove this memory copying for Tx zero-copy
+     */
     for (i = 0; i < pbuf_p->tot_len; i ++) {
 	tx_payload_buf[i] = ((uint8_t *)pbuf_p->payload)[i];
     }
@@ -131,11 +133,69 @@ networking_init(void)
 
 
 fdc_error_t
-ethernet_link_input(struct netif *netif)
+ethernet_link_input(struct netif *netif_p)
 {
+    fdc_error_t fdc_error;
+    err_t lwip_err;
+    void *rx_payload_buf;
+    size_t rx_payload_length;
+    struct pbuf *pbuf_p;
+    bool packet_dropped = false;
+    struct enet_device *enet_device_p = (struct enet_device *)netif_p->state;
+
+    enet_dequeue_rx_buffer(enet_device_p, &rx_payload_buf, &rx_payload_length);
+
     /*
-     * TODO: Wait cond var to be signaled from Rx interrupt (or do a read circular buffer)
+     * TODO for zero-copy: use PBUF_REF, instead of PBUF_POOL
      */
+    pbuf_p = pbuf_alloc(PBUF_RAW, rx_payload_length, PBUF_POOL);
+    if (pbuf_p == NULL) {
+	fdc_error =
+            CAPTURE_FDC_ERROR("pbuf_alloc() failed (Rx packet dropped)",
+			      netif_p, rx_payload_length);
+	packet_dropped = true;
+	goto error;
+    }
+
+    /*
+     * TODO for zero-copy: remove this memory copying and set
+     * pbuf_p->payload to poin to rx_payload_buf
+     */
+    for (i = 0; i < rx_payload_length; i ++) {
+	((uint8_t *)pbuf_p->payload)[i] = rx_payload_buf[i];
+    }
+
+    pbuf_p->tot_len = rx_payload_length;
+
+    /*
+     * TODO for zero-copy: don't recycle here. Instead, have an API that
+     * the application calls when it is done processing the received packet
+     */
+    enet_recycle_rx_buffer(enet_device_p, rx_payload_buf);
+
+    /*
+     * Pass received packet to the TCP/IP stack:
+     */
+    lwip_err = tcpip_input(pbuf_p, netif_p);
+    if (lwip_err != 0) {
+	    fdc_error =
+            CAPTURE_FDC_ERROR("tcpip_input() failed (Rx packet dropped)",
+			      netif_p, pbuf_p);
+
+	    /*
+	     * TODO: For zero-copy, set packet_dropped to true
+	     */
+	    goto error;
+    }
+
+    return 0;
+
+error:
+    if (packet_dropped) {
+	enet_recycle_rx_buffer(enet_device_p, rx_payload_buf);
+    }
+
+    return fdc_error;
 }
 
 
@@ -145,6 +205,21 @@ networking_receive_thread_f(void *arg)
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
+    FDC_ASSERT(arg != NULL, arg, cpu_id);
+
+    struct netif *netif_p = (struct netif *)arg;
+
+    rtos_enter_privileged_mode();
+    for ( ; ; ) {
+	ethernet_link_input(netif_p);
+    }
+
+    fdc_error = CAPTURE_FDC_ERROR(
+        "thread should not have terminated",
+        cpu_id, rtos_thread_self());
+
+    rtos_exit_privileged_mode();
+    return fdc_error;
 }
 
 

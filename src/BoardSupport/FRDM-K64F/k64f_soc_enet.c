@@ -847,6 +847,15 @@ k64f_enet_transmit_interrupt_e_handler(
 		continue;
 	    }
 
+	    if (buffer_desc_p->control &
+	        (ENET_TX_BD_ERROR_MASK |
+	         ENET_TX_BD_FIFO_OVERFLOW_ERROR_MASK |
+	         ENET_TX_BD_TMESTAMP_ERROR_MASK |
+		 ENET_TX_BD_FRAME_ERROR_MASK)) {
+		(void)CAPTURE_FDC_ERROR("Ethernet transmission failed (Tx packet dropped)",
+					buffer_desc_p->control, buffer_desc_p);
+	    }
+
 	    buffer_desc_p->data_length = 0;
 	    buffer_desc_p->control_extend1 &= ~ENET_TX_BD_INTERRUPT_MASK;
 	    enet_free_tx_buffer(enet_device_p, tx_payload_buf);
@@ -909,6 +918,17 @@ k64f_enet_receive_interrupt_e_handler(
 	    }
 
 	    buffer_desc_p->control_extend1 &= ~ENET_RX_BD_GENERATE_INTERRUPT_MASK;
+	    if (buffer_desc_p->control &
+	        (ENET_RX_BD_LENGTH_VIOLATION_MASK |
+		 ENET_RX_BD_NON_OCTET_ALIGNED_FRAME_MASK |
+		 ENET_RX_BD_CRC_ERROR_MASK |
+		 ENET_RX_BD_FIFO_OVERRRUN_MASK |
+		 ENET_RX_BD_FRAME_TRUNCATED_MASK)) {
+		(void)CAPTURE_FDC_ERROR("Received bad frame (Rx packet dropped)",
+					buffer_desc_p->control, buffer_desc_p);
+		continue;
+	    }
+
 	    enet_enqueue_rx_buffer(enet_device_p, rx_payload_buf);
 	}
     }
@@ -1028,8 +1048,10 @@ enet_start_xmit(const struct enet_device *enet_device_p,
  * It returns a pointer to the beginning of the data payload section of
  * the dequeued Rx buffer.
  */
-void *
-enet_dequeue_rx_buffer(const struct enet_device *enet_device_p)
+void
+enet_dequeue_rx_buffer(const struct enet_device *enet_device_p,
+		       void **rx_payload_buf_p,
+		       size_t *rx_payload_length_p)
 {
     void *rx_payload_buf = NULL;
 
@@ -1046,7 +1068,8 @@ enet_dequeue_rx_buffer(const struct enet_device *enet_device_p)
 
     DBG_ASSERT(rx_payload_buf != NULL, enet_device_p, 0);
 
-    struct enet_buf_control_block *buf_control_block_p = ((struct enet_buf_control_block *)rx_payload_buf) - 1;
+    struct enet_buf_control_block *buf_control_block_p =
+	((struct enet_buf_control_block *)rx_payload_buf) - 1;
 
     FDC_ASSERT(buf_control_block_p->signature == ENET_RX_BUFFER_SIGNATURE,
 	       buf_control_block_p->signature, buf_control_block_p);
@@ -1061,8 +1084,11 @@ enet_dequeue_rx_buffer(const struct enet_device *enet_device_p)
                rx_buf_desc_p->data_buffer, rx_payload_buf);
     FDC_ASSERT((rx_buf_desc_p->control & ENET_RX_BD_EMPTY_MASK) == 0,
 	       rx_buf_desc_p->control, rx_buf_desc_p);
+    FDC_ASSERT((rx_buf_desc_p->data_length <= NETWORK_MTU,
+	       rx_buf_desc_p->data_length, rx_buf_desc_p);
 
-    return rx_payload_buf;
+    *rx_payload_buf_pp = rx_payload_buf;
+    *rx_payload_length_p = rx_buf_desc_p->data_length;
 }
 
 
