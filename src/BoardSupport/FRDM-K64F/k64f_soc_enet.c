@@ -44,6 +44,7 @@ struct enet_buf_prefix {
 #   define ENET_TX_BUFFER_SIGNATURE  GEN_SIGNATURE('T', 'X', 'B', 'U')
 #   define ENET_RX_BUFFER_SIGNATURE  GEN_SIGNATURE('R', 'X', 'B', 'U')
 
+    bool in_transit;
     union {
 	struct enet_tx_buffer_descriptor *tx_buf_desc_p;
 	struct enet_rx_buffer_descriptor *rx_buf_desc_p;
@@ -202,6 +203,7 @@ enet_buffer_descriptor_rings_init(const struct enet_device *enet_device_p)
 	    (struct enet_buf_prefix *)g_enet_rx_data_buffers[i];
 
 	buf_prefix_p->signature = ENET_RX_BUFFER_SIGNATURE;
+	buf_prefix_p->in_transit = false;
 	buf_prefix_p->rx_buf_desc_p = buffer_desc_p;
 	buffer_desc_p->data_buffer = buf_prefix_p + 1;
 	buffer_desc_p->data_length = 0;
@@ -241,6 +243,7 @@ enet_buffer_descriptor_rings_init(const struct enet_device *enet_device_p)
 	    (struct enet_buf_prefix *)g_enet_tx_data_buffers[i];
 
 	buf_prefix_p->signature = ENET_TX_BUFFER_SIGNATURE;
+	buf_prefix_p->in_transit = false;
 	buf_prefix_p->tx_buf_desc_p = buffer_desc_p;
 	buffer_desc_p->data_buffer = buf_prefix_p + 1;
 	buffer_desc_p->data_length = 0;
@@ -784,6 +787,60 @@ k64f_enet_transmit_interrupt_e_handler(
 {
     FDC_ASSERT_RTOS_INTERRUPT_E_HANDLER_PRECONDITIONS(rtos_interrupt_p);
 
+    const struct enet_device *enet_device_p =
+        (struct enet_device *)rtos_interrupt_p->int_arg_p;
+
+    DBG_ASSERT(
+        enet_device->signature == ENET_DEVICE_SIGNATURE,
+        enet_device->signature, enet_device_p);
+
+    struct enet_device_var *const enet_var_p = enet_device_p->var_p;
+    volatile ENET_Type *enet_regs_p = enet_device_p->mmio_registers_p;
+
+    for ( ; ; ) {
+	uint32_t reg_value = read_32bit_mmio_register(&enet_regs_p->EIR);
+
+	if ((reg_value & ENET_EIR_TXF_MASK) == 0) {
+	    break;
+	}
+
+	reg_value &= ~ENET_EIR_TXF_MASK;
+	write_32bit_mmio_register(&enet_regs_p->EIR, reg_value);
+
+	for (unsigned int i = 0; i < ENET_MAX_TX_FRAME_BUFFERS; i ++) {
+	    struct enet_tx_buffer_descriptor *buffer_desc_p =
+		&enet_var_p->tx_buffer_descriptors[i];
+
+	    FDC_ASSERT((buffer_desc_p->control &
+			(ENET_TX_BD_LAST_IN_FRAME_MASK | ENET_TX_BD_CRC_MASK)) ==
+		       (ENET_TX_BD_LAST_IN_FRAME_MASK | ENET_TX_BD_CRC_MASK),
+		       buffer_desc_p->control, buffer_desc_p);
+
+	    if (i == ENET_MAX_TX_FRAME_BUFFERS - 1) {
+		FDC_ASSERT(buffer_desc_p->control & ENET_TX_BD_WRAP_MASK,
+		           buffer_desc_p->control, buffer_desc_p);
+	    }
+
+	    if (buffer_desc_p->control & ENET_TX_BD_READY_MASK) {
+		continue;
+	    }
+
+	    void *tx_payload_buf = buffer_desc_p->data_buffer;
+	    struct enet_buf_prefix *buf_prefix_p =
+		((struct enet_buf_prefix *)tx_payload_buf) - 1;
+
+	    DBG_ASSERT(buf_prefix_p->signature == ENET_TX_BUFFER_SIGNATURE,
+		       buf_prefix_p->signature, buf_prefix_p);
+
+	    if (!buf_prefix_p->in_transit) {
+		continue;
+	    }
+
+	    enet_free_tx_buffer(enet_device_p, tx_payload_buf);
+	    buffer_desc_p->data_length = 0;
+	    buffer_desc_p->control_extend1 = 0;
+	}
+    }
 }
 
 
@@ -823,7 +880,10 @@ enet_allocate_tx_buffer(const struct enet_device *enet_device_p)
 
     FDC_ASSERT(buf_prefix_p->signature == ENET_TX_BUFFER_SIGNATURE,
 	       buf_prefix_p->signature, buf_prefix_p);
+    FDC_ASSERT(!buf_prefix_p->in_transit,
+	       buf_prefix_p, enet_device_p);
 
+    buf_prefix_p->in_transit = true;
     struct enet_tx_buffer_descriptor *tx_buf_desc_p = buf_prefix_p->tx_buf_desc_p;
 
     FDC_ASSERT(tx_buf_desc_p->data_buffer == tx_payload_buf,
@@ -851,7 +911,10 @@ enet_free_tx_buffer(const struct enet_device *enet_device_p, void *tx_payload_bu
 
     FDC_ASSERT(buf_prefix_p->signature == ENET_TX_BUFFER_SIGNATURE,
 	       buf_prefix_p->signature, buf_prefix_p);
+    FDC_ASSERT(buf_prefix_p->in_transit,
+	       buf_prefix_p, enet_device_p);
 
+    buf_prefix_p->in_transit = false;
     struct enet_tx_buffer_descriptor *tx_buf_desc_p = buf_prefix_p->tx_buf_desc_p;
 
     FDC_ASSERT(tx_buf_desc_p->data_buffer == tx_payload_buf,
@@ -865,89 +928,6 @@ enet_free_tx_buffer(const struct enet_device *enet_device_p, void *tx_payload_bu
 			false);
 
     FDC_ASSERT(write_ok, enet_device_p, tx_payload_buf);
-}
-
-
-/**
- * Dequeues an Rx buffer from the Rx buffer queue of the given ENET device.
- * It returns a pointer to the beginning of the data payload section of
- * the dequeued Rx buffer.
- */
-void *
-enet_dequeue_rx_buffer(const struct enet_device *enet_device_p)
-{
-    void *rx_payload_buf = NULL;
-
-    FDC_ASSERT(
-        enet_device_p->signature == ENET_DEVICE_SIGNATURE,
-        enet_device_p->signature, enet_device_p);
-
-    struct enet_device_var *const enet_var_p = enet_device_p->var_p;
-
-    (void)rtos_k_pointer_circular_buffer_read(
-		&enet_var_p->rx_buffer_queue,
-        	&rx_payload_buf,
-		true);
-
-    DBG_ASSERT(rx_payload_buf != NULL, enet_device_p, 0);
-
-    struct enet_buf_prefix *buf_prefix_p = ((struct enet_buf_prefix *)rx_payload_buf) - 1;
-
-    FDC_ASSERT(buf_prefix_p->signature == ENET_RX_BUFFER_SIGNATURE,
-	       buf_prefix_p->signature, buf_prefix_p);
-
-    struct enet_rx_buffer_descriptor *rx_buf_desc_p = buf_prefix_p->rx_buf_desc_p;
-
-    FDC_ASSERT(rx_buf_desc_p->data_buffer == rx_payload_buf,
-               rx_buf_desc_p->data_buffer, rx_payload_buf);
-    FDC_ASSERT((rx_buf_desc_p->control & ENET_RX_BD_EMPTY_MASK) == 0,
-	       rx_buf_desc_p->control, rx_buf_desc_p);
-
-    return rx_payload_buf;
-}
-
-
-/**
- * Enqueue a Rx buffer into the Rx buffer queue of the corresponding
- * ENET device
- */
-void
-enet_enqueue_rx_buffer(const struct enet_device *enet_device_p, void *rx_payload_buf)
-{
-    FDC_ASSERT(
-        enet_device_p->signature == ENET_DEVICE_SIGNATURE,
-        enet_device_p->signature, enet_device_p);
-
-    struct enet_device_var *const enet_var_p = enet_device_p->var_p;
-    volatile ENET_Type *enet_regs_p = enet_device_p->mmio_registers_p;
-    struct enet_buf_prefix *buf_prefix_p = ((struct enet_buf_prefix *)rx_payload_buf) - 1;
-
-    FDC_ASSERT(buf_prefix_p->signature == ENET_RX_BUFFER_SIGNATURE,
-	       buf_prefix_p->signature, buf_prefix_p);
-
-    struct enet_rx_buffer_descriptor *rx_buf_desc_p = buf_prefix_p->rx_buf_desc_p;
-
-    FDC_ASSERT(rx_buf_desc_p->data_buffer == rx_payload_buf,
-               rx_buf_desc_p->data_buffer, rx_payload_buf);
-    FDC_ASSERT((rx_buf_desc_p->control & ENET_RX_BD_EMPTY_MASK) == 0,
-	       rx_buf_desc_p->control, rx_buf_desc_p);
-
-    bool write_ok = rtos_k_pointer_circular_buffer_write(
-			&enet_var_p->rx_buffer_queue,
-			rx_payload_buf,
-			false);
-
-    FDC_ASSERT(write_ok, enet_device_p, rx_payload_buf);
-
-    rx_buf_desc_p->control |= ENET_RX_BD_EMPTY_MASK;
-    rx_buf_desc_p->control_extend1 |= ENET_RX_BD_GENERATE_INTERRUPT_MASK;
-
-    /*
-     * Re-activate Rx buffer descriptor ring:
-     * (the Rx descriptor ring has at least one descriptor with the "empty"
-     *  bit set in its control field)
-     */
-    write_32bit_mmio_register(&enet_regs_p->RDAR, ENET_RDAR_RDAR_MASK);
 }
 
 
@@ -979,3 +959,122 @@ enet_start_xmit(const struct enet_device *enet_device_p,
      */
     write_32bit_mmio_register(&enet_regs_p->TDAR, ENET_TDAR_TDAR_MASK);
 }
+
+
+/**
+ * Dequeues an Rx buffer from the Rx buffer queue of the given ENET device.
+ * It returns a pointer to the beginning of the data payload section of
+ * the dequeued Rx buffer.
+ */
+void *
+enet_dequeue_rx_buffer(const struct enet_device *enet_device_p)
+{
+    void *rx_payload_buf = NULL;
+
+    FDC_ASSERT(
+        enet_device_p->signature == ENET_DEVICE_SIGNATURE,
+        enet_device_p->signature, enet_device_p);
+
+    struct enet_device_var *const enet_var_p = enet_device_p->var_p;
+
+    (void)rtos_k_pointer_circular_buffer_read(
+		&enet_var_p->rx_buffer_queue,
+        	&rx_payload_buf,
+		true);
+
+    DBG_ASSERT(rx_payload_buf != NULL, enet_device_p, 0);
+
+    struct enet_buf_prefix *buf_prefix_p = ((struct enet_buf_prefix *)rx_payload_buf) - 1;
+
+    FDC_ASSERT(buf_prefix_p->signature == ENET_RX_BUFFER_SIGNATURE,
+	       buf_prefix_p->signature, buf_prefix_p);
+    FDC_ASSERT(!buf_prefix_p->in_transit,
+	       buf_prefix_p, enet_device_p);
+
+    buf_prefix_p->in_transit = true;
+
+    struct enet_rx_buffer_descriptor *rx_buf_desc_p = buf_prefix_p->rx_buf_desc_p;
+
+    FDC_ASSERT(rx_buf_desc_p->data_buffer == rx_payload_buf,
+               rx_buf_desc_p->data_buffer, rx_payload_buf);
+    FDC_ASSERT((rx_buf_desc_p->control & ENET_RX_BD_EMPTY_MASK) == 0,
+	       rx_buf_desc_p->control, rx_buf_desc_p);
+
+    return rx_payload_buf;
+}
+
+
+/**
+ * Enqueue a Rx buffer into the Rx buffer queue of the corresponding
+ * ENET device
+ */
+void
+enet_enqueue_rx_buffer(const struct enet_device *enet_device_p, void *rx_payload_buf)
+{
+    FDC_ASSERT(
+        enet_device_p->signature == ENET_DEVICE_SIGNATURE,
+        enet_device_p->signature, enet_device_p);
+
+    struct enet_device_var *const enet_var_p = enet_device_p->var_p;
+    struct enet_buf_prefix *buf_prefix_p = ((struct enet_buf_prefix *)rx_payload_buf) - 1;
+
+    FDC_ASSERT(buf_prefix_p->signature == ENET_RX_BUFFER_SIGNATURE,
+	       buf_prefix_p->signature, buf_prefix_p);
+    FDC_ASSERT(buf_prefix_p->in_transit,
+	       buf_prefix_p, enet_device_p);
+
+    buf_prefix_p->in_transit = false;
+
+    struct enet_rx_buffer_descriptor *rx_buf_desc_p = buf_prefix_p->rx_buf_desc_p;
+
+    FDC_ASSERT(rx_buf_desc_p->data_buffer == rx_payload_buf,
+               rx_buf_desc_p->data_buffer, rx_payload_buf);
+    FDC_ASSERT((rx_buf_desc_p->control & ENET_RX_BD_EMPTY_MASK) == 0,
+	       rx_buf_desc_p->control, rx_buf_desc_p);
+
+    bool write_ok = rtos_k_pointer_circular_buffer_write(
+			&enet_var_p->rx_buffer_queue,
+			rx_payload_buf,
+			false);
+
+    FDC_ASSERT(write_ok, enet_device_p, rx_payload_buf);
+}
+
+
+/**
+ * Recycle the given Rx buffer, by marking the corresponding Rx descriptor
+ * as empty and reactivating the Rx descriptor ring.
+ */
+void
+enet_recycle_rx_buffer(const struct enet_device *enet_device_p, void *rx_payload_buf)
+{
+    FDC_ASSERT(
+        enet_device_p->signature == ENET_DEVICE_SIGNATURE,
+        enet_device_p->signature, enet_device_p);
+
+    struct enet_device_var *const enet_var_p = enet_device_p->var_p;
+    volatile ENET_Type *enet_regs_p = enet_device_p->mmio_registers_p;
+    struct enet_buf_prefix *buf_prefix_p = ((struct enet_buf_prefix *)rx_payload_buf) - 1;
+
+    FDC_ASSERT(buf_prefix_p->signature == ENET_RX_BUFFER_SIGNATURE,
+	       buf_prefix_p->signature, buf_prefix_p);
+
+    struct enet_rx_buffer_descriptor *rx_buf_desc_p = buf_prefix_p->rx_buf_desc_p;
+
+    FDC_ASSERT(rx_buf_desc_p->data_buffer == rx_payload_buf,
+               rx_buf_desc_p->data_buffer, rx_payload_buf);
+    FDC_ASSERT((rx_buf_desc_p->control & ENET_RX_BD_EMPTY_MASK) == 0,
+	       rx_buf_desc_p->control, rx_buf_desc_p);
+
+    rx_buf_desc_p->control |= ENET_RX_BD_EMPTY_MASK;
+    rx_buf_desc_p->control_extend1 |= ENET_RX_BD_GENERATE_INTERRUPT_MASK;
+
+    /*
+     * Re-activate Rx buffer descriptor ring:
+     * (the Rx descriptor ring has at least one descriptor with the "empty"
+     *  bit set in its control field)
+     */
+    write_32bit_mmio_register(&enet_regs_p->RDAR, ENET_RDAR_RDAR_MASK);
+}
+
+

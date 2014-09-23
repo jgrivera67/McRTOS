@@ -118,10 +118,10 @@ badd +1 src/Networking/module.mk
 badd +150 ~/embsys/projects/McRTOS/src/Networking/lwip_glue/ethernetif.c
 badd +37 ~/embsys/projects/McRTOS/src/Networking/lwip/src/netif/ethernetif.c
 badd +52 ~/embsys/tmp/Freescale_KSDK.notes
-badd +0 ~/embsys/projects/McRTOS/src/Networking/lwip_glue/arch/sys_arch.h
-badd +0 doc/tcpip_notes.txt
+badd +41 ~/embsys/projects/McRTOS/src/Networking/lwip_glue/arch/sys_arch.h
+badd +1 doc/tcpip_notes.txt
 silent! argdel *
-set lines=51 columns=205
+set lines=51 columns=203
 winpos 0 31
 edit src/Applications/frdm_demo/main.c
 set splitbelow splitright
@@ -151,19 +151,19 @@ set nosplitright
 wincmd t
 set winheight=1 winwidth=1
 exe '1resize ' . ((&lines * 42 + 25) / 51)
-exe 'vert 1resize ' . ((&columns * 84 + 102) / 205)
+exe 'vert 1resize ' . ((&columns * 83 + 101) / 203)
 exe '2resize ' . ((&lines * 6 + 25) / 51)
-exe 'vert 2resize ' . ((&columns * 84 + 102) / 205)
+exe 'vert 2resize ' . ((&columns * 83 + 101) / 203)
 exe '3resize ' . ((&lines * 8 + 25) / 51)
-exe 'vert 3resize ' . ((&columns * 120 + 102) / 205)
+exe 'vert 3resize ' . ((&columns * 119 + 101) / 203)
 exe '4resize ' . ((&lines * 8 + 25) / 51)
-exe 'vert 4resize ' . ((&columns * 120 + 102) / 205)
+exe 'vert 4resize ' . ((&columns * 119 + 101) / 203)
 exe '5resize ' . ((&lines * 8 + 25) / 51)
-exe 'vert 5resize ' . ((&columns * 120 + 102) / 205)
+exe 'vert 5resize ' . ((&columns * 119 + 101) / 203)
 exe '6resize ' . ((&lines * 5 + 25) / 51)
-exe 'vert 6resize ' . ((&columns * 120 + 102) / 205)
+exe 'vert 6resize ' . ((&columns * 119 + 101) / 203)
 exe '7resize ' . ((&lines * 16 + 25) / 51)
-exe 'vert 7resize ' . ((&columns * 120 + 102) / 205)
+exe 'vert 7resize ' . ((&columns * 119 + 101) / 203)
 argglobal
 setlocal fdm=manual
 setlocal fde=0
@@ -290,19 +290,19 @@ normal! zt
 normal! 062|
 wincmd w
 exe '1resize ' . ((&lines * 42 + 25) / 51)
-exe 'vert 1resize ' . ((&columns * 84 + 102) / 205)
+exe 'vert 1resize ' . ((&columns * 83 + 101) / 203)
 exe '2resize ' . ((&lines * 6 + 25) / 51)
-exe 'vert 2resize ' . ((&columns * 84 + 102) / 205)
+exe 'vert 2resize ' . ((&columns * 83 + 101) / 203)
 exe '3resize ' . ((&lines * 8 + 25) / 51)
-exe 'vert 3resize ' . ((&columns * 120 + 102) / 205)
+exe 'vert 3resize ' . ((&columns * 119 + 101) / 203)
 exe '4resize ' . ((&lines * 8 + 25) / 51)
-exe 'vert 4resize ' . ((&columns * 120 + 102) / 205)
+exe 'vert 4resize ' . ((&columns * 119 + 101) / 203)
 exe '5resize ' . ((&lines * 8 + 25) / 51)
-exe 'vert 5resize ' . ((&columns * 120 + 102) / 205)
+exe 'vert 5resize ' . ((&columns * 119 + 101) / 203)
 exe '6resize ' . ((&lines * 5 + 25) / 51)
-exe 'vert 6resize ' . ((&columns * 120 + 102) / 205)
+exe 'vert 6resize ' . ((&columns * 119 + 101) / 203)
 exe '7resize ' . ((&lines * 16 + 25) / 51)
-exe 'vert 7resize ' . ((&columns * 120 + 102) / 205)
+exe 'vert 7resize ' . ((&columns * 119 + 101) / 203)
 tabedit src/McRTOS/McRTOS_startup_arm_cortex_m.c
 set splitbelow splitright
 wincmd _ | wincmd |
@@ -331,19 +331,19 @@ set nosplitright
 wincmd t
 set winheight=1 winwidth=1
 exe '1resize ' . ((&lines * 4 + 25) / 51)
-exe 'vert 1resize ' . ((&columns * 144 + 102) / 205)
+exe 'vert 1resize ' . ((&columns * 143 + 101) / 203)
 exe '2resize ' . ((&lines * 22 + 25) / 51)
-exe 'vert 2resize ' . ((&columns * 144 + 102) / 205)
+exe 'vert 2resize ' . ((&columns * 143 + 101) / 203)
 exe '3resize ' . ((&lines * 18 + 25) / 51)
-exe 'vert 3resize ' . ((&columns * 144 + 102) / 205)
+exe 'vert 3resize ' . ((&columns * 143 + 101) / 203)
 exe '4resize ' . ((&lines * 2 + 25) / 51)
-exe 'vert 4resize ' . ((&columns * 144 + 102) / 205)
+exe 'vert 4resize ' . ((&columns * 143 + 101) / 203)
 exe '5resize ' . ((&lines * 8 + 25) / 51)
-exe 'vert 5resize ' . ((&columns * 60 + 102) / 205)
+exe 'vert 5resize ' . ((&columns * 59 + 101) / 203)
 exe '6resize ' . ((&lines * 30 + 25) / 51)
-exe 'vert 6resize ' . ((&columns * 60 + 102) / 205)
+exe 'vert 6resize ' . ((&columns * 59 + 101) / 203)
 exe '7resize ' . ((&lines * 9 + 25) / 51)
-exe 'vert 7resize ' . ((&columns * 60 + 102) / 205)
+exe 'vert 7resize ' . ((&columns * 59 + 101) / 203)
 argglobal
 setlocal fdm=manual
 setlocal fde=0
@@ -470,19 +470,19 @@ normal! zt
 normal! 03|
 wincmd w
 exe '1resize ' . ((&lines * 4 + 25) / 51)
-exe 'vert 1resize ' . ((&columns * 144 + 102) / 205)
+exe 'vert 1resize ' . ((&columns * 143 + 101) / 203)
 exe '2resize ' . ((&lines * 22 + 25) / 51)
-exe 'vert 2resize ' . ((&columns * 144 + 102) / 205)
+exe 'vert 2resize ' . ((&columns * 143 + 101) / 203)
 exe '3resize ' . ((&lines * 18 + 25) / 51)
-exe 'vert 3resize ' . ((&columns * 144 + 102) / 205)
+exe 'vert 3resize ' . ((&columns * 143 + 101) / 203)
 exe '4resize ' . ((&lines * 2 + 25) / 51)
-exe 'vert 4resize ' . ((&columns * 144 + 102) / 205)
+exe 'vert 4resize ' . ((&columns * 143 + 101) / 203)
 exe '5resize ' . ((&lines * 8 + 25) / 51)
-exe 'vert 5resize ' . ((&columns * 60 + 102) / 205)
+exe 'vert 5resize ' . ((&columns * 59 + 101) / 203)
 exe '6resize ' . ((&lines * 30 + 25) / 51)
-exe 'vert 6resize ' . ((&columns * 60 + 102) / 205)
+exe 'vert 6resize ' . ((&columns * 59 + 101) / 203)
 exe '7resize ' . ((&lines * 9 + 25) / 51)
-exe 'vert 7resize ' . ((&columns * 60 + 102) / 205)
+exe 'vert 7resize ' . ((&columns * 59 + 101) / 203)
 tabedit src/McRTOS/McRTOS_kernel_services.c
 set splitbelow splitright
 wincmd _ | wincmd |
@@ -508,17 +508,17 @@ set nosplitright
 wincmd t
 set winheight=1 winwidth=1
 exe '1resize ' . ((&lines * 41 + 25) / 51)
-exe 'vert 1resize ' . ((&columns * 149 + 102) / 205)
+exe 'vert 1resize ' . ((&columns * 148 + 101) / 203)
 exe '2resize ' . ((&lines * 7 + 25) / 51)
-exe 'vert 2resize ' . ((&columns * 149 + 102) / 205)
+exe 'vert 2resize ' . ((&columns * 148 + 101) / 203)
 exe '3resize ' . ((&lines * 6 + 25) / 51)
-exe 'vert 3resize ' . ((&columns * 55 + 102) / 205)
+exe 'vert 3resize ' . ((&columns * 54 + 101) / 203)
 exe '4resize ' . ((&lines * 19 + 25) / 51)
-exe 'vert 4resize ' . ((&columns * 55 + 102) / 205)
+exe 'vert 4resize ' . ((&columns * 54 + 101) / 203)
 exe '5resize ' . ((&lines * 14 + 25) / 51)
-exe 'vert 5resize ' . ((&columns * 55 + 102) / 205)
+exe 'vert 5resize ' . ((&columns * 54 + 101) / 203)
 exe '6resize ' . ((&lines * 7 + 25) / 51)
-exe 'vert 6resize ' . ((&columns * 55 + 102) / 205)
+exe 'vert 6resize ' . ((&columns * 54 + 101) / 203)
 argglobal
 setlocal fdm=manual
 setlocal fde=0
@@ -620,17 +620,17 @@ setlocal fdn=20
 setlocal fen
 wincmd w
 exe '1resize ' . ((&lines * 41 + 25) / 51)
-exe 'vert 1resize ' . ((&columns * 149 + 102) / 205)
+exe 'vert 1resize ' . ((&columns * 148 + 101) / 203)
 exe '2resize ' . ((&lines * 7 + 25) / 51)
-exe 'vert 2resize ' . ((&columns * 149 + 102) / 205)
+exe 'vert 2resize ' . ((&columns * 148 + 101) / 203)
 exe '3resize ' . ((&lines * 6 + 25) / 51)
-exe 'vert 3resize ' . ((&columns * 55 + 102) / 205)
+exe 'vert 3resize ' . ((&columns * 54 + 101) / 203)
 exe '4resize ' . ((&lines * 19 + 25) / 51)
-exe 'vert 4resize ' . ((&columns * 55 + 102) / 205)
+exe 'vert 4resize ' . ((&columns * 54 + 101) / 203)
 exe '5resize ' . ((&lines * 14 + 25) / 51)
-exe 'vert 5resize ' . ((&columns * 55 + 102) / 205)
+exe 'vert 5resize ' . ((&columns * 54 + 101) / 203)
 exe '6resize ' . ((&lines * 7 + 25) / 51)
-exe 'vert 6resize ' . ((&columns * 55 + 102) / 205)
+exe 'vert 6resize ' . ((&columns * 54 + 101) / 203)
 tabedit src/McRTOS/McRTOS_execution_controller.c
 set splitbelow splitright
 wincmd _ | wincmd |
@@ -652,15 +652,15 @@ set nosplitright
 wincmd t
 set winheight=1 winwidth=1
 exe '1resize ' . ((&lines * 35 + 25) / 51)
-exe 'vert 1resize ' . ((&columns * 138 + 102) / 205)
+exe 'vert 1resize ' . ((&columns * 137 + 101) / 203)
 exe '2resize ' . ((&lines * 6 + 25) / 51)
-exe 'vert 2resize ' . ((&columns * 66 + 102) / 205)
+exe 'vert 2resize ' . ((&columns * 65 + 101) / 203)
 exe '3resize ' . ((&lines * 3 + 25) / 51)
-exe 'vert 3resize ' . ((&columns * 66 + 102) / 205)
+exe 'vert 3resize ' . ((&columns * 65 + 101) / 203)
 exe '4resize ' . ((&lines * 1 + 25) / 51)
-exe 'vert 4resize ' . ((&columns * 66 + 102) / 205)
+exe 'vert 4resize ' . ((&columns * 65 + 101) / 203)
 exe '5resize ' . ((&lines * 22 + 25) / 51)
-exe 'vert 5resize ' . ((&columns * 66 + 102) / 205)
+exe 'vert 5resize ' . ((&columns * 65 + 101) / 203)
 argglobal
 setlocal fdm=manual
 setlocal fde=0
@@ -751,15 +751,15 @@ normal! zt
 normal! 0
 wincmd w
 exe '1resize ' . ((&lines * 35 + 25) / 51)
-exe 'vert 1resize ' . ((&columns * 138 + 102) / 205)
+exe 'vert 1resize ' . ((&columns * 137 + 101) / 203)
 exe '2resize ' . ((&lines * 6 + 25) / 51)
-exe 'vert 2resize ' . ((&columns * 66 + 102) / 205)
+exe 'vert 2resize ' . ((&columns * 65 + 101) / 203)
 exe '3resize ' . ((&lines * 3 + 25) / 51)
-exe 'vert 3resize ' . ((&columns * 66 + 102) / 205)
+exe 'vert 3resize ' . ((&columns * 65 + 101) / 203)
 exe '4resize ' . ((&lines * 1 + 25) / 51)
-exe 'vert 4resize ' . ((&columns * 66 + 102) / 205)
+exe 'vert 4resize ' . ((&columns * 65 + 101) / 203)
 exe '5resize ' . ((&lines * 22 + 25) / 51)
-exe 'vert 5resize ' . ((&columns * 66 + 102) / 205)
+exe 'vert 5resize ' . ((&columns * 65 + 101) / 203)
 tabedit src/McRTOS/failure_data_capture.c
 set splitbelow splitright
 wincmd _ | wincmd |
@@ -779,13 +779,13 @@ set nosplitright
 wincmd t
 set winheight=1 winwidth=1
 exe '1resize ' . ((&lines * 32 + 25) / 51)
-exe 'vert 1resize ' . ((&columns * 153 + 102) / 205)
+exe 'vert 1resize ' . ((&columns * 151 + 101) / 203)
 exe '2resize ' . ((&lines * 16 + 25) / 51)
-exe 'vert 2resize ' . ((&columns * 153 + 102) / 205)
+exe 'vert 2resize ' . ((&columns * 151 + 101) / 203)
 exe '3resize ' . ((&lines * 34 + 25) / 51)
-exe 'vert 3resize ' . ((&columns * 51 + 102) / 205)
+exe 'vert 3resize ' . ((&columns * 51 + 101) / 203)
 exe '4resize ' . ((&lines * 14 + 25) / 51)
-exe 'vert 4resize ' . ((&columns * 51 + 102) / 205)
+exe 'vert 4resize ' . ((&columns * 51 + 101) / 203)
 argglobal
 setlocal fdm=manual
 setlocal fde=0
@@ -858,13 +858,13 @@ normal! zt
 normal! 02|
 wincmd w
 exe '1resize ' . ((&lines * 32 + 25) / 51)
-exe 'vert 1resize ' . ((&columns * 153 + 102) / 205)
+exe 'vert 1resize ' . ((&columns * 151 + 101) / 203)
 exe '2resize ' . ((&lines * 16 + 25) / 51)
-exe 'vert 2resize ' . ((&columns * 153 + 102) / 205)
+exe 'vert 2resize ' . ((&columns * 151 + 101) / 203)
 exe '3resize ' . ((&lines * 34 + 25) / 51)
-exe 'vert 3resize ' . ((&columns * 51 + 102) / 205)
+exe 'vert 3resize ' . ((&columns * 51 + 101) / 203)
 exe '4resize ' . ((&lines * 14 + 25) / 51)
-exe 'vert 4resize ' . ((&columns * 51 + 102) / 205)
+exe 'vert 4resize ' . ((&columns * 51 + 101) / 203)
 tabedit src/McRTOS/utils.c
 set splitbelow splitright
 wincmd _ | wincmd |
@@ -876,9 +876,9 @@ set nosplitright
 wincmd t
 set winheight=1 winwidth=1
 exe '1resize ' . ((&lines * 35 + 25) / 51)
-exe 'vert 1resize ' . ((&columns * 153 + 102) / 205)
+exe 'vert 1resize ' . ((&columns * 151 + 101) / 203)
 exe '2resize ' . ((&lines * 35 + 25) / 51)
-exe 'vert 2resize ' . ((&columns * 51 + 102) / 205)
+exe 'vert 2resize ' . ((&columns * 51 + 101) / 203)
 argglobal
 setlocal fdm=manual
 setlocal fde=0
@@ -915,9 +915,9 @@ normal! zt
 normal! 0
 wincmd w
 exe '1resize ' . ((&lines * 35 + 25) / 51)
-exe 'vert 1resize ' . ((&columns * 153 + 102) / 205)
+exe 'vert 1resize ' . ((&columns * 151 + 101) / 203)
 exe '2resize ' . ((&lines * 35 + 25) / 51)
-exe 'vert 2resize ' . ((&columns * 51 + 102) / 205)
+exe 'vert 2resize ' . ((&columns * 51 + 101) / 203)
 tabedit src/BoardSupport/FRDM-K64F/k64f_soc_hardware_abstractions.c
 set splitbelow splitright
 wincmd _ | wincmd |
@@ -946,19 +946,19 @@ set nosplitright
 wincmd t
 set winheight=1 winwidth=1
 exe '1resize ' . ((&lines * 8 + 25) / 51)
-exe 'vert 1resize ' . ((&columns * 98 + 102) / 205)
+exe 'vert 1resize ' . ((&columns * 97 + 101) / 203)
 exe '2resize ' . ((&lines * 28 + 25) / 51)
-exe 'vert 2resize ' . ((&columns * 98 + 102) / 205)
+exe 'vert 2resize ' . ((&columns * 97 + 101) / 203)
 exe '3resize ' . ((&lines * 11 + 25) / 51)
-exe 'vert 3resize ' . ((&columns * 98 + 102) / 205)
+exe 'vert 3resize ' . ((&columns * 97 + 101) / 203)
 exe '4resize ' . ((&lines * 11 + 25) / 51)
-exe 'vert 4resize ' . ((&columns * 106 + 102) / 205)
+exe 'vert 4resize ' . ((&columns * 105 + 101) / 203)
 exe '5resize ' . ((&lines * 12 + 25) / 51)
-exe 'vert 5resize ' . ((&columns * 106 + 102) / 205)
+exe 'vert 5resize ' . ((&columns * 105 + 101) / 203)
 exe '6resize ' . ((&lines * 11 + 25) / 51)
-exe 'vert 6resize ' . ((&columns * 106 + 102) / 205)
+exe 'vert 6resize ' . ((&columns * 105 + 101) / 203)
 exe '7resize ' . ((&lines * 12 + 25) / 51)
-exe 'vert 7resize ' . ((&columns * 106 + 102) / 205)
+exe 'vert 7resize ' . ((&columns * 105 + 101) / 203)
 argglobal
 setlocal fdm=manual
 setlocal fde=0
@@ -1013,7 +1013,7 @@ normal! zt
 normal! 0
 wincmd w
 argglobal
-edit ~/embsys/projects/McRTOS/src/Networking/lwip_glue/arch/sys_arch.h
+edit inc/BoardSupport/hardware_abstractions.h
 setlocal fdm=manual
 setlocal fde=0
 setlocal fmr={{{,}}}
@@ -1023,12 +1023,12 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 silent! normal! zE
-let s:l = 34 - ((2 * winheight(0) + 5) / 11)
+let s:l = 1 - ((0 * winheight(0) + 5) / 11)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-34
-normal! 031|
+1
+normal! 0
 wincmd w
 argglobal
 edit inc/McRTOS/arm_defs.h
@@ -1084,21 +1084,21 @@ normal! zt
 1
 normal! 0
 wincmd w
-7wincmd w
+4wincmd w
 exe '1resize ' . ((&lines * 8 + 25) / 51)
-exe 'vert 1resize ' . ((&columns * 98 + 102) / 205)
+exe 'vert 1resize ' . ((&columns * 97 + 101) / 203)
 exe '2resize ' . ((&lines * 28 + 25) / 51)
-exe 'vert 2resize ' . ((&columns * 98 + 102) / 205)
+exe 'vert 2resize ' . ((&columns * 97 + 101) / 203)
 exe '3resize ' . ((&lines * 11 + 25) / 51)
-exe 'vert 3resize ' . ((&columns * 98 + 102) / 205)
+exe 'vert 3resize ' . ((&columns * 97 + 101) / 203)
 exe '4resize ' . ((&lines * 11 + 25) / 51)
-exe 'vert 4resize ' . ((&columns * 106 + 102) / 205)
+exe 'vert 4resize ' . ((&columns * 105 + 101) / 203)
 exe '5resize ' . ((&lines * 12 + 25) / 51)
-exe 'vert 5resize ' . ((&columns * 106 + 102) / 205)
+exe 'vert 5resize ' . ((&columns * 105 + 101) / 203)
 exe '6resize ' . ((&lines * 11 + 25) / 51)
-exe 'vert 6resize ' . ((&columns * 106 + 102) / 205)
+exe 'vert 6resize ' . ((&columns * 105 + 101) / 203)
 exe '7resize ' . ((&lines * 12 + 25) / 51)
-exe 'vert 7resize ' . ((&columns * 106 + 102) / 205)
+exe 'vert 7resize ' . ((&columns * 105 + 101) / 203)
 tabedit inc/BoardSupport/FRDM-K64F/MK64F12.h
 set splitbelow splitright
 wincmd _ | wincmd |
@@ -1121,15 +1121,15 @@ set nosplitright
 wincmd t
 set winheight=1 winwidth=1
 exe '1resize ' . ((&lines * 18 + 25) / 51)
-exe 'vert 1resize ' . ((&columns * 122 + 102) / 205)
+exe 'vert 1resize ' . ((&columns * 121 + 101) / 203)
 exe '2resize ' . ((&lines * 19 + 25) / 51)
-exe 'vert 2resize ' . ((&columns * 122 + 102) / 205)
+exe 'vert 2resize ' . ((&columns * 121 + 101) / 203)
 exe '3resize ' . ((&lines * 10 + 25) / 51)
-exe 'vert 3resize ' . ((&columns * 122 + 102) / 205)
+exe 'vert 3resize ' . ((&columns * 121 + 101) / 203)
 exe '4resize ' . ((&lines * 40 + 25) / 51)
-exe 'vert 4resize ' . ((&columns * 82 + 102) / 205)
+exe 'vert 4resize ' . ((&columns * 81 + 101) / 203)
 exe '5resize ' . ((&lines * 8 + 25) / 51)
-exe 'vert 5resize ' . ((&columns * 82 + 102) / 205)
+exe 'vert 5resize ' . ((&columns * 81 + 101) / 203)
 argglobal
 setlocal fdm=manual
 setlocal fde=0
@@ -1219,17 +1219,17 @@ normal! zt
 367
 normal! 059|
 wincmd w
-7wincmd w
+4wincmd w
 exe '1resize ' . ((&lines * 18 + 25) / 51)
-exe 'vert 1resize ' . ((&columns * 122 + 102) / 205)
+exe 'vert 1resize ' . ((&columns * 121 + 101) / 203)
 exe '2resize ' . ((&lines * 19 + 25) / 51)
-exe 'vert 2resize ' . ((&columns * 122 + 102) / 205)
+exe 'vert 2resize ' . ((&columns * 121 + 101) / 203)
 exe '3resize ' . ((&lines * 10 + 25) / 51)
-exe 'vert 3resize ' . ((&columns * 122 + 102) / 205)
+exe 'vert 3resize ' . ((&columns * 121 + 101) / 203)
 exe '4resize ' . ((&lines * 40 + 25) / 51)
-exe 'vert 4resize ' . ((&columns * 82 + 102) / 205)
+exe 'vert 4resize ' . ((&columns * 81 + 101) / 203)
 exe '5resize ' . ((&lines * 8 + 25) / 51)
-exe 'vert 5resize ' . ((&columns * 82 + 102) / 205)
+exe 'vert 5resize ' . ((&columns * 81 + 101) / 203)
 tabedit src/BoardSupport/LPC2478-STK/lpc2478_ethernet.c
 set splitbelow splitright
 wincmd _ | wincmd |
@@ -1241,9 +1241,9 @@ set nosplitright
 wincmd t
 set winheight=1 winwidth=1
 exe '1resize ' . ((&lines * 41 + 25) / 51)
-exe 'vert 1resize ' . ((&columns * 120 + 102) / 205)
+exe 'vert 1resize ' . ((&columns * 119 + 101) / 203)
 exe '2resize ' . ((&lines * 41 + 25) / 51)
-exe 'vert 2resize ' . ((&columns * 84 + 102) / 205)
+exe 'vert 2resize ' . ((&columns * 83 + 101) / 203)
 argglobal
 setlocal fdm=manual
 setlocal fde=0
@@ -1279,11 +1279,11 @@ normal! zt
 611
 normal! 023|
 wincmd w
-7wincmd w
+4wincmd w
 exe '1resize ' . ((&lines * 41 + 25) / 51)
-exe 'vert 1resize ' . ((&columns * 120 + 102) / 205)
+exe 'vert 1resize ' . ((&columns * 119 + 101) / 203)
 exe '2resize ' . ((&lines * 41 + 25) / 51)
-exe 'vert 2resize ' . ((&columns * 84 + 102) / 205)
+exe 'vert 2resize ' . ((&columns * 83 + 101) / 203)
 tabedit src/Networking/networking.c
 set splitbelow splitright
 wincmd _ | wincmd |
@@ -1303,13 +1303,13 @@ set nosplitright
 wincmd t
 set winheight=1 winwidth=1
 exe '1resize ' . ((&lines * 24 + 25) / 51)
-exe 'vert 1resize ' . ((&columns * 102 + 102) / 205)
+exe 'vert 1resize ' . ((&columns * 101 + 101) / 203)
 exe '2resize ' . ((&lines * 24 + 25) / 51)
-exe 'vert 2resize ' . ((&columns * 102 + 102) / 205)
+exe 'vert 2resize ' . ((&columns * 101 + 101) / 203)
 exe '3resize ' . ((&lines * 20 + 25) / 51)
-exe 'vert 3resize ' . ((&columns * 102 + 102) / 205)
+exe 'vert 3resize ' . ((&columns * 101 + 101) / 203)
 exe '4resize ' . ((&lines * 28 + 25) / 51)
-exe 'vert 4resize ' . ((&columns * 102 + 102) / 205)
+exe 'vert 4resize ' . ((&columns * 101 + 101) / 203)
 argglobal
 setlocal fdm=manual
 setlocal fde=0
@@ -1381,15 +1381,15 @@ normal! zt
 10
 normal! 0
 wincmd w
-7wincmd w
+4wincmd w
 exe '1resize ' . ((&lines * 24 + 25) / 51)
-exe 'vert 1resize ' . ((&columns * 102 + 102) / 205)
+exe 'vert 1resize ' . ((&columns * 101 + 101) / 203)
 exe '2resize ' . ((&lines * 24 + 25) / 51)
-exe 'vert 2resize ' . ((&columns * 102 + 102) / 205)
+exe 'vert 2resize ' . ((&columns * 101 + 101) / 203)
 exe '3resize ' . ((&lines * 20 + 25) / 51)
-exe 'vert 3resize ' . ((&columns * 102 + 102) / 205)
+exe 'vert 3resize ' . ((&columns * 101 + 101) / 203)
 exe '4resize ' . ((&lines * 28 + 25) / 51)
-exe 'vert 4resize ' . ((&columns * 102 + 102) / 205)
+exe 'vert 4resize ' . ((&columns * 101 + 101) / 203)
 tabnext 7
 if exists('s:wipebuf')
   silent exe 'bwipe ' . s:wipebuf

@@ -458,17 +458,16 @@ void *enet_alloc_tx_buffer(const struct enet_device *enet_device_p);
 void enet_free_tx_buffer(const struct enet_device *enet_device_p,
 			 void *tx_payload_buf);
 
+void enet_start_xmit(const struct enet_device *enet_device_p,
+		     void *tx_payload_buf);
+
 void *enet_dequeue_rx_buffer(const struct enet_device *enet_device_p);
 
 void enet_enqueue_rx_buffer(const struct enet_device *enet_device_p,
 			    void *rx_payload_buf);
 
-struct enet_mac_address {
-    uint8_t bytes[6];
-};
-
-void enet_start_xmit(const struct enet_device *enet_device_p,
-		     void *tx_payload_buf);
+void enet_recycle_rx_buffer(const struct enet_device *enet_device_p,
+			    void *rx_payload_buf);
 
 void wait_for_interrupts(void);
 
