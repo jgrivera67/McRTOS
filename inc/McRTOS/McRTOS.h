@@ -487,12 +487,14 @@ _THREAD_CALLERS_ONLY_
 fdc_error_t
 rtos_condvar_wait(
     _IN_ struct rtos_condvar *rtos_condvar_p,
-    _IN_  struct rtos_mutex *rtos_mutex_p);
+    _IN_  struct rtos_mutex *rtos_mutex_p,
+    _INOUT_ rtos_milliseconds_t *timeout_ms_p);
 
 _THREAD_CALLERS_ONLY_
 fdc_error_t
 rtos_condvar_wait_interrupt(
-    _IN_ struct rtos_condvar *rtos_condvar_p);
+    _IN_ struct rtos_condvar *rtos_condvar_p,
+    _INOUT_ rtos_milliseconds_t *timeout_ms_p);
 
 void
 rtos_condvar_signal(

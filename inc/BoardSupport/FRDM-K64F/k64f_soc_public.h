@@ -364,6 +364,8 @@ void micro_trace_restart(void);
 
 void micro_trace_get_cursor(uint64_t **mtb_cursor_pp, bool *mtb_cursor_wrapped_p);
 
+extern const struct enet_device g_enet_device0;
+
 /*
  * Variables defined in K64F_SOC-flash.ld
  */

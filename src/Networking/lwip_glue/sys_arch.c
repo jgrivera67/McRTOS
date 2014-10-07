@@ -28,64 +28,27 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/*
- * Prints an assertion messages and aborts execution.
- */
-void
-sys_assert( const char *msg )
-{
+#include "arch/sys_arch.h"
+#include <lwip/sys.h>
+#include <hardware_abstractions.h>
 
-//FSL:only needed for debugging
-#ifdef LWIP_DEBUG
-    printf(msg);
-    printf("\n\r");
-#endif
-
-    OSA_EnterCritical(kCriticalDisableInt);
-    for(;;);
-}
-
-#if !NO_SYS
-
-/* Used internal */
-void _mbox_create(msg_queue_handler_t *queueHandle, int size)
-{
-#ifdef FSL_RTOS_UCOSII
-    void * msgTbl = OSA_MemAlloc(size * sizeof(void*));
-    uint32_t * msgs = OSA_MemAlloc(size * sizeof(uint32_t));
-    msg_queue_t *queue = (msg_queue_t*)OSA_MemAlloc(sizeof(msg_queue_t));
-    queue->msgTbl = msgTbl;
-    queue->msgs = msgs;
-
-#elif defined(FSL_RTOS_UCOSIII)
-    uint32_t * msgs = OSA_MemAlloc(size * sizeof(uint32_t));
-    msg_queue_t *queue = (msg_queue_t*)OSA_MemAlloc(sizeof(msg_queue_t));
-    queue->msgs = msgs;
-
-#elif defined (FSL_RTOS_MQX)
-    msg_queue_t *queue = (msg_queue_t*)OSA_MemAlloc((SIZE_IN_MMT_UNITS(sizeof(LWMSGQ_STRUCT)) + SIZE_IN_MMT_UNITS(4) * size)*sizeof(msg_queue_t));
-#else
-   MSG_QUEUE_DECLARE(queue,size,1);
-#endif
-   *queueHandle = OSA_MsgQCreate(queue,size,1);
-}
 /*-----------------------------------------------------------------------------------*/
 //  Creates an empty mailbox.
 err_t sys_mbox_new(sys_mbox_t *mbox, int size)
 {
-    osa_status_t error;
-    msg_queue_handler_t queueHandle ;
-    _mbox_create(&queueHandle,size);
-    error = OSA_SemaCreate (&(mbox->_semSync) , (uint8_t)0);
-    if(error != kStatus_OSA_Success)
-        return ERR_MEM;
-    OSA_EnterCritical(kCriticalDisableInt);
-    mbox->queueHandler = queueHandle ;
-    OSA_ExitCritical(kCriticalDisableInt);
-    if(queueHandle == (msg_queue_handler_t)0)
-        return ERR_MEM;
-    else
-        return ERR_OK;
+    FDC_ASSERT(mbox->mbox_queue.cb_signature == 0,
+	       mbox->mbox_queue.cb_signature, mbox);
+    FDC_ASSERT(size <= MBOX_QUEUE_SIZE, size, MBOX_QUEUE_SIZE);
+
+    rtos_k_pointer_circular_buffer_init(
+        "lwIP mailbox",
+        MBOX_QUEUE_SIZE,
+        mbox->mbox_queue_entries,
+        NULL,
+        SOC_GET_CURRENT_CPU_ID(),
+        &mbox->mbox_queue);
+
+    return ERR_OK;
 }
 
 /*-----------------------------------------------------------------------------------*/
@@ -97,8 +60,13 @@ err_t sys_mbox_new(sys_mbox_t *mbox, int size)
 void
 sys_mbox_free(sys_mbox_t *mbox)
 {
-    OSA_MsgQDestroy (mbox->queueHandler);
-    OSA_SemaDestroy(&(mbox->_semSync));
+    FDC_ASSERT(mbox->mbox_queue.cb_signature == RTOS_POINTER_CIRCULAR_BUFFER_SIGNATURE,
+	       mbox->mbox_queue.cb_signature, mbox);
+
+    FDC_ASSERT(rtos_k_circular_buffer_is_empty(&mbox->mbox_queue),
+	       &mbox->mbox_queue, mbox);
+
+    *((uint32_t *)mbox->mbox_queue.cb_signature) = 0;
 }
 
 
@@ -107,28 +75,24 @@ sys_mbox_free(sys_mbox_t *mbox)
 void
 sys_mbox_post(sys_mbox_t *mbox, void *msg)
 {
-    osa_status_t error;
-    while(1)
-    {
-        error = OSA_MsgQPut(mbox->queueHandler,&msg);
-	if(error == kStatus_OSA_Success)
-            return ;
-	OSA_SemaWait (&(mbox->_semSync),OSA_WAIT_FOREVER);
-    }
+    bool write_ok =
+	rtos_k_pointer_circular_buffer_write(&mbox->mbox_queue, msg, true);
+
+    FDC_ASSERT(write_ok, &mbox->mbox_queue, mbox);
 }
 
 
-/*FSL*/
 /*
  *Try to post the "msg" to the mailbox. Returns ERR_MEM if this one
  *is full, else, ERR_OK if the "msg" is posted.
  */
 err_t
-sys_mbox_trypost( sys_mbox_t *mbox, void *msg )
+sys_mbox_trypost( sys_mbox_t *mbox, void *msg)
 {
-    osa_status_t error;
-    error = OSA_MsgQPut(mbox->queueHandler,&msg);
-    if(error == kStatus_OSA_Success)
+    bool write_ok =
+	rtos_k_pointer_circular_buffer_write(&mbox->mbox_queue, msg, false);
+
+    if (write_ok)
         return ERR_OK;
     else
         return ERR_MEM;
@@ -153,24 +117,18 @@ sys_mbox_trypost( sys_mbox_t *mbox, void *msg )
 */
 u32_t sys_arch_mbox_fetch(sys_mbox_t *mbox, void **msg, u32_t timeout)
 {
-    osa_status_t error;
-    uint32_t timeStart , timeEnd;
-    void * dummyptr;
-    if( timeout == (u32_t)0)
-        timeout = OSA_WAIT_FOREVER ;
-    if( msg == 0)
-        msg = &dummyptr;
+    void *msg_read;
+    rtos_milliseconds_t read_timeout = timeout;
 
-    timeStart = OSA_TimeGetMsec();
-    error = OSA_MsgQGet(mbox->queueHandler,&(*msg),(uint32_t)timeout);
-    timeEnd = OSA_TimeGetMsec();
-    switch(error)
-    {
-        case kStatus_OSA_Timeout:return SYS_ARCH_TIMEOUT;
-	case kStatus_OSA_Success:OSA_SemaPost(&(mbox->_semSync));return (u32_t)(timeEnd-timeStart);
-	default : return (u32_t)0;
+    bool read_ok =
+	rtos_k_pointer_circular_buffer_read(&mbox->mbox_queue, &msg_read, true,
+					    &read_timeout);
+
+    if (read_ok && msg != NULL) {
+	*msg = msg_read;
     }
 
+    return timeout - read_timeout;
 }
 
 /*-----------------------------------------------------------------------------------*/
@@ -281,21 +239,14 @@ void sys_mutex_free(sys_mutex_t *mutex)
     assert(error == kStatus_OSA_Success) ;
 }
 
-
 /*-----------------------------------------------------------------------------------*/
 // Initialize sys arch
 void
 sys_init(void)
 {
-    //tasks = NULL;
 }
 
 
-
-/*-----------------------------------------------------------------------------------*/
-/*-----------------------------------------------------------------------------------*/
-// TBD
-/*-----------------------------------------------------------------------------------*/
 /*
  * Starts a new thread with priority "prio" that will begin its execution in the
  * function "thread()". The "arg" argument will be passed as an argument to the
@@ -325,7 +276,6 @@ sys_thread_t sys_thread_new(const char *name, lwip_thread_fn thread, void *arg, 
 }
 
 
-
 /*
   This optional function does a "fast" critical region protection and returns
   the previous protection level. This function is only called during very short
@@ -341,12 +291,8 @@ sys_thread_t sys_thread_new(const char *name, lwip_thread_fn thread, void *arg, 
 */
 sys_prot_t sys_arch_protect(void)
 {
-    OSA_EnterCritical(kCriticalDisableInt);
-    return 1;
+    return (sys_prot_t)rtos_k_disable_cpu_interrupts();
 }
-
-
-
 
 /*
   This optional function does a "fast" set of critical region protection to the
@@ -356,74 +302,28 @@ sys_prot_t sys_arch_protect(void)
 */
 void sys_arch_unprotect(sys_prot_t pval)
 {
-    ( void ) pval;
-    OSA_ExitCritical(kCriticalDisableInt);
+    rtos_k_restore_cpu_interrupts((cpu_status_register_t)pval);
 }
 
 int sys_sem_valid(sys_sem_t *sem)
 {
-#ifdef FSL_RTOS_UCOSIII
-    return (sem->Type == OS_OBJ_TYPE_SEM ? 1 : 0 );
-#elif defined(FSL_RTOS_MQX)
-    return (sem->VALID != 0 ? 1 : 0 );
-#else
-    return (*sem != 0 ? 1 : 0);
-#endif
+    return sem->sem_condvar.cv_signature == RTOS_CONDVAR_SIGNATURE;
 }
 //  set the sem invalid
 void sys_sem_set_invalid(sys_sem_t *sem)
 {
-#ifdef FSL_RTOS_UCOSIII
-    sem->Type = OS_OBJ_TYPE_NONE;
-#elif defined(FSL_RTOS_MQX)
-    sem->VALID = 0;
-#else
-    *sem = 0;
-#endif
+    sem->sem_condvar.cv_signature = 0;
 }
 int sys_mbox_valid(sys_mbox_t *mbox)
 {
-    return (mbox->queueHandler != 0 ? 1 : 0);
+    return mbox->mbox_queue.cb_signature == RTOS_BYTE_CIRCULAR_BUFFER_SIGNATURE;
 }
 // set the mailbox invalid
 void sys_mbox_set_invalid(sys_mbox_t *mbox)
 {
-    mbox->queueHandler = 0;
-}
-#else
-static uint32_t time_now = 0;
-hwtimer_t hwtimer;
-void hwtimer_callback(void* data)
-{
-  time_now++;
-}
-void time_init(void)
-{
-#define HWTIMER_LL_DEVIF    kPitDevif      // Use hardware timer PIT
-#define HWTIMER_LL_SRCCLK   kBusClock     // Source Clock for PIT
-#define HWTIMER_LL_ID       3
-#define HWTIMER_PERIOD          1000      // 1 ms interval
-
-  if (kHwtimerSuccess != HWTIMER_SYS_Init(&hwtimer, &HWTIMER_LL_DEVIF, HWTIMER_LL_ID, 5, NULL))
-    {
-        sys_assert("\r\nError: hwtimer initialization.\r\n");
-    }
-  if (kHwtimerSuccess != HWTIMER_SYS_SetPeriod(&hwtimer, HWTIMER_LL_SRCCLK, HWTIMER_PERIOD))
-    {
-        sys_assert("\r\nError: hwtimer set period.\r\n");
-    }
-  if (kHwtimerSuccess != HWTIMER_SYS_RegisterCallback(&hwtimer, hwtimer_callback, NULL))
-    {
-        sys_assert("\r\nError: hwtimer callback registration.\r\n");
-    }
-  if (kHwtimerSuccess != HWTIMER_SYS_Start(&hwtimer))
-    {
-        sys_assert("\r\nError: hwtimer start.\r\n");
-    }
-
+    mbox->mbox_queue.cb_signature = 0;
 }
 
-#endif
 /*
 This optional function returns the current time in milliseconds (don't care
   for wraparound, this is only used for time diffs).
@@ -433,11 +333,5 @@ This optional function returns the current time in milliseconds (don't care
 
 u32_t sys_now(void)
 {
-    uint32_t curTime;
-#if !NO_SYS
-    curTime = OSA_TimeGetMsec();
-#else
-    curTime = time_now;
-#endif
-    return (u32_t)curTime;
+    return get_cpu_clock_cycles();
 }

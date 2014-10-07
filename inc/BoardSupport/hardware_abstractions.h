@@ -112,6 +112,13 @@
         ((rtos_microseconds_t)((_milli_secs) * 1000) * SOC_CPU_CLOCK_FREQ_IN_MEGA_HZ)
 
 /**
+ * Calculate difference between two CPU clock cycle values
+ */
+#define CPU_CLOCK_CYCLES_DELTA(_begin_cycles, _end_cycles) \
+        ((cpu_clock_cycles_t)((int32_t)(_end_cycles) - \
+                              (int32_t)(_begin_cycles)))
+
+/**
  * CPU identifier type
  */
 typedef _RANGE_(0, SOC_NUM_CPU_CORES - 1)

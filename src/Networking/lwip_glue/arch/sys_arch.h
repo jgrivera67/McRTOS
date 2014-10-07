@@ -28,28 +28,51 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __SYS_C64_H__
-#define __SYS_C64_H__
+#ifndef __SYS_ARCH_H__
+#define __SYS_ARCH_H__
 
-#include "fsl_os_abstraction.h"
-#include <stdio.h>
+#include <McRTOS_kernel_services.h>
 
-#if !NO_SYS
-typedef struct mboxHandler{
-   msg_queue_handler_t queueHandler;
-   semaphore_t _semSync ;
-}sys_mbox_t ;
+#define LWIP_COMPAT_MUTEX   0
 
-typedef semaphore_t sys_sem_t;
-typedef task_handler_t sys_thread_t;
-typedef mutex_t sys_mutex_t ;
-/*FSL:workaround from lwIP port (1.1.1 to 1.3.1)*/
-#define sys_arch_mbox_tryfetch(mbox,msg) \
-    sys_arch_mbox_fetch(mbox,msg,1)
-#endif
+/**
+ * Mailbox object
+ */
+struct sys_mbox {
+    /**
+     * Circular buffer of pointers used to represent the queue of a mailbox
+     */
+    struct rtos_circular_buffer mbox_queue;
+
+    /**
+     * Array of entries for mbox_queue
+     */
+#   define MBOX_QUEUE_SIZE  8
+    void *mbox_queue_entries[MBOX_QUEUE_SIZE];
+};
+
+typedef struct sys_mbox sys_mbox_t;
+
+/**
+ * Semaphore object
+ */
+struct sys_sem {
+    /**
+     * Counter for the semaphore
+     */
+    uint8_t sem_count;
+
+    /**
+     * Condition variable for the semaphore
+     */
+    struct rtos_condvar sem_condvar;
+};
+
+typedef struct sys_sem sys_sem_t;
+
+typedef struct rtos_mutex sys_mutex_t;
+
+typedef struct rtos_thread *sys_thread_t;
 
 
-void sys_assert( const char *const msg );
-void time_init(void);
-
-#endif /* __SYS_C64_H__ */
+#endif /* __SYS_ARCH_H__ */

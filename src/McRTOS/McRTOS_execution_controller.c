@@ -523,9 +523,9 @@ Exit:
 
 
 /**
- * Thread delay timer callback
+ * Thread timer callback
  */
-void rtos_delay_timer_callback(struct rtos_timer *rtos_timer_p)
+void rtos_thread_timer_callback(struct rtos_timer *rtos_timer_p)
 {
     DBG_ASSERT_CPU_INTERRUPTS_DISABLED();
     DBG_ASSERT(
@@ -541,11 +541,16 @@ void rtos_delay_timer_callback(struct rtos_timer *rtos_timer_p)
         &rtos_timer_p->tmr_list_node, rtos_timer_p);
 
     struct rtos_thread *rtos_thread_p =
-        ENCLOSING_STRUCT(rtos_timer_p, struct rtos_thread, thr_delay_timer);
+        ENCLOSING_STRUCT(rtos_timer_p, struct rtos_thread, thr_timer);
 
     DBG_ASSERT_RTOS_THREAD_INVARIANTS(rtos_thread_p);
 
-    rtos_k_condvar_signal(&rtos_thread_p->thr_condvar);
+    if (rtos_thread_p->thr_state == RTOS_THREAD_BLOCKED_ON_CONDVAR) {
+	FDC_ASSERT(rtos_thread_p->thr_blocked_on_condvar_p != NULL,
+		   rtos_thread_p, 0);
+
+	rtos_k_condvar_signal(rtos_thread_p->thr_blocked_on_condvar_p);
+    }
 }
 
 

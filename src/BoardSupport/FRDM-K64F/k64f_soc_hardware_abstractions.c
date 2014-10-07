@@ -1073,7 +1073,7 @@ soc_hardware_init(void)
 		 g_console_serial_port_p->urt_var_p->urt_rx_fifo_size);
 
     i2c_init(&g_i2c_devices[0]);
-    enet_init(&g_enet_device);
+    enet_init(&g_enet_device0);
     return reset_cause;
 }
 
@@ -1870,7 +1870,7 @@ k64f_uart_rx_tx_interrupt_e_handler(
             bool entry_read = rtos_k_byte_circular_buffer_read(
                                 &uart_var_p->urt_transmit_queue,
                                 &byte_to_transmit,
-                                false);
+                                false, 0);
 
             if (!entry_read) {
 		sw_transmit_queue_empty = true;
@@ -2099,7 +2099,7 @@ uart_getchar(
     bool entry_read = rtos_k_byte_circular_buffer_read(
 			&uart_var_p->urt_receive_queue,
 			&char_received,
-			true);
+			true, 0);
 
     FDC_ASSERT(entry_read, uart_device_p, 0);
 
@@ -2853,7 +2853,7 @@ i2c_wait_transfer_completion(
     cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
 
     while (!i2c_var_p->i2c_byte_transfer_completed) {
-        rtos_k_condvar_wait_interrupt(&i2c_var_p->i2c_condvar);
+        rtos_k_condvar_wait_interrupt(&i2c_var_p->i2c_condvar, 0);
     }
 
     i2c_var_p->i2c_byte_transfer_completed = false;

@@ -13,12 +13,12 @@
 #include <McRTOS/failure_data_capture.h>
 #include <McRTOS/utils.h>
 #include <lwip/tcpip.h>
-#include <lwip/ipaddr.h>
+#include <lwip/ip_addr.h>
 #include <lwip/err.h>
 #include <lwip/netif.h>
+#include <netif/etharp.h>
 #if 0 //???
 #include <lwip/udp.h>
-#include <netif/etharp.h>
 #include <lwip/init.h>
 #endif
 
@@ -35,7 +35,7 @@ TODO("Remove these pragmas")
 static struct netif g_netif0;
 
 static err_t
-ethernet_output(struct netif *netif_p, struct pbuf *pbuf_p, struct ip_addr *ipaddr)
+ethernet_output(struct netif *netif_p, struct pbuf *pbuf_p, struct ip_addr *ipaddr_p)
 {
     /*
      * TODO: Check if link is up before transmitting the packet
@@ -54,7 +54,7 @@ ethernet_link_output(struct netif *netif_p, struct pbuf *pbuf_p)
     /*
      * TODO: Change this for zero-copy
      */
-    tx_payload_buf = enet_alloc_tx_buffer(enet_device_p);
+    tx_payload_buf = enet_allocate_tx_buffer(enet_device_p);
 
     FDC_ASSERT(tx_payload_buf != NULL, enet_device_p, netif_p);
     FDC_ASSERT(pbuf_p->tot_len <= NETWORK_MTU,
@@ -67,7 +67,7 @@ ethernet_link_output(struct netif *netif_p, struct pbuf *pbuf_p)
     /*
      * TODO: remove this memory copying for Tx zero-copy
      */
-    for (i = 0; i < pbuf_p->tot_len; i ++) {
+    for (size_t i = 0; i < pbuf_p->tot_len; i ++) {
 	tx_payload_buf[i] = ((uint8_t *)pbuf_p->payload)[i];
     }
 
@@ -84,8 +84,6 @@ ethernet_netif_init(struct netif *netif)
     DBG_ASSERT(netif != NULL, 0, 0);
     DBG_ASSERT(netif->state == &g_enet_device0,
 		netif->state, netif);
-    DBG_ASSERT(netif->init == ethernet_netif_init,
-	       netif->init, netif);
     DBG_ASSERT(netif->input == tcpip_input,
 	       netif->input, netif);
 
@@ -107,7 +105,7 @@ networking_init(void)
     struct netif *netif_p;
     fdc_error_t fdc_error;
 
-    tcpip_init(NULL,NULL);
+    tcpip_init(NULL, NULL);
 
     IP4_ADDR(&netif0_ipaddr, 192,168,2,102);
     IP4_ADDR(&netif0_netmask, 255,255,255,0);
@@ -117,7 +115,7 @@ networking_init(void)
 			&netif0_ipaddr,
 			&netif0_netmask,
 		        &netif0_gw,
-			&g_enet_device0,
+			(void *)&g_enet_device0,
 			ethernet_netif_init,
 			tcpip_input);
 
@@ -132,7 +130,7 @@ networking_init(void)
 }
 
 
-fdc_error_t
+static fdc_error_t
 ethernet_link_input(struct netif *netif_p)
 {
     fdc_error_t fdc_error;
@@ -161,8 +159,8 @@ ethernet_link_input(struct netif *netif_p)
      * TODO for zero-copy: remove this memory copying and set
      * pbuf_p->payload to poin to rx_payload_buf
      */
-    for (i = 0; i < rx_payload_length; i ++) {
-	((uint8_t *)pbuf_p->payload)[i] = rx_payload_buf[i];
+    for (size_t i = 0; i < rx_payload_length; i ++) {
+	((uint8_t *)pbuf_p->payload)[i] = ((uint8_t *)rx_payload_buf)[i];
     }
 
     pbuf_p->tot_len = rx_payload_length;

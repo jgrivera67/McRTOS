@@ -778,10 +778,12 @@ struct rtos_thread
     };
 
     /**
-     * Delay timer for this thread. It is started by when
+     * Timer for this thread. It is started by when
      * rtos_k_thread_delay() is called for this thread.
+     * It is also started when rtos_k_condvar_wait*() is
+     * called with a timeout.
      */
-    struct rtos_timer __attribute__ ((aligned(sizeof(uint32_t)))) thr_delay_timer;
+    struct rtos_timer __attribute__ ((aligned(sizeof(uint32_t)))) thr_timer;
 
     /**
      * Built-in condvar for this thread. It is signaled from the
@@ -906,12 +908,14 @@ _THREAD_CALLERS_ONLY_
 void
 rtos_k_condvar_wait(
     _INOUT_ struct rtos_condvar *rtos_condvar_p,
-    _IN_    struct rtos_mutex *rtos_mutex_p);
+    _IN_    struct rtos_mutex *rtos_mutex_p,
+    _INOUT_ rtos_milliseconds_t *timeout_ms_p);
 
 _THREAD_CALLERS_ONLY_
 void
 rtos_k_condvar_wait_interrupt(
-    _INOUT_ struct rtos_condvar *rtos_condvar_p);
+    _INOUT_ struct rtos_condvar *rtos_condvar_p,
+    _INOUT_ rtos_milliseconds_t *timeout_ms_p);
 
 void
 rtos_k_condvar_signal(
@@ -1061,7 +1065,8 @@ bool rtos_k_pointer_circular_buffer_write(
 bool rtos_k_pointer_circular_buffer_read(
         _INOUT_ struct rtos_circular_buffer *circ_buf_p,
         _OUT_ void **entry_value_p,
-        _IN_ bool wait_if_empty);
+        _IN_ bool wait_if_empty,
+	_INOUT_ rtos_milliseconds_t *timeout_ms_p);
 
 void rtos_k_byte_circular_buffer_init(
         _IN_  const char *name_p,
@@ -1079,7 +1084,11 @@ bool rtos_k_byte_circular_buffer_write(
 bool rtos_k_byte_circular_buffer_read(
         _INOUT_ struct rtos_circular_buffer *circ_buf_p,
         _OUT_ uint8_t *entry_value_p,
-        _IN_ bool wait_if_empty);
+        _IN_ bool wait_if_empty,
+	_INOUT_ rtos_milliseconds_t *timeout_ms_p);
+
+bool rtos_k_circular_buffer_is_empty(
+	_IN_ struct rtos_circular_buffer *circ_buf_p);
 
 #define ATOMIC_POST_INCREMENT_UINT32(_counter_p) \
         rtos_k_atomic_fetch_add_uint32(_counter_p, 1)

@@ -784,14 +784,6 @@ rtos_remove_runnable_thread(
     RTOS_THREAD_CHANGE_STATE(thread_p, new_thread_state);
 }
 
-
-/**
- * Calculate difference between two CPU clock cycle values
- */
-#define CPU_CLOCK_CYCLES_DELTA(_begin_cycles, _end_cycles) \
-        ((cpu_clock_cycles_t)((int32_t)(_end_cycles) - \
-                              (int32_t)(_begin_cycles)))
-
 #ifdef _CPU_CYCLES_MEASURE_
 
 /**
@@ -864,7 +856,7 @@ rtos_remove_runnable_thread(
 _NEVER_RETURN_
 void rtos_thread_scheduler(rtos_context_switch_type_t ctx_switch_type);
 
-extern rtos_timer_function_t rtos_delay_timer_callback;
+extern rtos_timer_function_t rtos_thread_timer_callback;
 
 cpu_status_register_t rtos_start_interrupts_disabled_time_measure(
     _IN_ cpu_register_t saved_reg);

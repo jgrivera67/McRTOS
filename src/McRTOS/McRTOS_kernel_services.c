@@ -369,13 +369,13 @@ rtos_k_thread_init(
         &thread_stack_p->tes_stack[RTOS_THREAD_STACK_NUM_ENTRIES]);
 
     /*
-     * Initialize the thread's delay timer
+     * Initialize the thread's timer
      */
     rtos_k_timer_init(
         params_p->p_name_p,
         cpu_id,
-        rtos_delay_timer_callback,
-        &rtos_thread_p->thr_delay_timer);
+        rtos_thread_timer_callback,
+        &rtos_thread_p->thr_timer);
 
     /*
      * Initialize the thread's condvar:
@@ -473,20 +473,20 @@ rtos_k_thread_delay(rtos_milliseconds_t num_milliseconds)
     FDC_ASSERT(num_milliseconds != 0, num_milliseconds, current_thread_p);
 
     /*
-     * Start delay timer for the current thread:
+     * Start timer for the current thread:
      */
     rtos_k_timer_start(
-        &current_thread_p->thr_delay_timer,
+        &current_thread_p->thr_timer,
         num_milliseconds);
 
     /*
      * Wait for the calling thread's delay timer to expire:
      */
-    rtos_k_condvar_wait_interrupt(&current_thread_p->thr_condvar);
+    rtos_k_condvar_wait_interrupt(&current_thread_p->thr_condvar, 0);
 
     FDC_ASSERT(
-        current_thread_p->thr_delay_timer.tmr_time_to_expire == 0,
-        current_thread_p->thr_delay_timer.tmr_time_to_expire, current_thread_p);
+        current_thread_p->thr_timer.tmr_time_to_expire == 0,
+        current_thread_p->thr_timer.tmr_time_to_expire, current_thread_p);
 }
 
 
@@ -821,7 +821,7 @@ rtos_k_thread_condvar_wait(
     struct rtos_thread *current_thread_p =
         RTOS_EXECUTION_CONTEXT_GET_THREAD(current_execution_context_p);
 
-    rtos_k_condvar_wait(&current_thread_p->thr_condvar, rtos_mutex_p);
+    rtos_k_condvar_wait(&current_thread_p->thr_condvar, rtos_mutex_p, NULL);
 }
 
 
@@ -841,7 +841,7 @@ rtos_k_thread_condvar_wait_interrupt(void)
     struct rtos_thread *current_thread_p =
         RTOS_EXECUTION_CONTEXT_GET_THREAD(current_execution_context_p);
 
-    rtos_k_condvar_wait_interrupt(&current_thread_p->thr_condvar);
+    rtos_k_condvar_wait_interrupt(&current_thread_p->thr_condvar, NULL);
 }
 
 
@@ -1010,6 +1010,11 @@ rtos_k_mutex_acquire(
             &current_thread_p->thr_list_node);
 
         RTOS_THREAD_CHANGE_STATE(current_thread_p, RTOS_THREAD_BLOCKED_ON_MUTEX);
+	FDC_ASSERT(
+	    current_thread_p->thr_blocked_on_p == NULL,
+	    current_thread_p->thr_blocked_on_p, rtos_mutex_p);
+
+	current_thread_p->thr_blocked_on_mutex_p = rtos_mutex_p;
 
         RTOS_EXECUTION_CONTEXT_SET_SWITCHED_OUT_REASON(
             current_execution_context_p,
@@ -1029,6 +1034,12 @@ rtos_k_mutex_acquire(
         rtos_mutex_p->mtx_owner_p = current_thread_p;
         current_thread_p->thr_owned_mutexes_count ++;
     }
+
+    FDC_ASSERT(
+	current_thread_p->thr_blocked_on_mutex_p == rtos_mutex_p,
+	current_thread_p->thr_blocked_on_mutex_p, rtos_mutex_p);
+
+    current_thread_p->thr_blocked_on_mutex_p = NULL;
 
     /*
      * Restore previous interrupt masking in the ARM core
@@ -1288,7 +1299,8 @@ rtos_k_condvar_init(
 void
 rtos_k_condvar_wait(
     _INOUT_ struct rtos_condvar *rtos_condvar_p,
-    _IN_    struct rtos_mutex *rtos_mutex_p)
+    _IN_    struct rtos_mutex *rtos_mutex_p,
+    _INOUT_ rtos_milliseconds_t *timeout_ms_p)
 {
     FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
 
@@ -1352,11 +1364,29 @@ rtos_k_condvar_wait(
         &current_thread_p->thr_list_node);
 
     RTOS_THREAD_CHANGE_STATE(current_thread_p, RTOS_THREAD_BLOCKED_ON_CONDVAR);
+    FDC_ASSERT(
+	current_thread_p->thr_blocked_on_p == NULL,
+	current_thread_p->thr_blocked_on_p, rtos_condvar_p);
+
+    current_thread_p->thr_blocked_on_condvar_p = rtos_condvar_p;
 
     RTOS_EXECUTION_CONTEXT_SET_SWITCHED_OUT_REASON(
         current_execution_context_p,
         CTX_SWITCHED_OUT_THREAD_BLOCKED_ON_CONDVAR,
         cpu_controller_p);
+
+    if (timeout_ms_p != NULL) {
+	rtos_milliseconds_t timeout_ms = *timeout_ms_p;
+
+	FDC_ASSERT(timeout_ms != 0, rtos_condvar_p, 0);
+
+	/*
+	 * Start timer for the current thread:
+	 */
+	rtos_k_timer_start(
+	    &current_thread_p->thr_timer,
+	    timeout_ms);
+    }
 
     /*
      * Perform a synchronous context switch:
@@ -1365,6 +1395,19 @@ rtos_k_condvar_wait(
      * executing after this call
      */
     rtos_k_synchronous_context_switch(current_execution_context_p);
+
+    if (timeout_ms_p != NULL) {
+	FDC_ASSERT(
+	    GLIST_NODE_IS_UNLINKED(&current_thread_p->thr_timer.tmr_list_node),
+	    current_thread_p, rtos_condvar_p);
+	*timeout_ms_p = current_thread_p->thr_timer.tmr_time_to_expire;
+    }
+
+    FDC_ASSERT(
+	current_thread_p->thr_blocked_on_condvar_p == rtos_condvar_p,
+	current_thread_p->thr_blocked_on_condvar_p, rtos_condvar_p);
+
+    current_thread_p->thr_blocked_on_condvar_p = NULL;
 
     /*
      * Restore previous interrupt masking in the ARM core
@@ -1383,7 +1426,8 @@ rtos_k_condvar_wait(
  */
 void
 rtos_k_condvar_wait_interrupt(
-    _INOUT_ struct rtos_condvar *rtos_condvar_p)
+    _INOUT_ struct rtos_condvar *rtos_condvar_p,
+    _INOUT_ rtos_milliseconds_t *timeout_ms_p)
 {
     FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
 
@@ -1454,11 +1498,29 @@ rtos_k_condvar_wait_interrupt(
         &current_thread_p->thr_list_node);
 
     RTOS_THREAD_CHANGE_STATE(current_thread_p, RTOS_THREAD_BLOCKED_ON_CONDVAR);
+    FDC_ASSERT(
+	current_thread_p->thr_blocked_on_p == NULL,
+	current_thread_p->thr_blocked_on_p, rtos_condvar_p);
+
+    current_thread_p->thr_blocked_on_condvar_p = rtos_condvar_p;
 
     RTOS_EXECUTION_CONTEXT_SET_SWITCHED_OUT_REASON(
         current_execution_context_p,
         CTX_SWITCHED_OUT_THREAD_BLOCKED_ON_CONDVAR,
         cpu_controller_p);
+
+    if (timeout_ms_p != NULL) {
+	rtos_milliseconds_t timeout_ms = *timeout_ms_p;
+
+	FDC_ASSERT(timeout_ms != 0, rtos_condvar_p, 0);
+
+	/*
+	 * Start timer for the current thread:
+	 */
+	rtos_k_timer_start(
+	    &current_thread_p->thr_timer,
+	    timeout_ms);
+    }
 
     /*
      * Perform a synchronous context switch:
@@ -1467,6 +1529,20 @@ rtos_k_condvar_wait_interrupt(
      * executing after this call
      */
     rtos_k_synchronous_context_switch(current_execution_context_p);
+
+    if (timeout_ms_p != NULL) {
+	FDC_ASSERT(
+	    GLIST_NODE_IS_UNLINKED(&current_thread_p->thr_timer.tmr_list_node),
+	    current_thread_p, rtos_condvar_p);
+
+	*timeout_ms_p = current_thread_p->thr_timer.tmr_time_to_expire;
+    }
+
+    FDC_ASSERT(
+	current_thread_p->thr_blocked_on_condvar_p == rtos_condvar_p,
+	current_thread_p->thr_blocked_on_condvar_p, rtos_condvar_p);
+
+    current_thread_p->thr_blocked_on_condvar_p = NULL;
 
 Exit:
     rtos_condvar_p->cv_pending_interrupt_wakeup = false;
@@ -1505,8 +1581,7 @@ rtos_k_condvar_signal_internal(
         rtos_condvar_p->cv_cpu_id == cpu_id,
         rtos_condvar_p->cv_cpu_id, cpu_id);
 
-    if (current_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT)
-    {
+    if (current_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT) {
         FDC_ASSERT_PRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED();
     }
 
@@ -1517,8 +1592,7 @@ rtos_k_condvar_signal_internal(
 
     bool waiters_awaken = false;
 
-    while (GLIST_IS_NOT_EMPTY(&rtos_condvar_p->cv_waiting_thread_queue_anchor))
-    {
+    while (GLIST_IS_NOT_EMPTY(&rtos_condvar_p->cv_waiting_thread_queue_anchor)) {
         waiters_awaken = true;
 
         /*
@@ -1542,16 +1616,17 @@ rtos_k_condvar_signal_internal(
         rtos_add_tail_runnable_thread(
             cpu_controller_p, awaken_thread_p);
 
-        if (!broadcast)
-        {
+	if (GLIST_NODE_IS_LINKED(&awaken_thread_p->thr_timer.tmr_list_node)) {
+	    rtos_k_timer_stop(&awaken_thread_p->thr_timer);
+	}
+
+        if (!broadcast) {
             break;
         }
     }
 
-    if (current_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT)
-    {
-        if (waiters_awaken)
-        {
+    if (current_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT) {
+        if (waiters_awaken) {
             /*
              * Add current thread at the beginning of the corresponding runnable
              * queue and change its state from running to runnable
@@ -1570,9 +1645,7 @@ rtos_k_condvar_signal_internal(
              */
             rtos_k_synchronous_context_switch(&current_thread_p->thr_execution_context);
         }
-    }
-    else
-    {
+    } else {
         /*
          * The caller is an interrupt context:
          *
@@ -3071,7 +3144,7 @@ rtos_k_mpu_remove_thread_data_region(void)
                     if (wait_if_full) {                                     \
                         do {                                                \
                             rtos_k_condvar_wait_interrupt(                  \
-                                &circ_buf_p->cb_not_full_condvar);          \
+                                &circ_buf_p->cb_not_full_condvar, 0);       \
                         } while (circ_buf_p->cb_entries_filled ==           \
                                  circ_buf_p->cb_num_entries);               \
                     } else {                                                \
@@ -3087,7 +3160,7 @@ rtos_k_mpu_remove_thread_data_region(void)
                         do {                                                \
                             rtos_k_condvar_wait(                            \
                                 &circ_buf_p->cb_not_full_condvar,           \
-                                circ_buf_p->cb_mutex_p);                    \
+                                circ_buf_p->cb_mutex_p, 0);                 \
                         } while (circ_buf_p->cb_entries_filled ==           \
                                  circ_buf_p->cb_num_entries);               \
                     } else {                                                \
@@ -3145,7 +3218,8 @@ rtos_k_mpu_remove_thread_data_region(void)
         _circular_buffer_read_func(                                         \
             _INOUT_ struct rtos_circular_buffer *circ_buf_p,                \
             _OUT_ _entry_type *entry_value_p,                               \
-            _IN_ bool wait_if_empty)                                        \
+            _IN_ bool wait_if_empty,					    \
+	    _INOUT_ rtos_milliseconds_t *timeout_ms_p)			    \
         {                                                                   \
             cpu_status_register_t saved_cpu_intr_mask = 0;                  \
             bool entry_read;                                                \
@@ -3156,7 +3230,8 @@ rtos_k_mpu_remove_thread_data_region(void)
                     if (wait_if_empty) {                                    \
                         do {                                                \
                             rtos_k_condvar_wait_interrupt(                  \
-                                &circ_buf_p->cb_not_empty_condvar);         \
+                                &circ_buf_p->cb_not_empty_condvar,	    \
+				timeout_ms_p);				    \
                         } while (circ_buf_p->cb_entries_filled == 0);       \
                     } else {                                                \
                         entry_read = false;                                 \
@@ -3170,7 +3245,8 @@ rtos_k_mpu_remove_thread_data_region(void)
                         do {                                                \
                             rtos_k_condvar_wait(                            \
                                 &circ_buf_p->cb_not_empty_condvar,          \
-                                circ_buf_p->cb_mutex_p);                    \
+                                circ_buf_p->cb_mutex_p,                     \
+				timeout_ms_p);				    \
                         } while (circ_buf_p->cb_entries_filled == 0);       \
                     } else {                                                \
                         entry_read = false;                                 \
@@ -3229,6 +3305,35 @@ GEN_FUNCTION_CIRCULAR_BUFFER_WRITE(
 
 GEN_FUNCTION_CIRCULAR_BUFFER_READ(
     rtos_k_byte_circular_buffer_read, uint8_t, RTOS_BYTE_CIRCULAR_BUFFER_SIGNATURE)
+
+
+/**
+ * Checks if a circular buffer is empty
+ */
+bool
+rtos_k_circular_buffer_is_empty(_IN_ struct rtos_circular_buffer *circ_buf_p)
+{
+    bool is_empty;
+
+    FDC_ASSERT(circ_buf_p->cb_signature == RTOS_POINTER_CIRCULAR_BUFFER_SIGNATURE ||
+	       circ_buf_p->cb_signature == RTOS_BYTE_CIRCULAR_BUFFER_SIGNATURE,
+	       circ_buf_p->cb_signature, circ_buf_p);
+
+    if (circ_buf_p->cb_mutex_p == NULL) {
+	cpu_status_register_t saved_cpu_intr_mask =
+				rtos_k_disable_cpu_interrupts();
+
+	is_empty = (circ_buf_p->cb_entries_filled == 0);
+	rtos_k_restore_cpu_interrupts(saved_cpu_intr_mask);
+    } else {
+	rtos_k_mutex_acquire(circ_buf_p->cb_mutex_p);
+	is_empty = (circ_buf_p->cb_entries_filled == 0);
+	rtos_k_mutex_release(circ_buf_p->cb_mutex_p);
+    }
+
+    return is_empty;
+}
+
 
 /**
  * Check invariants of a circular buffer

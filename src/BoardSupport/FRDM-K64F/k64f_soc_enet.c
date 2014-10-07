@@ -138,7 +138,7 @@ const struct enet_device g_enet_device0 = {
     .tx_rtos_interrupt_params = {
             .irp_name_p = "ENET Transmit Interrupt",
             .irp_isr_function_p = k64f_enet_transmit_isr,
-            .irp_arg_p =  (void *)&g_enet_device,
+            .irp_arg_p =  (void *)&g_enet_device0,
             .irp_channel = VECTOR_NUMBER_TO_IRQ_NUMBER(INT_ENET_Transmit),
             .irp_priority = ENET_INTERRUPT_PRIORITY,
             .irp_cpu_id = 0,
@@ -149,7 +149,7 @@ const struct enet_device g_enet_device0 = {
     .rx_rtos_interrupt_params = {
             .irp_name_p = "ENET Receive Interrupt",
             .irp_isr_function_p = k64f_enet_receive_isr,
-            .irp_arg_p =  (void *)&g_enet_device,
+            .irp_arg_p =  (void *)&g_enet_device0,
             .irp_channel = VECTOR_NUMBER_TO_IRQ_NUMBER(INT_ENET_Receive),
             .irp_priority = ENET_INTERRUPT_PRIORITY,
             .irp_cpu_id = 0,
@@ -954,7 +954,7 @@ enet_allocate_tx_buffer(const struct enet_device *enet_device_p)
     (void)rtos_k_pointer_circular_buffer_read(
 		&enet_var_p->tx_buffer_pool,
         	&tx_payload_buf,
-		true);
+		true, 0);
 
     DBG_ASSERT(tx_payload_buf != NULL, enet_device_p, 0);
 
@@ -1064,7 +1064,7 @@ enet_dequeue_rx_buffer(const struct enet_device *enet_device_p,
     (void)rtos_k_pointer_circular_buffer_read(
 		&enet_var_p->rx_buffer_queue,
         	&rx_payload_buf,
-		true);
+		true, 0);
 
     DBG_ASSERT(rx_payload_buf != NULL, enet_device_p, 0);
 
@@ -1084,10 +1084,10 @@ enet_dequeue_rx_buffer(const struct enet_device *enet_device_p,
                rx_buf_desc_p->data_buffer, rx_payload_buf);
     FDC_ASSERT((rx_buf_desc_p->control & ENET_RX_BD_EMPTY_MASK) == 0,
 	       rx_buf_desc_p->control, rx_buf_desc_p);
-    FDC_ASSERT((rx_buf_desc_p->data_length <= NETWORK_MTU,
+    FDC_ASSERT(rx_buf_desc_p->data_length <= NETWORK_MTU,
 	       rx_buf_desc_p->data_length, rx_buf_desc_p);
 
-    *rx_payload_buf_pp = rx_payload_buf;
+    *rx_payload_buf_p = rx_payload_buf;
     *rx_payload_length_p = rx_buf_desc_p->data_length;
 }
 

@@ -8,11 +8,15 @@
 #ifndef _NETWORKING_H
 #define _NETWORKING_H
 
+#include <McRTOS/failure_data_capture.h>
+
 /**
  * Maximum transfer unit for Ethernet (frame size without CRC)
  */
 #define NETWORK_MTU 1500
 
 void networking_init(void);
+
+fdc_error_t networking_receive_thread_f(void *arg);
 
 #endif /* _NETWORKING_H */
