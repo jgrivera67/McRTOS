@@ -393,7 +393,6 @@
 #define  RTOS_MUTEX_RELEASE_SYSTEM_CALL                 0x7
 #define  RTOS_CREATE_CONDVAR_SYSTEM_CALL                0x8
 #define  RTOS_CONDVAR_WAIT_SYSTEM_CALL                  0x9
-#define  RTOS_CONDVAR_WAIT_INTERRUPT_SYSTEM_CALL        0xa
 #define  RTOS_CONDVAR_SIGNAL_SYSTEM_CALL                0xb
 #define  RTOS_CONDVAR_BROADCAST_SYSTEM_CALL             0xc
 #define  RTOS_CREATE_TIMER_SYSTEM_CALL                  0xd

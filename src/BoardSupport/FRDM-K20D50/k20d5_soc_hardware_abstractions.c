@@ -1934,7 +1934,7 @@ read_adc_channel(
 
     while (!adc_channel_p->adc_conversion_completed)
     {
-        rtos_k_condvar_wait_interrupt(&adc_channel_p->adc_condvar);
+        rtos_k_condvar_wait_intr_disabled(&adc_channel_p->adc_condvar, NULL);
     }
 
     adc_channel_p->adc_conversion_completed = false;
@@ -1959,7 +1959,7 @@ kl25_tpm_wait_pwm_cycle_completion(
 
     while (!tpm_var_p->tpm_pwm_cycle_completed)
     {
-        rtos_k_condvar_wait_interrupt(&tpm_var_p->tpm_condvar);
+        rtos_k_condvar_wait_intr_disabled(&tpm_var_p->tpm_condvar, NULL);
     }
 
     tpm_var_p->tpm_pwm_cycle_completed = false;
@@ -2217,7 +2217,7 @@ i2c_wait_transfer_completion(
     cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
 
     while (!i2c_var_p->i2c_byte_transfer_completed) {
-        rtos_k_condvar_wait_interrupt(&i2c_var_p->i2c_condvar);
+        rtos_k_condvar_wait_intr_disabled(&i2c_var_p->i2c_condvar, NULL);
     }
 
     i2c_var_p->i2c_byte_transfer_completed = false;

@@ -3,8 +3,8 @@
  *
  * Hardware abstraction layer for the lpc2478-stk board
  *
- * @author German Rivera 
- */ 
+ * @author German Rivera
+ */
 
 #include "hardware_abstractions.h"
 #include "lpc2478_stk_board.h"
@@ -173,7 +173,7 @@ struct adc_channel {
      * Condvar to signal a thread waiting for an A/D conversion
      */
     struct rtos_condvar adc_condvar;
-    
+
     /**
      * Last value read from the V/VREF field of the corresponding ADC channel's
      * reg_AD0DR[] register, by the A/D conversion completion interrupt handler.
@@ -254,7 +254,7 @@ init_spi(bool master);
 #endif
 
 
-/* 
+/*
  * Added function prototypes for dummy VIC interrupt ISRs
  */
 static isr_function_t dummy_wdt_isr;
@@ -302,12 +302,12 @@ extern isr_function_t isr_adc;
 
 /**
  * Global pointer to the SDRAM map
- */ 
+ */
 struct sdram_map *const g_sdram_map_p = (struct sdram_map *)BOARD_SDRAM_BASE;
 
 /**
  * Global pointer to the beginning of unused SDRAM
- */ 
+ */
 void *const g_available_sdram_p = (void *)AVAILABLE_SDRAM_START_ADDR;
 
 /*
@@ -318,7 +318,7 @@ void *const g_available_sdram_p = (void *)AVAILABLE_SDRAM_START_ADDR;
 /**
  * Global definition of const pointer to the array of fast_gpio_port structs,
  * one entry per fast GPIO port of the LPC2478.
- */ 
+ */
 static volatile struct fast_gpio_port *const g_fast_gpio_ports_array =
     (struct fast_gpio_port *)FIO_BASE_ADDR;
 
@@ -355,7 +355,7 @@ static lpc2478_vic_t *const g_vic_mmio_registers_p = (lpc2478_vic_t *)LPC2478_VI
 struct rtos_interrupt *g_rtos_interrupt_timer0 = NULL;
 
 /**
- * Global array of const structures for timer devices for the LPC2478 
+ * Global array of const structures for timer devices for the LPC2478
  * (allocated in flash space)
  */
 static const struct timer_device g_timer_devices[] =
@@ -411,7 +411,7 @@ static const struct timer_device *const g_cpu_clock_cycle_counter_timer_p =
  * NOTE: It is used in lpc2478_interrupt_handlers.s.
  */
 struct rtos_interrupt *g_rtos_interrupt_uart0 = NULL;
- 
+
 /**
  * Global array of non-const structures for UART devices for the LPC2478
  * (allocated in SRAM space)
@@ -452,7 +452,7 @@ static struct uart_device_var g_uart_devices_var[] =
 };
 
 /**
- * Global array of const structures for UART devices for the LPC2478 
+ * Global array of const structures for UART devices for the LPC2478
  * (allocated in flash space)
  */
 static const struct uart_device g_uart_devices[] =
@@ -521,7 +521,7 @@ const struct uart_device *const g_console_serial_port_p = &g_uart_devices[0];
  * NOTE: It is used in lpc2478_interrupt_handlers.s.
  */
 struct rtos_interrupt *g_rtos_interrupt_adc = NULL;
- 
+
 /**
  * Global array of non-const structures for A/D converter channels
  * (allocated in SRAM space)
@@ -588,7 +588,7 @@ static const struct pin_config_info g_usb_device_link_led_pin =
  */
 struct rtos_interrupt *g_rtos_interrupt_gpio_ports = NULL;
 
-/** 
+/**
  * Condvar signaled when any of the buttons of the buttons device is pressed
  */
 static struct rtos_condvar g_buttons_pressed_condvar;
@@ -615,11 +615,11 @@ static const struct buttons_device g_buttons_device =
         &((struct gpio_interrupt_registers *)
             GPIO_INTERRUPT_REGISTERS_BASE_ADDR)->gpio_port_p2,
 
-    .bd_button1_pin = 
+    .bd_button1_pin =
         PIN_COFIG_INFO_INITIALIZER(
             BUTTON_PINS_GPIO_PORT, BUTTON1_PIN_BIT_INDEX, PINSEL_PRIMARY, false),
 
-    .bd_button2_pin = 
+    .bd_button2_pin =
         PIN_COFIG_INFO_INITIALIZER(
             BUTTON_PINS_GPIO_PORT, BUTTON2_PIN_BIT_INDEX, PINSEL_PRIMARY, false),
 
@@ -739,7 +739,7 @@ turn_on_power(uint32_t pconp_mask)
      * Clear reserved bits. Reading reserved bits is not defined, so the
      * register value read can contain garbage 1's in these bits, and we are
      * not supposed to write 1's to reserved bits.
-     */ 
+     */
     CLEAR_BIT_FIELD(reg_value, PCONP_RESERVED_MASK);
 
     reg_value |= pconp_mask;
@@ -815,7 +815,7 @@ configure_pin(const struct pin_config_info *pin_info_p, bool is_output)
             /*
              * Initialize pin to be de-asserted, before setting it as an
              * output pin:
-             */ 
+             */
             deactivate_output_pin(pin_info_p);
 
             reg_value = read_32bit_mmio_register(reg_FIODIR_p);
@@ -852,7 +852,7 @@ activate_output_pin(const struct pin_config_info *pin_info_p)
     {
         volatile uint32_t *reg_FIOSET_p =
             &g_fast_gpio_ports_array[pin_info_p->gpio_port_index].reg_FIOSET;
-                
+
         write_32bit_mmio_register(
             reg_FIOSET_p,
             BIT(pin_info_p->pin_bit_index));
@@ -889,7 +889,7 @@ deactivate_output_pin(const struct pin_config_info *pin_info_p)
     {
         volatile uint32_t *reg_FIOSET_p =
             &g_fast_gpio_ports_array[pin_info_p->gpio_port_index].reg_FIOSET;
-                
+
         write_32bit_mmio_register(
             reg_FIOSET_p,
             BIT(pin_info_p->pin_bit_index));
@@ -977,7 +977,7 @@ void soc_hardware_init(void)
     /*
      * Initialize peripherals that use DRAM:
      */
-    
+
     init_lcd();
 
     TODO("Enable init_ethernet")
@@ -987,7 +987,7 @@ void soc_hardware_init(void)
 
 /**
  * Initializes the RTOS tick timer for the calling CPU core
- */ 
+ */
 void
 initialize_tick_timer(void)
 {
@@ -1019,7 +1019,7 @@ initialize_tick_timer(void)
 }
 
 
-uint32_t 
+uint32_t
 get_cpu_clock_cycles(void)
 {
     lpc2478_timer_t *timer_mmio_registers_p =
@@ -1220,9 +1220,9 @@ static void initMAM(uint32_t cclk, uint8_t mamcr, uint8_t mamtim_override)
     }
     else
     {
-        /* 
+        /*
          * invalid value
-         * setting to reset value for now 
+         * setting to reset value for now
          */
         (void)CAPTURE_FDC_ERROR(
             "Invalid mamtim_override", mamtim_override, 0);
@@ -1698,7 +1698,7 @@ init_uart_internal(
         cpu_id,
         &uart_device_p->urt_var_p->urt_rdr_condvar);
 
-    /* 
+    /*
      * Register McRTOS interrupt handler
      */
     rtos_k_register_interrupt(
@@ -1706,7 +1706,7 @@ init_uart_internal(
         uart_device_p->urt_rtos_interrupt_pp);
 
     DBG_ASSERT(
-        *uart_device_p->urt_rtos_interrupt_pp != NULL, 
+        *uart_device_p->urt_rtos_interrupt_pp != NULL,
         uart_device_p->urt_rtos_interrupt_pp, uart_device_p);
 
     /*
@@ -1716,7 +1716,7 @@ init_uart_internal(
     reg_value |= UART_IER_THRE_INTERRUPT_ENABLE_MASK;
     write_32bit_mmio_register(&uart_mmio_registers_p->reg_IER, reg_value);
 
-    /* 
+    /*
      * Enable transmissions:
      */
     uart_mmio_registers_p->reg_TER = UTER_TXEN;
@@ -1727,7 +1727,7 @@ init_uart_internal(
 
 /**
  * UART interrupt pre-handler
- */ 
+ */
 void
 uart_interrupt_pre_handler(
     _IN_ const struct uart_device *uart_device_p)
@@ -1753,7 +1753,7 @@ uart_interrupt_pre_handler(
     FDC_ASSERT(
         (reg_value & UART_IIR_INT_STATUS_MASK) == 0,
         reg_value, uart_device_p);
-    
+
     uart_interrupt_id_t interrupt_id =
         GET_BIT_FIELD(
             reg_value, UART_IIR_INT_ID_MASK, UART_IIR_INT_ID_SHIFT);
@@ -1780,18 +1780,18 @@ uart_interrupt_pre_handler(
             break;
 
         case UART_INT_RECEIVE_DATA_AVAILABLE:
-  
+
             FDC_ASSERT(
                 reg_lsr_value & UART_LSR_RDR_MASK,
                 reg_lsr_value, uart_device_p);
 
            /*
              * Read the first byte from the Receive FIFO to clear the
-             * interrupt source. 
+             * interrupt source.
              */
             uart_var_p->urt_first_byte_received =
                 read_8bit_mmio_register(&uart_mmio_registers_p->reg_RBR);
-           
+
             DBG_ASSERT(
                 !uart_var_p->urt_byte_received_pending,
                 uart_var_p, 0);
@@ -1956,7 +1956,7 @@ static void initVIC(void)
 }
 
 
-/** 
+/**
  * Install an ISR into the VIC
  */
 void
@@ -2000,7 +2000,7 @@ install_isr(
     /* Set Vector Priorities */
     g_vic_mmio_registers_p->reg_VICVectPriority[channel] = priority;
 
-    /*  
+    /*
      *  Enable the interrupt channel in the VIC:
      *
      *  NOTE: There is no need to read the VICIntEnable register
@@ -2024,13 +2024,13 @@ assert_interrupt_source_is_set(interrupt_channel_t interrupt_channel)
         interrupt_channel < SOC_NUM_INTERRUPT_CHANNELS,
         interrupt_channel, SOC_NUM_INTERRUPT_CHANNELS);
 
-    FDC_ASSERT_EQUAL(                             
+    FDC_ASSERT_EQUAL(
         g_vic_mmio_registers_p->reg_VICIRQStatus & VIC_CHANNEL_MASK(interrupt_channel),
-        VIC_CHANNEL_MASK(interrupt_channel)); 
-                                                  
-    FDC_ASSERT_EQUAL(                             
+        VIC_CHANNEL_MASK(interrupt_channel));
+
+    FDC_ASSERT_EQUAL(
         g_vic_mmio_registers_p->reg_VICRawIntr & VIC_CHANNEL_MASK(interrupt_channel),
-        VIC_CHANNEL_MASK(interrupt_channel)); 
+        VIC_CHANNEL_MASK(interrupt_channel));
 }
 
 
@@ -2046,12 +2046,12 @@ notify_interrupt_controller_isr_done(interrupt_channel_t interrupt_channel)
         interrupt_channel < SOC_NUM_INTERRUPT_CHANNELS,
         interrupt_channel, SOC_NUM_INTERRUPT_CHANNELS);
 
-    write_32bit_mmio_register(        
-        &g_vic_mmio_registers_p->reg_VICAddress, 0x0); 
-} 
+    write_32bit_mmio_register(
+        &g_vic_mmio_registers_p->reg_VICAddress, 0x0);
+}
 
 
-/* 
+/*
  * Generate dummy VIC interrupt handler functions
  */
 GENERATE_DUMMY_VIC_ISR_FUNCTION(wdt, VIC_CHANNEL_WDT)
@@ -2525,7 +2525,7 @@ init_timer(
     lpc2478_timer_t *timer_mmio_registers_p = timer_device_p->tmr_mmio_registers_p;
     uint32_t timer_pclk_shift = timer_device_p->tmr_timer_pclk_shift;
     uint32_t timer_pclksel_index = timer_device_p->tmr_pclksel_index;
-    vic_interrupt_channel_t vic_channel = 
+    vic_interrupt_channel_t vic_channel =
         timer_device_p->tmr_rtos_interrupt_params.irp_channel;
 
     turn_on_power(timer_device_p->tmr_pconp_mask);
@@ -2536,7 +2536,7 @@ init_timer(
     cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
 
 #if 0 // XXX Remove this code
-    /*  
+    /*
      *  Disable timer interrupt in the VIC
      *
      *  NOTE: There is no need to read the VICIntEnClear register
@@ -2547,7 +2547,7 @@ init_timer(
 
     uint32_t timer_pclksel_freq =
         get_peripheral_clock_freq(timer_pclksel_index, timer_pclk_shift);
-    
+
     FDC_ASSERT(timer_pclksel_freq != 0, 0, 0);
 
     /*
@@ -2560,7 +2560,7 @@ init_timer(
      * For example, if the timer peripheral clock frequency is 72 MHz,
      * timer_frequency_hz is 100 and TARGET_NUM_TC_INCREMENTS is 2, then
      * prescale would be:
-     * 
+     *
      *      (72,000,000 / 100) / 2 = 360,000
      */
     prescale = (timer_pclksel_freq / timer_frequency_hz) / TARGET_NUM_TC_INCREMENTS;
@@ -2592,17 +2592,17 @@ init_timer(
      * Set the Prescale register (PR)
      *
      * NOTE: We use prescale - 1 because the first time that reg_PC is
-     * incremented, it is actually set to 0, not to 1. So the count 
+     * incremented, it is actually set to 0, not to 1. So the count
      * kept in reg_PC is one unit behind.
      */
-    
+
     FDC_ASSERT(prescale >= 1, prescale, 0);
 
     timer_mmio_registers_p->reg_PR = prescale - 1;
 
     /*
      * Set the timer/counter mode to Timer Mode. The prescale counter
-     * register (PC) will get incremented on every rising PCLK edge, 
+     * register (PC) will get incremented on every rising PCLK edge,
      * until it matches the PR register. On the next PCLK cycle after
      * reg_PC matches reg_PR, reg_PC is reset back to 0 and reg_TC is
      * incremented. Note also that the first time that reg_TC is
@@ -2634,7 +2634,7 @@ init_timer(
         timer_mmio_registers_p->reg_IR |= IR_MR0_INTERRUPT_MASK;
 
 #if 0 // XXX Remove this code
-        /*  
+        /*
          *  Enable the corresponding timer interrupt channel in the VIC
          *
          *  NOTE: There is no need to read the VICIntEnable register
@@ -2648,7 +2648,7 @@ init_timer(
          */
         reg_value = timer_mmio_registers_p->reg_TCR;
         reg_value &= ~TCR_COUNTER_RESET_MASK;
-        reg_value |= TCR_COUNTER_ENABLE_MASK; 
+        reg_value |= TCR_COUNTER_ENABLE_MASK;
         timer_mmio_registers_p->reg_TCR = reg_value;
     }
     else
@@ -2662,7 +2662,7 @@ init_timer(
         reg_value = timer_mmio_registers_p->reg_TCR;
         CLEAR_BIT_FIELD(reg_value, TCR_RESERVED_MASK);
         reg_value &= ~TCR_COUNTER_RESET_MASK;
-        reg_value |= TCR_COUNTER_ENABLE_MASK; 
+        reg_value |= TCR_COUNTER_ENABLE_MASK;
         timer_mmio_registers_p->reg_TCR = reg_value;
     }
 
@@ -2683,14 +2683,14 @@ clear_timer_interrupt_source(
         timer_device_p->tmr_signature, timer_device_p);
 
     lpc2478_timer_t *timer_mmio_registers_p = timer_device_p->tmr_mmio_registers_p;
-    vic_interrupt_channel_t vic_channel = 
+    vic_interrupt_channel_t vic_channel =
         timer_device_p->tmr_rtos_interrupt_params.irp_channel;
 
     FDC_ASSERT_INTERRUPT_SOURCE_IS_SET(vic_channel);
 
-    FDC_ASSERT_EQUAL(                             
+    FDC_ASSERT_EQUAL(
         timer_mmio_registers_p->reg_IR & IR_MR0_INTERRUPT_MASK,
-        IR_MR0_INTERRUPT_MASK); 
+        IR_MR0_INTERRUPT_MASK);
 
     /*
      * Clear interrupt condition in the timer device by writing a logic one to the
@@ -2698,9 +2698,9 @@ clear_timer_interrupt_source(
      */
     timer_mmio_registers_p->reg_IR |= IR_MR0_INTERRUPT_MASK;
 
-    FDC_ASSERT_EQUAL(                             
+    FDC_ASSERT_EQUAL(
         g_vic_mmio_registers_p->reg_VICRawIntr & VIC_CHANNEL_MASK(vic_channel),
-        0); 
+        0);
 }
 
 
@@ -2718,10 +2718,11 @@ timer_interrupt_handler(
 
 static inline void
 uart_putchar_internal(
-    _IN_ const struct uart_device *uart_device_p, 
+    _IN_ const struct uart_device *uart_device_p,
     _IN_ uint8_t c,
     _IN_ bool use_condvar)
 {
+    cpu_status_register_t cpu_status_register;
     struct uart_device_var *const uart_var_p = uart_device_p->urt_var_p;
     lpc2478_uart_t *const uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
     uint8_t reg_lsr_value;
@@ -2739,6 +2740,14 @@ uart_putchar_internal(
         return;
     }
 
+    if (use_condvar)
+    {
+        /*
+         * Disable interrupts in the ARM core
+         */
+        cpu_status_register = rtos_k_disable_cpu_interrupts();
+    }
+
     for ( ; ; )
     {
         reg_lsr_value = read_8bit_mmio_register(&uart_mmio_registers_p->reg_LSR);
@@ -2749,11 +2758,19 @@ uart_putchar_internal(
 
         if (use_condvar)
         {
-            rtos_k_condvar_wait_interrupt(&uart_var_p->urt_thre_condvar);
+            rtos_k_condvar_wait_intr_disabled(&uart_var_p->urt_thre_condvar, NULL);
         }
     }
 
     write_8bit_mmio_register(&uart_mmio_registers_p->reg_THR, c);
+
+    if (use_condvar)
+    {
+        /*
+         * Restore previous interrupt masking in the ARM core
+         */
+        rtos_k_restore_cpu_interrupts(cpu_status_register);
+    }
 }
 
 
@@ -2763,7 +2780,7 @@ uart_putchar_internal(
  */
 void
 uart_putchar(
-    _IN_ const struct uart_device *uart_device_p, 
+    _IN_ const struct uart_device *uart_device_p,
     _IN_ uint8_t c)
 {
     uart_putchar_internal(uart_device_p, c, true);
@@ -2777,7 +2794,7 @@ uart_putchar(
  */
 void
 uart_putchar_with_polling(
-    _IN_ const struct uart_device *uart_device_p, 
+    _IN_ const struct uart_device *uart_device_p,
     _IN_ uint8_t c)
 {
     uart_putchar_internal(uart_device_p, c, false);
@@ -2822,7 +2839,7 @@ uart_getchar(
         /*
          * Wait to be signaled from UART interrupt:
          */
-        rtos_k_condvar_wait_interrupt(&uart_var_p->urt_rdr_condvar);
+        rtos_k_condvar_wait_intr_disabled(&uart_var_p->urt_rdr_condvar, NULL);
 
         FDC_ASSERT(uart_var_p->urt_byte_received_pending,
             uart_var_p, 0);
@@ -2965,7 +2982,7 @@ init_buttons(const struct buttons_device *buttons_device_p)
 
 /**
  * Clear last GPIO ports interrupt
- */ 
+ */
 void
 clear_gpio_ports_interrupt_source(
     const struct buttons_device *buttons_device_p)
@@ -2990,12 +3007,12 @@ clear_gpio_ports_interrupt_source(
     reg_value = read_32bit_mmio_register(
                     &gpio_mmio_interrupt_registers_p->reg_IntStatus);
 
-#if 0    
+#if 0
     FDC_ASSERT(
         reg_value & GPIO_INT_STATUS_P2_INT_MASK,
         reg_value, 0);
 #endif
-    
+
     reg_value = read_32bit_mmio_register(
                     &gpio_port_mmio_interrupt_registers_p->reg_IntStatF);
 
@@ -3046,7 +3063,7 @@ gpio_ports_interrupt_handler(
     DBG_ASSERT(
         buttons_device_p->bd_signature == BUTTONS_DEVICE_SIGNATURE,
         buttons_device_p->bd_signature, buttons_device_p);
-   
+
     struct rtos_interrupt *buttons_interrupt_p =
         *buttons_device_p->bd_rtos_interrupt_pp;
 
@@ -3069,9 +3086,9 @@ gpio_ports_interrupt_handler(
 /**
  * Read the buttons device. It blocks the calling thread until a button is
  * pressed.
- * 
+ *
  * @return  bit map of the buttons last pressed
- */ 
+ */
 uint32_t
 read_buttons(
     _IN_ const struct buttons_device *buttons_device_p)
@@ -3083,14 +3100,19 @@ read_buttons(
     uint32_t buttons_pressed_bitmap = 0x0;
 
 #ifdef USE_GPIO_INTERRUPTS
+    /*
+     * Disable interrupts in the ARM core
+     */
+    cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
+
     do {
         /*
          * Wait for a GPIO interrupt on port GPIO_PORT_P2:
          */
-        rtos_k_condvar_wait_interrupt(
-            &buttons_device_p->bd_var_p->bd_condvar);
+        rtos_k_condvar_wait_intr_disabled(
+            &buttons_device_p->bd_var_p->bd_condvar, NULL);
 
-        buttons_pressed_bitmap = 
+        buttons_pressed_bitmap =
             buttons_device_p->bd_var_p->bd_buttons_pressed_bitmap;
 
         /*
@@ -3100,6 +3122,11 @@ read_buttons(
             &g_vic_mmio_registers_p->reg_VICIntEnable,
             VIC_CHANNEL_MASK(buttons_device_p->bd_rtos_interrupt_params.irp_channel));
     } while (buttons_pressed_bitmap == 0x0);
+
+    /*
+     * Restore previous interrupt masking in the ARM core
+     */
+    rtos_k_restore_cpu_interrupts(cpu_status_register);
 #else
 
     volatile struct fast_gpio_port *fast_gpio_port_registers_p =
@@ -3135,14 +3162,14 @@ init_adc(const struct adc_device *adc_device_p)
 
     lpc2478_adc_t *adc_mmio_registers_p = adc_device_p->ad_mmio_registers_p;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
-	
+
     /*
      * Turn on ADC power in the System Control Block
      */
     turn_on_power(PCONP_PCADC);
 
     uint32_t adc_pclksel_freq = get_peripheral_clock_freq(0, PCLK_ADC);
-    
+
     FDC_ASSERT(adc_pclksel_freq != 0, 0, 0);
 
     /*
@@ -3157,7 +3184,7 @@ init_adc(const struct adc_device *adc_device_p)
      * adc_clock_divider = (adc_pclk_freq / ADC_CLOCK_FREQUENCY) - 1
      */
     uint8_t adc_clock_divider = (adc_pclksel_freq / ADC_CLOCK_FREQUENCY) - 1;
-  
+
     /*
      * Initialize of the AD0CR register:
      */
@@ -3218,7 +3245,7 @@ init_adc(const struct adc_device *adc_device_p)
 
 /**
  * Clear last interrupt for the given UART
- */ 
+ */
 void
 clear_adc_interrupt_source(
     _IN_ const struct adc_device *adc_device_p)
@@ -3234,7 +3261,7 @@ clear_adc_interrupt_source(
     FDC_ASSERT_INTERRUPT_SOURCE_IS_SET(VIC_CHANNEL_AD0);
 
     reg_value = read_32bit_mmio_register(&adc_mmio_registers_p->reg_AD0STAT);
-                
+
     FDC_ASSERT(
         (reg_value & AD0STAT_ADINT_MASK) != 0 &&
         (reg_value & AD0STAT_DONE_MASK) != 0,
@@ -3267,7 +3294,7 @@ clear_adc_interrupt_source(
 }
 
 
-/** 
+/**
  * A/D converter interrupt handler
  */
 void
@@ -3282,15 +3309,15 @@ adc_interrupt_handler(
         *adc_device_p->ad_rtos_interrupt_pp;
 
     FDC_ASSERT_RTOS_INTERRUPT_HANDLER_PRECONDITIONS(adc_interrupt_p);
- 
+
     /*
      * Signal condition variables of the channels for an A/D conversion
-     * has completed 
+     * has completed
      */
     for (uint8_t i = 0; i < NUM_ADC_CHANNELS; i ++)
     {
         struct adc_channel *adc_channel_p = &g_adc_channels[i];
-            
+
         if (adc_channel_p->adc_conversion_completed)
         {
             rtos_k_condvar_signal(&adc_channel_p->adc_condvar);
@@ -3352,7 +3379,7 @@ select_input_pin_adc_channel(
             &g_pin_connect_block->reg_PINSEL[1], reg_value);
 
         break;
-	
+
     case 4:
         reg_value = read_32bit_mmio_register(
                         &g_pin_connect_block->reg_PINSEL[3]);
@@ -3431,15 +3458,15 @@ read_adc_channel(
 
     /*
      * Select the channel pin:
-     */ 
+     */
     SET_BIT_FIELD(reg_value, AD0CR_SEL_MASK, AD0CR_SEL_SHIFT, BIT(adc_channel));
-   
+
     /*
      * Indicate that we want to start the A/D conversion now:
      */
-    
+
     SET_BIT_FIELD(reg_value, AD0CR_START_MASK, AD0CR_START_SHIFT, 0x1);
-   
+
     write_reg_AD0CR(&adc_mmio_registers_p->reg_AD0CR, reg_value);
 
     /*
@@ -3449,7 +3476,7 @@ read_adc_channel(
 
     while (!adc_channel_p->adc_conversion_completed)
     {
-        rtos_k_condvar_wait_interrupt(&adc_channel_p->adc_condvar);
+        rtos_k_condvar_wait_intr_disabled(&adc_channel_p->adc_condvar, NULL);
     }
 
     adc_channel_p->adc_conversion_completed = false;
@@ -3458,7 +3485,7 @@ read_adc_channel(
     uint32_t adc_done_mask;
     do {
         reg_value = read_32bit_mmio_register(&adc_mmio_registers_p->reg_AD0STAT);
-                
+
         FDC_ASSERT(
             (reg_value & AD0STAT_ADINT_MASK) != 0 &&
             (reg_value & AD0STAT_DONE_MASK) != 0,
@@ -3484,7 +3511,7 @@ init_trimpot(void)
 {
     select_input_pin_adc_channel(TRIMPOT_ADC_CHANNEL);
 }
-    
+
 uint32_t
 read_trimpot(void)
 {
@@ -3506,7 +3533,7 @@ init_spi(bool master)
 
     /*
      * XXX Not implemented yet
-     */ 
+     */
     FDC_ASSERT(false, 0, 0);
 
     /*
@@ -3515,7 +3542,7 @@ init_spi(bool master)
     turn_on_power(PCONP_PCSPI);
 
     uint32_t spi_pclksel_freq = get_peripheral_clock_freq(0, PCLK_SPI);
-    
+
     if (spi_pclksel_freq == 0)
     {
         FDC_ASSERT(false, 0, 0);
@@ -3526,7 +3553,7 @@ init_spi(bool master)
      * Configure pins:
      *
      * XXX Not implemented yet
-     */ 
+     */
     FDC_ASSERT(false, 0, 0);
 }
 #endif
@@ -3643,11 +3670,11 @@ init_ssp(
     uint32_t ssp_pclksel_freq = get_peripheral_clock_freq(
         ssp_controller_p->sc_pclksel_index,
         ssp_controller_p->sc_ssp_pclk_shift);
-    
+
     FDC_ASSERT(ssp_pclksel_freq != 0, ssp_controller_p, 0);
 
     uint8_t ssp_clock_divider = (ssp_pclksel_freq / SSP_CLOCK_FREQUENCY) - 1;
-  
+
     /*
      * Set SSP clock frequency:
      */
@@ -3727,7 +3754,7 @@ ssp_flush_transmit_receive_fifos(
 }
 
 
-/** 
+/**
  * Clear SSP controller interrupt source
  */
 void
@@ -3762,7 +3789,7 @@ clear_ssp_controller_interrupt_source(
          * Clear unexpected interrupt source:
          */
         write_8bit_mmio_register(
-            &ssp_mmio_registers_p->reg_ICR, 
+            &ssp_mmio_registers_p->reg_ICR,
             SSP_ICR_RORIC_MASK | SSP_ICR_RTIC_MASK);
 
        return;
@@ -3807,7 +3834,7 @@ clear_ssp_controller_interrupt_source(
      * Clear reserved bits. Reading reserved bits is not defined, so the
      * register value read can contain garbage 1's in these bits, and we are
      * not supposed to write 1's to reserved bits.
-     */ 
+     */
     CLEAR_BIT_FIELD(reg_value, SSP_IMSC_RESERVED_MASK);
 
     FDC_ASSERT(
@@ -3815,7 +3842,7 @@ clear_ssp_controller_interrupt_source(
         reg_value, interrupt_source);
 
     reg_value &= ~interrupt_source;
-  
+
     write_8bit_mmio_register(
         &ssp_mmio_registers_p->reg_IMSC, reg_value);
 
@@ -3837,7 +3864,7 @@ clear_ssp_controller_interrupt_source(
 }
 
 
-/** 
+/**
  * SSP controller interrupt handler
  */
 void
@@ -3851,7 +3878,7 @@ ssp_controller_interrupt_handler(
         ssp_controller_p->sc_signature == SSP_CONTROLLER_SIGNATURE,
         ssp_controller_p->sc_signature, ssp_controller_p);
 
-    struct rtos_interrupt *ssp_interrupt_p = 
+    struct rtos_interrupt *ssp_interrupt_p =
         *ssp_controller_p->sc_rtos_interrupt_pp;
 
     FDC_ASSERT_RTOS_INTERRUPT_HANDLER_PRECONDITIONS(ssp_interrupt_p);
@@ -3883,9 +3910,9 @@ ssp_wait_for_interrupt(
         ssp_controller_p->sc_signature, ssp_controller_p);
 
     FDC_ASSERT(
-        (ssp_interrupt_mask & (SSP_IMSC_TXIM_MASK | SSP_IMSC_RXIM_MASK)) == 
+        (ssp_interrupt_mask & (SSP_IMSC_TXIM_MASK | SSP_IMSC_RXIM_MASK)) ==
             SSP_IMSC_TXIM_MASK ||
-        (ssp_interrupt_mask & (SSP_IMSC_TXIM_MASK | SSP_IMSC_RXIM_MASK)) == 
+        (ssp_interrupt_mask & (SSP_IMSC_TXIM_MASK | SSP_IMSC_RXIM_MASK)) ==
             SSP_IMSC_RXIM_MASK,
         ssp_interrupt_mask, ssp_controller_p);
 
@@ -3910,13 +3937,13 @@ ssp_wait_for_interrupt(
      * Clear reserved bits. Reading reserved bits is not defined, so the
      * register value read can contain garbage 1's in these bits, and we are
      * not supposed to write 1's to reserved bits.
-     */ 
+     */
     CLEAR_BIT_FIELD(reg_value, SSP_IMSC_RESERVED_MASK);
 
     FDC_ASSERT(reg_value == 0, reg_value, 0);
 
     reg_value |= ssp_interrupt_mask;
-  
+
     write_8bit_mmio_register(
         &ssp_mmio_registers_p->reg_IMSC, reg_value);
 
@@ -3934,12 +3961,22 @@ ssp_wait_for_interrupt(
     struct ssp_controller_var *ssp_controller_var_p =
         ssp_controller_p->sc_var_p;
 
+    /*
+     * Disable interrupts in the ARM core
+     */
+    cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
+
     while (!ssp_controller_var_p->sc_interrupt_pending)
     {
-        rtos_k_condvar_wait_interrupt(&ssp_controller_var_p->sc_condvar);
+        rtos_k_condvar_wait_intr_disabled(&ssp_controller_var_p->sc_condvar, NULL);
     }
 
     ssp_controller_var_p->sc_interrupt_pending = false;
+
+    /*
+     * Restore previous interrupt masking in the ARM core
+     */
+    rtos_k_restore_cpu_interrupts(cpu_status_register);
 }
 
 
@@ -3954,13 +3991,13 @@ ssp_transmit_receive_16bit_value(
     uint8_t outgoing_buffer[2];
     uint8_t incoming_buffer[2];
     uint16_t incoming_value;
-   
+
     outgoing_buffer[0] = outgoing_value >> 8;
     outgoing_buffer[1] = outgoing_value & 0xff;
 
     ssp_transmit_receive_buffer(
         ssp_controller_p, outgoing_buffer, incoming_buffer, 2);
-    
+
     incoming_value = incoming_buffer[0] << 8;
     incoming_value |= incoming_buffer[1];
 
@@ -3993,14 +4030,14 @@ ssp_transmit_receive_buffer(
         status_reg_value , 0);
 
     const uint8_t *const out_buffer_end_p = outgoing_buffer + size;
-    uint8_t *in_buffer_cursor_p = incoming_buffer; 
+    uint8_t *in_buffer_cursor_p = incoming_buffer;
 
-    for (const uint8_t *out_buffer_cursor_p = outgoing_buffer; 
+    for (const uint8_t *out_buffer_cursor_p = outgoing_buffer;
          out_buffer_cursor_p != out_buffer_end_p; out_buffer_cursor_p ++)
     {
         /*
          * Transmit next byte:
-         */ 
+         */
 
         for ( ; ; )
         {
@@ -4028,10 +4065,10 @@ ssp_transmit_receive_buffer(
             {
                 break;
             }
-        
+
             //ssp_wait_for_interrupt(ssp_controller_p, SSP_IMSC_RXIM_MASK);
         }
-   
+
         data_reg_value = read_16bit_mmio_register(&ssp_mmio_registers_p->reg_DR_data);
 
         FDC_ASSERT(data_reg_value <= UINT8_MAX, data_reg_value, 0);
@@ -4052,7 +4089,7 @@ void
 wait_for_interrupts(void)
 {
     uint8_t reg_PCON = read_8bit_mmio_register(&g_scb_mmio_registers_p->reg_PCON);
-   
+
     SET_SCB_PCON_IDLE_MODE(reg_PCON);
 
     write_8bit_mmio_register(&g_scb_mmio_registers_p->reg_PCON, reg_PCON);
@@ -4079,7 +4116,7 @@ wait_for_interrupts(void)
     {                                                                   \
         FDC_ASSERT_VALID_MMIO_ADDRESS(io_reg_p);                        \
         *io_reg_p = value;                                              \
-    }   
+    }
 
 GEN_READ_MMIO_REGISTER_FUNCTION(read_32bit_mmio_register, uint32_t, uint32_t)
 

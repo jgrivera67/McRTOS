@@ -563,7 +563,7 @@ camera_frame_reader_thread_f(void *arg)
             do {
                 rtos_condvar_wait(
                     g_car.c_turned_on_condvar_p,
-                    g_car.c_turned_on_mutex_p);
+                    g_car.c_turned_on_mutex_p, NULL);
             } while (!g_car.c_turned_on);
 
             /*
@@ -978,7 +978,7 @@ car_driver_thread_f(void *arg)
             do {
                 rtos_condvar_wait(
                     g_car.c_turned_on_condvar_p,
-                    g_car.c_turned_on_mutex_p);
+                    g_car.c_turned_on_mutex_p, NULL);
             } while (!g_car.c_turned_on);
 
             set_wheels_straight();

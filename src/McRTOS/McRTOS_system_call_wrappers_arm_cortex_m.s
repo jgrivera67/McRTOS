@@ -221,9 +221,6 @@ GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_MUTEX_RELEASE_SYSTEM_CALL, \
 GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_CONDVAR_WAIT_SYSTEM_CALL, \
                                  rtos_condvar_wait
 
-GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_CONDVAR_WAIT_INTERRUPT_SYSTEM_CALL, \
-                                 rtos_condvar_wait_interrupt
-
 GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_CONDVAR_SIGNAL_SYSTEM_CALL, \
                                  rtos_condvar_signal
 

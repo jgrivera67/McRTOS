@@ -75,8 +75,6 @@ const void *const g_rtos_system_call_dispatch_table[] =
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
         RTOS_CONDVAR_WAIT_SYSTEM_CALL, rtos_k_condvar_wait),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
-        RTOS_CONDVAR_WAIT_INTERRUPT_SYSTEM_CALL, rtos_k_condvar_wait_interrupt),
-    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
         RTOS_CONDVAR_SIGNAL_SYSTEM_CALL, rtos_k_condvar_signal),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
         RTOS_CONDVAR_BROADCAST_SYSTEM_CALL, rtos_k_condvar_broadcast),
@@ -473,6 +471,11 @@ rtos_k_thread_delay(rtos_milliseconds_t num_milliseconds)
     FDC_ASSERT(num_milliseconds != 0, num_milliseconds, current_thread_p);
 
     /*
+     * Disable interrupts in the ARM core
+     */
+    cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
+
+    /*
      * Start timer for the current thread:
      */
     rtos_k_timer_start(
@@ -482,11 +485,16 @@ rtos_k_thread_delay(rtos_milliseconds_t num_milliseconds)
     /*
      * Wait for the calling thread's delay timer to expire:
      */
-    rtos_k_condvar_wait_interrupt(&current_thread_p->thr_condvar, 0);
+    rtos_k_condvar_wait_intr_disabled(&current_thread_p->thr_condvar, NULL);
 
     FDC_ASSERT(
         current_thread_p->thr_timer.tmr_time_to_expire == 0,
         current_thread_p->thr_timer.tmr_time_to_expire, current_thread_p);
+
+    /*
+     * Restore previous interrupt masking in the ARM core
+     */
+    rtos_k_restore_cpu_interrupts(cpu_status_register);
 }
 
 
@@ -841,7 +849,7 @@ rtos_k_thread_condvar_wait_interrupt(void)
     struct rtos_thread *current_thread_p =
         RTOS_EXECUTION_CONTEXT_GET_THREAD(current_execution_context_p);
 
-    rtos_k_condvar_wait_interrupt(&current_thread_p->thr_condvar, NULL);
+    rtos_k_condvar_wait_intr_disabled(&current_thread_p->thr_condvar, NULL);
 }
 
 
@@ -1049,7 +1057,7 @@ rtos_k_mutex_acquire(
 
 
 /**
- * Internal function shared between rtos_k_mutex_release() and rtos_k_condvar_wait()
+ * Internal function common to rtos_k_mutex_release() and rtos_k_condvar_wait()
  */
 static void
 rtos_k_mutex_release_internal(
@@ -1287,22 +1295,18 @@ rtos_k_condvar_init(
     rtos_condvar_p->cv_signature = RTOS_CONDVAR_SIGNATURE;
     rtos_condvar_p->cv_name_p = condvar_name_p;
     rtos_condvar_p->cv_cpu_id = cpu_id;
-    rtos_condvar_p->cv_pending_interrupt_wakeup = false;
     rtos_condvar_p->cv_released_mutex_p = NULL;
     GLIST_NODE_INIT(&rtos_condvar_p->cv_waiting_thread_queue_anchor);
 }
 
 
-/**
- * Waits on a McRTOS condition variable
- */
-void
-rtos_k_condvar_wait(
+static void
+rtos_k_condvar_wait_internal(
     _INOUT_ struct rtos_condvar *rtos_condvar_p,
     _IN_    struct rtos_mutex *rtos_mutex_p,
     _INOUT_ rtos_milliseconds_t *timeout_ms_p)
 {
-    FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
+    DBG_ASSERT_CPU_INTERRUPTS_DISABLED();
 
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
     struct rtos_cpu_controller *cpu_controller_p =
@@ -1327,38 +1331,32 @@ rtos_k_condvar_wait(
         rtos_condvar_p->cv_cpu_id == cpu_id,
         rtos_condvar_p->cv_cpu_id, cpu_id);
 
-    FDC_ASSERT_PRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED();
-
-    /*
-     * Disable interrupts in the ARM core
-     */
-    cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
-
-    if (rtos_condvar_p->cv_released_mutex_p == NULL)
+    if (rtos_mutex_p != NULL)
     {
-        rtos_condvar_p->cv_released_mutex_p = rtos_mutex_p;
-    }
-    else
-    {
-        FDC_ASSERT(
-            rtos_mutex_p == rtos_condvar_p->cv_released_mutex_p,
-            rtos_mutex_p, rtos_condvar_p->cv_released_mutex_p);
-    }
+        if (rtos_condvar_p->cv_released_mutex_p == NULL)
+	{
+	    rtos_condvar_p->cv_released_mutex_p = rtos_mutex_p;
+	}
+	else
+	{
+	    FDC_ASSERT(
+		rtos_mutex_p == rtos_condvar_p->cv_released_mutex_p,
+		rtos_mutex_p, rtos_condvar_p->cv_released_mutex_p);
+	}
 
-    /*
-     * Release the mutex while having interrupts disabled, so that no one else
-     * can acquire it until after we have enqueued the calling thread to the
-     * condvar's wait queue:
-     */
-
-    rtos_k_mutex_release_internal(
-        rtos_mutex_p, current_thread_p, cpu_controller_p, true);
+	/*
+	 * Release the mutex while having interrupts disabled, so that no one else
+	 * can acquire it until after we have enqueued the calling thread to the
+	 * condvar's wait queue:
+	 */
+	rtos_k_mutex_release_internal(
+	    rtos_mutex_p, current_thread_p, cpu_controller_p, true);
+    }
 
     /*
      * Add current thread at the end of the condvar's waiting queue and
      * change its state from running to blocked:
      */
-
     glist_add_tail_elem(
         &rtos_condvar_p->cv_waiting_thread_queue_anchor,
         &current_thread_p->thr_list_node);
@@ -1396,6 +1394,7 @@ rtos_k_condvar_wait(
      */
     rtos_k_synchronous_context_switch(current_execution_context_p);
 
+    FDC_ASSERT_CPU_INTERRUPTS_DISABLED();
     if (timeout_ms_p != NULL) {
 	FDC_ASSERT(
 	    GLIST_NODE_IS_UNLINKED(&current_thread_p->thr_timer.tmr_list_node),
@@ -1408,6 +1407,28 @@ rtos_k_condvar_wait(
 	current_thread_p->thr_blocked_on_condvar_p, rtos_condvar_p);
 
     current_thread_p->thr_blocked_on_condvar_p = NULL;
+}
+
+
+/**
+ * Waits on a McRTOS condition variable
+ */
+void
+rtos_k_condvar_wait(
+    _INOUT_ struct rtos_condvar *rtos_condvar_p,
+    _IN_    struct rtos_mutex *rtos_mutex_p,
+    _INOUT_ rtos_milliseconds_t *timeout_ms_p)
+{
+    FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
+    FDC_ASSERT_PRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED();
+    FDC_ASSERT(rtos_mutex_p != NULL, rtos_condvar_p, 0);
+
+    /*
+     * Disable interrupts in the ARM core
+     */
+    cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
+
+    rtos_k_condvar_wait_internal(rtos_condvar_p, rtos_mutex_p, timeout_ms_p);
 
     /*
      * Restore previous interrupt masking in the ARM core
@@ -1422,138 +1443,18 @@ rtos_k_condvar_wait(
 
 
 /**
- * Waits on a McRTOS condition variable to be signaled by an interrupt handler
+ * Waits on a McRTOS condition variable when the calling thread has interrupts
+ * disabled.
  */
 void
-rtos_k_condvar_wait_interrupt(
+rtos_k_condvar_wait_intr_disabled(
     _INOUT_ struct rtos_condvar *rtos_condvar_p,
     _INOUT_ rtos_milliseconds_t *timeout_ms_p)
 {
     FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
+    FDC_ASSERT_CPU_INTERRUPTS_DISABLED();
 
-    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
-    struct rtos_cpu_controller *cpu_controller_p =
-        &g_McRTOS_p->rts_cpu_controllers[cpu_id];
-
-    struct rtos_execution_context *current_execution_context_p =
-        cpu_controller_p->cpc_current_execution_context_p;
-
-    FDC_ASSERT(
-        current_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
-        current_execution_context_p->ctx_context_type,
-        current_execution_context_p);
-
-    struct rtos_thread *current_thread_p =
-        RTOS_EXECUTION_CONTEXT_GET_THREAD(current_execution_context_p);
-
-    FDC_ASSERT(
-        rtos_condvar_p->cv_signature == RTOS_CONDVAR_SIGNATURE,
-        rtos_condvar_p->cv_signature, rtos_condvar_p);
-
-    FDC_ASSERT(
-        rtos_condvar_p->cv_cpu_id == cpu_id,
-        rtos_condvar_p->cv_cpu_id, cpu_id);
-
-    cpu_status_register_t cpu_status_register;
-    bool interrupts_enabled;
-    bool restore_interrupts = false;
-
-#   if DEFINED_ARM_CLASSIC_ARCH()
-        CAPTURE_ARM_CPSR_REGISTER(cpu_status_register);
-        interrupts_enabled =
-            CPU_INTERRUPTS_ARE_ENABLED(cpu_status_register);
-#   elif DEFINED_ARM_CORTEX_M_ARCH()
-        interrupts_enabled =
-            CPU_INTERRUPTS_ARE_ENABLED(__get_PRIMASK());
-#   endif
-
-    /*
-     * Disable interrupts in the ARM core:
-     *
-     * NOTE: Here we don't call rtos_k_disable_cpu_interrupts() if interrupts are
-     * already disabled, as this code path calls rtos_k_restore_execution_context()
-     */
-    if (interrupts_enabled)
-    {
-        cpu_status_register = rtos_k_disable_cpu_interrupts();
-        restore_interrupts = true;
-    }
-
-    /*
-     * If there is a pending wakeup from an interrupt for this condvar, we don't
-     * need to wait:
-     */
-    if (rtos_condvar_p->cv_pending_interrupt_wakeup)
-    {
-        goto Exit;
-    }
-
-    /*
-     * Add current thread at the end of the condvar's waiting queue and
-     * change its state from running to blocked:
-     */
-
-    glist_add_tail_elem(
-        &rtos_condvar_p->cv_waiting_thread_queue_anchor,
-        &current_thread_p->thr_list_node);
-
-    RTOS_THREAD_CHANGE_STATE(current_thread_p, RTOS_THREAD_BLOCKED_ON_CONDVAR);
-    FDC_ASSERT(
-	current_thread_p->thr_blocked_on_p == NULL,
-	current_thread_p->thr_blocked_on_p, rtos_condvar_p);
-
-    current_thread_p->thr_blocked_on_condvar_p = rtos_condvar_p;
-
-    RTOS_EXECUTION_CONTEXT_SET_SWITCHED_OUT_REASON(
-        current_execution_context_p,
-        CTX_SWITCHED_OUT_THREAD_BLOCKED_ON_CONDVAR,
-        cpu_controller_p);
-
-    if (timeout_ms_p != NULL) {
-	rtos_milliseconds_t timeout_ms = *timeout_ms_p;
-
-	FDC_ASSERT(timeout_ms != 0, rtos_condvar_p, 0);
-
-	/*
-	 * Start timer for the current thread:
-	 */
-	rtos_k_timer_start(
-	    &current_thread_p->thr_timer,
-	    timeout_ms);
-    }
-
-    /*
-     * Perform a synchronous context switch:
-     *
-     * NOTE: When this thread is switched in again, it will start
-     * executing after this call
-     */
-    rtos_k_synchronous_context_switch(current_execution_context_p);
-
-    if (timeout_ms_p != NULL) {
-	FDC_ASSERT(
-	    GLIST_NODE_IS_UNLINKED(&current_thread_p->thr_timer.tmr_list_node),
-	    current_thread_p, rtos_condvar_p);
-
-	*timeout_ms_p = current_thread_p->thr_timer.tmr_time_to_expire;
-    }
-
-    FDC_ASSERT(
-	current_thread_p->thr_blocked_on_condvar_p == rtos_condvar_p,
-	current_thread_p->thr_blocked_on_condvar_p, rtos_condvar_p);
-
-    current_thread_p->thr_blocked_on_condvar_p = NULL;
-
-Exit:
-    rtos_condvar_p->cv_pending_interrupt_wakeup = false;
-
-    /*
-     * Restore previous interrupt masking in the ARM core
-     */
-    if (restore_interrupts)
-    {
-        rtos_k_restore_cpu_interrupts(cpu_status_register);
-    }
+    rtos_k_condvar_wait_internal(rtos_condvar_p, NULL, timeout_ms_p);
 }
 
 
@@ -1652,16 +1553,10 @@ rtos_k_condvar_signal_internal(
          * NOTE: If there were waiter awaken, they will get the chance to run
          * when the calling interrupt handler calls rtos_k_exit_interrupt(),
          * which calls rtos_thread_scheduler().
-         * Even if there were no waiters, we still need to set the
-         * cv_pending_interrupt_wakeup flag, in case of a race between a thread
-         * calling rtos_k_condvar_wait_interrupt() and an ISR calling this
-         * function.
          */
         DBG_ASSERT(
             current_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
             current_execution_context_p->ctx_context_type, current_execution_context_p);
-
-        rtos_condvar_p->cv_pending_interrupt_wakeup = true;
     }
 
     /*
@@ -3143,8 +3038,8 @@ rtos_k_mpu_remove_thread_data_region(void)
                     circ_buf_p->cb_num_entries) {                           \
                     if (wait_if_full) {                                     \
                         do {                                                \
-                            rtos_k_condvar_wait_interrupt(                  \
-                                &circ_buf_p->cb_not_full_condvar, 0);       \
+                            rtos_k_condvar_wait_intr_disabled(              \
+                                &circ_buf_p->cb_not_full_condvar, NULL);    \
                         } while (circ_buf_p->cb_entries_filled ==           \
                                  circ_buf_p->cb_num_entries);               \
                     } else {                                                \
@@ -3160,7 +3055,7 @@ rtos_k_mpu_remove_thread_data_region(void)
                         do {                                                \
                             rtos_k_condvar_wait(                            \
                                 &circ_buf_p->cb_not_full_condvar,           \
-                                circ_buf_p->cb_mutex_p, 0);                 \
+                                circ_buf_p->cb_mutex_p, NULL);              \
                         } while (circ_buf_p->cb_entries_filled ==           \
                                  circ_buf_p->cb_num_entries);               \
                     } else {                                                \
@@ -3229,7 +3124,7 @@ rtos_k_mpu_remove_thread_data_region(void)
                 if (circ_buf_p->cb_entries_filled == 0) {                   \
                     if (wait_if_empty) {                                    \
                         do {                                                \
-                            rtos_k_condvar_wait_interrupt(                  \
+                            rtos_k_condvar_wait_intr_disabled(              \
                                 &circ_buf_p->cb_not_empty_condvar,	    \
 				timeout_ms_p);				    \
                         } while (circ_buf_p->cb_entries_filled == 0);       \

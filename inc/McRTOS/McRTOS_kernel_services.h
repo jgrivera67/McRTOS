@@ -454,16 +454,6 @@ struct rtos_condvar
     cpu_id_t    cv_cpu_id;
 
     /**
-     * Flag that indicates that there is a pending wakeup from an interrupt
-     * for this condvar. This flag is set when the condvar is signaled from
-     * an ISR, and it is cleared by rtos_k_condvar_wait_interrupt().
-     *
-     * NOTE: Having this flag is necessary to avoid lost wakeups from
-     * interrupts.
-     */
-    volatile bool cv_pending_interrupt_wakeup;
-
-    /**
      * Pointer to the mutex that was released when rtos_condvar_wait()
      * call was entered for this condvar, and which needs to be reacquired
      * before rtos_condvar_wait() returns.
@@ -913,7 +903,7 @@ rtos_k_condvar_wait(
 
 _THREAD_CALLERS_ONLY_
 void
-rtos_k_condvar_wait_interrupt(
+rtos_k_condvar_wait_intr_disabled(
     _INOUT_ struct rtos_condvar *rtos_condvar_p,
     _INOUT_ rtos_milliseconds_t *timeout_ms_p);
 
