@@ -607,8 +607,8 @@ rtos_root_thread_f(void *arg)
         if (fdc_error != 0)
         {
             console_printf(
-                "CPU core %u: *** Error creating application thread %u ***\n",
-                cpu_id, i);
+                "CPU core %u: *** Error creating application thread %u: '%s' ***\n",
+                cpu_id, i, rtos_app_config_p->stc_autostart_threads_p[i].p_name_p);
 
             fatal_error_handler(fdc_error);
         }

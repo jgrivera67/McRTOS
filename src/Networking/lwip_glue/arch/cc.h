@@ -38,6 +38,9 @@
 #include <McRTOS/failure_data_capture.h>
 #include <McRTOS/utils.h>
 
+#pragma GCC diagnostic ignored "-Waddress"
+#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
+
 //#define LWIP_PROVIDE_ERRNO 1
 
 #define BYTE_ORDER LITTLE_ENDIAN
@@ -74,6 +77,6 @@ typedef int sys_prot_t;
 /*
  * fatal, print message and abandon execution.
  */
-#define LWIP_PLATFORM_ASSERT(x)			FDC_ASSERT(x)
+#define LWIP_PLATFORM_ASSERT(x)			FDC_ASSERT(x, 0, 0)
 
 #endif /* __CC_H__ */

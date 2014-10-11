@@ -29,6 +29,7 @@ local_src :=	$(subdirectory)/networking.c \
 		$(subdirectory)/lwip/src/core/tcp_out.c \
 		$(subdirectory)/lwip/src/core/timers.c \
 		$(subdirectory)/lwip/src/core/udp.c \
+		$(subdirectory)/lwip/src/netif/etharp.c \
 		$(subdirectory)/lwip/src/core/ipv4/autoip.c \
 		$(subdirectory)/lwip/src/core/ipv4/icmp.c \
 		$(subdirectory)/lwip/src/core/ipv4/igmp.c \
@@ -37,21 +38,16 @@ local_src :=	$(subdirectory)/networking.c \
 		$(subdirectory)/lwip/src/core/ipv4/ip.c \
 		$(subdirectory)/lwip/src/core/ipv4/ip_addr.c \
 		$(subdirectory)/lwip/src/core/ipv4/ip_frag.c \
-		$(subdirectory)/lwip/src/core/ipv6/icmp6.c \
-		$(subdirectory)/lwip/src/core/ipv6/inet6.c \
-		$(subdirectory)/lwip/src/core/ipv6/ip6.c \
-		$(subdirectory)/lwip/src/core/ipv6/ip6_addr.c \
-		$(subdirectory)/lwip/src/netif/etharp.c \
 
 include_dirs += $(SOURCE_DIR)/$(subdirectory)/lwip_glue \
 	        $(SOURCE_DIR)/$(subdirectory)/lwip/src/include \
 	        $(SOURCE_DIR)/$(subdirectory)/lwip/src/include/ipv4 \
 
-local_subdirs := $(subdirectory)/lwip/src/api \
+local_subdirs := $(subdirectory)/lwip_glue \
+		 $(subdirectory)/lwip/src/api \
 		 $(subdirectory)/lwip/src/core \
-		 $(subdirectory)/lwip/src/core/ipv4 \
-		$(subdirectory)/lwip/src/core/ipv6 \
 		 $(subdirectory)/lwip/src/netif \
+		 $(subdirectory)/lwip/src/core/ipv4 \
 
 create-local-output-subdirs :=				\
 	$(shell for f in $(local_subdirs);		\

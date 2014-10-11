@@ -43,7 +43,7 @@
  * critical regions during buffer allocation, deallocation and memory
  * allocation and deallocation.
  */
-#define SYS_LIGHTWEIGHT_PROT    0
+#define SYS_LIGHTWEIGHT_PROT    1   /* McRTOS setting */
 
 #define USE_RTOS    1
 
@@ -266,6 +266,9 @@ Some MCU allow computing and verifying the IP, UDP, TCP and ICMP checksums by ha
  * sys_mbox_new() when the acceptmbox is created.
  */
 #define DEFAULT_ACCEPTMBOX_SIZE         12
+
+#define LWIP_DHCP_BOOTP_FILE		0 /* McRTOS setting */
+#define ETHARP_STATS			0 /* McRTOS setting */
 
 #endif /* __LWIPOPTS_H__ */
 

@@ -60,7 +60,7 @@ struct sys_sem {
     /**
      * Counter for the semaphore
      */
-    uint8_t sem_count;
+    volatile uint8_t sem_count;
 
     /**
      * Condition variable for the semaphore

@@ -34,19 +34,19 @@
 
 /*-----------------------------------------------------------------------------------*/
 //  Creates an empty mailbox.
-err_t sys_mbox_new(sys_mbox_t *mbox, int size)
+err_t sys_mbox_new(sys_mbox_t *mbox_p, int size)
 {
-    FDC_ASSERT(mbox->mbox_queue.cb_signature == 0,
-	       mbox->mbox_queue.cb_signature, mbox);
+    FDC_ASSERT(mbox_p->mbox_queue.cb_signature == 0,
+	       mbox_p->mbox_queue.cb_signature, mbox_p);
     FDC_ASSERT(size <= MBOX_QUEUE_SIZE, size, MBOX_QUEUE_SIZE);
 
     rtos_k_pointer_circular_buffer_init(
         "lwIP mailbox",
         MBOX_QUEUE_SIZE,
-        mbox->mbox_queue_entries,
+        mbox_p->mbox_queue_entries,
         NULL,
         SOC_GET_CURRENT_CPU_ID(),
-        &mbox->mbox_queue);
+        &mbox_p->mbox_queue);
 
     return ERR_OK;
 }
@@ -58,27 +58,27 @@ err_t sys_mbox_new(sys_mbox_t *mbox, int size)
   programming error in lwIP and the developer should be notified.
 */
 void
-sys_mbox_free(sys_mbox_t *mbox)
+sys_mbox_free(sys_mbox_t *mbox_p)
 {
-    FDC_ASSERT(mbox->mbox_queue.cb_signature == RTOS_POINTER_CIRCULAR_BUFFER_SIGNATURE,
-	       mbox->mbox_queue.cb_signature, mbox);
+    FDC_ASSERT(mbox_p->mbox_queue.cb_signature == RTOS_POINTER_CIRCULAR_BUFFER_SIGNATURE,
+	       mbox_p->mbox_queue.cb_signature, mbox_p);
 
-    FDC_ASSERT(rtos_k_circular_buffer_is_empty(&mbox->mbox_queue),
-	       &mbox->mbox_queue, mbox);
+    FDC_ASSERT(rtos_k_circular_buffer_is_empty(&mbox_p->mbox_queue),
+	       &mbox_p->mbox_queue, mbox_p);
 
-    *((uint32_t *)mbox->mbox_queue.cb_signature) = 0;
+    *((uint32_t *)&mbox_p->mbox_queue.cb_signature) = 0;
 }
 
 
 /*-----------------------------------------------------------------------------------*/
 //   Posts the "msg" to the mailbox.
 void
-sys_mbox_post(sys_mbox_t *mbox, void *msg)
+sys_mbox_post(sys_mbox_t *mbox_p, void *msg)
 {
     bool write_ok =
-	rtos_k_pointer_circular_buffer_write(&mbox->mbox_queue, msg, true);
+	rtos_k_pointer_circular_buffer_write(&mbox_p->mbox_queue, msg, true);
 
-    FDC_ASSERT(write_ok, &mbox->mbox_queue, mbox);
+    FDC_ASSERT(write_ok, &mbox_p->mbox_queue, mbox_p);
 }
 
 
@@ -87,10 +87,10 @@ sys_mbox_post(sys_mbox_t *mbox, void *msg)
  *is full, else, ERR_OK if the "msg" is posted.
  */
 err_t
-sys_mbox_trypost( sys_mbox_t *mbox, void *msg)
+sys_mbox_trypost(sys_mbox_t *mbox_p, void *msg)
 {
     bool write_ok =
-	rtos_k_pointer_circular_buffer_write(&mbox->mbox_queue, msg, false);
+	rtos_k_pointer_circular_buffer_write(&mbox_p->mbox_queue, msg, false);
 
     if (write_ok)
         return ERR_OK;
@@ -115,35 +115,56 @@ sys_mbox_trypost( sys_mbox_t *mbox, void *msg)
   Note that a function with a similar name, sys_mbox_fetch(), is
   implemented by lwIP.
 */
-u32_t sys_arch_mbox_fetch(sys_mbox_t *mbox, void **msg, u32_t timeout)
+u32_t sys_arch_mbox_fetch(sys_mbox_t *mbox_p, void **msg, u32_t timeout)
 {
     void *msg_read;
     rtos_milliseconds_t read_timeout = timeout;
 
     bool read_ok =
-	rtos_k_pointer_circular_buffer_read(&mbox->mbox_queue, &msg_read, true,
+	rtos_k_pointer_circular_buffer_read(&mbox_p->mbox_queue, &msg_read, true,
 					    &read_timeout);
 
     if (read_ok && msg != NULL) {
 	*msg = msg_read;
     }
 
+    FDC_ASSERT(read_timeout <= timeout, read_timeout, timeout);
     return timeout - read_timeout;
 }
+
+
+/*
+ *Try to fetch the "msg" from the mailbox. Returns ERR_MEM if this one
+ *is empty, else, ERR_OK if the "msg" is fetched.
+ */
+u32_t
+sys_arch_mbox_tryfetch( sys_mbox_t *mbox_p, void **msg)
+{
+    bool read_ok =
+	rtos_k_pointer_circular_buffer_read(&mbox_p->mbox_queue, msg, false, NULL);
+
+    if (read_ok)
+        return 0;
+    else
+        return SYS_MBOX_EMPTY;
+}
+
 
 /*-----------------------------------------------------------------------------------*/
 //  Creates and returns a new semaphore. The "count" argument specifies
 //  the initial state of the semaphore. TBD finish and test
 err_t
-sys_sem_new(sys_sem_t *sem,u8_t count)
+sys_sem_new(sys_sem_t *sem_p, u8_t count)
 {
-    osa_status_t outcome;
-    outcome =  OSA_SemaCreate(sem,(uint8_t)count);
-    if(outcome == kStatus_OSA_Success)
-        return ERR_OK;
-    else
-	return ERR_VAL;
+    FDC_ASSERT(sem_p->sem_condvar.cv_signature == 0,
+	       sem_p->sem_condvar.cv_signature, sem_p);
 
+    sem_p->sem_count = count;
+    rtos_k_condvar_init("lwIP semaphore",
+			SOC_GET_CURRENT_CPU_ID(),
+			&sem_p->sem_condvar);
+
+    return ERR_OK;
 }
 
 
@@ -164,79 +185,90 @@ sys_sem_new(sys_sem_t *sem,u8_t count)
   sys_sem_wait(), that uses the sys_arch_sem_wait() function.
 */
 u32_t
-sys_arch_sem_wait(sys_sem_t *sem, u32_t timeout)
+sys_arch_sem_wait(sys_sem_t *sem_p, u32_t timeout)
 {
-    osa_status_t error;
-    uint32_t timeStart , timeEnd;
-    if(timeout == (u32_t)0)
-        timeout = OSA_WAIT_FOREVER;
-    timeStart = OSA_TimeGetMsec();
-    error = OSA_SemaWait(sem,(uint32_t)timeout);
-    timeEnd = OSA_TimeGetMsec();
-    switch(error)
-    {
-        case kStatus_OSA_Timeout:return SYS_ARCH_TIMEOUT;
-	case kStatus_OSA_Success:return (u32_t)(timeEnd-timeStart);
-	default : return (u32_t)0;
+    rtos_milliseconds_t cv_timeout = timeout;
+    cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
+
+    while (sem_p->sem_count == 0) {
+        rtos_k_condvar_wait_intr_disabled(&sem_p->sem_condvar, &cv_timeout);
     }
+
+    sem_p->sem_count --;
+    rtos_k_restore_cpu_interrupts(cpu_status_register);
+
+    FDC_ASSERT(cv_timeout <= timeout, cv_timeout, timeout);
+    return timeout - cv_timeout;
 }
 
 
 /*-----------------------------------------------------------------------------------*/
 // Signals a semaphore
 void
-sys_sem_signal(sys_sem_t *sem)
+sys_sem_signal(sys_sem_t *sem_p)
 {
-    OSA_SemaPost(sem);
+    cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
+
+    FDC_ASSERT(sem_p->sem_count != UINT8_MAX, sem_p, 0);
+    sem_p->sem_count ++;
+    FDC_ASSERT(sem_p->sem_count != 0, sem_p, 0);
+    rtos_k_restore_cpu_interrupts(cpu_status_register);
+    rtos_k_condvar_signal(&sem_p->sem_condvar);
 }
 
 /*-----------------------------------------------------------------------------------*/
 // Deallocates a semaphore
 void
-sys_sem_free(sys_sem_t *sem)
+sys_sem_free(sys_sem_t *sem_p)
 {
-    OSA_SemaDestroy(sem);
+    FDC_ASSERT(sem_p->sem_condvar.cv_signature == RTOS_CONDVAR_SIGNATURE,
+	       sem_p->sem_condvar.cv_signature, sem_p);
+
+    *((uint32_t *)&sem_p->sem_condvar.cv_signature) = 0;
 }
 
 
 /** Create a new mutex
  * @param mutex pointer to the mutex to create
  * @return a new mutex */
-err_t sys_mutex_new(sys_mutex_t *mutex)
+err_t sys_mutex_new(sys_mutex_t *mutex_p)
 {
-    osa_status_t error;
-    error = OSA_MutexCreate(mutex);
-    return (error == kStatus_OSA_Success) ? ERR_OK :  ERR_MEM ;
+    FDC_ASSERT(mutex_p->mtx_signature == 0,
+	       mutex_p->mtx_signature, mutex_p);
+
+    rtos_k_mutex_init(
+        "lwIP mutex",
+        SOC_GET_CURRENT_CPU_ID(),
+        mutex_p);
+
+    return ERR_OK;
 }
 
 
 /** Lock a mutex
  * @param mutex the mutex to lock */
-void sys_mutex_lock(sys_mutex_t *mutex)
+void sys_mutex_lock(sys_mutex_t *mutex_p)
 {
-    osa_status_t error;
-    error = OSA_MutexLock(mutex,OSA_WAIT_FOREVER);
-    assert(error == kStatus_OSA_Success) ;
+    rtos_k_mutex_acquire(mutex_p);
 }
 
 
 /** Unlock a mutex
  * @param mutex the mutex to unlock */
-void sys_mutex_unlock(sys_mutex_t *mutex)
+void sys_mutex_unlock(sys_mutex_t *mutex_p)
 {
-    osa_status_t error;
-    error = OSA_MutexUnlock(mutex);
-    assert(error == kStatus_OSA_Success) ;
+    rtos_k_mutex_release(mutex_p);
 }
 
 
 /** Delete a semaphore
  * @param mutex the mutex to delete */
-void sys_mutex_free(sys_mutex_t *mutex)
+void sys_mutex_free(sys_mutex_t *mutex_p)
 {
-    osa_status_t error;
-    error = OSA_MutexDestroy(mutex);
-    assert(error == kStatus_OSA_Success) ;
+    FDC_ASSERT(mutex_p->mtx_signature == RTOS_MUTEX_SIGNATURE,
+	       mutex_p->mtx_signature, mutex_p);
+
+    *((uint32_t *)&mutex_p->mtx_signature) = 0;
 }
 
 /*-----------------------------------------------------------------------------------*/
@@ -256,23 +288,31 @@ sys_init(void)
  */
 sys_thread_t sys_thread_new(const char *name, lwip_thread_fn thread, void *arg, int stacksize, int prio)
 {
-     task_handler_t taskHandler;
-     osa_status_t error;
-     task_stack_t * stackMem ;
-#ifdef FSL_RTOS_UCOSIII
-	 taskHandler = (task_handler_t)OSA_MemAlloc(sizeof(OS_TCB));
-#endif
+    fdc_error_t fdc_error;
+    struct rtos_thread *thread_p = NULL;
+    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
+    struct rtos_thread_creation_params thread_params = {
+	.p_name_p = name,
+        .p_function_p = (rtos_thread_function_t *)thread,
+        .p_function_arg_p = arg,
+        .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 3,
+        .p_thread_pp = &thread_p,
+    };
 
-#if (defined FSL_RTOS_UCOSII) || (defined FSL_RTOS_UCOSIII)
-    stackMem =  (task_stack_t *)OSA_MemAlloc((size_t)stacksize);
-#else
-    stackMem = NULL;
-#endif
-     error = OSA_TaskCreate((task_t)thread ,(uint8_t*) name,(uint16_t) stacksize, stackMem,prio,(task_param_t)arg,false,&taskHandler);
-     if(error == kStatus_OSA_Success)
-         return taskHandler;
-     else
-         return (sys_thread_t)0;
+    FDC_ASSERT(stacksize == 0, stacksize, 0);
+    FDC_ASSERT(prio == 1, prio, 0);
+
+    fdc_error = rtos_k_create_thread(&thread_params);
+    if (fdc_error != 0) {
+	console_printf(
+	    "CPU core %u: *** Error creating application thread '%s' ***\n",
+	    cpu_id, name);
+
+	fatal_error_handler(fdc_error);
+    }
+
+    console_printf("CPU core %u: %s started\n", cpu_id, name);
+    return thread_p;
 }
 
 
@@ -310,18 +350,18 @@ int sys_sem_valid(sys_sem_t *sem)
     return sem->sem_condvar.cv_signature == RTOS_CONDVAR_SIGNATURE;
 }
 //  set the sem invalid
-void sys_sem_set_invalid(sys_sem_t *sem)
+void sys_sem_set_invalid(sys_sem_t *sem_p)
 {
-    sem->sem_condvar.cv_signature = 0;
+    *((uint32_t *)&sem_p->sem_condvar.cv_signature) = 0;
 }
 int sys_mbox_valid(sys_mbox_t *mbox)
 {
     return mbox->mbox_queue.cb_signature == RTOS_BYTE_CIRCULAR_BUFFER_SIGNATURE;
 }
 // set the mailbox invalid
-void sys_mbox_set_invalid(sys_mbox_t *mbox)
+void sys_mbox_set_invalid(sys_mbox_t *mbox_p)
 {
-    mbox->mbox_queue.cb_signature = 0;
+    *((uint32_t *)&mbox_p->mbox_queue.cb_signature) = 0;
 }
 
 /*
@@ -333,5 +373,5 @@ This optional function returns the current time in milliseconds (don't care
 
 u32_t sys_now(void)
 {
-    return get_cpu_clock_cycles();
+    return CPU_CLOCK_CYCLES_TO_MILLISECONDS(get_cpu_clock_cycles());
 }
