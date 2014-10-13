@@ -1036,18 +1036,18 @@ rtos_k_mutex_acquire(
          * executing after this call
          */
         rtos_k_synchronous_context_switch(current_execution_context_p);
+
+	FDC_ASSERT(
+	    current_thread_p->thr_blocked_on_mutex_p == rtos_mutex_p,
+	    current_thread_p->thr_blocked_on_mutex_p, rtos_mutex_p);
+
+	current_thread_p->thr_blocked_on_mutex_p = NULL;
     }
     else
     {
         rtos_mutex_p->mtx_owner_p = current_thread_p;
         current_thread_p->thr_owned_mutexes_count ++;
     }
-
-    FDC_ASSERT(
-	current_thread_p->thr_blocked_on_mutex_p == rtos_mutex_p,
-	current_thread_p->thr_blocked_on_mutex_p, rtos_mutex_p);
-
-    current_thread_p->thr_blocked_on_mutex_p = NULL;
 
     /*
      * Restore previous interrupt masking in the ARM core
@@ -1353,6 +1353,19 @@ rtos_k_condvar_wait_internal(
 	    rtos_mutex_p, current_thread_p, cpu_controller_p, true);
     }
 
+    if (timeout_ms_p != NULL) {
+	rtos_milliseconds_t timeout_ms = *timeout_ms_p;
+
+	FDC_ASSERT(timeout_ms != 0, rtos_condvar_p, 0);
+
+	/*
+	 * Start timer for the current thread:
+	 */
+	rtos_k_timer_start(
+	    &current_thread_p->thr_timer,
+	    timeout_ms);
+    }
+
     /*
      * Add current thread at the end of the condvar's waiting queue and
      * change its state from running to blocked:
@@ -1372,19 +1385,6 @@ rtos_k_condvar_wait_internal(
         current_execution_context_p,
         CTX_SWITCHED_OUT_THREAD_BLOCKED_ON_CONDVAR,
         cpu_controller_p);
-
-    if (timeout_ms_p != NULL) {
-	rtos_milliseconds_t timeout_ms = *timeout_ms_p;
-
-	FDC_ASSERT(timeout_ms != 0, rtos_condvar_p, 0);
-
-	/*
-	 * Start timer for the current thread:
-	 */
-	rtos_k_timer_start(
-	    &current_thread_p->thr_timer,
-	    timeout_ms);
-    }
 
     /*
      * Perform a synchronous context switch:
@@ -1526,6 +1526,15 @@ rtos_k_condvar_signal_internal(
         }
     }
 
+    /*
+     * If the caller is a thread, perform a context switch, to allow awaken
+     * threads to run as soon as possible, if they have higher priority than
+     * the calling thread.
+     *
+     * NOTE: If the caller is an interrupt handler and there were waiters awaken,
+     * they will get the chance to run when the calling interrupt handler calls
+     * rtos_k_exit_interrupt(), * which calls rtos_thread_scheduler().
+     */
     if (current_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT) {
         if (waiters_awaken) {
             /*
@@ -1546,17 +1555,6 @@ rtos_k_condvar_signal_internal(
              */
             rtos_k_synchronous_context_switch(&current_thread_p->thr_execution_context);
         }
-    } else {
-        /*
-         * The caller is an interrupt context:
-         *
-         * NOTE: If there were waiter awaken, they will get the chance to run
-         * when the calling interrupt handler calls rtos_k_exit_interrupt(),
-         * which calls rtos_thread_scheduler().
-         */
-        DBG_ASSERT(
-            current_execution_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
-            current_execution_context_p->ctx_context_type, current_execution_context_p);
     }
 
     /*
@@ -3030,7 +3028,7 @@ rtos_k_mpu_remove_thread_data_region(void)
             _IN_ bool wait_if_full)                                         \
         {                                                                   \
             cpu_status_register_t saved_cpu_intr_mask = 0;                  \
-            bool entry_written;                                             \
+            bool entry_written = false;                                     \
                                                                             \
             if (circ_buf_p->cb_mutex_p == NULL) {                           \
                 saved_cpu_intr_mask = rtos_k_disable_cpu_interrupts();      \
@@ -3043,7 +3041,6 @@ rtos_k_mpu_remove_thread_data_region(void)
                         } while (circ_buf_p->cb_entries_filled ==           \
                                  circ_buf_p->cb_num_entries);               \
                     } else {                                                \
-                        entry_written = false;                              \
                         goto exit;                                          \
                     }                                                       \
                 }                                                           \
@@ -3059,7 +3056,6 @@ rtos_k_mpu_remove_thread_data_region(void)
                         } while (circ_buf_p->cb_entries_filled ==           \
                                  circ_buf_p->cb_num_entries);               \
                     } else {                                                \
-                        entry_written = false;                              \
                         goto exit;                                          \
                     }                                                       \
                 }                                                           \
@@ -3117,7 +3113,7 @@ rtos_k_mpu_remove_thread_data_region(void)
 	    _INOUT_ rtos_milliseconds_t *timeout_ms_p)			    \
         {                                                                   \
             cpu_status_register_t saved_cpu_intr_mask = 0;                  \
-            bool entry_read;                                                \
+            bool entry_read = false;                                        \
                                                                             \
             if (circ_buf_p->cb_mutex_p == NULL) {                           \
                 saved_cpu_intr_mask = rtos_k_disable_cpu_interrupts();      \
@@ -3127,9 +3123,10 @@ rtos_k_mpu_remove_thread_data_region(void)
                             rtos_k_condvar_wait_intr_disabled(              \
                                 &circ_buf_p->cb_not_empty_condvar,	    \
 				timeout_ms_p);				    \
+			    if (timeout_ms_p != NULL &&	*timeout_ms_p == 0) \
+				goto exit;                                  \
                         } while (circ_buf_p->cb_entries_filled == 0);       \
                     } else {                                                \
-                        entry_read = false;                                 \
                         goto exit;                                          \
                     }                                                       \
                 }                                                           \
@@ -3142,9 +3139,10 @@ rtos_k_mpu_remove_thread_data_region(void)
                                 &circ_buf_p->cb_not_empty_condvar,          \
                                 circ_buf_p->cb_mutex_p,                     \
 				timeout_ms_p);				    \
+			    if (timeout_ms_p != NULL &&	*timeout_ms_p == 0) \
+				goto exit;                                  \
                         } while (circ_buf_p->cb_entries_filled == 0);       \
                     } else {                                                \
-                        entry_read = false;                                 \
                         goto exit;                                          \
                     }                                                       \
                 }                                                           \

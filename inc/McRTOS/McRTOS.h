@@ -15,6 +15,10 @@
 #include "failure_data_capture.h"
 #include "utils.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * Opaque types
  */
@@ -571,5 +575,9 @@ rtos_thread_enable_fpu(void);
 _THREAD_CALLERS_ONLY_
 void
 rtos_thread_disable_fpu(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _McRTOS */

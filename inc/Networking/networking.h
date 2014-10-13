@@ -17,6 +17,4 @@
 
 void networking_init(void);
 
-fdc_error_t networking_receive_thread_f(void *arg);
-
 #endif /* _NETWORKING_H */

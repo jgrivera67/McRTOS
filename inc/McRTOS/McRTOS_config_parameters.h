@@ -43,7 +43,7 @@
 /**
  * Execution stack size for threads (in number of stack entries)
  */
-#define RTOS_THREAD_STACK_NUM_ENTRIES   UINT32_C(160)
+#define RTOS_THREAD_STACK_NUM_ENTRIES   UINT32_C(256)
 
 /**
  * Thread stack size in bytes

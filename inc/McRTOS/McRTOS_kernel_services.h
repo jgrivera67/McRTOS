@@ -17,6 +17,10 @@
 #include "hardware_abstractions.h"
 #include "compile_time_checks.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct rtos_interrupt;
 struct rtos_thread_execution_stack;
 
@@ -1091,5 +1095,9 @@ bool rtos_k_circular_buffer_is_empty(
                     (uint32_t *)&(_pointer_p), sizeof(*(_pointer_p))))
 
 C_ASSERT(sizeof(void *) == sizeof(uint32_t));
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _McRTOS_KERNEL_SERVICES_H */

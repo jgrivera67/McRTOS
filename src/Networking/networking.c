@@ -17,15 +17,6 @@
 #include <lwip/err.h>
 #include <lwip/netif.h>
 #include <netif/etharp.h>
-#if 0 //???
-#include <lwip/udp.h>
-#include <lwip/init.h>
-#endif
-
-TODO("Remove these pragmas")
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-#pragma GCC diagnostic ignored "-Wunused-variable"
-#pragma GCC diagnostic ignored "-Wunused-function"
 
 /**
  * Ethernet link speed: 100 Mbps
@@ -33,6 +24,9 @@ TODO("Remove these pragmas")
 #define ETHERNET_LINK_SPEED_IN_BPS   UINT32_C(100000000)
 
 static struct netif g_netif0;
+
+static fdc_error_t networking_receive_thread_f(void *arg);
+
 
 static err_t
 ethernet_output(struct netif *netif_p, struct pbuf *pbuf_p, struct ip_addr *ipaddr_p)
@@ -79,7 +73,8 @@ ethernet_link_output(struct netif *netif_p, struct pbuf *pbuf_p)
 static err_t
 ethernet_netif_init(struct netif *netif)
 {
-    err_t result;
+    fdc_error_t fdc_error;
+    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
     DBG_ASSERT(netif != NULL, 0, 0);
     DBG_ASSERT(netif->state == &g_enet_device0,
@@ -92,6 +87,25 @@ ethernet_netif_init(struct netif *netif)
     netif->name[1] = 'n';
     netif->output = ethernet_output;
     netif->linkoutput = ethernet_link_output;
+
+    struct rtos_thread_creation_params thread_params = {
+	.p_name_p = "Ethernet receive thread",
+        .p_function_p = networking_receive_thread_f,
+        .p_function_arg_p = netif,
+        .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 2,
+        .p_thread_pp = NULL,
+    };
+
+    fdc_error = rtos_k_create_thread(&thread_params);
+    if (fdc_error != 0) {
+	console_printf(
+	    "CPU core %u: *** Error creating application thread '%s' ***\n",
+	    cpu_id, thread_params.p_name_p);
+
+	return ERR_IF;
+    }
+
+    console_printf("CPU core %u: started\n", cpu_id, thread_params.p_name_p);
     return 0;
 }
 
@@ -197,7 +211,7 @@ error:
 }
 
 
-fdc_error_t
+static fdc_error_t
 networking_receive_thread_f(void *arg)
 {
     fdc_error_t fdc_error;

@@ -47,7 +47,7 @@ struct sys_mbox {
     /**
      * Array of entries for mbox_queue
      */
-#   define MBOX_QUEUE_SIZE  8
+#   define MBOX_QUEUE_SIZE 32
     void *mbox_queue_entries[MBOX_QUEUE_SIZE];
 };
 

@@ -295,12 +295,16 @@ sys_thread_t sys_thread_new(const char *name, lwip_thread_fn thread, void *arg, 
 	.p_name_p = name,
         .p_function_p = (rtos_thread_function_t *)thread,
         .p_function_arg_p = arg,
-        .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 3,
+        .p_priority = prio,
         .p_thread_pp = &thread_p,
     };
 
-    FDC_ASSERT(stacksize == 0, stacksize, 0);
-    FDC_ASSERT(prio == 1, prio, 0);
+    const size_t max_stack_size = RTOS_THREAD_STACK_NUM_ENTRIES *
+				  sizeof(rtos_execution_stack_entry_t);
+
+    FDC_ASSERT((size_t)stacksize <= max_stack_size, stacksize, max_stack_size);
+    FDC_ASSERT(prio > RTOS_HIGHEST_THREAD_PRIORITY + 1 &&
+	       prio < RTOS_LOWEST_THREAD_PRIORITY, prio, thread);
 
     fdc_error = rtos_k_create_thread(&thread_params);
     if (fdc_error != 0) {
