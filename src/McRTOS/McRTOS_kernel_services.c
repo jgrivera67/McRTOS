@@ -566,6 +566,12 @@ rtos_k_thread_abort(fdc_error_t fdc_error)
 
     current_thread_p->thr_abort_status = fdc_error;
 
+    DEBUG_PRINTF("thread %s (%#p) aborted (context: %#p, abort status: %#x)\n",
+	         current_execution_context_p->ctx_name_p,
+	         current_thread_p,
+	         current_execution_context_p,
+	         fdc_error);
+
     /*
      * Disable interrupts in the ARM core
      */
@@ -581,7 +587,14 @@ rtos_k_thread_abort(fdc_error_t fdc_error)
 
     RTOS_THREAD_CHANGE_STATE(current_thread_p, RTOS_THREAD_ABORTED);
 
-    rtos_thread_scheduler(RTOS_CSW_THREAD_TO_THREAD);
+    RTOS_EXECUTION_CONTEXT_SET_SWITCHED_OUT_REASON(
+        current_execution_context_p, CTX_SWITCHED_OUT_THREAD_TERMINATED,
+        cpu_controller_p);
+
+    /*
+     * Perform a synchronous context switch:
+     */
+    rtos_k_synchronous_context_switch(current_execution_context_p);
 
     /*
      * We should never come back here:
@@ -1533,7 +1546,7 @@ rtos_k_condvar_signal_internal(
      *
      * NOTE: If the caller is an interrupt handler and there were waiters awaken,
      * they will get the chance to run when the calling interrupt handler calls
-     * rtos_k_exit_interrupt(), * which calls rtos_thread_scheduler().
+     * rtos_k_exit_interrupt(), which calls rtos_thread_scheduler().
      */
     if (current_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT) {
         if (waiters_awaken) {

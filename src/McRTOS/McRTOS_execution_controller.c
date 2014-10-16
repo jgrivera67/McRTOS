@@ -112,8 +112,9 @@ void rtos_thread_scheduler(
             current_thread_p->thr_state, current_thread_p);
 
         FDC_ASSERT(
-            GLIST_NODE_IS_LINKED(&current_thread_p->thr_list_node),
-            &current_thread_p->thr_list_node, current_thread_p);
+            GLIST_NODE_IS_LINKED(&current_thread_p->thr_list_node) ||
+	    current_thread_p->thr_state == RTOS_THREAD_ABORTED,
+            current_thread_p->thr_state, current_thread_p);
 
         if (current_thread_p->thr_fpu_enable_count != 0) {
             FDC_ASSERT(current_thread_p == cpu_controller_p->cpc_last_fpu_thread_p,

@@ -397,8 +397,8 @@ fdc_trace_rtos_context_switch(
             current_execution_context_p->ctx_context_type,
             current_execution_context_p);
 
-        DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(
-            current_execution_context_p, ctx_switch_type);
+	DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(
+	    current_execution_context_p, ctx_switch_type);
 
         if (target_execution_context_p != current_execution_context_p) {
             DBG_ASSERT(
@@ -408,7 +408,11 @@ fdc_trace_rtos_context_switch(
 
             DBG_ASSERT_RTOS_EXECUTION_CONTEXT_CPU_REGISTERS(
                 target_execution_context_p, ctx_switch_type);
-        }
+        } else {
+	    DBG_ASSERT(current_execution_context_p->ctx_last_switched_out_reason !=
+	               CTX_SWITCHED_OUT_THREAD_TERMINATED,
+		       current_execution_context_p, 0);
+	}
         break;
 
     case RTOS_CSW_RESET_TO_THREAD:
