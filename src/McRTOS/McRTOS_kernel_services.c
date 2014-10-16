@@ -1691,10 +1691,6 @@ rtos_k_timer_start(
         rtos_timer_p->tmr_signature == RTOS_TIMER_SIGNATURE,
         rtos_timer_p->tmr_signature, rtos_timer_p);
 
-    FDC_ASSERT(
-        rtos_timer_p->tmr_time_to_expire == 0,
-        rtos_timer_p->tmr_time_to_expire, rtos_timer_p);
-
     FDC_ASSERT(expiration_time_in_ms != 0, expiration_time_in_ms, rtos_timer_p);
 
     rtos_ticks_t num_ticks =
