@@ -4,6 +4,7 @@
 # Copyright (C) 2014 German Rivera
 #
 local_src :=	$(subdirectory)/networking.c \
+            	$(subdirectory)/ping.c \
 		$(subdirectory)/lwip_glue/sys_arch.c \
 		$(subdirectory)/lwip/src/api/api_lib.c \
 		$(subdirectory)/lwip/src/api/api_msg.c \

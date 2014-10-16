@@ -64,7 +64,10 @@ typedef int sys_prot_t;
  * non-fatal, print a message.
  */
 #ifdef DEBUG
-#define LWIP_PLATFORM_DIAG(x)                    DEBUG_PRINTF x
+#define LWIP_PLATFORM_DIAG(x)                    __LWIP_DEBUG_PRINTF x
+
+#define __LWIP_DEBUG_PRINTF(_fmt, ...) \
+	DEBUG_PRINTF(_fmt "\n", ##__VA_ARGS__)
 
 #else
 #define LWIP_PLATFORM_DIAG(x)                    __LWIP_PRINTF x

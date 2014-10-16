@@ -269,6 +269,7 @@ Some MCU allow computing and verifying the IP, UDP, TCP and ICMP checksums by ha
 
 #define LWIP_DHCP_BOOTP_FILE		0 /* McRTOS setting */
 #define ETHARP_STATS			0 /* McRTOS setting */
+#define SOCKETS_DEBUG                   LWIP_DBG_ON /*??? McRTOS setting */
 
 #endif /* __LWIPOPTS_H__ */
 

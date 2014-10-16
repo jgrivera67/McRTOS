@@ -23,7 +23,7 @@
  */
 #define ETHERNET_LINK_SPEED_IN_BPS   UINT32_C(100000000)
 
-static struct netif g_netif0;
+struct netif g_netif0;
 
 static fdc_error_t networking_receive_thread_f(void *arg);
 
@@ -141,6 +141,8 @@ networking_init(void)
     netif_set_default(&g_netif0);
 
     DEBUG_PRINTF("lwIP initialized\n");
+
+    ping_init();
 }
 
 

@@ -17,4 +17,8 @@
 
 void networking_init(void);
 
+void ping_init(void);
+
+extern struct netif g_netif0;
+
 #endif /* _NETWORKING_H */
