@@ -17,8 +17,6 @@
 
 void networking_init(void);
 
-void ping_init(void);
-
-extern struct netif g_netif0;
+fdc_error_t networking_receive_thread_f(void *arg);
 
 #endif /* _NETWORKING_H */

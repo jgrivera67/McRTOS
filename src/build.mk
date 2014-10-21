@@ -152,7 +152,6 @@ include_dirs := $(INCLUDE_DIR) \
 	        $(INCLUDE_DIR)/BoardSupport \
 	        $(INCLUDE_DIR)/BoardSupport/$(PLATFORM) \
 	        $(INCLUDE_DIR)/Networking \
-	        $(SOURCE_DIR)/Networking/lwip/src/include/posix \
 
 ifeq "$(CPU_ARCHITECTURE)" "arm_cortex_m"
     include_dirs += $(INCLUDE_DIR)/BoardSupport/CMSIS
@@ -199,7 +198,8 @@ CFLAGS  = 	$(MCFLAGS) $(OPT) -gdwarf-2 \
 		${COMMON_CFLAGS} ${CMD_LINE_CFLAGS}
 
 LDFLAGS = 	$(MCFLAGS) -nostartfiles -T$(LDSCRIPT) \
-		-Wl,-Map=$(PLATFORM).map,--cref,--no-warn-mismatch
+		-Wl,-Map=$(PLATFORM).map,--cref,--no-warn-mismatch \
+		-nostdlib
 
 vpath %.h $(include_dirs)
 vpath %.c $(SOURCE_DIR)
