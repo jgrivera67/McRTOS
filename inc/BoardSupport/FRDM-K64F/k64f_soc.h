@@ -293,6 +293,7 @@ struct enet_device {
     struct pin_info rmii_txd0_pin;
     struct pin_info rmii_txd1_pin;
     struct pin_info mii_txer_pin;
+    struct pin_info mii_intr_pin;
     struct rtos_interrupt_registration_params tx_rtos_interrupt_params;
     struct rtos_interrupt **tx_rtos_interrupt_pp;
     struct rtos_interrupt_registration_params rx_rtos_interrupt_params;

@@ -15,6 +15,10 @@
  */
 #define NETWORK_MTU 1500
 
+struct transport_end_point {
+	uint16_t port;
+};
+
 void networking_init(void);
 
 fdc_error_t networking_receive_thread_f(void *arg);

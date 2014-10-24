@@ -59,8 +59,9 @@ enum enet_phy_registers
 {
     ENET_PHY_CONTROL_REG =  0x0, /* basic control register */
     ENET_PHY_STATUS_REG =   0x1, /* basic status register */
-    ENET_PHY_ID1_REG =	    0x2, /* identification register 1*/
-    ENET_PHY_ID2_REG =	    0x3, /* identification register 2*/
+    ENET_PHY_ID1_REG =	    0x2, /* identification register 1 */
+    ENET_PHY_ID2_REG =	    0x3, /* identification register 2 */
+    ENET_PHY_INTR_CONTROL_STATUS_REG = 0x1b, /* interrupt control/status register */
     ENET_PHY_CONTROL1_REG = 0x1e, /* control register 1 */
     ENET_PHY_CONTROL2_REG = 0x1f, /* control register 2*/
 };
@@ -84,6 +85,23 @@ enum enet_phy_registers
 #define ENET_PHY_AUTO_NEG_COMPLETE_MASK	BIT(5)
 #define ENET_PHY_AUTO_NEG_CAPABLE_MASK	BIT(3)
 #define ENET_PHY_LINK_UP_MASK		BIT(2)
+
+/*
+ * Bit masks for ENET_PHY_INTR_CONTROL_STATUS_REG register flags
+ */
+#define ENET_PHY_RECEIVE_ERROR_INTR_ENABLE_MASK	BIT(14)
+#define ENET_PHY_LINK_DOWN_INTR_ENABLE_MASK	BIT(10)
+#define ENET_PHY_LINK_UP_INTR_ENABLE_MASK	BIT(8)
+#define ENET_PHY_RECEIVE_ERROR_INTR_MASK	BIT(6)
+#define ENET_PHY_LINK_DOWN_INTR_MASK		BIT(2)
+#define ENET_PHY_LINK_UP_INTR_MASK		BIT(0)
+
+/*
+ * Bit masks for ENET_PHY_CONTROL2_REG register flags
+ */
+#define ENET_PHY_POWER_SAVING_MASK	    BIT(10) /* 1 = enabled, 0 = disabled, default 0 */
+#define ENET_PHY_INTR_LEVEL_MASK	    BIT(9)  /* 1 = active high, 0 = active low, default 0 */
+#define ENET_PHY_DISABLE_TRANSMITTER_MASK   BIT(3)  /* 1 = disabled, 0 = enabled, default 0 */
 
 /**
  * Maximum number of iterations for a polling loop
@@ -1040,6 +1058,14 @@ enet_start_xmit(const struct enet_device *enet_device_p,
      *  bit set in its control field)
      */
     write_32bit_mmio_register(&enet_regs_p->TDAR, ENET_TDAR_TDAR_MASK);
+
+#   ifdef DEBUG
+    uint32_t reg_value = enet_phy_read(enet_device_p, ENET_PHY_STATUS_REG);
+
+    if ((reg_value & ENET_PHY_LINK_UP_MASK) == 0) {
+	DEBUG_PRINTF("link down for enet device %#p\n", enet_device_p);
+    }
+#   endif
 }
 
 
