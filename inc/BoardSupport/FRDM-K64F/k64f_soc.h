@@ -10,7 +10,7 @@
 #define __K64F_SOC_H
 
 #include "k64f_soc_public.h"
-#include "McRTOS_kernel_services.h"
+#include <McRTOS_kernel_services.h>
 
 struct rtos_interrupt;  /* opaque type */
 
@@ -273,36 +273,6 @@ struct i2c_device_var {
 #define ENET_MAX_RX_FRAME_BUFFERS   8
 
 #define ENET_MAX_TX_FRAME_BUFFERS   8
-
-/**
- * Const fields of an Ethernet MAC device (to be placed in flash)
- */
-struct enet_device {
-#   define ENET_DEVICE_SIGNATURE  GEN_SIGNATURE('E', 'N', 'E', 'T')
-    uint32_t signature;
-    const char *name;
-    struct enet_device_var *var_p;
-    volatile ENET_Type *mmio_registers_p;
-    struct pin_info rmii_mdio_pin;
-    struct pin_info rmii_mdc_pin;
-    struct pin_info rmii_rxd0_pin;
-    struct pin_info rmii_rxd1_pin;
-    struct pin_info rmii_crs_dv_pin;
-    struct pin_info rmii_rxer_pin;
-    struct pin_info rmii_txen_pin;
-    struct pin_info rmii_txd0_pin;
-    struct pin_info rmii_txd1_pin;
-    struct pin_info mii_txer_pin;
-    struct pin_info mii_intr_pin;
-    struct rtos_interrupt_registration_params tx_rtos_interrupt_params;
-    struct rtos_interrupt **tx_rtos_interrupt_pp;
-    struct rtos_interrupt_registration_params rx_rtos_interrupt_params;
-    struct rtos_interrupt **rx_rtos_interrupt_pp;
-    struct pin_info enet_1588_tmr_pins[4];
-    uint32_t clock_gate_mask;
-    /* MAC address in big-endian byte order */
-    uint8_t mac_address[6];
-};
 
 struct enet_rx_buffer_descriptor {
     uint16_t data_length;

@@ -8,6 +8,7 @@
 
 #include "hardware_abstractions.h"
 #include "k64f_soc.h"
+#include "k64f_soc_enet.h"
 #include "frdm_board.h"
 #include "McRTOS_arm_cortex_m.h"
 #include "failure_data_capture.h"

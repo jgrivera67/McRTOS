@@ -294,7 +294,7 @@ rtos_dbg_dump_exception_info(
         before_exception_stack_p[CPU_REG_PSR]);
 
     debugger_printf(
-	"Fault status registers:\n"
+	"Fault status registers (see DUI0553A_cortex_m4_dgug.pdf):\n"
 	"\tSCB CFSR: %#x\n"
 	"\tSCB HFSR: %#x\n"
 	"\tSCB DFSR: %#x\n"

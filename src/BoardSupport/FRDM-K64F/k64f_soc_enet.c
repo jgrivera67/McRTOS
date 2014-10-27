@@ -8,13 +8,12 @@
 
 #include "hardware_abstractions.h"
 #include "k64f_soc.h"
+#include "k64f_soc_enet.h"
 #include "frdm_board.h"
 #include "McRTOS_arm_cortex_m.h"
 #include "failure_data_capture.h"
 #include "utils.h"
 #include "McRTOS_config_parameters.h"
-#include "McRTOS_kernel_services.h"
-#include <Networking/networking.h>
 
 C_ASSERT(NETWORK_MTU == 1500);
 
@@ -36,6 +35,10 @@ C_ASSERT(NETWORK_MTU == 1500);
 	ROUND_UP(ENET_MAX_FRAME_SIZE + sizeof(struct enet_buf_control_block), \
 		 ENET_FRAME_BUFFER_ALIGNMENT)
 
+/**
+ * Ethernet frame buffer control block. It is located right before the
+ * corresponding frame buffer
+ */
 struct enet_buf_control_block {
     uint32_t signature;
 #   define ENET_TX_BUFFER_SIGNATURE  GEN_SIGNATURE('T', 'X', 'B', 'U')
@@ -184,13 +187,7 @@ const struct enet_device g_enet_device0 = {
 
     .clock_gate_mask = SIM_SCGC2_ENET_MASK,
     .mac_address = {
-	/* MAC address in big-endian byte order */
-	[0] = 0x01,
-	[1] = 0x00,
-	[2] = 0x35,
-	[3] = 0x52,
-	[4] = 0xCF,
-	[5] = 0x00
+	.bytes = { 0x1, 0x00, 0x35, 0x52, 0xCF, 0x00 }
     }
 };
 
@@ -346,13 +343,13 @@ ethernet_mac_init(const struct enet_device *enet_device_p)
     /*
      * Program the MAC address:
      */
-    reg_value = enet_device_p->mac_address[5] << 24 |
-		enet_device_p->mac_address[4] << 16 |
-		enet_device_p->mac_address[3] << 8 |
-		enet_device_p->mac_address[2];
+    reg_value = enet_device_p->mac_address.bytes[5] << 24 |
+		enet_device_p->mac_address.bytes[4] << 16 |
+		enet_device_p->mac_address.bytes[3] << 8 |
+		enet_device_p->mac_address.bytes[2];
     write_32bit_mmio_register(&enet_regs_p->PALR, reg_value);
-    reg_value = enet_device_p->mac_address[1] << 24 |
-		enet_device_p->mac_address[0] << 16;
+    reg_value = enet_device_p->mac_address.bytes[1] << 24 |
+		enet_device_p->mac_address.bytes[0] << 16;
     write_32bit_mmio_register(&enet_regs_p->PAUR, reg_value);
 
     /*
@@ -1053,7 +1050,7 @@ enet_start_xmit(const struct enet_device *enet_device_p,
     tx_buf_desc_p->control_extend1 |= ENET_TX_BD_INTERRUPT_MASK;
 
     /*
-     * Activate Rx buffer descriptor ring:
+     * Activate Tx buffer descriptor ring:
      * (the Tx descriptor ring has at least one descriptor with the "ready"
      *  bit set in its control field)
      */
@@ -1071,8 +1068,6 @@ enet_start_xmit(const struct enet_device *enet_device_p,
 
 /**
  * Dequeues an Rx buffer from the Rx buffer queue of the given ENET device.
- * It returns a pointer to the beginning of the data payload section of
- * the dequeued Rx buffer.
  */
 void
 enet_dequeue_rx_buffer(const struct enet_device *enet_device_p,

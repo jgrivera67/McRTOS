@@ -10,6 +10,9 @@
 #ifndef _COMPILE_TIME_CHECKS_H
 #define _COMPILE_TIME_CHECKS_H
 
+#include <stdint.h>
+#include <stddef.h>
+
 /*
  * Compile-time assertion macros
  */
