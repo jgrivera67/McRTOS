@@ -172,7 +172,6 @@ static isr_function_t dummy_can0_rx_warning_isr;
 static isr_function_t dummy_can0_wake_up_isr;
 static isr_function_t dummy_sdhc_isr;
 static isr_function_t dummy_enet_1588_timer_isr;
-static isr_function_t dummy_enet_error_isr;
 
 //???static uint32_t g_pll_frequency_in_hz = 0;
 
@@ -280,7 +279,7 @@ isr_function_t *const g_interrupt_vector_table[] __attribute__ ((section(".vecto
     [INT_ENET_1588_Timer] = dummy_enet_1588_timer_isr, /* Ethernet MAC IEEE 1588 Timer Interrupt */
     [INT_ENET_Transmit] = k64f_enet_transmit_isr, /* Ethernet MAC Transmit Interrupt */
     [INT_ENET_Receive] = k64f_enet_receive_isr, /* Ethernet MAC Receive Interrupt */
-    [INT_ENET_Error] = dummy_enet_error_isr, /* Ethernet MAC Error and miscelaneous Interrupt */
+    [INT_ENET_Error] = k64f_enet_error_isr, /* Ethernet MAC Error and miscelaneous Interrupt */
 };
 
 C_ASSERT(
@@ -878,7 +877,7 @@ k64f_mpu_init(void)
     /*
      * Enable MPU:
      */
-    write_32bit_mmio_register(&mpu_regs_p->CESR, MPU_CESR_VLD_MASK);
+    //???write_32bit_mmio_register(&mpu_regs_p->CESR, MPU_CESR_VLD_MASK); //??? JGR TODO MPU XXX
     mpu_var_p->initialized = true;
 }
 
@@ -3381,7 +3380,6 @@ GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_can0_rx_warning_isr, VECTOR_NUMBER_TO_IRQ
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_can0_wake_up_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_CAN0_Wake_Up))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_sdhc_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_SDHC))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_enet_1588_timer_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_ENET_1588_Timer))
-GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_enet_error_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_ENET_Error))
 
 /**
  * Generate function that reads from an MMIO register of the given bit width

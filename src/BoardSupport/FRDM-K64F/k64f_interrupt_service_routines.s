@@ -74,6 +74,12 @@ GEN_ISR_FUNCTION k64f_enet_transmit_isr, g_rtos_interrupt_enet_tx_p, \
 GEN_ISR_FUNCTION k64f_enet_receive_isr, g_rtos_interrupt_enet_rx_p, \
                  k64f_enet_receive_interrupt_e_handler
 
+/**
+ * ENET Error ISR
+ */
+GEN_ISR_FUNCTION k64f_enet_error_isr, g_rtos_interrupt_enet_error_p, \
+                 k64f_enet_error_interrupt_e_handler
+
 .end
 
 
