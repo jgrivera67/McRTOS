@@ -95,16 +95,23 @@ const struct enet_device g_enet_device0 = {
     .name = "enet0",
     .var_p = &g_enet_var,
     .mmio_registers_p = (volatile ENET_Type *)ENET_BASE,
-    .rmii_mdio_pin = PIN_INITIALIZER(PIN_PORT_B, 0, PIN_FUNCTION_ALT4),
-    .rmii_mdc_pin = PIN_INITIALIZER(PIN_PORT_B, 1, PIN_FUNCTION_ALT4),
-    .rmii_rxd0_pin = PIN_INITIALIZER(PIN_PORT_A, 13, PIN_FUNCTION_ALT4),
-    .rmii_rxd1_pin = PIN_INITIALIZER(PIN_PORT_A, 12, PIN_FUNCTION_ALT4),
-    .rmii_crs_dv_pin = PIN_INITIALIZER(PIN_PORT_A, 14, PIN_FUNCTION_ALT4),
     .rmii_rxer_pin = PIN_INITIALIZER(PIN_PORT_A, 5, PIN_FUNCTION_ALT4),
+    .rmii_rxd1_pin = PIN_INITIALIZER(PIN_PORT_A, 12, PIN_FUNCTION_ALT4),
+    .rmii_rxd0_pin = PIN_INITIALIZER(PIN_PORT_A, 13, PIN_FUNCTION_ALT4),
+    .rmii_crs_dv_pin = PIN_INITIALIZER(PIN_PORT_A, 14, PIN_FUNCTION_ALT4),
     .rmii_txen_pin = PIN_INITIALIZER(PIN_PORT_A, 15, PIN_FUNCTION_ALT4),
     .rmii_txd0_pin = PIN_INITIALIZER(PIN_PORT_A, 16, PIN_FUNCTION_ALT4),
     .rmii_txd1_pin = PIN_INITIALIZER(PIN_PORT_A, 17, PIN_FUNCTION_ALT4),
     .mii_txer_pin = PIN_INITIALIZER(PIN_PORT_A, 28, PIN_FUNCTION_ALT4),
+    .rmii_mdio_pin = PIN_INITIALIZER(PIN_PORT_B, 0, PIN_FUNCTION_ALT4),
+    .rmii_mdc_pin = PIN_INITIALIZER(PIN_PORT_B, 1, PIN_FUNCTION_ALT4),
+    .enet_1588_tmr_pins = {
+	[0] = PIN_INITIALIZER(PIN_PORT_C, 16, PIN_FUNCTION_ALT4),
+	[1] = PIN_INITIALIZER(PIN_PORT_C, 17, PIN_FUNCTION_ALT4),
+	[2] = PIN_INITIALIZER(PIN_PORT_C, 18, PIN_FUNCTION_ALT4),
+	[3] = PIN_INITIALIZER(PIN_PORT_C, 19, PIN_FUNCTION_ALT4),
+    },
+
     .tx_rtos_interrupt_params = {
             .irp_name_p = "ENET Transmit Interrupt",
             .irp_isr_function_p = k64f_enet_transmit_isr,
@@ -137,14 +144,6 @@ const struct enet_device g_enet_device0 = {
         },
 
     .error_rtos_interrupt_pp = &g_rtos_interrupt_enet_error_p,
-
-    .enet_1588_tmr_pins = {
-	[0] = PIN_INITIALIZER(PIN_PORT_C, 16, PIN_FUNCTION_ALT4),
-	[1] = PIN_INITIALIZER(PIN_PORT_C, 17, PIN_FUNCTION_ALT4),
-	[2] = PIN_INITIALIZER(PIN_PORT_C, 18, PIN_FUNCTION_ALT4),
-	[3] = PIN_INITIALIZER(PIN_PORT_C, 19, PIN_FUNCTION_ALT4),
-    },
-
     .clock_gate_mask = SIM_SCGC2_ENET_MASK,
     .mac_address = {
 	.bytes = { 0x1, 0x00, 0x35, 0x52, 0xCF, 0x00 }
@@ -363,27 +362,36 @@ ethernet_mac_init(const struct enet_device *enet_device_p)
     write_32bit_mmio_register(&enet_regs_p->PAUR, reg_value);
 
     /*
+     * - Enable normal operating mode (Disable sleep mode)
      * - Enable buffer descriptor byte swapping
      *   (since ARM Cortex-M is little-endian):
      * - Enable enhanced frame time-stamping functions
      */
     reg_value = read_32bit_mmio_register(&enet_regs_p->ECR);
+    reg_value &= ~ENET_ECR_SLEEP_MASK;
     reg_value |= ENET_ECR_DBSWP_MASK | ENET_ECR_EN1588_MASK;
     write_32bit_mmio_register(&enet_regs_p->ECR, reg_value);
 
     /*
      * Configure receive control register:
-     * - ???Enable stripping of CRC field for incoming frames
-     * - Enable frame padding remove for incoming frames
+     * - Enable stripping of CRC field for incoming frames
+     * - ???Enable frame padding remove for incoming frames
+     * - Enable flow control
      * - Configure RMII interface to the Ethernet PHY
      * - Enable 100Mbps operation
      * - Disable internal loopback
      * - Set max incoming frame length (including CRC)
      */
     reg_value = read_32bit_mmio_register(&enet_regs_p->RCR);
-    //???reg_value |= ENET_RCR_CRCFWD_MASK;
-    reg_value |= ENET_RCR_PADEN_MASK;
+    reg_value |= ENET_RCR_CRCFWD_MASK;
+    //???reg_value |= ENET_RCR_PADEN_MASK;
+    reg_value |= ENET_RCR_FCE_MASK;
     reg_value |= ENET_RCR_MII_MODE_MASK | ENET_RCR_RMII_MODE_MASK;
+
+#if 0  /* Promiscuous mode is useful for debugging */
+    reg_value |= ENET_RCR_PROM_MASK;
+#endif
+
     reg_value &= ~ENET_RCR_RMII_10T_MASK;
     reg_value &= ~ENET_RCR_LOOP_MASK;
     SET_BIT_FIELD(reg_value, ENET_RCR_MAX_FL_MASK, ENET_RCR_MAX_FL_SHIFT,
@@ -517,7 +525,6 @@ ethernet_mac_init(const struct enet_device *enet_device_p)
     write_32bit_mmio_register(&enet_regs_p->EIMR,
 			      ENET_EIMR_TXF_MASK |
 			      ENET_EIMR_RXF_MASK |
-			      ENET_EIMR_RXB_MASK |
 			      ENET_EIMR_BABR_MASK |
 			      ENET_EIMR_BABT_MASK |
 			      ENET_EIMR_EBERR_MASK |
@@ -783,8 +790,18 @@ enet_init(const struct enet_device *enet_device_p)
 
     /*
      * Configure GPIO pins for Ethernet PHY functions:
-     * - Set "open drain enabled", "pull-up resistor enabled" and
-     *   "internal pull resistor enabled" for rmii_mdio pin
+     */
+
+    for (uint_fast8_t i = 0; i < ARRAY_SIZE(enet_device_p->enet_1588_tmr_pins);
+	 ++ i) {
+	set_pin_function(&enet_device_p->enet_1588_tmr_pins[i], 0);
+    }
+
+    set_pin_function(&enet_device_p->rmii_mdc_pin, 0);
+
+    /*
+     * Set "open drain enabled", "pull-up resistor enabled" and
+     * "internal pull resistor enabled" for rmii_mdio pin
      *
      * NOTE: No external pullup is available on MDIO signal when the K64F SoC
      * requests status of the Ethernet link connection. Internal pullup
@@ -795,19 +812,14 @@ enet_init(const struct enet_device *enet_device_p)
 		     PORT_PCR_PE_MASK |
 		     PORT_PCR_PS_MASK);
 
-    set_pin_function(&enet_device_p->rmii_mdc_pin, 0);
     set_pin_function(&enet_device_p->rmii_rxd0_pin, 0);
     set_pin_function(&enet_device_p->rmii_rxd1_pin, 0);
+    set_pin_function(&enet_device_p->rmii_crs_dv_pin, 0);
     set_pin_function(&enet_device_p->rmii_rxer_pin, 0);
-    set_pin_function(&enet_device_p->rmii_txen_pin, 0);
     set_pin_function(&enet_device_p->rmii_txd0_pin, 0);
     set_pin_function(&enet_device_p->rmii_txd1_pin, 0);
+    set_pin_function(&enet_device_p->rmii_txen_pin, 0);
     set_pin_function(&enet_device_p->mii_txer_pin, 0);
-
-    for (uint_fast8_t i = 0; i < ARRAY_SIZE(enet_device_p->enet_1588_tmr_pins);
-	 ++ i) {
-	set_pin_function(&enet_device_p->enet_1588_tmr_pins[i], 0);
-    }
 
     /*
      * TODO: Need to configure MPU access for ENET DMA engine
@@ -912,7 +924,6 @@ k64f_enet_receive_interrupt_e_handler(
     for ( ; ; ) {
 	uint32_t reg_value = read_32bit_mmio_register(&enet_regs_p->EIR);
 
-	DEBUG_PRINTF("*** EIR: %#x\n", reg_value); //???
 	if ((reg_value & ENET_EIR_RXF_MASK) == 0) {
 	    break;
 	}

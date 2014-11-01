@@ -238,8 +238,6 @@ struct enet_device {
     const char *name;
     struct enet_device_var *var_p;
     volatile ENET_Type *mmio_registers_p;
-    struct pin_info rmii_mdio_pin;
-    struct pin_info rmii_mdc_pin;
     struct pin_info rmii_rxd0_pin;
     struct pin_info rmii_rxd1_pin;
     struct pin_info rmii_crs_dv_pin;
@@ -249,13 +247,15 @@ struct enet_device {
     struct pin_info rmii_txd1_pin;
     struct pin_info mii_txer_pin;
     struct pin_info mii_intr_pin;
+    struct pin_info rmii_mdio_pin;
+    struct pin_info rmii_mdc_pin;
+    struct pin_info enet_1588_tmr_pins[4];
     struct rtos_interrupt_registration_params tx_rtos_interrupt_params;
     struct rtos_interrupt **tx_rtos_interrupt_pp;
     struct rtos_interrupt_registration_params rx_rtos_interrupt_params;
     struct rtos_interrupt **rx_rtos_interrupt_pp;
     struct rtos_interrupt_registration_params error_rtos_interrupt_params;
     struct rtos_interrupt **error_rtos_interrupt_pp;
-    struct pin_info enet_1588_tmr_pins[4];
     uint32_t clock_gate_mask;
     struct ethernet_mac_address mac_address;
 };

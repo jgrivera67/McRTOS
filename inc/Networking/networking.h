@@ -97,8 +97,10 @@ struct ethernet_header {
      *  ntoh16() must be invoked after reading this field.)
      */
     uint16_t frame_type;
-#   define ENET_ARP_PACKET  0x806
-#   define ENET_IP_PACKET   0x800
+#   define ENET_ARP_PACKET	    0x806
+#   define ENET_IPv4_PACKET	    0x800
+#   define ENET_VLAN_TAGGED_FRAME   0x8100
+#   define ENET_IPv6_PACKET	    0x86dd
 }; // __attribute__((packed));
 
 C_ASSERT(sizeof(struct ethernet_header) == 14);

@@ -62,7 +62,7 @@ net_apr_send_request(const struct enet_device *enet_device_p,
 		          &enet_broadcast_mac_addr);
     enet_frame_buf->enet_header.frame_type = hton16(ENET_ARP_PACKET);
     enet_frame_buf->arp_packet.link_addr_type = hton16(0x1);
-    enet_frame_buf->arp_packet.network_addr_type = hton16(ENET_IP_PACKET);
+    enet_frame_buf->arp_packet.network_addr_type = hton16(ENET_IPv4_PACKET);
     enet_frame_buf->arp_packet.link_addr_size = sizeof(struct ethernet_mac_address);
     enet_frame_buf->arp_packet.network_addr_size = sizeof(struct ipv4_address);
     enet_frame_buf->arp_packet.operation = hton16(ARP_REQUEST);
@@ -106,64 +106,6 @@ networking_init(void)
     }
 }
 
-//???
-static void
-poll_rx_frames(const struct enet_device *enet_device_p)
-{
-    DBG_ASSERT(
-        enet_device_p->signature == ENET_DEVICE_SIGNATURE,
-        enet_device_p->signature, enet_device_p);
-
-    struct enet_device_var *const enet_var_p = enet_device_p->var_p;
-
-    volatile ENET_Type *enet_regs_p = enet_device_p->mmio_registers_p;
-
-    uint32_t reg_value = read_32bit_mmio_register(&enet_regs_p->RDAR);
-
-    //FDC_ASSERT(reg_value & ENET_RDAR_RDAR_MASK, reg_value, 0);
-
-	for (unsigned int i = 0; i < ENET_MAX_RX_FRAME_BUFFERS; i ++) {
-	    volatile struct enet_rx_buffer_descriptor *buffer_desc_p =
-		&enet_var_p->rx_buffer_descriptors[i];
-
-	    if (i == ENET_MAX_RX_FRAME_BUFFERS - 1) {
-		FDC_ASSERT(buffer_desc_p->control & ENET_RX_BD_WRAP_MASK,
-		           buffer_desc_p->control, buffer_desc_p);
-	    }
-
-	    if (buffer_desc_p->control & ENET_RX_BD_EMPTY_MASK) {
-		continue;
-	    }
-
-	    FDC_ASSERT(buffer_desc_p->control & ENET_RX_BD_LAST_IN_FRAME_MASK,
-		       buffer_desc_p->control, buffer_desc_p);
-
-	    struct enet_frame_buffer *frame_buf_p =
-		TO_FRAME_BUFFER(buffer_desc_p->data_buffer);
-
-	    DBG_ASSERT(frame_buf_p->signature == ENET_RX_BUFFER_SIGNATURE,
-		       frame_buf_p->signature, frame_buf_p);
-
-	    if (!frame_buf_p->in_transit) {
-		continue;
-	    }
-
-	    buffer_desc_p->control_extend1 &= ~ENET_RX_BD_GENERATE_INTERRUPT_MASK;
-	    if (buffer_desc_p->control &
-	        (ENET_RX_BD_LENGTH_VIOLATION_MASK |
-		 ENET_RX_BD_NON_OCTET_ALIGNED_FRAME_MASK |
-		 ENET_RX_BD_CRC_ERROR_MASK |
-		 ENET_RX_BD_FIFO_OVERRRUN_MASK |
-		 ENET_RX_BD_FRAME_TRUNCATED_MASK)) {
-		(void)CAPTURE_FDC_ERROR("Received bad frame (Rx packet dropped)",
-					buffer_desc_p->control, buffer_desc_p);
-		continue;
-	    }
-
-            debugger_printf("*** Received frame: %#p\n", buffer_desc_p->data_buffer);
-	}
-}
-//???
 
 /**
  * Packet receive processing thread for a given Ethernet interface
@@ -190,22 +132,51 @@ net_receive_thread_f(void *arg)
     net_apr_send_request(enet_device_p, &local_ipaddr, &local_ipaddr);
 
     uint32_t apr_reqs_sent_count  = 0; //???
+    uint32_t apr_replies_received_count  = 0; //???
     for ( ; ; ) {
-	struct ethernet_frame *enet_rx_frame_buf = NULL;
+	struct ethernet_frame *rx_frame_buf = NULL;
 	size_t rx_frame_length;
 
 	net_apr_send_request(enet_device_p, &local_ipaddr, &dest_ipaddr); //???
 	//???
 	apr_reqs_sent_count++;
-	CONSOLE_POS_PRINTF(29, 60, "APR requests sent %8u", apr_reqs_sent_count);
-	poll_rx_frames(enet_device_p);
+	CONSOLE_POS_PRINTF(29, 1, "APR requests sent %8u", apr_reqs_sent_count);
 	//???
-#if 0
-	enet_dequeue_rx_buffer(enet_device_p, (void **)&enet_rx_frame_buf,
+	enet_dequeue_rx_buffer(enet_device_p, (void **)&rx_frame_buf,
 			       &rx_frame_length);
-	FDC_ASSERT(enet_rx_frame_buf != NULL, enet_device_p, cpu_id);
-#endif
+	FDC_ASSERT(rx_frame_buf != NULL, enet_device_p, cpu_id);
+	//???
+	switch (ntoh16(rx_frame_buf->enet_header.frame_type)) {
+	case ENET_ARP_PACKET:
+	    apr_replies_received_count++;
+	    CONSOLE_POS_PRINTF(30, 1, "APR replies received %8u", apr_replies_received_count);
+	    CONSOLE_POS_PRINTF(31,1,
+		"Received ARP packet: "
+		"operation: %x "
+		"source mac addr: %x:%x:%x:%x:%x:%x "
+		"dest mac addr: %x:%x:%x:%x:%x:%x\n",
+		ntoh16(rx_frame_buf->arp_packet.operation),
+		rx_frame_buf->arp_packet.source_mac_addr.bytes[0],
+		rx_frame_buf->arp_packet.source_mac_addr.bytes[1],
+		rx_frame_buf->arp_packet.source_mac_addr.bytes[2],
+		rx_frame_buf->arp_packet.source_mac_addr.bytes[3],
+		rx_frame_buf->arp_packet.source_mac_addr.bytes[4],
+		rx_frame_buf->arp_packet.source_mac_addr.bytes[5],
+		rx_frame_buf->arp_packet.dest_mac_addr.bytes[0],
+		rx_frame_buf->arp_packet.dest_mac_addr.bytes[1],
+		rx_frame_buf->arp_packet.dest_mac_addr.bytes[2],
+		rx_frame_buf->arp_packet.dest_mac_addr.bytes[3],
+		rx_frame_buf->arp_packet.dest_mac_addr.bytes[4],
+		rx_frame_buf->arp_packet.dest_mac_addr.bytes[5]);
+	    break;
+	default:
+	    CONSOLE_POS_PRINTF(31,1,
+		"Received frame of type %#x                                                       \n",
+		ntoh16(rx_frame_buf->enet_header.frame_type));
+	}
+	//???
 
+	enet_recycle_rx_buffer(enet_device_p, rx_frame_buf);
 	rtos_thread_delay(500); //????
     }
 
