@@ -82,7 +82,7 @@ struct rtos_interrupt *g_rtos_interrupt_enet_error_p = NULL;
  * Global non-const structure for ENET MAC device
  * (allocated in SRAM space)
  */
-static struct enet_device_var g_enet_var = {
+struct enet_device_var g_enet_var = {
     .initialized = false,
 };
 
@@ -147,7 +147,9 @@ const struct enet_device g_enet_device0 = {
     .clock_gate_mask = SIM_SCGC2_ENET_MASK,
     .mac_address = {
 	.bytes = { 0x1, 0x00, 0x35, 0x52, 0xCF, 0x00 }
-    }
+    },
+
+    .mpu_region_index = RTOS_NUM_GLOBAL_MPU_REGIONS,
 };
 
 static void
@@ -435,13 +437,11 @@ ethernet_mac_init(const struct enet_device *enet_device_p)
 		  0);
     write_32bit_mmio_register(&enet_regs_p->OPD, reg_value);
 
-#if 0 //???
     /*
      * Set Tx accelerators:
      */
     reg_value =	ENET_TACC_PROCHK_MASK |
-		ENET_TACC_IPCHK_MASK |
-		ENET_TACC_SHIFT16_MASK;
+		ENET_TACC_IPCHK_MASK;
     write_32bit_mmio_register(&enet_regs_p->TACC, reg_value);
 
     /*
@@ -451,10 +451,8 @@ ethernet_mac_init(const struct enet_device *enet_device_p)
 		ENET_RACC_IPDIS_MASK |
 		ENET_RACC_PRODIS_MASK |
 		ENET_RACC_LINEDIS_MASK |
-		ENET_RACC_SHIFT16_MASK |
 		ENET_RACC_PADREM_MASK;
     write_32bit_mmio_register(&enet_regs_p->RACC, reg_value);
-#endif
 
     /**
      * Initialize the Serial Management Interface (SMI) between the Ethernet MAC
@@ -822,8 +820,21 @@ enet_init(const struct enet_device *enet_device_p)
     set_pin_function(&enet_device_p->mii_txer_pin, 0);
 
     /*
-     * TODO: Need to configure MPU access for ENET DMA engine
+     * NOTE: The K64F ENET MAC DMA engine does not work with the K64F MPU
+     * so, unfortunately we have to disable the MPU
      */
+#if 0
+    /*
+     * Configure MPU access for CPU and ENET DMA engine:
+     */
+    mpu_set_privileged_global_data_region(enet_device_p->mpu_region_index,
+					  enet_var_p, enet_var_p + 1);
+    mpu_set_mpu_region_for_dma(enet_device_p->mpu_region_index,
+			       enet_var_p, enet_var_p + 1, 0);
+#else
+    mpu_disable();
+    capture_fdc_msg_printf("MPU had to be disabled for ENET MAC DMA to work\n");
+#endif
 
     ethernet_mac_init(enet_device_p);
     ethernet_phy_init(enet_device_p);
@@ -994,10 +1005,9 @@ k64f_enet_error_interrupt_e_handler(
         enet_device_p->signature == ENET_DEVICE_SIGNATURE,
         enet_device_p->signature, enet_device_p);
 
+    struct enet_device_var *const enet_var_p = enet_device_p->var_p;
     volatile ENET_Type *enet_regs_p = enet_device_p->mmio_registers_p;
     uint32_t reg_value = read_32bit_mmio_register(&enet_regs_p->EIR);
-
-    DEBUG_PRINTF("*** EIR: %#x\n", reg_value); //???
 
     uint32_t error_interrupt_mask = (reg_value &
 				     (ENET_EIMR_BABR_MASK |
@@ -1007,10 +1017,14 @@ k64f_enet_error_interrupt_e_handler(
 				      ENET_EIMR_PLR_MASK));
 
     if (error_interrupt_mask != 0) {
+	capture_fdc_msg_printf("ENET %s error (error interrupt mask: %#x)\n",
+			       enet_device_p->name, error_interrupt_mask);
+
 	/*
 	 * Clear interrupt source (w1c):
 	 */
 	write_32bit_mmio_register(&enet_regs_p->EIR, error_interrupt_mask);
+        enet_var_p->tx_rx_error_count ++;
     }
 }
 

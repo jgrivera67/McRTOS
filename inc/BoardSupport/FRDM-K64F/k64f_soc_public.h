@@ -283,6 +283,17 @@ enum soc_interrupt_vectors {
 };
 
 /**
+ * Max number of DMA bus masters
+ */
+#define MPU_NUM_DMA_MASTERS 4
+
+/**
+ * MPU DMA bus masters
+ */
+typedef _RANGE_(0, MPU_NUM_DMA_MASTERS - 1)
+        uint8_t mpu_dma_master_t;
+
+/**
  * ADC result range type
  */
 #if ADC_RESOLUTION <= 8

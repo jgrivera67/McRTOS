@@ -274,6 +274,10 @@ struct mpu_region_range {
     bool read_only;
 };
 
+void mpu_disable(void);
+
+void mpu_enable(void);
+
 void mpu_set_thread_data_regions(
     cpu_id_t cpu_id,
     bool privileged,
@@ -289,6 +293,17 @@ void mpu_set_thread_data_region(
     bool read_only);
 
 void mpu_unset_thread_data_region(mpu_thread_data_region_index_t thread_region_index);
+
+void mpu_set_privileged_global_data_region(
+    uint8_t region_index,
+    void *start_addr,
+    void *end_addr);
+
+void mpu_set_mpu_region_for_dma(
+    uint8_t region_index,
+    void *start_addr,
+    void *end_addr,
+    mpu_dma_master_t mpu_dma_master);
 
 void install_isr(
     interrupt_channel_t channel,

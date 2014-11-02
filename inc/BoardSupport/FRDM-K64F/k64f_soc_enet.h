@@ -179,6 +179,11 @@ struct enet_device_var {
     bool initialized;
 
     /**
+     * Total number of Tx/Rx errors:
+     */
+    uint32_t tx_rx_error_count;
+
+    /**
      * Tx buffer descriptor ring accessed by the Ethernet MAC
      */
     volatile struct enet_tx_buffer_descriptor tx_buffer_descriptors[ENET_MAX_TX_FRAME_BUFFERS];
@@ -258,6 +263,7 @@ struct enet_device {
     struct rtos_interrupt **error_rtos_interrupt_pp;
     uint32_t clock_gate_mask;
     struct ethernet_mac_address mac_address;
+    uint8_t mpu_region_index;
 };
 
 void enet_phy_write(const struct enet_device *enet_device_p, uint32_t phy_reg,
