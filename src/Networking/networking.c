@@ -49,7 +49,7 @@ net_apr_send_request(const struct enet_device *enet_device_p,
 		     const struct ipv4_address *source_ip_addr_p,
 		     const struct ipv4_address *dest_ip_addr_p)
 {
-    struct ethernet_frame *enet_frame_buf = enet_allocate_tx_buffer(enet_device_p);
+    struct ethernet_frame *enet_frame_buf = enet_allocate_tx_buffer(enet_device_p, true);
 
     DBG_ASSERT(enet_frame_buf != NULL, enet_device_p, 0);
 

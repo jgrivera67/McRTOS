@@ -58,7 +58,15 @@ struct enet_frame_buffer {
 	volatile struct enet_rx_buffer_descriptor *rx_buf_desc_p;
     };
 
-    bool in_transit;
+    uint32_t state_flags;
+#   define ENET_FRAME_IN_TX_TRANSIT		BIT(0)
+#   define ENET_FRAME_IN_RX_TRANSIT		BIT(1)
+#   define ENET_FRAME_IN_TX_USE_BY_APP		BIT(2)
+#   define ENET_FRAME_IN_RX_USE_BY_APP		BIT(3)
+#   define ENET_FRAME_FREE_AFTER_TX_COMPLETE	BIT(4)
+#   define ENET_FRAME_IN_RX_QUEUE		BIT(5)
+#   define ENET_FRAME_RX_DROPPED		BIT(6)
+#   define ENET_FRAME_IN_TX_POOL		BIT(7)
 
     /*
      * Reserved for future use (alignment holes)
