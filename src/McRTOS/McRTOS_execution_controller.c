@@ -416,8 +416,8 @@ rtos_tick_timer_interrupt_handler(
 
     /*
      * Thread time slice tick bookkeeping is done in the thread scheduler,
-     * which will be called by rtos_k_exit_interrupt() if there an no more nested
-     * interrupts in the preemption chain. We just need to set the flag
+     * which will be called by rtos_k_exit_interrupt() if there are no more
+     * nested interrupts in the preemption chain. We just need to set the flag
      * cpc_pending_thread_time_slice_decrement here:
      */
     cpu_controller_p->cpc_pending_thread_time_slice_decrement = true;

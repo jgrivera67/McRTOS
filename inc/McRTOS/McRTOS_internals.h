@@ -29,8 +29,7 @@
 /**
  * Number of spokes of the per-cpu timer wheel. It must be a power of 2.
  */
-//#define RTOS_TIMER_WHEEL_NUM_SPOKES UINT16_C(256)
-#define RTOS_TIMER_WHEEL_NUM_SPOKES UINT16_C(8)
+#define RTOS_TIMER_WHEEL_NUM_SPOKES UINT16_C(128)
 
 /**
  * Timer wheel spoke index range type
