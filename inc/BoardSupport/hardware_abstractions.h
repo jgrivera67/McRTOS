@@ -475,25 +475,23 @@ void i2c_write(
 
 void enet_init(const struct enet_device *enet_device_p);
 
-void *enet_allocate_tx_buffer(const struct enet_device *enet_device_p,
-		              bool free_after_tx_complete);
+struct network_packet *enet_allocate_tx_packet(const struct enet_device *enet_device_p,
+					       bool free_after_tx_complete);
 
-void enet_free_tx_buffer(const struct enet_device *enet_device_p,
-			 void *tx_payload_buf);
+void enet_free_tx_packet(const struct enet_device *enet_device_p,
+			 struct network_packet *tx_packet_p);
 
 void enet_start_xmit(const struct enet_device *enet_device_p,
-		     void *tx_payload_buf,
-		     size_t data_length);
+		     struct network_packet *tx_packet_p);
 
-void enet_dequeue_rx_buffer(const struct enet_device *enet_device_p,
-			    void **rx_payload_buf_p,
-			    size_t *rx_payload_length_p);
+void enet_dequeue_rx_packet(const struct enet_device *enet_device_p,
+			    struct network_packet **rx_packet_pp);
 
-void enet_enqueue_rx_buffer(const struct enet_device *enet_device_p,
-			    void *rx_payload_buf);
+void enet_enqueue_rx_packet(const struct enet_device *enet_device_p,
+			    struct network_packet *rx_packet_p);
 
-void enet_recycle_rx_buffer(const struct enet_device *enet_device_p,
-			    void *rx_payload_buf);
+void enet_recycle_rx_packet(const struct enet_device *enet_device_p,
+			    struct network_packet *rx_packet_p);
 
 void wait_for_interrupts(void);
 

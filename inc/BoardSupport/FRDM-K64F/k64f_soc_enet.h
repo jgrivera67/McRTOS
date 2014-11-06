@@ -35,9 +35,9 @@ C_ASSERT(NETWORK_MTU == 1500);
  */
 #define ENET_FRAME_DATA_BUFFER_ALIGNMENT UINT32_C(16)
 
-#define ENET_MAX_RX_FRAME_BUFFERS   8
+#define ENET_MAX_RX_PACKETS   8
 
-#define ENET_MAX_TX_FRAME_BUFFERS   8
+#define ENET_MAX_TX_PACKETS   8
 
 /**
  * Maximum Ethernet frame size rounded-up to the required alignment
@@ -46,19 +46,19 @@ C_ASSERT(NETWORK_MTU == 1500);
 	ROUND_UP(ENET_MAX_FRAME_SIZE, ENET_FRAME_DATA_BUFFER_ALIGNMENT)
 
 /**
- * Ethernet frame buffer object
+ * Network packet object
  */
-struct enet_frame_buffer {
+struct network_packet {
     uint32_t signature;
-#   define ENET_TX_BUFFER_SIGNATURE  GEN_SIGNATURE('T', 'X', 'B', 'U')
-#   define ENET_RX_BUFFER_SIGNATURE  GEN_SIGNATURE('R', 'X', 'B', 'U')
+#   define ENET_TX_PACKET_SIGNATURE  GEN_SIGNATURE('T', 'X', 'B', 'U')
+#   define ENET_RX_PACKET_SIGNATURE  GEN_SIGNATURE('R', 'X', 'B', 'U')
 
     union {
 	volatile struct enet_tx_buffer_descriptor *tx_buf_desc_p;
 	volatile struct enet_rx_buffer_descriptor *rx_buf_desc_p;
     };
 
-    uint32_t state_flags;
+    uint16_t state_flags;
 #   define ENET_FRAME_IN_TX_TRANSIT		BIT(0)
 #   define ENET_FRAME_IN_RX_TRANSIT		BIT(1)
 #   define ENET_FRAME_IN_TX_USE_BY_APP		BIT(2)
@@ -68,15 +68,19 @@ struct enet_frame_buffer {
 #   define ENET_FRAME_RX_DROPPED		BIT(6)
 #   define ENET_FRAME_IN_TX_POOL		BIT(7)
 
-    /*
-     * Reserved for future use (alignment holes)
+    /**
+     * Total packet length, including L2 L3 and L4 headers
      */
-    uint8_t reserved1;
-    uint16_t reserved2;
-    uint32_t reserved3;
+    uint16_t total_length;
+
+    /**
+     * Embedded node used to insert this packet in a list of packets
+     * as it traverses the networking stack.
+     */
+    struct glist_node node;
 
     /*
-     * Frame payload data buffer
+     * Packet payload data buffer
      */
     uint8_t data_buffer[ENET_ALIGNED_MAX_FRAME_SIZE]
 	__attribute__ ((aligned(ENET_FRAME_DATA_BUFFER_ALIGNMENT)));
@@ -86,12 +90,12 @@ C_ASSERT(ENET_ALIGNED_MAX_FRAME_SIZE >= 256 &&
 	 (ENET_ALIGNED_MAX_FRAME_SIZE & ~ENET_MRBR_R_BUF_SIZE_MASK) == 0);
 
 C_ASSERT(sizeof(bool) == sizeof(uint8_t));
-C_ASSERT(offsetof(struct enet_frame_buffer, data_buffer) %
+C_ASSERT(offsetof(struct network_packet, data_buffer) %
 	 ENET_FRAME_DATA_BUFFER_ALIGNMENT == 0);
 
-#define TO_FRAME_BUFFER(_data_buf) \
-	((struct enet_frame_buffer *) \
-	 ((uintptr_t)(_data_buf) - offsetof(struct enet_frame_buffer, data_buffer)))
+#define TO_NETWORK_PACKET(_data_buf) \
+	((struct network_packet *) \
+	 ((uintptr_t)(_data_buf) - offsetof(struct network_packet, data_buffer)))
 
 struct enet_rx_buffer_descriptor {
     uint16_t data_length;
@@ -194,43 +198,43 @@ struct enet_device_var {
     /**
      * Tx buffer descriptor ring accessed by the Ethernet MAC
      */
-    volatile struct enet_tx_buffer_descriptor tx_buffer_descriptors[ENET_MAX_TX_FRAME_BUFFERS];
+    volatile struct enet_tx_buffer_descriptor tx_buffer_descriptors[ENET_MAX_TX_PACKETS];
 
     /**
      * Rx buffer descriptor ring accessed by the Ethernet MAC
      */
-    volatile struct enet_rx_buffer_descriptor rx_buffer_descriptors[ENET_MAX_RX_FRAME_BUFFERS];
+    volatile struct enet_rx_buffer_descriptor rx_buffer_descriptors[ENET_MAX_RX_PACKETS];
 
     /**
-     * Circular buffer of pointers used to keep track of free Tx buffers
+     * Circular buffer of pointers used to keep track of free Tx packets
      */
-    struct rtos_circular_buffer tx_buffer_pool;
+    struct rtos_circular_buffer tx_packet_pool;
 
     /**
      * Circular buffer of pointers used to represent the queue of received
-     * frames (non-empty Rx buffers)
+     * Rx packets (non-empty Rx buffers)
      */
-    struct rtos_circular_buffer rx_buffer_queue;
+    struct rtos_circular_buffer rx_packet_queue;
 
     /**
-     * Array of entries for tx_buffer_pool
+     * Array of entries for tx_packet_pool
      */
-    void *tx_buffer_pool_entries[ENET_MAX_TX_FRAME_BUFFERS];
+    void *tx_packet_pool_entries[ENET_MAX_TX_PACKETS];
 
     /**
-     * Array of entries for rx_buffer_queue
+     * Array of entries for rx_packet_queue
      */
-    void *rx_buffer_queue_entries[ENET_MAX_RX_FRAME_BUFFERS];
+    void *rx_packet_queue_entries[ENET_MAX_RX_PACKETS];
 
     /**
-     * Ethernet Tx frame buffers
+     * Ethernet Tx packets (for outgoing Ethernet frames)
      */
-    struct enet_frame_buffer tx_frame_buffers[ENET_MAX_TX_FRAME_BUFFERS];
+    struct network_packet tx_packets[ENET_MAX_TX_PACKETS];
 
     /**
-     * Ethernet Rx frame buffers
+     * Ethernet Rx packets (for incoming Ethernet frames)
      */
-    struct enet_frame_buffer rx_frame_buffers[ENET_MAX_RX_FRAME_BUFFERS];
+    struct network_packet rx_packets[ENET_MAX_RX_PACKETS];
 };
 
 #define ENET_PHY_ADDRESS    0x0

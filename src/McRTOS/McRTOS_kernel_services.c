@@ -536,6 +536,22 @@ rtos_k_thread_micro_delay(_IN_ rtos_microseconds_t num_microseconds)
 
 
 /**
+ * Return the current number of ticks for the calling CPU.
+ * 1 tick == RTOS_MILLISECONDS_PER_TICK milliseconds
+ */
+rtos_ticks_t
+rtos_k_get_ticks(void)
+{
+    FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
+
+    struct rtos_cpu_controller *cpu_controller_p =
+        &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
+
+    return cpu_controller_p->cpc_ticks_since_boot_count;
+}
+
+
+/**
  * Abort the calling thread
  */
 void
@@ -1693,8 +1709,7 @@ rtos_k_timer_start(
 
     FDC_ASSERT(expiration_time_in_ms != 0, expiration_time_in_ms, rtos_timer_p);
 
-    rtos_ticks_t num_ticks =
-        HOW_MANY(expiration_time_in_ms, RTOS_MILLISECONDS_PER_TICK);
+    rtos_ticks_t num_ticks = MILLISECONDS_TO_TICKS(expiration_time_in_ms);
 
     /*
      * Disable interrupts in the ARM core

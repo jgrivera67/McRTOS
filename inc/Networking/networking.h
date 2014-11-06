@@ -9,11 +9,30 @@
 #define _NETWORKING_H
 
 #include <McRTOS/compile_time_checks.h>
+#include <McRTOS/McRTOS_kernel_services.h>
 
 /**
  * Maximum transfer unit for Ethernet (frame size without CRC)
  */
 #define NETWORK_MTU 1500
+
+/**
+ * Number of entries for the ARP cache table
+ */
+#define ARP_CACHE_NUM_ENTRIES	16
+
+/**
+ * ARP cache entry lifetime in ticks (20 minutes)
+ */
+#define ARP_CACHE_ENTRY_LIFETIME_IN_TICKS \
+	MILLISECONDS_TO_TICKS(20u * 60 * 1000)
+
+/**
+ * Timeout to wait for an ARP reply after sending a non-gratuitous
+ * ARP request
+ */
+#define ARP_REPLY_WAIT_TIMEOUT_IN_TICKS \
+	MILLISECONDS_TO_TICKS(5u * 1000)
 
 /**
  * Convert a 16-bit value from host byte order to network byte order
@@ -112,14 +131,20 @@ C_ASSERT(offsetof(struct ethernet_header, frame_type) == 12);
  * IPv4 address in network byte order
  */
 struct ipv4_address {
-    /**
-     * bytes[0] = most significant byte
-     * bytes[3] = less significant byte
-     */
-    uint8_t bytes[4];
-};
+    union {
+	/**
+	 * bytes[0] = most significant byte
+	 * bytes[3] = less significant byte
+	 */
+	uint8_t bytes[4];
 
-C_ASSERT(sizeof(struct ipv4_address) == 4);
+	/**
+	 * Address seen as a 32-bit value in big endian
+	 */
+	uint32_t value;
+    } __attribute__((packed));
+};
+C_ASSERT(sizeof(struct ipv4_address) == sizeof(uint32_t));
 
 /**
  * ARP packet layout in network byte order
@@ -346,6 +371,82 @@ struct udp_datagram {
     uint8_t data[];
 }; //  __attribute__((packed));
 
+enum arp_cache_entry_states {
+    ARP_ENTRY_INVALID = 0,
+    ARP_ENTRY_ARP_REQUEST_SENT, /* no reply received yet */
+    ARP_ENTRY_ARP_REPLY_RECEIVED,
+};
+
+/**
+ * ARP cache entry
+ */
+struct arp_cache_entry {
+    struct ipv4_address dest_ip_addr;
+    struct ethernet_mac_address dest_mac_addr;
+    enum arp_cache_entry_states state;
+
+    /**
+     * Timestamp in ticks when the last ARP request for this entry was sent.
+     * It is used to determine if we have waited too long for the ARP reply,
+     * and need to send another ARP request.
+     */
+    rtos_ticks_t arp_request_time_stamp;
+
+    /**
+     * Timestamp in ticks when the last ARP reply for this entry was received.
+     * It is used to determine when the entry has expired and a new ARP request
+     * must be sent.
+     */
+    rtos_ticks_t arp_reply_time_stamp;
+
+    /**
+     * Timestamp in ticks when the last lookup was done for this entry. It is
+     * used to determine the least recently used entry, for cache entry
+     * replacement.
+     */
+    rtos_ticks_t last_lookup_time_stamp;
+
+    /**
+     * Anchor node of the list of Tx packets waiting for ARP resolution
+     * of the IP address associated with this entry.
+     */
+    struct glist_node pending_tx_packet_list_anchor;
+
+    /**
+     * Mutex to serialize access to the 'pending_tx_packet_list_anchor' list
+     */
+    struct rtos_mutex pending_tx_packet_list_mutex;
+};
+
+/**
+ * Network end point
+ */
+struct network_end_point {
+    /**
+     * Local IPv4 address
+     */
+    struct ipv4_address local_ip_addr;
+
+    /**
+     * Subnet mask
+     */
+    struct ipv4_address subnet_mask;
+
+    /**
+     * Local IPv4 address
+     */
+    struct ipv4_address default_gateway_ip_addr;
+
+    /**
+     * Ethernet network interface (NIC)
+     */
+    const struct enet_device *enet_device_p;
+
+    /**
+     * ARP cache
+     */
+    struct arp_cache_entry arp_cache[ARP_CACHE_NUM_ENTRIES];
+};
 
 /**
  * Transport protocol end point
@@ -395,8 +496,14 @@ void networking_init(void);
 struct enet_device;
 
 void
-net_apr_send_request(const struct enet_device *enet_device_p,
+net_send_arp_request(const struct enet_device *enet_device_p,
 		     const struct ipv4_address *source_ip_addr_p,
 		     const struct ipv4_address *dest_ip_addr_p);
+
+void
+net_send_ip_packet(struct network_end_point *network_end_point_p,
+		   const struct ipv4_address *dest_ip_addr_p,
+		   struct network_packet *tx_packet_p,
+		   size_t data_payload_length);
 
 #endif /* _NETWORKING_H */

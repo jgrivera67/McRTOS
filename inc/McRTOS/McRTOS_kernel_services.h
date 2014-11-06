@@ -21,6 +21,16 @@
 extern "C" {
 #endif
 
+/**
+ * Calculate difference between two values of McRTOS clock ticks
+ */
+#define RTOS_TICKS_DELTA(_begin_ticks, _end_ticks) \
+        ((rtos_ticks_t)((int32_t)(_end_ticks) - \
+                         (int32_t)(_begin_ticks)))
+
+#define MILLISECONDS_TO_TICKS(_milli_secs) \
+        ((rtos_ticks_t)HOW_MANY(_milli_secs, RTOS_MILLISECONDS_PER_TICK))
+
 struct rtos_interrupt;
 struct rtos_thread_execution_stack;
 
@@ -826,6 +836,9 @@ rtos_k_thread_delay(_IN_ rtos_milliseconds_t num_milliseconds);
 _THREAD_CALLERS_ONLY_
 void
 rtos_k_thread_micro_delay(_IN_ rtos_microseconds_t num_microseconds);
+
+rtos_ticks_t
+rtos_k_get_ticks(void);
 
 _NEVER_RETURN_
 _THREAD_CALLERS_ONLY_

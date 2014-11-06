@@ -330,7 +330,7 @@ struct rtos_cpu_controller
     struct fdc_info cpc_failures_info;
 
     /**
-     * Anchor node node of the list of execution contexts that exist in the systems
+     * Anchor node of the list of execution contexts that exist in the systems
      */
     struct glist_node cpc_execution_contexts_list_anchor;
 
