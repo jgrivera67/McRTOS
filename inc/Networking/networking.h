@@ -29,10 +29,10 @@
 
 /**
  * Timeout to wait for an ARP reply after sending a non-gratuitous
- * ARP request
+ * ARP request (3 minutes)
  */
 #define ARP_REPLY_WAIT_TIMEOUT_IN_TICKS \
-	MILLISECONDS_TO_TICKS(5u * 1000)
+	MILLISECONDS_TO_TICKS(3u * 60 * 1000)
 
 /**
  * Convert a 16-bit value from host byte order to network byte order
@@ -58,7 +58,7 @@
  */
 #define ntoh32(_x)  byte_swap32(_x)
 
-#define ENET_COPY_MAC_ADDRESS(_dest, _src) \
+#define COPY_MAC_ADDRESS(_dest, _src) \
 	do {								\
 	    if ((uintptr_t)(_dest) % 4 == 0 &&				\
 	        (uintptr_t)(_src) % 4 == 0) {				\
@@ -76,7 +76,7 @@
 	    }								\
 	} while (0)
 
-#define ENET_COPY_IP_ADDRESS(_dest, _src) \
+#define COPY_IPv4_ADDRESS(_dest, _src) \
 	do {								\
 	    if ((uintptr_t)(_dest) % 4 == 0 &&				\
 	        (uintptr_t)(_src) % 4 == 0) {				\
@@ -89,6 +89,30 @@
 		    *(uint16_t *)((_src)->bytes + 2);			\
 	    }								\
 	} while (0)
+
+/**
+ * Build an IPv4 subnet mask in network byte order
+ */
+#define IPv4_SUBNET_MASK(_num_bits) MULTI_BIT_MASK(_num_bits, 0)
+
+#define SAME_IPv4_SUBNET(_local_ip_addr_p, _dest_ip_addr_p, _subnet_mask) \
+	(((_local_ip_addr_p)->value & (_subnet_mask)) == \
+	 ((_dest_ip_addr_p)->value & (_subnet_mask)))
+
+/**
+ * Returns pointer to the data payload area of a network packet
+ */
+#define GET_IPV4_DATA_PAYLOAD_AREA(_net_packet_p)   \
+        ((_net_packet_p)->data_buffer +		    \
+	 (sizeof(struct ethernet_header) +	    \
+	  sizeof(struct ipv4_header)))
+
+/**
+ * Returns pointer to the data payload area of a UDP datagram
+ */
+#define GET_UDP_DATA_PAYLOAD_AREA(_net_packet_p)	\
+        (GET_IPV4_DATA_PAYLOAD_AREA(_net_packet_p) +	\
+	 sizeof(struct udp_header))
 
 /**
  * Ethernet MAC address in network byte order
@@ -145,6 +169,27 @@ struct ipv4_address {
     } __attribute__((packed));
 };
 C_ASSERT(sizeof(struct ipv4_address) == sizeof(uint32_t));
+
+/**
+ * IPv6 address in network byte order
+ */
+struct ipv6_address {
+    union {
+	/**
+	 * bytes[0] = most significant byte
+	 * bytes[15] = less significant byte
+	 */
+	uint8_t bytes[16];
+
+	/**
+	 * Address seen as two 64-bit double words in big endian
+	 */
+	uint64_t dwords[2];
+    } __attribute__((packed));
+};
+C_ASSERT(sizeof(struct ipv6_address) == sizeof(uint64_t) * 2);
+
+
 
 /**
  * ARP packet layout in network byte order
@@ -211,18 +256,30 @@ C_ASSERT(offsetof(struct arp_packet, dest_mac_addr) == 18);
 C_ASSERT(offsetof(struct arp_packet, dest_ip_addr) == 24);
 
 /**
+ * Transport protocols encapsulated in IP packets
+ */
+enum l4_protocols {
+    TRANSPORT_PROTO_ICMP = 0x1,
+    TRANSPORT_PROTO_TCP =  0x6,
+    TRANSPORT_PROTO_UDP =  0x11
+};
+
+/**
  * Header of an IPv4 packet in network byte order
  * (An IPv4 packet is encapsulated in an Ethernet frame)
  */
 struct ipv4_header {
     /**
      * IP version and header length
+     * - Version is 4 for IPv4
+     * - Header length is in 32-bit words and if there are
+     *   no options, its value is 5
      */
     uint8_t version_and_header_length;
 #   define IP_VERSION_MASK	    MULTI_BIT_MASK(3, 0)
 #   define IP_VERSION_SHIFT	    0
 #   define IP_HEADER_LENGTH_MASK    MULTI_BIT_MASK(7, 4)
-#   define IP_HEADER_LENGTH_SHIFT   0
+#   define IP_HEADER_LENGTH_SHIFT   4
 
     /**
      * type of service
@@ -243,7 +300,7 @@ struct ipv4_header {
     uint16_t total_length;
 
     /**
-     * total packet length (header + data payload) in bytes
+     * Identifcation number for the IP packet
      * (hton16() must be invoked before writing this field.
      *  ntoh16() must be invoked after reading this field.)
      */
@@ -266,7 +323,7 @@ struct ipv4_header {
     uint8_t time_to_live;
 
     /**
-     * Transport protocol type
+     * Transport protocol type (values from enum l4_protocols)
      */
     uint8_t protocol_type;
 
@@ -288,6 +345,55 @@ struct ipv4_header {
     struct ipv4_address dest_ip_addr;
 }; //  __attribute__((packed));
 
+C_ASSERT(sizeof(struct ipv4_header) == 20);
+
+/**
+ * Header of an IPv6 packet in network byte order
+ * (An IPv6 packet is encapsulated in an Ethernet frame)
+ */
+struct ipv6_header {
+    /**
+     * First 32-bit word:
+     * - Version is 6 for IPv6
+     * - Header length is in 32-bit words and if there are
+     *   no options, its value is 5
+     */
+    uint32_t first_word;
+#   define IPv6_VERSION_MASK	    MULTI_BIT_MASK(3, 0)
+#   define IPv6_VERSION_SHIFT	    0
+#   define IPv6_TRAFFIC_CLASS_MASK  MULTI_BIT_MASK(11, 4)
+#   define IPv6_TRAFFIC_CLASS_SHIFT 4
+#   define IPv6_FLOW_LABEL_MASK	    MULTI_BIT_MASK(31, 12)
+#   define IPv6_FLOW_LABEL_SHIFT    12
+
+    /**
+     * Payload length
+     */
+    uint16_t payload_length;
+
+    /**
+     * Next header type (values from enum l4_protocols)
+     */
+    uint8_t next_header;
+
+    /**
+     * Hop limit
+     */
+    uint8_t hop_limit;
+
+    /**
+     * Source (sender) IPv6 address
+     */
+    struct ipv6_address source_ipv6_addr;
+
+    /**
+     * Destination (receiver) IPv6 address
+     */
+    struct ipv6_address dest_ipv6_addr;
+};
+
+C_ASSERT(sizeof(struct ipv6_header) == 40);
+
 /**
  * Ethernet frame layout
  */
@@ -305,19 +411,22 @@ C_ASSERT(offsetof(struct ethernet_frame, ipv4_header) ==
 	 sizeof(struct ethernet_header));
 
 /**
- * ICMP message layout
+ * IPv4 ICMP header layout
  * (An ICMP message is encapsulated in an IP packet)
  */
-struct icmp_message {
+struct ipv4_icmp_header {
     /**
      * Message type
      */
     uint8_t msg_type;
-
+#   define ICMP_TYPE_PING_REPLY	    0
+#   define ICMP_TYPE_PING_REQUEST   8
     /**
      * Message code
      */
     uint8_t msg_code;
+#   define ICMP_CODE_PING_REPLY	    0
+#   define ICMP_CODE_PING_REQUEST   0
 
     /**
      * message checksum
@@ -325,18 +434,15 @@ struct icmp_message {
      *  ntoh16() must be invoked after reading this field.)
      */
     uint16_t msg_checksum;
-
-    /**
-     * Data payload (if any)
-     */
-    uint8_t data[];
 }; //  __attribute__((packed));
 
+C_ASSERT(sizeof(struct ipv4_icmp_header) == 4);
+
 /**
- * UDP datagram layout
+ * UDP header layout
  * (A UDP datagram is encapsulated in an IP packet)
  */
-struct udp_datagram {
+struct udp_header {
     /**
      * Source port number
      * (hton16() must be invoked before writing this field.
@@ -364,12 +470,9 @@ struct udp_datagram {
      *  ntoh16() must be invoked after reading this field.)
      */
     uint16_t datagram_checksum;
-
-    /**
-     * Data payload (if any)
-     */
-    uint8_t data[];
 }; //  __attribute__((packed));
+
+C_ASSERT(sizeof(struct udp_header) == 8);
 
 enum arp_cache_entry_states {
     ARP_ENTRY_INVALID = 0,
@@ -378,7 +481,7 @@ enum arp_cache_entry_states {
 };
 
 /**
- * ARP cache entry
+ * IPv4 ARP cache entry
  */
 struct arp_cache_entry {
     struct ipv4_address dest_ip_addr;
@@ -418,19 +521,66 @@ struct arp_cache_entry {
     struct rtos_mutex pending_tx_packet_list_mutex;
 };
 
+enum neighbor_cache_entry_states {
+    NEIGHBOR_ENTRY_INVALID = 0,
+};
+
 /**
- * Network end point
+ * IPv6 neighbor cache entry
  */
-struct network_end_point {
+struct neighbor_cache_entry {
+    struct ipv6_address dest_ipv6_addr;
+    struct ethernet_mac_address dest_mac_addr;
+    enum neighbor_cache_entry_states state;
+
+#if 0 //???
+    /**
+     * Timestamp in ticks when the last ARP request for this entry was sent.
+     * It is used to determine if we have waited too long for the ARP reply,
+     * and need to send another ARP request.
+     */
+    rtos_ticks_t arp_request_time_stamp;
+
+    /**
+     * Timestamp in ticks when the last ARP reply for this entry was received.
+     * It is used to determine when the entry has expired and a new ARP request
+     * must be sent.
+     */
+    rtos_ticks_t arp_reply_time_stamp;
+
+    /**
+     * Timestamp in ticks when the last lookup was done for this entry. It is
+     * used to determine the least recently used entry, for cache entry
+     * replacement.
+     */
+    rtos_ticks_t last_lookup_time_stamp;
+
+    /**
+     * Anchor node of the list of Tx packets waiting for ARP resolution
+     * of the IP address associated with this entry.
+     */
+    struct glist_node pending_tx_packet_list_anchor;
+
+    /**
+     * Mutex to serialize access to the 'pending_tx_packet_list_anchor' list
+     */
+    struct rtos_mutex pending_tx_packet_list_mutex;
+#endif
+};
+
+/**
+ * IPv4 network end point
+ */
+struct ipv4_end_point {
     /**
      * Local IPv4 address
      */
     struct ipv4_address local_ip_addr;
 
     /**
-     * Subnet mask
+     * Subnet mask in network byte order
      */
-    struct ipv4_address subnet_mask;
+    uint32_t subnet_mask;
 
     /**
      * Local IPv4 address
@@ -438,9 +588,10 @@ struct network_end_point {
     struct ipv4_address default_gateway_ip_addr;
 
     /**
-     * Ethernet network interface (NIC)
+     * Sequence number to use as the 'identification' field of the next
+     * IP packet transmitted out of this network end-point
      */
-    const struct enet_device *enet_device_p;
+    uint16_t next_tx_ip_packet_seq_num;
 
     /**
      * ARP cache
@@ -449,11 +600,63 @@ struct network_end_point {
 };
 
 /**
- * Transport protocol end point
+ * IPv6 network end point
  */
-struct transport_end_point {
+
+struct ipv6_end_point {
     /**
-     * Protocol-specific port number
+     * Local IPv6 address
+     */
+    struct ipv6_address local_ip_addr;
+
+    /**
+     * Local IPv6 address
+     */
+    struct ipv6_address default_gateway_ip_addr;
+
+    /**
+     * Neighbor cache
+     */
+    struct neighbor_cache_entry neighbor_cache[ARP_CACHE_NUM_ENTRIES];
+};
+
+/**
+ * Local layer-3 (network layer) end point
+ */
+struct local_l3_end_point {
+#   define LOCAL_L3_END_POINT_SIGNATURE	GEN_SIGNATURE('L', '3', 'E', 'P')
+    uint32_t signature;
+
+    /**
+     * Ethernet network interface (NIC)
+     */
+    const struct enet_device *enet_device_p;
+
+    /**
+     * IPv4 end point (used if layer3_packet_type == ENET_IPv4_PACKET)
+     */
+    struct ipv4_end_point ipv4;
+
+    /**
+     * IPv6 end point (used if layer3_packet_type == ENET_IPv6_PACKET)
+     */
+    struct ipv6_end_point ipv6;
+};
+
+/**
+ * Local Layer-4 (transport layer) end point
+ *
+ * NOTE: There is no explicit IP address associated with a local l4
+ * end-point. The local IP address is implicitly "INADDR_ANY".
+ */
+struct local_l4_end_point {
+    /**
+     * Transport protocol type
+     */
+    enum l4_protocols protocol;
+
+    /**
+     * Protocol-specific port number (must be different from 0)
      */
     uint16_t port;
 };
@@ -501,9 +704,29 @@ net_send_arp_request(const struct enet_device *enet_device_p,
 		     const struct ipv4_address *dest_ip_addr_p);
 
 void
-net_send_ip_packet(struct network_end_point *network_end_point_p,
-		   const struct ipv4_address *dest_ip_addr_p,
-		   struct network_packet *tx_packet_p,
-		   size_t data_payload_length);
+net_send_ipv4_packet(struct local_l3_end_point *local_l3_end_point_p,
+		     const struct ipv4_address *dest_ip_addr_p,
+		     struct network_packet *tx_packet_p,
+		     size_t data_payload_length,
+		     enum l4_protocols l4_protocol);
+
+void
+net_send_ipv4_udp_packet(struct local_l4_end_point *local_l4_end_point_p,
+			 struct local_l3_end_point *local_l3_end_point_p,
+		         const struct ipv4_address *dest_ip_addr_p,
+			 uint16_t dest_port,
+		         struct network_packet *tx_packet_p,
+		         size_t data_payload_length);
+
+void
+net_send_ipv4_icmp_message(struct local_l3_end_point *local_l3_end_point_p,
+			   const struct ipv4_address *dest_ip_addr_p,
+		           struct network_packet *tx_packet_p,
+			   uint8_t msg_type,
+		           uint8_t msg_code,
+		           size_t data_payload_length);
+
+void
+net_send_ipv4_ping_request(const struct ipv4_address *dest_ip_addr_p);
 
 #endif /* _NETWORKING_H */

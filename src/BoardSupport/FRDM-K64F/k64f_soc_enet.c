@@ -178,6 +178,7 @@ enet_tx_buffer_descriptor_ring_init(const struct enet_device *enet_device_p)
 	tx_packet_p->signature = ENET_TX_PACKET_SIGNATURE;
 	tx_packet_p->state_flags = ENET_FRAME_IN_TX_POOL;
 	tx_packet_p->tx_buf_desc_p = buffer_desc_p;
+	GLIST_NODE_INIT(&tx_packet_p->node);
 	buffer_desc_p->data_buffer = tx_packet_p->data_buffer;
 	DBG_ASSERT((uintptr_t)buffer_desc_p->data_buffer %
 		   ENET_FRAME_DATA_BUFFER_ALIGNMENT == 0,
@@ -233,6 +234,7 @@ enet_rx_buffer_descriptor_ring_init(const struct enet_device *enet_device_p)
 	rx_packet_p->signature = ENET_RX_PACKET_SIGNATURE;
 	rx_packet_p->state_flags = ENET_FRAME_IN_RX_TRANSIT;
 	rx_packet_p->rx_buf_desc_p = buffer_desc_p;
+	GLIST_NODE_INIT(&rx_packet_p->node);
 	buffer_desc_p->data_buffer = rx_packet_p->data_buffer;
 	DBG_ASSERT((uintptr_t)buffer_desc_p->data_buffer %
 		   ENET_FRAME_DATA_BUFFER_ALIGNMENT == 0,
@@ -1023,6 +1025,7 @@ k64f_enet_receive_interrupt_e_handler(
 		continue;
 	    }
 
+	    rx_packet_p->total_length = buffer_desc_p->data_length;
 	    enet_enqueue_rx_packet(enet_device_p, rx_packet_p);
 	}
     }
@@ -1092,6 +1095,8 @@ enet_allocate_tx_packet(const struct enet_device *enet_device_p,
 	       tx_packet_p->signature, tx_packet_p);
     FDC_ASSERT(tx_packet_p->state_flags == ENET_FRAME_IN_TX_POOL,
 	       tx_packet_p->state_flags, enet_device_p);
+    FDC_ASSERT(GLIST_NODE_IS_UNLINKED(&tx_packet_p->node),
+	       &tx_packet_p->node, tx_packet_p);
 
     tx_packet_p->state_flags = ENET_FRAME_IN_TX_USE_BY_APP;
     if (free_after_tx_complete) {
@@ -1136,6 +1141,8 @@ enet_free_tx_packet(const struct enet_device *enet_device_p,
 	       tx_packet_p->signature, tx_packet_p);
     FDC_ASSERT(tx_packet_p->state_flags == ENET_FRAME_IN_TX_USE_BY_APP,
 	       tx_packet_p->state_flags, tx_packet_p);
+    FDC_ASSERT(GLIST_NODE_IS_UNLINKED(&tx_packet_p->node),
+	       &tx_packet_p->node, tx_packet_p);
 
     tx_packet_p->state_flags = ENET_FRAME_IN_TX_POOL;
 
@@ -1251,7 +1258,6 @@ enet_dequeue_rx_packet(const struct enet_device *enet_device_p,
 	       rx_buf_desc_p->data_length, rx_buf_desc_p);
 
     rx_packet_p->state_flags = ENET_FRAME_IN_RX_USE_BY_APP;
-    rx_packet_p->total_length = rx_buf_desc_p->data_length;
     *rx_packet_pp = rx_packet_p;
 }
 

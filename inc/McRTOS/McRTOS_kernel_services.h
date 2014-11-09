@@ -966,6 +966,14 @@ uint32_t
 rtos_k_atomic_fetch_sub_uint32(
     volatile uint32_t *counter_p, uint32_t value);
 
+uint16_t
+rtos_k_atomic_fetch_add_uint16(
+    volatile uint16_t *counter_p, uint16_t value);
+
+uint16_t
+rtos_k_atomic_fetch_sub_uint16(
+    volatile uint16_t *counter_p, uint16_t value);
+
 rtos_thread_prio_t
 rtos_k_find_highest_thread_priority(
     rtos_thread_prio_bitmap_t rtos_thread_prio_bitmap);
@@ -1102,6 +1110,12 @@ bool rtos_k_circular_buffer_is_empty(
 
 #define ATOMIC_POST_DECREMENT_UINT32(_counter_p) \
         rtos_k_atomic_fetch_sub_uint32(_counter_p, 1)
+
+#define ATOMIC_POST_INCREMENT_UINT16(_counter_p) \
+        rtos_k_atomic_fetch_add_uint16(_counter_p, 1)
+
+#define ATOMIC_POST_DECREMENT_UINT16(_counter_p) \
+        rtos_k_atomic_fetch_sub_uint16(_counter_p, 1)
 
 #define ATOMIC_POST_INCREMENT_POINTER(_pointer_p)                       \
         ((void *)rtos_k_atomic_fetch_add_uint32(                        \

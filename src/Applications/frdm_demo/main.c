@@ -31,7 +31,7 @@ enum app_thread_priorities
 static void app_hardware_init(void);
 static void app_hardware_stop(void);
 static void app_software_init(void);
-static void dummy_command(const char *cmd_line);
+static void ping_command(const char *cmd_line);
 static fdc_error_t hello_world_thread_f(void *arg);
 
 static fdc_error_t accelerometer_thread_f(void *arg);
@@ -106,9 +106,9 @@ static const struct rtos_console_command g_app_console_commands[] =
 {
     [0] =
     {
-        .cmd_name_p = "d",
-        .cmd_description_p = "Dummy command",
-        .cmd_function_p = dummy_command,
+        .cmd_name_p = "p",
+        .cmd_description_p = "ping command",
+        .cmd_function_p = ping_command,
     },
 };
 
@@ -189,9 +189,13 @@ void app_software_init(void)
 }
 
 static void
-dummy_command(const char *cmd_line)
+ping_command(const char *cmd_line)
 {
-    console_printf("This is a dummy command\n");
+    struct ipv4_address dest_ip_addr = {
+	.bytes = { 192, 168, 8, 1 }
+    };
+
+    net_send_ipv4_ping_request(&dest_ip_addr);
 }
 
 static fdc_error_t

@@ -98,7 +98,12 @@ C_ASSERT(offsetof(struct network_packet, data_buffer) %
 	 ((uintptr_t)(_data_buf) - offsetof(struct network_packet, data_buffer)))
 
 struct enet_rx_buffer_descriptor {
+    /**
+     * If the ENET_RX_BD_LAST_IN_FRAME bit is set in 'control', this is the
+     * frame length in bytes including CRC
+     */
     uint16_t data_length;
+
     uint16_t control;
 #   define  ENET_RX_BD_EMPTY_MASK			BIT(15)
 #   define  ENET_RX_BD_SOFTWARE_OWNERSHIP1_MASK		BIT(14)

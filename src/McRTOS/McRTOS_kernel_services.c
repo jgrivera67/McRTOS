@@ -3318,7 +3318,7 @@ rtos_k_disable_cpu_interrupts(void)
 
 
 /**
- * Increments atomically the value stored in *counter_p, and returns the
+ * Increments atomically the 32-bit value stored in *counter_p, and returns the
  * original value.
  *
  * @param   counter_p: Pointer to the counter to be incremented.
@@ -3347,7 +3347,7 @@ rtos_k_atomic_fetch_add_uint32(volatile uint32_t *counter_p, uint32_t value)
 
 
 /**
- * Decrements atomically the value stored in *counter_p, and returns the
+ * Decrements atomically the 32-bit value stored in *counter_p, and returns the
  * original value.
  *
  * @param   counter_p: Pointer to the counter to be decremented.
@@ -3364,6 +3364,64 @@ rtos_k_atomic_fetch_sub_uint32(volatile uint32_t *counter_p, uint32_t value)
     __disable_irq();
 
     uint32_t old_value = *counter_p;
+
+    *counter_p -= value;
+
+    if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
+        __enable_irq();
+    }
+
+    return old_value;
+}
+
+
+/**
+ * Increments atomically the 16-bit value stored in *counter_p, and returns the
+ * original value.
+ *
+ * @param   counter_p: Pointer to the counter to be incremented.
+ *
+ * @param   value: Increment value.
+ *
+ * @return  value of the counter prior to the increment.
+ */
+uint16_t
+rtos_k_atomic_fetch_add_uint16(volatile uint16_t *counter_p, uint16_t value)
+{
+    cpu_status_register_t old_primask = __get_PRIMASK();
+
+    __disable_irq();
+
+    uint16_t old_value = *counter_p;
+
+    *counter_p += value;
+
+    if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
+        __enable_irq();
+    }
+
+    return old_value;
+}
+
+
+/**
+ * Decrements atomically the 16-bit value stored in *counter_p, and returns the
+ * original value.
+ *
+ * @param   counter_p: Pointer to the counter to be decremented.
+ *
+ * @param   value: Decrement value.
+ *
+ * @return  value of the counter prior to the decrement.
+ */
+uint16_t
+rtos_k_atomic_fetch_sub_uint16(volatile uint16_t *counter_p, uint16_t value)
+{
+    cpu_status_register_t old_primask = __get_PRIMASK();
+
+    __disable_irq();
+
+    uint16_t old_value = *counter_p;
 
     *counter_p -= value;
 
