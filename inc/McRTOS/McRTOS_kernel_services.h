@@ -814,6 +814,37 @@ struct rtos_thread
 C_ASSERT(sizeof(struct rtos_thread) % SOC_CACHE_LINE_SIZE_IN_BYTES == 0);
 
 
+/**
+ * Generic queue
+ */
+struct rtos_queue {
+#   define RTOS_QUEUE_SIGNATURE  GEN_SIGNATURE('Q', 'U', 'E', 'U')
+    uint32_t signature;
+
+    /**
+     * Flag indicating if serialization to access the queue is to be done
+     * using a mutex (true), or by disabling interrupts (false)
+     */
+    bool use_mutex;
+
+    /**
+     * Anchor node of the linked list that represents the queue
+     */
+    struct glist_node list_anchor;
+
+    /**
+     * Mutex to serialize access to the queue. It is only meaningful if
+     * 'use_mutex' is true.
+     */
+    struct rtos_mutex mutex;
+
+    /**
+     * Condition variable to be signaled when the queue becomes non-empty
+     */
+    struct rtos_condvar non_empty_condvar;
+};
+
+
 _MAY_NOT_RETURN_
 fdc_error_t
 rtos_k_create_thread(
@@ -1104,6 +1135,21 @@ bool rtos_k_byte_circular_buffer_read(
 
 bool rtos_k_circular_buffer_is_empty(
 	_IN_ struct rtos_circular_buffer *circ_buf_p);
+
+void rtos_k_queue_init(
+	_IN_  const char *queue_name_p,
+	_IN_ bool use_mutex,
+	_OUT_ struct rtos_queue *queue_p);
+
+void
+rtos_k_queue_add(
+    _INOUT_ struct rtos_queue *queue_p,
+    _INOUT_ struct glist_node *elem_p);
+
+struct glist_node *
+rtos_k_queue_remove(
+    _INOUT_ struct rtos_queue *queue_p,
+    _IN_ rtos_milliseconds_t timeout_ms);
 
 #define ATOMIC_POST_INCREMENT_UINT32(_counter_p) \
         rtos_k_atomic_fetch_add_uint32(_counter_p, 1)

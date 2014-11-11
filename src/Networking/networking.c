@@ -15,6 +15,7 @@
 #include <McRTOS/utils.h>
 
 #pragma GCC diagnostic ignored "-Wunused-variable" // ???
+#pragma GCC diagnostic ignored "-Wunused-parameter" // ???
 
 /**
  * Ethernet link speed: 100 Mbps
@@ -56,19 +57,25 @@ static const struct rtos_thread_creation_params net_threads[] = {
 
 
 static void
-arp_cache_init(struct arp_cache_entry arp_cache[])
+arp_cache_init(struct arp_cache *arp_cache_p)
 {
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
+    rtos_k_mutex_init(
+	"ARP cache mutex",
+	cpu_id,
+	&arp_cache_p->mutex);
+
+    rtos_k_condvar_init(
+	"ARP cache updated condvar",
+	cpu_id,
+	&arp_cache_p->updated_condvar);
+
+
     for (unsigned int i = 0; i < ARP_CACHE_NUM_ENTRIES; i++) {
-	struct arp_cache_entry *entry_p = &arp_cache[i];
+	struct arp_cache_entry *entry_p = &arp_cache_p->entries[i];
 
 	entry_p->state = ARP_ENTRY_INVALID;
-	GLIST_NODE_INIT(&entry_p->pending_tx_packet_list_anchor);
-	rtos_k_mutex_init(
-	    "ARP cache entry mutex",
-	    cpu_id,
-	    &entry_p->pending_tx_packet_list_mutex);
     }
 }
 
@@ -88,7 +95,7 @@ net_send_arp_request(const struct enet_device *enet_device_p,
     struct ethernet_frame *enet_frame =
 	(struct ethernet_frame *)tx_packet_p->data_buffer;
 
-#if 0 // Hw does this
+#if 0 // Hardware does this
     COPY_MAC_ADDRESS(&enet_frame->enet_header.source_mac_addr,
 		     &enet_device_p->mac_address);
 #endif
@@ -103,12 +110,12 @@ net_send_arp_request(const struct enet_device *enet_device_p,
     enet_frame->arp_packet.operation = hton16(ARP_REQUEST);
     COPY_MAC_ADDRESS(&enet_frame->arp_packet.source_mac_addr,
 		     &enet_device_p->mac_address);
-    COPY_IPv4_ADDRESS(&enet_frame->arp_packet.source_ip_addr,
-		      source_ip_addr_p);
+    COPY_UNALIGNED_IPv4_ADDRESS(&enet_frame->arp_packet.source_ip_addr,
+				source_ip_addr_p);
     COPY_MAC_ADDRESS(&enet_frame->arp_packet.dest_mac_addr,
 		     &enet_null_mac_addr);
-    COPY_IPv4_ADDRESS(&enet_frame->arp_packet.dest_ip_addr,
-		      dest_ip_addr_p);
+    COPY_UNALIGNED_IPv4_ADDRESS(&enet_frame->arp_packet.dest_ip_addr,
+		                dest_ip_addr_p);
 
     tx_packet_p->total_length =
 	sizeof(struct ethernet_header) + sizeof(struct arp_packet);
@@ -132,7 +139,7 @@ networking_init(void)
     for (unsigned int i = 0; i < ARRAY_SIZE(g_local_l3_end_points); i ++) {
 	struct local_l3_end_point *l3_end_point_p = &g_local_l3_end_points[i];
 
-	arp_cache_init(l3_end_point_p->ipv4.arp_cache);
+	arp_cache_init(&l3_end_point_p->ipv4.arp_cache);
 	//TODO: Init IPv6 neighbor cache
     }
 
@@ -154,10 +161,131 @@ networking_init(void)
 }
 
 
-static bool
-arp_cache_lookup(struct local_l3_end_point *local_l3_end_point_p,
+
+static struct arp_cache_entry *
+arp_cache_lookup(struct arp_cache *arp_cache_p,
+		 const struct ipv4_address *dest_ip_addr_p)
+{
+    unsigned int i;
+    struct arp_cache_entry *chosen_entry_p = NULL;
+
+    for (i = 0; i < ARP_CACHE_NUM_ENTRIES; i++) {
+	struct arp_cache_entry *entry_p = &arp_cache_p->entries[i];
+
+	if (entry_p->state == ARP_ENTRY_INVALID) {
+	    continue;
+	}
+
+	if (entry_p->dest_ip_addr.value == dest_ip_addr_p->value) {
+	    entry_p->last_lookup_time_stamp = rtos_k_get_ticks();
+	    chosen_entry_p = entry_p;
+	    break;
+	}
+
+    }
+
+    return chosen_entry_p;
+}
+
+
+static fdc_error_t
+find_dest_mac_addr(struct local_l3_end_point *local_l3_end_point_p,
+		   const struct ipv4_address *dest_ip_addr_p,
+		   struct ethernet_mac_address *dest_mac_addr_p)
+{
+    unsigned int arp_request_retries = 0;
+    struct arp_cache_entry *arp_entry_p = NULL;
+    struct arp_cache *arp_cache_p = &local_l3_end_point_p->ipv4.arp_cache;
+    fdc_error_t fdc_error;
+
+    rtos_k_mutex_acquire(&arp_cache_p->mutex);
+    for ( ; ; ) {
+	bool send_arp_request = false;
+	arp_entry_p = arp_cache_lookup(arp_cache_p, dest_ip_addr_p);
+	rtos_ticks_t current_ticks = rtos_k_get_ticks();
+
+	if (arp_entry_p == NULL) {
+	    send_arp_request = true;
+	} else if (arp_entry_p->state == ARP_ENTRY_ARP_REPLY_RECEIVED) {
+	    if (RTOS_TICKS_DELTA(arp_entry_p->arp_reply_time_stamp, current_ticks) <
+		ARP_CACHE_ENTRY_LIFETIME_IN_TICKS) {
+		/*
+		 * ARP cache hit
+		 */
+		*dest_mac_addr_p = arp_entry_p->dest_mac_addr;
+		break;
+	    } else {
+		/*
+		 * ARP entry expired, send a new ARP request:
+		 */
+		send_arp_request = true;
+	    }
+	} else {
+	    FDC_ASSERT(arp_entry_p->state == ARP_ENTRY_ARP_REQUEST_SENT,
+		       arp_entry_p->state, arp_entry_p);
+
+	    if (RTOS_TICKS_DELTA(arp_entry_p->arp_request_time_stamp, current_ticks) >=
+		ARP_REPLY_WAIT_TIMEOUT_IN_TICKS) {
+		/*
+		 * Re-send ARP request:
+		 */
+		capture_fdc_msg_printf("Outstanding ARP request re-sent for IP address: %u%u%u%u\n",
+				       dest_ip_addr_p->bytes[0],
+				       dest_ip_addr_p->bytes[1],
+				       dest_ip_addr_p->bytes[2],
+				       dest_ip_addr_p->bytes[3]);
+
+		send_arp_request = true;
+	    }
+	}
+
+	/*
+	 * Send ARP request if necessary:
+	 */
+	if (send_arp_request) {
+	    if (arp_request_retries == ARP_REQUEST_MAX_RETRIES) {
+		fdc_error = CAPTURE_FDC_ERROR("Unreachable IP address",
+					      dest_ip_addr_p->value, 0);
+
+		capture_fdc_msg_printf("Unreachable IP address: %u%u%u%u\n",
+				       dest_ip_addr_p->bytes[0],
+				       dest_ip_addr_p->bytes[1],
+				       dest_ip_addr_p->bytes[2],
+				       dest_ip_addr_p->bytes[3]);
+
+		goto common_exit;
+	    }
+
+	    arp_request_retries ++;
+	    if (arp_entry_p != NULL) {
+		arp_entry_p->arp_request_time_stamp = rtos_k_get_ticks();
+		arp_entry_p->state = ARP_ENTRY_ARP_REQUEST_SENT;
+	    }
+
+	    net_send_arp_request(local_l3_end_point_p->enet_device_p,
+				 &local_l3_end_point_p->ipv4.local_ip_addr,
+				 dest_ip_addr_p);
+	}
+
+	/*
+	 * Wait for ARP cache update:
+	 */
+	rtos_condvar_wait(&arp_cache_p->updated_condvar, &arp_cache_p->mutex, NULL);
+    }
+
+    fdc_error = 0;
+
+common_exit:
+    rtos_k_mutex_release(&arp_cache_p->mutex);
+    return fdc_error;
+}
+
+
+#if 0 //????
+static void
+arp_cache_lookup(struct arp_cache *arp_cache_p,
 		 const struct ipv4_address *dest_ip_addr_p,
-		 struct arp_cache_entry **arp_entry_pp)
+		 struct ethernet_mac_address *dest_mac_addr)
 {
     unsigned int i;
     struct arp_cache_entry *first_free_entry_p = NULL;
@@ -166,9 +294,11 @@ arp_cache_lookup(struct local_l3_end_point *local_l3_end_point_p,
     bool dest_mac_addr_found = false;
     bool send_arp_request = false;
     struct arp_cache_entry *chosen_entry_p = NULL;
+    struct arp_cache *arp_cache_p = &local_l3_end_point_p->ipv4.arp_cache;
 
+    rtos_k_mutex_acquire(&arp_cache_p->mutex);
     for (i = 0; i < ARP_CACHE_NUM_ENTRIES; i++) {
-	struct arp_cache_entry *entry_p = &local_l3_end_point_p->ipv4.arp_cache[i];
+	struct arp_cache_entry *entry_p = &arp_cache_p->entries[i];
 	rtos_ticks_t current_ticks = rtos_k_get_ticks();
 
 	if (entry_p->state == ARP_ENTRY_INVALID) {
@@ -265,15 +395,17 @@ arp_cache_lookup(struct local_l3_end_point *local_l3_end_point_p,
 	chosen_entry_p->state = ARP_ENTRY_ARP_REQUEST_SENT;
     }
 
+    rtos_k_mutex_release(&arp_cache_p->mutex);
     FDC_ASSERT(chosen_entry_p != NULL, 0, 0);
     *arp_entry_pp = chosen_entry_p;
     return dest_mac_addr_found;
 }
+#endif //???
 
 /**
  * Sends an IPv4 packet over Ethernet
  */
-void
+fdc_error_t
 net_send_ipv4_packet(struct local_l3_end_point *local_l3_end_point_p,
 		     const struct ipv4_address *dest_ip_addr_p,
 		     struct network_packet *tx_packet_p,
@@ -281,7 +413,8 @@ net_send_ipv4_packet(struct local_l3_end_point *local_l3_end_point_p,
 		     enum l4_protocols l4_protocol)
 {
     struct arp_cache_entry *arp_entry_p = NULL;
-    bool arp_cache_hit;
+    struct ethernet_mac_address dest_mac_addr;
+    fdc_error_t fdc_error;
 
     FDC_ASSERT(tx_packet_p->signature == ENET_TX_PACKET_SIGNATURE,
 	       tx_packet_p->signature, tx_packet_p);
@@ -325,10 +458,10 @@ net_send_ipv4_packet(struct local_l3_end_point *local_l3_end_point_p,
      * NOTE: enet_frame->ipv4_header.header_checksum is filled by hardware
      */
 
-    COPY_IPv4_ADDRESS(&enet_frame->ipv4_header.source_ip_addr,
-		      &local_l3_end_point_p->ipv4.local_ip_addr);
-    COPY_IPv4_ADDRESS(&enet_frame->ipv4_header.dest_ip_addr,
-		      dest_ip_addr_p);
+    enet_frame->ipv4_header.source_ip_addr.value =
+	local_l3_end_point_p->ipv4.local_ip_addr.value;
+
+    enet_frame->ipv4_header.dest_ip_addr.value = dest_ip_addr_p->value;
 
    /*
     * Populate Ethernet header
@@ -351,28 +484,26 @@ net_send_ipv4_packet(struct local_l3_end_point *local_l3_end_point_p,
     if (SAME_IPv4_SUBNET(&local_l3_end_point_p->ipv4.local_ip_addr,
 		         dest_ip_addr_p,
 			 local_l3_end_point_p->ipv4.subnet_mask)) {
-	arp_cache_hit = arp_cache_lookup(local_l3_end_point_p,
-					 dest_ip_addr_p,
-		                         &arp_entry_p);
+	 fdc_error = find_dest_mac_addr(local_l3_end_point_p,
+					dest_ip_addr_p,
+					&dest_mac_addr);
     } else {
-	arp_cache_hit = arp_cache_lookup(local_l3_end_point_p,
-					 &local_l3_end_point_p->
-					     ipv4.default_gateway_ip_addr,
-		                         &arp_entry_p);
+	 fdc_error = find_dest_mac_addr(local_l3_end_point_p,
+					&local_l3_end_point_p->ipv4.default_gateway_ip_addr,
+					&dest_mac_addr);
     }
 
-    if (!arp_cache_hit) {
-	rtos_mutex_acquire(&arp_entry_p->pending_tx_packet_list_mutex);
-	glist_add_tail_elem(&arp_entry_p->pending_tx_packet_list_anchor,
-			    &tx_packet_p->node);
-	rtos_mutex_release(&arp_entry_p->pending_tx_packet_list_mutex);
-	return;
+    if (fdc_error != 0) {
+	return fdc_error;
     }
 
-    COPY_MAC_ADDRESS(&enet_frame->enet_header.dest_mac_addr,
-		     &arp_entry_p->dest_mac_addr);
+    COPY_MAC_ADDRESS(&enet_frame->enet_header.dest_mac_addr, &dest_mac_addr);
 
+    /*
+     * Transmit packet:
+     */
     enet_start_xmit(enet_device_p, tx_packet_p);
+    return 0;
 }
 
 
@@ -502,17 +633,18 @@ net_send_ipv4_ping_request(const struct ipv4_address *dest_ip_addr_p)
 
 
 static void
-net_receive_arp_packet(struct network_packet *rx_packet_p)
+net_receive_arp_packet(struct local_l3_end_point *local_l3_end_point_p,
+	               struct network_packet *rx_packet_p)
 {
 
     FDC_ASSERT(rx_packet_p->total_length >=
 	       sizeof(struct ethernet_header) + sizeof(struct arp_packet),
 	       rx_packet_p->total_length, rx_packet_p);
 
-    struct ethernet_frame *rx_frame =
+    struct ethernet_frame *rx_frame_p =
 	(struct ethernet_frame *)rx_packet_p->data_buffer;
 
-    uint16_t arp_operation = ntoh16(rx_frame->arp_packet.operation);
+    uint16_t arp_operation = ntoh16(rx_frame_p->arp_packet.operation);
 
     //???
     CONSOLE_POS_PRINTF(31,1,
@@ -521,39 +653,76 @@ net_receive_arp_packet(struct network_packet *rx_packet_p)
 		"source mac addr: %x:%x:%x:%x:%x:%x "
 		"dest mac addr: %x:%x:%x:%x:%x:%x\n",
 		arp_operation,
-		rx_frame->arp_packet.source_mac_addr.bytes[0],
-		rx_frame->arp_packet.source_mac_addr.bytes[1],
-		rx_frame->arp_packet.source_mac_addr.bytes[2],
-		rx_frame->arp_packet.source_mac_addr.bytes[3],
-		rx_frame->arp_packet.source_mac_addr.bytes[4],
-		rx_frame->arp_packet.source_mac_addr.bytes[5],
-		rx_frame->arp_packet.dest_mac_addr.bytes[0],
-		rx_frame->arp_packet.dest_mac_addr.bytes[1],
-		rx_frame->arp_packet.dest_mac_addr.bytes[2],
-		rx_frame->arp_packet.dest_mac_addr.bytes[3],
-		rx_frame->arp_packet.dest_mac_addr.bytes[4],
-		rx_frame->arp_packet.dest_mac_addr.bytes[5]);
+		rx_frame_p->arp_packet.source_mac_addr.bytes[0],
+		rx_frame_p->arp_packet.source_mac_addr.bytes[1],
+		rx_frame_p->arp_packet.source_mac_addr.bytes[2],
+		rx_frame_p->arp_packet.source_mac_addr.bytes[3],
+		rx_frame_p->arp_packet.source_mac_addr.bytes[4],
+		rx_frame_p->arp_packet.source_mac_addr.bytes[5],
+		rx_frame_p->arp_packet.dest_mac_addr.bytes[0],
+		rx_frame_p->arp_packet.dest_mac_addr.bytes[1],
+		rx_frame_p->arp_packet.dest_mac_addr.bytes[2],
+		rx_frame_p->arp_packet.dest_mac_addr.bytes[3],
+		rx_frame_p->arp_packet.dest_mac_addr.bytes[4],
+		rx_frame_p->arp_packet.dest_mac_addr.bytes[5]);
     //???
 
-    switch(arp_operation) {
-	case ARP_REQUEST:
-	    break;
-	case ARP_REPLY:
-#if 0 //???
-	    apr_replies_received_count++;
-	    CONSOLE_POS_PRINTF(30, 1, "APR replies received %8u", apr_replies_received_count);
-#endif
-	    break;
-	default:
-	    capture_fdc_msg_printf("Recieved ARP packet with unsupported operation (%#x)\n",
-		                   arp_operation);
+    if (arp_operation == ARP_REQUEST || arp_operation == ARP_REPLY) {
+	FDC_ASSERT(rx_frame_p->arp_packet.link_addr_type == hton16(0x1),
+	           rx_frame_p->arp_packet.link_addr_type, rx_frame_p);
+	FDC_ASSERT(rx_frame_p->arp_packet.network_addr_type == hton16(ENET_IPv4_PACKET),
+		   rx_frame_p->arp_packet.network_addr_type, rx_frame_p);
+	FDC_ASSERT(rx_frame_p->arp_packet.link_addr_size == sizeof(struct ethernet_mac_address),
+		   rx_frame_p->arp_packet.network_addr_size, rx_frame_p);
+	FDC_ASSERT(rx_frame_p->arp_packet.network_addr_size == sizeof(struct ipv4_address),
+		   rx_frame_p->arp_packet.network_addr_size, rx_frame_p);
+    }
 
+    switch(arp_operation) {
+    case ARP_REQUEST:
+	if (UNALIGNED_IPv4_ADDRESSES_EQUAL(&rx_frame_p->arp_packet.dest_ip_addr,
+				           &local_l3_end_point_p->ipv4.local_ip_addr)) {
+	    /*
+	     * Send ARP reply
+	     */
+	}
+
+	/*
+	 * Update ARP cache with (source IP addr, source MAC addr)
+	 */
+
+	break;
+    case ARP_REPLY:
+	FDC_ASSERT(
+	    UNALIGNED_IPv4_ADDRESSES_EQUAL(&rx_frame_p->arp_packet.dest_ip_addr,
+					   &local_l3_end_point_p->ipv4.local_ip_addr),
+	    &rx_frame_p->arp_packet.dest_ip_addr,
+	    &local_l3_end_point_p->ipv4.local_ip_addr);
+
+	FDC_ASSERT(
+	    MAC_ADDRESSES_EQUAL(&rx_frame_p->arp_packet.dest_mac_addr,
+				&local_l3_end_point_p->enet_device_p->mac_address),
+	    &rx_frame_p->arp_packet.dest_mac_addr,
+	    &local_l3_end_point_p->enet_device_p->mac_address);
+
+	/*
+	 * Update ARP cache with (source IP addr, source MAC addr)
+	 */
+#if 0 //???
+	apr_replies_received_count++;
+	CONSOLE_POS_PRINTF(30, 1, "APR replies received %8u", apr_replies_received_count);
+#endif
+	break;
+    default:
+	capture_fdc_msg_printf("Recieved ARP packet with unsupported operation (%#x)\n",
+			       arp_operation);
     }
 }
 
 
 static void
-net_receive_ipv4_packet(struct network_packet *rx_packet_p)
+net_receive_ipv4_packet(struct local_l3_end_point *local_l3_end_point_p,
+	                struct network_packet *rx_packet_p)
 {
 
     FDC_ASSERT(rx_packet_p->total_length >=
@@ -568,7 +737,8 @@ net_receive_ipv4_packet(struct network_packet *rx_packet_p)
 
 
 static void
-net_receive_ipv6_packet(struct network_packet *rx_packet_p)
+net_receive_ipv6_packet(struct local_l3_end_point *local_l3_end_point_p,
+		        struct network_packet *rx_packet_p)
 {
 
     FDC_ASSERT(rx_packet_p->total_length >=
@@ -622,13 +792,13 @@ net_receive_thread_f(void *arg)
 
 	switch (ntoh16(rx_frame->enet_header.frame_type)) {
 	case ENET_ARP_PACKET:
-	    net_receive_arp_packet(rx_packet_p);
+	    net_receive_arp_packet(local_l3_end_point_p, rx_packet_p);
 	    break;
 	case ENET_IPv4_PACKET:
-	    net_receive_ipv4_packet(rx_packet_p);
+	    net_receive_ipv4_packet(local_l3_end_point_p, rx_packet_p);
 	    break;
 	case ENET_IPv6_PACKET:
-	    net_receive_ipv6_packet(rx_packet_p);
+	    net_receive_ipv6_packet(local_l3_end_point_p, rx_packet_p);
 	    break;
 	default:
 	    capture_fdc_msg_printf("Received frame of unknown type: %#x\n",

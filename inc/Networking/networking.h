@@ -17,9 +17,14 @@
 #define NETWORK_MTU 1500
 
 /**
- * Number of entries for the ARP cache table
+ * Number of entries for the IPv4 ARP cache table
  */
 #define ARP_CACHE_NUM_ENTRIES	16
+
+/**
+ * Number of entries for the IPv6 Neighbor cache table
+ */
+#define NEIGHBOR_CACHE_NUM_ENTRIES  16
 
 /**
  * ARP cache entry lifetime in ticks (20 minutes)
@@ -33,6 +38,12 @@
  */
 #define ARP_REPLY_WAIT_TIMEOUT_IN_TICKS \
 	MILLISECONDS_TO_TICKS(3u * 60 * 1000)
+
+/**
+ * Maximum number of ARP requests to be sent for a given destination
+ * IP address, before failing with "unreachable destination".
+ */
+#define ARP_REQUEST_MAX_RETRIES	8
 
 /**
  * Convert a 16-bit value from host byte order to network byte order
@@ -58,37 +69,68 @@
  */
 #define ntoh32(_x)  byte_swap32(_x)
 
-#define COPY_MAC_ADDRESS(_dest, _src) \
+/**
+ * Copies a MAC address. The source and destination must be at least
+ * 2-byte aligned
+ */
+#define COPY_MAC_ADDRESS(_dest_p, _src_p) \
 	do {								\
-	    if ((uintptr_t)(_dest) % 4 == 0 &&				\
-	        (uintptr_t)(_src) % 4 == 0) {				\
-		*(uint32_t *)((_dest)->bytes) =				\
-		    *(uint32_t *)((_src)->bytes);			\
-		*(uint16_t *)((_dest)->bytes + 4) =			\
-		    *(uint16_t *)((_src)->bytes + 4);			\
+	    if ((uintptr_t)(_dest_p) % 4 == 0 &&			\
+	        (uintptr_t)(_src_p) % 4 == 0) {				\
+		*(uint32_t *)((_dest_p)->bytes) =			\
+		    *(uint32_t *)((_src_p)->bytes);			\
+		*(uint16_t *)((_dest_p)->bytes + 4) =			\
+		    *(uint16_t *)((_src_p)->bytes + 4);			\
 	    } else {							\
-		*(uint16_t *)((_dest)->bytes) =				\
-		    *(uint16_t *)((_src)->bytes);			\
-		*(uint16_t *)((_dest)->bytes + 2) =			\
-		    *(uint16_t *)((_src)->bytes + 2);			\
-		*(uint16_t *)((_dest)->bytes + 4) =			\
-		    *(uint16_t *)((_src)->bytes + 4);			\
+		*(uint16_t *)((_dest_p)->bytes) =			\
+		    *(uint16_t *)((_src_p)->bytes);			\
+		*(uint16_t *)((_dest_p)->bytes + 2) =			\
+		    *(uint16_t *)((_src_p)->bytes + 2);			\
+		*(uint16_t *)((_dest_p)->bytes + 4) =			\
+		    *(uint16_t *)((_src_p)->bytes + 4);			\
 	    }								\
 	} while (0)
 
-#define COPY_IPv4_ADDRESS(_dest, _src) \
+/**
+ * Compares two MAC addresses. Their storage must be at least 2-byte aligned
+ */
+#define MAC_ADDRESSES_EQUAL(_mac_addr1_p, _mac_addr2_p) \
+	(((uintptr_t)(_mac_addr1_p) % 4 == 0 &&				\
+	  (uintptr_t)(_mac_addr2_p) % 4 == 0)				\
+	 ?								\
+	 (*(uint32_t *)((_mac_addr1_p)->bytes) ==			\
+	     *(uint32_t *)((_mac_addr2_p)->bytes) &&			\
+	  *(uint16_t *)((_mac_addr1_p)->bytes + 4) ==			\
+	     *(uint16_t *)((_mac_addr2_p)->bytes + 4))			\
+	 : 							        \
+	 (*(uint16_t *)((_mac_addr1_p)->bytes) ==			\
+	     *(uint16_t *)((_mac_addr2_p)->bytes) &&			\
+	  *(uint16_t *)((_mac_addr1_p)->bytes + 2) ==			\
+	     *(uint16_t *)((_mac_addr2_p)->bytes + 2) &&		\
+	  *(uint16_t *)((_mac_addr1_p)->bytes + 4) ==			\
+	     *(uint16_t *)((_mac_addr2_p)->bytes + 4)))
+
+/**
+ * Copies an IPv4 address, where the source or destination are not 4-byte
+ * aligned, but they must be at least 2-byte aligned.
+ */
+#define COPY_UNALIGNED_IPv4_ADDRESS(_dest_p, _src_p) \
 	do {								\
-	    if ((uintptr_t)(_dest) % 4 == 0 &&				\
-	        (uintptr_t)(_src) % 4 == 0) {				\
-		*(uint32_t *)((_dest)->bytes) =				\
-		    *(uint32_t *)((_src)->bytes);			\
-	    } else {							\
-		*(uint16_t *)((_dest)->bytes) =				\
-		    *(uint16_t *)((_src)->bytes);			\
-		*(uint16_t *)((_dest)->bytes + 2) =			\
-		    *(uint16_t *)((_src)->bytes + 2);			\
-	    }								\
+	    *(uint16_t *)((_dest_p)->bytes) =				\
+		*(uint16_t *)((_src_p)->bytes);				\
+	    *(uint16_t *)((_dest_p)->bytes + 2) =			\
+		*(uint16_t *)((_src_p)->bytes + 2);			\
 	} while (0)
+
+/**
+ * Compares two IPv4 addresses stored at locations that are not 4-byte
+ * aligned, but they must be at least 2-byte aligned.
+ */
+#define UNALIGNED_IPv4_ADDRESSES_EQUAL(_ip_addr1_p, _ip_addr2_p) \
+	(*(uint16_t *)((_ip_addr1_p)->bytes) ==				\
+	    *(uint16_t *)((_ip_addr2_p)->bytes) &&			\
+	 *(uint16_t *)((_ip_addr1_p)->bytes + 2) ==			\
+	    *(uint16_t *)((_ip_addr2_p)->bytes + 2))
 
 /**
  * Build an IPv4 subnet mask in network byte order
@@ -508,17 +550,26 @@ struct arp_cache_entry {
      * replacement.
      */
     rtos_ticks_t last_lookup_time_stamp;
+};
+
+/**
+ * IPv4 ARP cache
+ */
+struct arp_cache {
+    /**
+     * Mutex to serialize access to the ARP cache
+     */
+    struct rtos_mutex mutex;
 
     /**
-     * Anchor node of the list of Tx packets waiting for ARP resolution
-     * of the IP address associated with this entry.
+     * Condvar signales when the ARP cache is updated
      */
-    struct glist_node pending_tx_packet_list_anchor;
+    struct rtos_condvar updated_condvar;
 
     /**
-     * Mutex to serialize access to the 'pending_tx_packet_list_anchor' list
+     * Array of cache entries
      */
-    struct rtos_mutex pending_tx_packet_list_mutex;
+    struct arp_cache_entry entries[ARP_CACHE_NUM_ENTRIES];
 };
 
 enum neighbor_cache_entry_states {
@@ -532,41 +583,23 @@ struct neighbor_cache_entry {
     struct ipv6_address dest_ipv6_addr;
     struct ethernet_mac_address dest_mac_addr;
     enum neighbor_cache_entry_states state;
-
-#if 0 //???
-    /**
-     * Timestamp in ticks when the last ARP request for this entry was sent.
-     * It is used to determine if we have waited too long for the ARP reply,
-     * and need to send another ARP request.
-     */
-    rtos_ticks_t arp_request_time_stamp;
-
-    /**
-     * Timestamp in ticks when the last ARP reply for this entry was received.
-     * It is used to determine when the entry has expired and a new ARP request
-     * must be sent.
-     */
-    rtos_ticks_t arp_reply_time_stamp;
-
-    /**
-     * Timestamp in ticks when the last lookup was done for this entry. It is
-     * used to determine the least recently used entry, for cache entry
-     * replacement.
-     */
-    rtos_ticks_t last_lookup_time_stamp;
-
-    /**
-     * Anchor node of the list of Tx packets waiting for ARP resolution
-     * of the IP address associated with this entry.
-     */
-    struct glist_node pending_tx_packet_list_anchor;
-
-    /**
-     * Mutex to serialize access to the 'pending_tx_packet_list_anchor' list
-     */
-    struct rtos_mutex pending_tx_packet_list_mutex;
-#endif
 };
+
+/**
+ * IPv6 Neighbor cache
+ */
+struct neighbor_cache {
+    /**
+     * Mutex to serialize access to the Neighbor cache
+     */
+    struct rtos_mutex mutex;
+
+    /**
+     * Array of cache entries
+     */
+    struct neighbor_cache_entry entries[NEIGHBOR_CACHE_NUM_ENTRIES];
+};
+
 
 /**
  * IPv4 network end point
@@ -596,7 +629,7 @@ struct ipv4_end_point {
     /**
      * ARP cache
      */
-    struct arp_cache_entry arp_cache[ARP_CACHE_NUM_ENTRIES];
+    struct arp_cache arp_cache;
 };
 
 /**
@@ -617,7 +650,7 @@ struct ipv6_end_point {
     /**
      * Neighbor cache
      */
-    struct neighbor_cache_entry neighbor_cache[ARP_CACHE_NUM_ENTRIES];
+    struct neighbor_cache neighbor_cache;
 };
 
 /**
@@ -703,7 +736,7 @@ net_send_arp_request(const struct enet_device *enet_device_p,
 		     const struct ipv4_address *source_ip_addr_p,
 		     const struct ipv4_address *dest_ip_addr_p);
 
-void
+fdc_error_t
 net_send_ipv4_packet(struct local_l3_end_point *local_l3_end_point_p,
 		     const struct ipv4_address *dest_ip_addr_p,
 		     struct network_packet *tx_packet_p,

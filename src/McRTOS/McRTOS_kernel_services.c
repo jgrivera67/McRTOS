@@ -3278,6 +3278,128 @@ check_circular_buffer_invariants(
 }
 
 
+/**
+ * Initializes a generic queue
+ */
+void
+rtos_k_queue_init(
+    _IN_  const char *queue_name_p,
+    _IN_ bool use_mutex,
+    _OUT_ struct rtos_queue *queue_p)
+{
+    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
+
+    queue_p->signature = RTOS_QUEUE_SIGNATURE;
+    GLIST_NODE_INIT(&queue_p->list_anchor);
+    queue_p->use_mutex = use_mutex;
+    if (use_mutex) {
+	rtos_k_mutex_init(queue_name_p, cpu_id, &queue_p->mutex);
+    }
+
+    rtos_k_condvar_init(queue_name_p, cpu_id, &queue_p->non_empty_condvar);
+}
+
+
+/**
+ * Adds an element at the end of a generic queue
+ */
+void
+rtos_k_queue_add(
+    _INOUT_ struct rtos_queue *queue_p,
+    _INOUT_ struct glist_node *elem_p)
+{
+    FDC_ASSERT(queue_p->signature == RTOS_QUEUE_SIGNATURE,
+	       queue_p->signature, queue_p);
+
+    if (queue_p->use_mutex) {
+	rtos_k_mutex_acquire(&queue_p->mutex);
+	glist_add_tail_elem(&queue_p->list_anchor, elem_p);
+	rtos_k_mutex_release(&queue_p->mutex);
+    } else {
+	cpu_status_register_t saved_cpu_intr_mask = rtos_k_disable_cpu_interrupts();
+	glist_add_tail_elem(&queue_p->list_anchor, elem_p);
+        rtos_k_restore_cpu_interrupts(saved_cpu_intr_mask);
+    }
+
+    rtos_k_condvar_signal(&queue_p->non_empty_condvar);
+}
+
+
+/**
+ * Removes the element from the head of a generic queue, if the queue
+ * is not empty. Otherwise, it waits until the queue becomes non-empty.
+ * If timeout_ms is not 0, The wait will timeout at the specified
+ * milliseconds value.
+ *
+ * @param queue_p	Pointer to the queue object
+ * @param timeout_ms	0, or timeout for waiting for the queue to become
+ *			non-empty
+ *
+ * @return pointer to element removed from the queue, or NULL if timeout
+ */
+struct glist_node *
+rtos_k_queue_remove(
+    _INOUT_ struct rtos_queue *queue_p,
+    _IN_ rtos_milliseconds_t timeout_ms)
+{
+    struct glist_node *elem_p = NULL;
+    cpu_status_register_t saved_cpu_intr_mask;
+
+    FDC_ASSERT(queue_p->signature == RTOS_QUEUE_SIGNATURE,
+	       queue_p->signature, queue_p);
+
+    if (queue_p->use_mutex) {
+	rtos_k_mutex_acquire(&queue_p->mutex);
+    } else {
+	saved_cpu_intr_mask = rtos_k_disable_cpu_interrupts();
+    }
+
+    while (GLIST_IS_EMPTY(&queue_p->list_anchor)) {
+	if (timeout_ms != 0) {
+	    rtos_milliseconds_t tmp_timeout_ms = timeout_ms;
+
+	    if (queue_p->use_mutex) {
+		rtos_k_condvar_wait(
+		    &queue_p->non_empty_condvar,
+		    &queue_p->mutex,
+		    &tmp_timeout_ms);
+	    } else {
+		rtos_k_condvar_wait_intr_disabled(
+		    &queue_p->non_empty_condvar,
+		    &tmp_timeout_ms);
+	    }
+
+	    if (tmp_timeout_ms == 0) {
+		goto common_exit;
+	    }
+	} else {
+	    if (queue_p->use_mutex) {
+		rtos_k_condvar_wait(
+		    &queue_p->non_empty_condvar,
+		    &queue_p->mutex,
+		    NULL);
+	    } else {
+		rtos_k_condvar_wait_intr_disabled(
+		    &queue_p->non_empty_condvar,
+		    NULL);
+	    }
+	}
+    }
+
+    elem_p = GLIST_GET_FIRST(&queue_p->list_anchor);
+    glist_remove_elem(elem_p);
+
+common_exit:
+    if (queue_p->use_mutex) {
+	rtos_k_mutex_release(&queue_p->mutex);
+    } else {
+        rtos_k_restore_cpu_interrupts(saved_cpu_intr_mask);
+    }
+
+    return elem_p;
+}
+
+
 #if DEFINED_ARM_CORTEX_M_ARCH()
 
 /**
