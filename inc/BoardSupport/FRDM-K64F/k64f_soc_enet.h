@@ -13,90 +13,14 @@
 #include <McRTOS_kernel_services.h>
 #include <Networking/networking.h>
 
-C_ASSERT(NETWORK_MTU == 1500);
-
 /**
- * Maximum Ethernet frame size (in bytes) including CRC
- */
-#define ENET_MAX_FRAME_SIZE	    (NETWORK_MTU + 18)
-
-/**
- * Maximum Ethernet VLAN frame size (in bytes)
- */
-#define ENET_MAX_FRAME_VLAN_SIZE    (NETWORK_MTU + 22)
-
-/*
  * Ethernet frame buffer descriptor alignment in bytes
  */
 #define ENET_FRAME_BUFFER_DESCRIPTOR_ALIGNMENT UINT32_C(16)
 
-/*
- * Ethernet frame data buffer alignment in bytes
- */
-#define ENET_FRAME_DATA_BUFFER_ALIGNMENT UINT32_C(16)
-
-#define ENET_MAX_RX_PACKETS   8
-
-#define ENET_MAX_TX_PACKETS   8
-
 /**
- * Maximum Ethernet frame size rounded-up to the required alignment
+ * Rx buffer descriptor (type of entries of the ENET Rx ring)
  */
-#define ENET_ALIGNED_MAX_FRAME_SIZE \
-	ROUND_UP(ENET_MAX_FRAME_SIZE, ENET_FRAME_DATA_BUFFER_ALIGNMENT)
-
-/**
- * Network packet object
- */
-struct network_packet {
-    uint32_t signature;
-#   define ENET_TX_PACKET_SIGNATURE  GEN_SIGNATURE('T', 'X', 'B', 'U')
-#   define ENET_RX_PACKET_SIGNATURE  GEN_SIGNATURE('R', 'X', 'B', 'U')
-
-    union {
-	volatile struct enet_tx_buffer_descriptor *tx_buf_desc_p;
-	volatile struct enet_rx_buffer_descriptor *rx_buf_desc_p;
-    };
-
-    uint16_t state_flags;
-#   define ENET_FRAME_IN_TX_TRANSIT		BIT(0)
-#   define ENET_FRAME_IN_RX_TRANSIT		BIT(1)
-#   define ENET_FRAME_IN_TX_USE_BY_APP		BIT(2)
-#   define ENET_FRAME_IN_RX_USE_BY_APP		BIT(3)
-#   define ENET_FRAME_FREE_AFTER_TX_COMPLETE	BIT(4)
-#   define ENET_FRAME_IN_RX_QUEUE		BIT(5)
-#   define ENET_FRAME_RX_DROPPED		BIT(6)
-#   define ENET_FRAME_IN_TX_POOL		BIT(7)
-
-    /**
-     * Total packet length, including L2 L3 and L4 headers
-     */
-    uint16_t total_length;
-
-    /**
-     * Embedded node used to insert this packet in a list of packets
-     * as it traverses the networking stack.
-     */
-    struct glist_node node;
-
-    /*
-     * Packet payload data buffer
-     */
-    uint8_t data_buffer[ENET_ALIGNED_MAX_FRAME_SIZE]
-	__attribute__ ((aligned(ENET_FRAME_DATA_BUFFER_ALIGNMENT)));
-};
-
-C_ASSERT(ENET_ALIGNED_MAX_FRAME_SIZE >= 256 &&
-	 (ENET_ALIGNED_MAX_FRAME_SIZE & ~ENET_MRBR_R_BUF_SIZE_MASK) == 0);
-
-C_ASSERT(sizeof(bool) == sizeof(uint8_t));
-C_ASSERT(offsetof(struct network_packet, data_buffer) %
-	 ENET_FRAME_DATA_BUFFER_ALIGNMENT == 0);
-
-#define TO_NETWORK_PACKET(_data_buf) \
-	((struct network_packet *) \
-	 ((uintptr_t)(_data_buf) - offsetof(struct network_packet, data_buffer)))
-
 struct enet_rx_buffer_descriptor {
     /**
      * If the ENET_RX_BD_LAST_IN_FRAME bit is set in 'control', this is the
@@ -150,6 +74,9 @@ struct enet_rx_buffer_descriptor {
     uint16_t reserved4;
 } __attribute__ ((aligned(ENET_FRAME_BUFFER_DESCRIPTOR_ALIGNMENT)));
 
+/**
+ * Tx buffer descriptor (type of entries of the ENET Tx ring)
+ */
 struct enet_tx_buffer_descriptor {
     uint16_t data_length;
     uint16_t control;
@@ -189,6 +116,8 @@ struct enet_tx_buffer_descriptor {
     uint16_t reserved6;
 } __attribute__ ((aligned(ENET_FRAME_BUFFER_DESCRIPTOR_ALIGNMENT)));
 
+C_ASSERT(sizeof(struct enet_rx_buffer_descriptor) % ENET_FRAME_BUFFER_DESCRIPTOR_ALIGNMENT == 0);
+
 /**
  * Non-const fields of an Ethernet MAC device (to be placed in SRAM)
  */
@@ -201,45 +130,53 @@ struct enet_device_var {
     uint32_t tx_rx_error_count;
 
     /**
-     * Tx buffer descriptor ring accessed by the Ethernet MAC
+     * Pointer to local layer-3 end point associated with this ENET device
      */
-    volatile struct enet_tx_buffer_descriptor tx_buffer_descriptors[ENET_MAX_TX_PACKETS];
+    struct local_l3_end_point *local_l3_end_point_p;
+
+    /**
+     * Number of Tx buffer descriptors currently filled in the ENET Tx ring
+     */
+    uint16_t tx_ring_entries_filled;
+
+    /**
+     * Number of Rx buffer descriptors currently filled in the ENET Rx ring
+     */
+    uint16_t rx_ring_entries_filled;
+
+    /**
+     * ENET Tx ring write cursor (pointer to next Tx buffer descriptor
+     * that can be filled by enet_start_xmit())
+     */
+    volatile struct enet_tx_buffer_descriptor *tx_ring_write_cursor;
+
+    /**
+     * ENET Tx ring read cursor (pointer to the first Tx buffer descriptor
+     * that can be read by k64f_enet_transmit_interrupt_e_handler())
+     */
+    volatile struct enet_tx_buffer_descriptor *tx_ring_read_cursor;
+
+    /**
+     * ENET Rx ring write cursor (pointer to next Rx buffer descriptor
+     * that can be filled by enet_repost_rx_packet())
+     */
+    volatile struct enet_rx_buffer_descriptor *rx_ring_write_cursor;
+
+    /**
+     * ENET Rx ring read cursor (pointer to the first Rx buffer descriptor
+     * that can be read by k64f_enet_receive_interrupt_e_handler())
+     */
+    volatile struct enet_rx_buffer_descriptor *rx_ring_read_cursor;
+
+    /**
+     * Tx buffer descriptor ring accessed by the Ethernet MAC (ENET device)
+     */
+    volatile struct enet_tx_buffer_descriptor tx_buffer_descriptors[NET_MAX_TX_PACKETS];
 
     /**
      * Rx buffer descriptor ring accessed by the Ethernet MAC
      */
-    volatile struct enet_rx_buffer_descriptor rx_buffer_descriptors[ENET_MAX_RX_PACKETS];
-
-    /**
-     * Circular buffer of pointers used to keep track of free Tx packets
-     */
-    struct rtos_circular_buffer tx_packet_pool;
-
-    /**
-     * Circular buffer of pointers used to represent the queue of received
-     * Rx packets (non-empty Rx buffers)
-     */
-    struct rtos_circular_buffer rx_packet_queue;
-
-    /**
-     * Array of entries for tx_packet_pool
-     */
-    void *tx_packet_pool_entries[ENET_MAX_TX_PACKETS];
-
-    /**
-     * Array of entries for rx_packet_queue
-     */
-    void *rx_packet_queue_entries[ENET_MAX_RX_PACKETS];
-
-    /**
-     * Ethernet Tx packets (for outgoing Ethernet frames)
-     */
-    struct network_packet tx_packets[ENET_MAX_TX_PACKETS];
-
-    /**
-     * Ethernet Rx packets (for incoming Ethernet frames)
-     */
-    struct network_packet rx_packets[ENET_MAX_RX_PACKETS];
+    volatile struct enet_rx_buffer_descriptor rx_buffer_descriptors[NET_MAX_RX_PACKETS];
 };
 
 #define ENET_PHY_ADDRESS    0x0
@@ -282,6 +219,15 @@ struct enet_device {
     struct ethernet_mac_address mac_address;
     uint8_t mpu_region_index;
 };
+
+void enet_init(const struct enet_device *enet_device_p,
+	       struct local_l3_end_point *local_l3_end_point_p);
+
+void enet_start_xmit(const struct enet_device *enet_device_p,
+		     struct network_packet *tx_packet_p);
+
+void enet_repost_rx_packet(const struct enet_device *enet_device_p,
+			   struct network_packet *rx_packet_p);
 
 void enet_phy_write(const struct enet_device *enet_device_p, uint32_t phy_reg,
 		    uint32_t data);

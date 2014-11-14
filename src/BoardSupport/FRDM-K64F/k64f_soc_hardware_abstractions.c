@@ -1240,7 +1240,6 @@ soc_hardware_init(void)
 		 g_console_serial_port_p->urt_var_p->urt_rx_fifo_size);
 
     i2c_init(&g_i2c_devices[0]);
-    enet_init(&g_enet_device0);
     return reset_cause;
 }
 

@@ -36,6 +36,8 @@ static fdc_error_t hello_world_thread_f(void *arg);
 
 static fdc_error_t accelerometer_thread_f(void *arg);
 
+static fdc_error_t ping_thread_f(void *arg);
+
 struct app_state_vars {
     /**
      * Current LED color mask
@@ -61,6 +63,10 @@ struct app_state_vars {
 C_ASSERT(sizeof(struct app_state_vars) % SOC_MPU_REGION_ALIGNMENT == 0);
 
 static struct app_state_vars g_app;
+
+static const struct ipv4_address g_dest_ip_addr[] = {
+    { .bytes = { 192, 168, 8, 1 } },
+};
 
 
 /**
@@ -92,6 +98,15 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
         .p_function_p = accelerometer_thread_f,
         .p_function_arg_p = NULL,
         .p_priority = ACCELEROMETER_THREAD_PRIORITY,
+        .p_thread_pp = NULL,
+    },
+
+    [3] =
+    {
+        .p_name_p = "ping thread",
+        .p_function_p = ping_thread_f,
+        .p_function_arg_p = (void *)&g_dest_ip_addr[0],
+        .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 2,
         .p_thread_pp = NULL,
     },
 };
@@ -253,6 +268,34 @@ exit:
 
     return fdc_error;
 }
+
+
+static fdc_error_t
+ping_thread_f(void *arg)
+{
+    fdc_error_t fdc_error;
+    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
+
+    FDC_ASSERT(arg != NULL, arg, cpu_id);
+    const struct ipv4_address *dest_ip_addr_p = arg;
+    uint32_t ping_count = 0;
+
+    for ( ; ; ) {
+	CONSOLE_POS_PRINTF(32, 60, "Ping thread %u", ping_count);
+        rtos_enter_privileged_mode();
+	net_send_ipv4_ping_request(dest_ip_addr_p);
+        rtos_exit_privileged_mode();
+	ping_count ++;
+	rtos_thread_delay(1500);
+    }
+
+    fdc_error = CAPTURE_FDC_ERROR(
+        "thread should not have terminated",
+        cpu_id, rtos_thread_self());
+
+    return fdc_error;
+}
+
 
 /**
  * Accelerometer thread

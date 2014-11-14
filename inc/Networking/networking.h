@@ -14,7 +14,32 @@
 /**
  * Maximum transfer unit for Ethernet (frame size without CRC)
  */
-#define NETWORK_MTU 1500
+#define ETHERNET_MAX_FRAME_DATA_SIZE	1500
+
+/**
+ * Maximum Ethernet frame size (in bytes) including CRC
+ */
+#define ETHERNET_MAX_FRAME_SIZE	    (ETHERNET_MAX_FRAME_DATA_SIZE + 18)
+
+#if 0
+/**
+ * Maximum Ethernet VLAN frame size (in bytes)
+ */
+#define ENET_MAX_FRAME_VLAN_SIZE    (ETHERNET_MAX_FRAME_DATA_SIZE + 22)
+#endif
+
+/**
+ * Network packet data buffer alignment in bytes
+ * (required by the ENET device)
+ */
+#define NET_PACKET_DATA_BUFFER_ALIGNMENT UINT32_C(16)
+
+/**
+ * Network packet data buffer size rounded-up to the required alignment
+ */
+#define NET_PACKET_DATA_BUFFER_SIZE \
+	ROUND_UP(ETHERNET_MAX_FRAME_SIZE, NET_PACKET_DATA_BUFFER_ALIGNMENT)
+
 
 /**
  * Number of entries for the IPv4 ARP cache table
@@ -43,7 +68,7 @@
  * Maximum number of ARP requests to be sent for a given destination
  * IP address, before failing with "unreachable destination".
  */
-#define ARP_REQUEST_MAX_RETRIES	8
+#define ARP_REQUEST_MAX_RETRIES	64
 
 /**
  * Convert a 16-bit value from host byte order to network byte order
@@ -155,6 +180,21 @@
 #define GET_UDP_DATA_PAYLOAD_AREA(_net_packet_p)	\
         (GET_IPV4_DATA_PAYLOAD_AREA(_net_packet_p) +	\
 	 sizeof(struct udp_header))
+
+/**
+ * Maximum number of local layer-3 end points (network interfaces)
+ */
+#define NET_MAX_LOCAL_L3_END_POINTS 1
+
+/**
+ * Maximum number of Tx packet buffers per layer-3 end point
+ */
+#define NET_MAX_TX_PACKETS   8
+
+/**
+ * Maximum number of Rx packet buffers per layer-3 end point
+ */
+#define NET_MAX_RX_PACKETS   8
 
 /**
  * Ethernet MAC address in network byte order
@@ -318,21 +358,21 @@ struct ipv4_header {
      *   no options, its value is 5
      */
     uint8_t version_and_header_length;
-#   define IP_VERSION_MASK	    MULTI_BIT_MASK(3, 0)
-#   define IP_VERSION_SHIFT	    0
-#   define IP_HEADER_LENGTH_MASK    MULTI_BIT_MASK(7, 4)
-#   define IP_HEADER_LENGTH_SHIFT   4
+#   define IP_VERSION_MASK	    MULTI_BIT_MASK(7, 4)
+#   define IP_VERSION_SHIFT	    4
+#   define IP_HEADER_LENGTH_MASK    MULTI_BIT_MASK(3, 0)
+#   define IP_HEADER_LENGTH_SHIFT   0
 
     /**
      * type of service
      */
     uint8_t type_of_service;
-#   define TOS_PRECEDENCE_MASK		    MULTI_BIT_MASK(2, 0)
-#   define TOS_PRECEDENCE_SHIFT		    0
-#   define TOS_MINIMIZE_DELAY_MASK	    BIT(3)
-#   define TOS_MAXIMIZE_THROUGHPUT_MASK	    BIT(4)
-#   define TOS_MAXIMIZE_RELIABILITY_MASK    BIT(5)
-#   define TOS_MINIMIZE_MONETARY_COST_MASK  BIT(6)
+#   define TOS_PRECEDENCE_MASK		    MULTI_BIT_MASK(7, 5)
+#   define TOS_PRECEDENCE_SHIFT		    5
+#   define TOS_MINIMIZE_DELAY_MASK	    BIT(4)
+#   define TOS_MAXIMIZE_THROUGHPUT_MASK	    BIT(3)
+#   define TOS_MAXIMIZE_RELIABILITY_MASK    BIT(2)
+#   define TOS_MINIMIZE_MONETARY_COST_MASK  BIT(1)
 
     /**
      * total packet length (header + data payload) in bytes
@@ -453,10 +493,10 @@ C_ASSERT(offsetof(struct ethernet_frame, ipv4_header) ==
 	 sizeof(struct ethernet_header));
 
 /**
- * IPv4 ICMP header layout
- * (An ICMP message is encapsulated in an IP packet)
+ * IPv4 ICMPv4 header layout
+ * (An ICMPv4 message is encapsulated in an IPv4 packet)
  */
-struct ipv4_icmp_header {
+struct icmpv4_header {
     /**
      * Message type
      */
@@ -478,7 +518,41 @@ struct ipv4_icmp_header {
     uint16_t msg_checksum;
 }; //  __attribute__((packed));
 
-C_ASSERT(sizeof(struct ipv4_icmp_header) == 4);
+C_ASSERT(sizeof(struct icmpv4_header) == 4);
+
+/**
+ * IPv6 ICMPv6 header layout
+ * (An ICMPv6 message is encapsulated in an IPv6 packet)
+ */
+struct icmpv6_header {
+    /**
+     * Message type
+     */
+    uint8_t msg_type;
+
+    /**
+     * Message code
+     */
+    uint8_t msg_code;
+
+    /**
+     * Message checksum
+     * (hton16() must be invoked before writing this field.
+     *  ntoh16() must be invoked after reading this field.)
+     */
+    uint16_t msg_checksum;
+
+    /**
+     * Message data
+     */
+    union {
+	uint32_t data32[1];
+	uint16_t data16[2];
+	uint8_t  data8[4];
+    };
+}; //  __attribute__((packed));
+
+C_ASSERT(sizeof(struct icmpv6_header) == 8);
 
 /**
  * UDP header layout
@@ -518,8 +592,8 @@ C_ASSERT(sizeof(struct udp_header) == 8);
 
 enum arp_cache_entry_states {
     ARP_ENTRY_INVALID = 0,
-    ARP_ENTRY_ARP_REQUEST_SENT, /* no reply received yet */
-    ARP_ENTRY_ARP_REPLY_RECEIVED,
+    ARP_ENTRY_HALF_FILLED, /* arp reques sent but no reply received yet */
+    ARP_ENTRY_FILLED,
 };
 
 /**
@@ -562,9 +636,9 @@ struct arp_cache {
     struct rtos_mutex mutex;
 
     /**
-     * Condvar signales when the ARP cache is updated
+     * Condvar signaled when the ARP cache is updated
      */
-    struct rtos_condvar updated_condvar;
+    struct rtos_condvar cache_updated_condvar;
 
     /**
      * Array of cache entries
@@ -654,6 +728,58 @@ struct ipv6_end_point {
 };
 
 /**
+ * Network packet object
+ */
+struct network_packet {
+    uint32_t signature;
+#   define NET_TX_PACKET_SIGNATURE  GEN_SIGNATURE('T', 'X', 'B', 'U')
+#   define NET_RX_PACKET_SIGNATURE  GEN_SIGNATURE('R', 'X', 'B', 'U')
+
+    union {
+	volatile struct enet_tx_buffer_descriptor *tx_buf_desc_p;
+	volatile struct enet_rx_buffer_descriptor *rx_buf_desc_p;
+    };
+
+    uint16_t state_flags;
+#   define NET_PACKET_IN_TX_TRANSIT		BIT(0)
+#   define NET_PACKET_IN_RX_TRANSIT		BIT(1)
+#   define NET_PACKET_IN_TX_USE_BY_APP		BIT(2)
+#   define NET_PACKET_IN_RX_USE_BY_APP		BIT(3)
+#   define NET_PACKET_FREE_AFTER_TX_COMPLETE	BIT(4)
+#   define NET_PACKET_IN_RX_QUEUE		BIT(5)
+#   define NET_PACKET_RX_FAILED			BIT(6)
+#   define NET_PACKET_IN_TX_POOL		BIT(7)
+
+    /**
+     * Total packet length, including L2 L3 and L4 headers
+     */
+    uint16_t total_length;
+
+    /**
+     * Embedded node used to insert this packet in a list of packets
+     * as it traverses the networking stack.
+     */
+    struct glist_node node;
+
+    /*
+     * Packet payload data buffer
+     */
+    uint8_t data_buffer[NET_PACKET_DATA_BUFFER_SIZE]
+	__attribute__ ((aligned(NET_PACKET_DATA_BUFFER_ALIGNMENT)));
+};
+
+C_ASSERT(sizeof(bool) == sizeof(uint8_t));
+C_ASSERT(offsetof(struct network_packet, data_buffer) %
+	 NET_PACKET_DATA_BUFFER_ALIGNMENT == 0);
+
+#define BUFFER_TO_NETWORK_PACKET(_data_buf) \
+	((struct network_packet *) \
+	 ((uintptr_t)(_data_buf) - offsetof(struct network_packet, data_buffer)))
+
+#define GLIST_NODE_TO_NETWORK_PACKET(_node_p) \
+	GLIST_NODE_ENTRY(_node_p, struct network_packet, node)
+
+/**
  * Local layer-3 (network layer) end point
  */
 struct local_l3_end_point {
@@ -664,6 +790,16 @@ struct local_l3_end_point {
      * Ethernet network interface (NIC)
      */
     const struct enet_device *enet_device_p;
+
+    /**
+     * Queue of received Rx packets (non-empty Rx buffers)
+     */
+    struct rtos_queue rx_packet_queue;
+
+    /**
+     * Rx packet buffers
+     */
+    struct network_packet rx_packets[NET_MAX_RX_PACKETS];
 
     /**
      * IPv4 end point (used if layer3_packet_type == ENET_IPv4_PACKET)
@@ -692,6 +828,31 @@ struct local_l4_end_point {
      * Protocol-specific port number (must be different from 0)
      */
     uint16_t port;
+};
+
+/**
+ * Networking state variables
+ */
+struct networking {
+    /**
+     * Flag indicating if the networking subsystem has been initialzied
+     */
+    bool initialized;
+
+    /**
+     * Pool of free Tx packets
+     */
+    struct rtos_queue free_tx_packet_pool;
+
+    /**
+     * Tx packet buffers (shared among all local layer-3 end points)
+     */
+    struct network_packet tx_packets[NET_MAX_TX_PACKETS * NET_MAX_LOCAL_L3_END_POINTS];
+
+    /**
+     * Local layer-3 end points (one per NIC)
+     */
+    struct local_l3_end_point local_l3_end_points[NET_MAX_LOCAL_L3_END_POINTS];
 };
 
 /**
@@ -729,31 +890,32 @@ static inline uint32_t byte_swap32(uint32_t value)
 
 void networking_init(void);
 
-struct enet_device;
+struct network_packet *net_allocate_tx_packet(bool free_after_tx_complete);
 
-void
-net_send_arp_request(const struct enet_device *enet_device_p,
-		     const struct ipv4_address *source_ip_addr_p,
-		     const struct ipv4_address *dest_ip_addr_p);
+void net_free_tx_packet(struct network_packet *tx_packet_p);
+
+void net_dequeue_rx_packet(struct local_l3_end_point *local_l3_end_point_p,
+			   struct network_packet **rx_packet_pp);
+
+void net_enqueue_rx_packet(struct local_l3_end_point *local_l3_end_point_p,
+			   struct network_packet *rx_packet_p);
+
 
 fdc_error_t
-net_send_ipv4_packet(struct local_l3_end_point *local_l3_end_point_p,
-		     const struct ipv4_address *dest_ip_addr_p,
+net_send_ipv4_packet(const struct ipv4_address *dest_ip_addr_p,
 		     struct network_packet *tx_packet_p,
 		     size_t data_payload_length,
 		     enum l4_protocols l4_protocol);
 
 void
 net_send_ipv4_udp_packet(struct local_l4_end_point *local_l4_end_point_p,
-			 struct local_l3_end_point *local_l3_end_point_p,
 		         const struct ipv4_address *dest_ip_addr_p,
 			 uint16_t dest_port,
 		         struct network_packet *tx_packet_p,
 		         size_t data_payload_length);
 
 void
-net_send_ipv4_icmp_message(struct local_l3_end_point *local_l3_end_point_p,
-			   const struct ipv4_address *dest_ip_addr_p,
+net_send_ipv4_icmp_message(const struct ipv4_address *dest_ip_addr_p,
 		           struct network_packet *tx_packet_p,
 			   uint8_t msg_type,
 		           uint8_t msg_code,

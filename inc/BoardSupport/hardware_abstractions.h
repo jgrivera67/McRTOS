@@ -473,26 +473,6 @@ void i2c_write(
     uint8_t i2c_slave_addr, uint8_t i2c_slave_reg_addr,
     uint8_t *buffer_p, size_t num_bytes);
 
-void enet_init(const struct enet_device *enet_device_p);
-
-struct network_packet *enet_allocate_tx_packet(const struct enet_device *enet_device_p,
-					       bool free_after_tx_complete);
-
-void enet_free_tx_packet(const struct enet_device *enet_device_p,
-			 struct network_packet *tx_packet_p);
-
-void enet_start_xmit(const struct enet_device *enet_device_p,
-		     struct network_packet *tx_packet_p);
-
-void enet_dequeue_rx_packet(const struct enet_device *enet_device_p,
-			    struct network_packet **rx_packet_pp);
-
-void enet_enqueue_rx_packet(const struct enet_device *enet_device_p,
-			    struct network_packet *rx_packet_p);
-
-void enet_recycle_rx_packet(const struct enet_device *enet_device_p,
-			    struct network_packet *rx_packet_p);
-
 void wait_for_interrupts(void);
 
 uint32_t read_32bit_mmio_register(const volatile uint32_t *io_reg_p);

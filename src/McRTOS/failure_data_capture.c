@@ -101,30 +101,17 @@ rtos_k_capture_failure_data(
         &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
     struct fdc_info *fdc_info_p = &cpu_controller_p->cpc_failures_info;
 
-    cpu_status_register_t cpu_sr;
-    bool interrupts_enabled;
-    bool restore_interrupts = false;
-
-#   if DEFINED_ARM_CLASSIC_ARCH()
-        CAPTURE_ARM_CPSR_REGISTER(cpu_sr);
-        interrupts_enabled =
-            CPU_INTERRUPTS_ARE_ENABLED(cpu_sr);
-#   elif DEFINED_ARM_CORTEX_M_ARCH()
-        interrupts_enabled =
-            CPU_INTERRUPTS_ARE_ENABLED(__get_PRIMASK());
-#   endif
-
     /*
-     * Only call rtos_k_disable_cpu_interrupts() if interrupts are currently
-     * enabled:
-     *
-     * NOTE: This check is necessary to avoid an unwanted recursion if an assert
-     * fails in rtos_stop_interrupts_disabled_time_measure()
+     * NOTE: We cannot call rtos_k_disable_cpu_interrupts(), since unwanted
+     * recursion can happen if an assert fails in
+     * rtos_stop_interrupts_disabled_time_measure()
      */
-    if (interrupts_enabled)
-    {
-        cpu_sr = rtos_k_disable_cpu_interrupts();
-        restore_interrupts = true;
+
+    cpu_status_register_t old_primask = __get_PRIMASK();
+
+    if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
+	__disable_irq();
+	__ISB();
     }
 
     struct failure_record *failure =
@@ -140,7 +127,7 @@ rtos_k_capture_failure_data(
     failure->fr_failure_args[0] = arg1;
     failure->fr_failure_args[1] = arg2;
 
-    failure->fr_cpu_status_register = cpu_sr;
+    failure->fr_cpu_status_register = old_primask;
     failure->fr_execution_context_p =
         cpu_controller_p->cpc_current_execution_context_p;
 
@@ -175,9 +162,9 @@ rtos_k_capture_failure_data(
         }
     }
 
-    if (restore_interrupts)
-    {
-        rtos_k_restore_cpu_interrupts(cpu_sr);
+    if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
+        __ISB();
+        __enable_irq();
     }
 
 #   endif /* _RELIABILITY_CHECKS_ */
