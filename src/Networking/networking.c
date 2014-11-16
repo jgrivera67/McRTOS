@@ -573,6 +573,7 @@ choose_ipv4_local_l3_end_point(const struct ipv4_address *dest_ip_addr_p)
 }
 
 
+#ifdef SOFTWARE_BASED_CHECKSUM
 static uint16_t
 net_compute_checksum(void *data_p, size_t data_length)
 {
@@ -597,6 +598,7 @@ net_compute_checksum(void *data_p, size_t data_length)
     checksum = ~one_complement_sum;
     return checksum;
 }
+#endif
 
 
 /**
@@ -659,12 +661,13 @@ net_send_ipv4_packet(const struct ipv4_address *dest_ip_addr_p,
     COPY_UNALIGNED_IPv4_ADDRESS(&enet_frame->ipv4_header.dest_ip_addr,
 				dest_ip_addr_p);
 
-#if 0 //??
     /*
-     * NOTE: enet_frame->ipv4_header.header_checksum is filled by hardware
+     * NOTE: enet_frame->ipv4_header.header_checksum is computed by hardware.
+     * We just need to initialize the checksum field to 0
      */
-#else
     enet_frame->ipv4_header.header_checksum = 0;
+
+#ifdef SOFTWARE_BASED_CHECKSUM
     enet_frame->ipv4_header.header_checksum =
 	net_compute_checksum(&enet_frame->ipv4_header,
 			     sizeof(struct ipv4_header));
@@ -765,12 +768,13 @@ net_send_ipv4_icmp_message(const struct ipv4_address *dest_ip_addr_p,
     icmp_header_p->msg_type = msg_type;
     icmp_header_p->msg_code = msg_code;
 
-#if 0 //??
     /*
-     * NOTE: icmp_header_p->msg_checksum is filled by hardware
+     * NOTE: icmp_header_p->msg_checksum is computed by hardware
+     * We just need to initialize the checksum field to 0
      */
-#else
     icmp_header_p->msg_checksum = 0;
+
+#ifdef SOFTWARE_BASED_CHECKSUM
     icmp_header_p->msg_checksum =
 	net_compute_checksum(icmp_header_p,
 			     sizeof(struct icmpv4_header) + data_payload_length);

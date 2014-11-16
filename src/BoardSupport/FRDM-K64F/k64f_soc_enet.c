@@ -422,23 +422,34 @@ ethernet_mac_init(const struct enet_device *enet_device_p)
 
     /*
      * Set Tx accelerators:
+     * - Enable IP header checksum offload
+     *   (automatically insert IP header checksum)
+     * - Enable layer-4 checksum offload (for TCP, UDP, ICMP)
+     *   (automatically insert layer-4 checksum)
      */
-#if 0 //???
+#   ifndef SOFTWARE_BASED_CHECKSUM
     reg_value =	ENET_TACC_PROCHK_MASK |
 		ENET_TACC_IPCHK_MASK;
     write_32bit_mmio_register(&enet_regs_p->TACC, reg_value);
-#else
-    write_32bit_mmio_register(&enet_regs_p->TACC, 0);
-#endif
+#   endif
 
     /*
      * Set Rx accelerators:
+     * - Enable padding removal for short IP frames
+     * - Enable discard of frames with MAC layer errors
+     * - Enable IP header checksum offload
+     *   (automatically discard frames with wrong IP header checksum)
+     * - Enable layer-4 checksum offload for TCP, UDP, ICMP
+     *   (automatically discard frames with wrong layer-4 checksum)
      */
     reg_value =	ENET_RACC_PADREM_MASK |
-		ENET_RACC_IPDIS_MASK |
-		ENET_RACC_PRODIS_MASK |
-		ENET_RACC_LINEDIS_MASK |
-		ENET_RACC_PADREM_MASK;
+		ENET_RACC_LINEDIS_MASK;
+
+#   ifndef SOFTWARE_BASED_CHECKSUM
+    reg_value |= ENET_RACC_IPDIS_MASK |
+		 ENET_RACC_PRODIS_MASK;
+#   endif
+
     write_32bit_mmio_register(&enet_regs_p->RACC, reg_value);
 
     /**
