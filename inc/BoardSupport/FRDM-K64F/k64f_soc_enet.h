@@ -220,8 +220,10 @@ struct enet_device {
     uint8_t mpu_region_index;
 };
 
-void enet_init(const struct enet_device *enet_device_p,
-	       struct local_l3_end_point *local_l3_end_point_p);
+void enet_init(const struct enet_device *enet_device_p);
+
+void enet_start(const struct enet_device *enet_device_p,
+	        struct local_l3_end_point *local_l3_end_point_p);
 
 void enet_start_xmit(const struct enet_device *enet_device_p,
 		     struct network_packet *tx_packet_p);

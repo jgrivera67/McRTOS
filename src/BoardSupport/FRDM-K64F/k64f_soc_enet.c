@@ -149,7 +149,11 @@ const struct enet_device g_enet_device0 = {
     .error_rtos_interrupt_pp = &g_rtos_interrupt_enet_error_p,
     .clock_gate_mask = SIM_SCGC2_ENET_MASK,
     .mac_address = {
-	.bytes = { 0x1, 0x00, 0x35, 0x52, 0xCF, 0x00 }
+	 /*
+	  * NOTE: Bit 1 of the first byte of the MAC address must 1
+	  * for private MAC addresses (locally administered)
+	  */
+	.bytes = { 0x82, 0x88, 0x88, 0x88, 0x88, 0x80 + BOARD_INSTANCE }
     },
 
     .mpu_region_index = RTOS_NUM_GLOBAL_MPU_REGIONS,
@@ -201,7 +205,7 @@ enet_tx_buffer_descriptor_ring_init(const struct enet_device *enet_device_p)
     /*
      * The Tx descriptor ring is empty:
      */
-    enet_var_p->rx_ring_entries_filled = 0;
+    enet_var_p->tx_ring_entries_filled = 0;
     enet_var_p->tx_ring_write_cursor = &enet_var_p->tx_buffer_descriptors[0];
     enet_var_p->tx_ring_read_cursor = &enet_var_p->tx_buffer_descriptors[0];
 }
@@ -419,9 +423,13 @@ ethernet_mac_init(const struct enet_device *enet_device_p)
     /*
      * Set Tx accelerators:
      */
+#if 0 //???
     reg_value =	ENET_TACC_PROCHK_MASK |
 		ENET_TACC_IPCHK_MASK;
     write_32bit_mmio_register(&enet_regs_p->TACC, reg_value);
+#else
+    write_32bit_mmio_register(&enet_regs_p->TACC, 0);
+#endif
 
     /*
      * Set Rx accelerators:
@@ -481,32 +489,6 @@ ethernet_mac_init(const struct enet_device *enet_device_p)
     write_32bit_mmio_register(&enet_regs_p->RAFL, 4);
 
     /*
-     * Initialize Tx buffer descriptor ring:
-     */
-    enet_tx_buffer_descriptor_ring_init(enet_device_p);
-
-    /*
-     * Initialize Rx buffer descriptor ring:
-     */
-    enet_rx_buffer_descriptor_ring_init(enet_device_p);
-
-    /*
-     * Enable generation of Tx/Rx interrupts:
-     * - Generate Tx interrupt when a frame has been transmitted (the
-     *   last and only Tx buffer descriptor of the frame has been updated)
-     * - Generate Rx interrupt when a frame has been received (the
-     *   (last and only Rx buffer descriptor of the frame has been updated)
-     */
-    write_32bit_mmio_register(&enet_regs_p->EIMR,
-			      ENET_EIMR_TXF_MASK |
-			      ENET_EIMR_RXF_MASK |
-			      ENET_EIMR_BABR_MASK |
-			      ENET_EIMR_BABT_MASK |
-			      ENET_EIMR_EBERR_MASK |
-			      ENET_EIMR_UN_MASK |
-			      ENET_EIMR_PLR_MASK);
-
-    /*
      * Register McRTOS interrupt handlers
      */
     rtos_k_register_interrupt(
@@ -532,28 +514,7 @@ ethernet_mac_init(const struct enet_device *enet_device_p)
     DBG_ASSERT(
         *enet_device_p->error_rtos_interrupt_pp != NULL,
         enet_device_p->error_rtos_interrupt_pp, enet_device_p);
-
-    /*
-     * Clear pending interrupts before enabling the ENET module:
-     */
-    write_32bit_mmio_register(&enet_regs_p->EIR, MULTI_BIT_MASK(30, 0));
-
-    /*
-     * Enable ENET module:
-     */
-    reg_value = read_32bit_mmio_register(&enet_regs_p->ECR);
-    reg_value |= ENET_ECR_ETHEREN_MASK;
-    write_32bit_mmio_register(&enet_regs_p->ECR, reg_value);
-
-    /*
-     * Activate Rx buffer descriptor ring:
-     * (the Rx descriptor ring must have at least one descriptor with the "empty"
-     *  bit set in its control field)
-     */
-    __DSB();
-    write_32bit_mmio_register(&enet_regs_p->RDAR, ENET_RDAR_RDAR_MASK);
 }
-
 
 void
 enet_phy_write(const struct enet_device *enet_device_p, uint32_t phy_reg, uint32_t data)
@@ -743,8 +704,7 @@ ethernet_phy_init(const struct enet_device *enet_device_p)
  * Initializes the Ethernet MAC module of the K64F SoC
  */
 void
-enet_init(const struct enet_device *enet_device_p,
-	  struct local_l3_end_point *local_l3_end_point_p)
+enet_init(const struct enet_device *enet_device_p)
 {
     uint32_t reg_value;
 
@@ -757,7 +717,6 @@ enet_init(const struct enet_device *enet_device_p,
     FDC_ASSERT(!enet_var_p->initialized, enet_device_p, enet_var_p);
     FDC_ASSERT_CPU_INTERRUPTS_DISABLED();
 
-    enet_var_p->local_l3_end_point_p = local_l3_end_point_p;
     /*
      * Enable the Clock to the ENET Module
      */
@@ -820,6 +779,76 @@ enet_init(const struct enet_device *enet_device_p,
     enet_var_p->initialized = true;
     DEBUG_PRINTF("Initialized device %s\n", enet_device_p->name);
 }
+
+
+/**
+ * Activates the Ethernet MAC module of the K64F SoC
+ */
+void
+enet_start(const struct enet_device *enet_device_p,
+	   struct local_l3_end_point *local_l3_end_point_p)
+{
+    uint32_t reg_value;
+
+    FDC_ASSERT(
+        enet_device_p->signature == ENET_DEVICE_SIGNATURE,
+        enet_device_p->signature, enet_device_p);
+
+    volatile ENET_Type *enet_regs_p = enet_device_p->mmio_registers_p;
+    struct enet_device_var *const enet_var_p = enet_device_p->var_p;
+
+    FDC_ASSERT(enet_var_p->initialized, enet_device_p, enet_var_p);
+    FDC_ASSERT(enet_var_p->local_l3_end_point_p == NULL,
+               enet_var_p->local_l3_end_point_p, enet_var_p);
+
+    enet_var_p->local_l3_end_point_p = local_l3_end_point_p;
+
+    cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
+
+    /*
+     * Initialize Tx buffer descriptor ring:
+     */
+    enet_tx_buffer_descriptor_ring_init(enet_device_p);
+
+    /*
+     * Initialize Rx buffer descriptor ring:
+     */
+    enet_rx_buffer_descriptor_ring_init(enet_device_p);
+
+    /*
+     * Enable generation of Tx/Rx interrupts:
+     * - Generate Tx interrupt when a frame has been transmitted (the
+     *   last and only Tx buffer descriptor of the frame has been updated)
+     * - Generate Rx interrupt when a frame has been received (the
+     *   (last and only Rx buffer descriptor of the frame has been updated)
+     */
+    write_32bit_mmio_register(&enet_regs_p->EIMR,
+			      ENET_EIMR_TXF_MASK |
+			      ENET_EIMR_RXF_MASK |
+			      ENET_EIMR_BABR_MASK |
+			      ENET_EIMR_BABT_MASK |
+			      ENET_EIMR_EBERR_MASK |
+			      ENET_EIMR_UN_MASK |
+			      ENET_EIMR_PLR_MASK);
+
+    /*
+     * Enable ENET module:
+     */
+    reg_value = read_32bit_mmio_register(&enet_regs_p->ECR);
+    reg_value |= ENET_ECR_ETHEREN_MASK;
+    write_32bit_mmio_register(&enet_regs_p->ECR, reg_value);
+
+    /*
+     * Activate Rx buffer descriptor ring:
+     * (the Rx descriptor ring must have at least one descriptor with the "empty"
+     *  bit set in its control field)
+     */
+    __DSB();
+    write_32bit_mmio_register(&enet_regs_p->RDAR, ENET_RDAR_RDAR_MASK);
+
+    rtos_k_restore_cpu_interrupts(cpu_status_register);
+}
+
 
 /**
  * Transmit completion interrupt handler
@@ -888,6 +917,9 @@ k64f_enet_transmit_interrupt_e_handler(
 	    DBG_ASSERT(tx_packet_p->signature == NET_TX_PACKET_SIGNATURE,
 		       tx_packet_p->signature, tx_packet_p);
 
+	    FDC_ASSERT(tx_packet_p->tx_buf_desc_p == buffer_desc_p,
+		       tx_packet_p->tx_buf_desc_p, buffer_desc_p);
+
 	    FDC_ASSERT(tx_packet_p->state_flags & NET_PACKET_IN_TX_TRANSIT,
 		       tx_packet_p->state_flags, tx_packet_p);
 
@@ -895,6 +927,8 @@ k64f_enet_transmit_interrupt_e_handler(
 		       tx_packet_p->state_flags, tx_packet_p);
 
 	    tx_packet_p->state_flags &= ~NET_PACKET_IN_TX_TRANSIT;
+	    tx_packet_p->tx_buf_desc_p = NULL;
+	    buffer_desc_p->data_buffer = NULL;
 	    buffer_desc_p->control_extend1 &= ~ENET_TX_BD_INTERRUPT_MASK;
 	    if (buffer_desc_p->control_extend0 &
 	        (ENET_TX_BD_ERROR_MASK |
@@ -977,12 +1011,12 @@ k64f_enet_receive_interrupt_e_handler(
 		       enet_var_p->rx_ring_entries_filled == NET_MAX_RX_PACKETS,
 		       buffer_desc_p, enet_var_p->rx_ring_write_cursor);
 
-	    FDC_ASSERT(buffer_desc_p->control & ENET_RX_BD_LAST_IN_FRAME_MASK,
-	       buffer_desc_p->control, buffer_desc_p);
-
 	    if (buffer_desc_p->control & ENET_RX_BD_EMPTY_MASK) {
 		break;
 	    }
+
+	    FDC_ASSERT(buffer_desc_p->control & ENET_RX_BD_LAST_IN_FRAME_MASK,
+	       buffer_desc_p->control, buffer_desc_p);
 
 	    struct network_packet *rx_packet_p =
 		BUFFER_TO_NETWORK_PACKET(buffer_desc_p->data_buffer);
@@ -997,6 +1031,8 @@ k64f_enet_receive_interrupt_e_handler(
 		        rx_packet_p->state_flags, rx_packet_p);
 
 	    rx_packet_p->state_flags &= ~NET_PACKET_IN_RX_TRANSIT;
+	    rx_packet_p->rx_buf_desc_p = NULL;
+	    buffer_desc_p->data_buffer = NULL;
 	    buffer_desc_p->control_extend1 &= ~ENET_RX_BD_GENERATE_INTERRUPT_MASK;
 	    if (buffer_desc_p->control &
 	        (ENET_RX_BD_LENGTH_VIOLATION_MASK |
@@ -1009,6 +1045,9 @@ k64f_enet_receive_interrupt_e_handler(
 
 		rx_packet_p->state_flags = NET_PACKET_RX_FAILED;
 	    } else {
+		FDC_ASSERT(buffer_desc_p->data_length <= ETHERNET_MAX_FRAME_DATA_SIZE,
+			   buffer_desc_p->data_length, buffer_desc_p);
+
 		rx_packet_p->total_length = buffer_desc_p->data_length;
 	    }
 
@@ -1026,6 +1065,7 @@ k64f_enet_receive_interrupt_e_handler(
 	    enet_var_p->rx_ring_entries_filled --;
 	} while (enet_var_p->rx_ring_entries_filled != 0);
 
+	enet_var_p->rx_ring_read_cursor = buffer_desc_p;
 	rtos_k_restore_cpu_interrupts(cpu_status_register);
     }
 }

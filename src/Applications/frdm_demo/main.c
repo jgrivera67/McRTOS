@@ -206,11 +206,13 @@ void app_software_init(void)
 static void
 ping_command(const char *cmd_line)
 {
+    static uint16_t seq_num = 0;
     struct ipv4_address dest_ip_addr = {
 	.bytes = { 192, 168, 8, 1 }
     };
 
-    net_send_ipv4_ping_request(&dest_ip_addr);
+    net_send_ipv4_ping_request(&dest_ip_addr, seq_num);
+    seq_num ++;
 }
 
 static fdc_error_t
@@ -283,7 +285,7 @@ ping_thread_f(void *arg)
     for ( ; ; ) {
 	CONSOLE_POS_PRINTF(32, 60, "Ping thread %u", ping_count);
         rtos_enter_privileged_mode();
-	net_send_ipv4_ping_request(dest_ip_addr_p);
+	net_send_ipv4_ping_request(dest_ip_addr_p, ping_count);
         rtos_exit_privileged_mode();
 	ping_count ++;
 	rtos_thread_delay(1500);

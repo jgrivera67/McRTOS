@@ -11,6 +11,12 @@
 #include <McRTOS/compile_time_checks.h>
 #include <McRTOS/McRTOS_kernel_services.h>
 
+#ifndef BOARD_INSTANCE
+#define BOARD_INSTANCE	1
+#endif
+
+C_ASSERT(BOARD_INSTANCE == 1 || BOARD_INSTANCE == 2);
+
 /**
  * Maximum transfer unit for Ethernet (frame size without CRC)
  */
@@ -187,9 +193,9 @@
 #define NET_MAX_LOCAL_L3_END_POINTS 1
 
 /**
- * Maximum number of Tx packet buffers per layer-3 end point
+ * Maximum number of Tx packet buffers
  */
-#define NET_MAX_TX_PACKETS   8
+#define NET_MAX_TX_PACKETS   (8 * NET_MAX_LOCAL_L3_END_POINTS)
 
 /**
  * Maximum number of Rx packet buffers per layer-3 end point
@@ -521,6 +527,18 @@ struct icmpv4_header {
 C_ASSERT(sizeof(struct icmpv4_header) == 4);
 
 /**
+ * ICMPv4 echo request/reply message layout
+ */
+struct icmpv4_echo_message {
+	struct icmpv4_header header;
+	uint16_t identifier;
+	uint16_t seq_num;
+};
+
+C_ASSERT(offsetof(struct icmpv4_echo_message, identifier) ==
+	 sizeof(struct icmpv4_header));
+
+/**
  * IPv6 ICMPv6 header layout
  * (An ICMPv6 message is encapsulated in an IPv6 packet)
  */
@@ -847,7 +865,7 @@ struct networking {
     /**
      * Tx packet buffers (shared among all local layer-3 end points)
      */
-    struct network_packet tx_packets[NET_MAX_TX_PACKETS * NET_MAX_LOCAL_L3_END_POINTS];
+    struct network_packet tx_packets[NET_MAX_TX_PACKETS];
 
     /**
      * Local layer-3 end points (one per NIC)
@@ -922,6 +940,7 @@ net_send_ipv4_icmp_message(const struct ipv4_address *dest_ip_addr_p,
 		           size_t data_payload_length);
 
 void
-net_send_ipv4_ping_request(const struct ipv4_address *dest_ip_addr_p);
+net_send_ipv4_ping_request(const struct ipv4_address *dest_ip_addr_p,
+		           uint16_t seq_num);
 
 #endif /* _NETWORKING_H */

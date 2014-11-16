@@ -5,6 +5,9 @@
 #
 # Author: German Rivera - September, 2013
 #
+# NOTE: additional CFLAGS can be specfied in the command line like this:
+# make CMD_LINE_CFLAGS=...
+#
 
 #
 # Application subdirectory

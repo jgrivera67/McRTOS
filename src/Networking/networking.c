@@ -39,7 +39,7 @@ static struct networking g_networking = {
 	    .signature = LOCAL_L3_END_POINT_SIGNATURE,
 	    .enet_device_p = &g_enet_device0,
 	    .ipv4 = {
-		.local_ip_addr = { .bytes = { 192, 168, 8, 2 } },
+		.local_ip_addr = { .bytes = { 192, 168, 8, 1 + BOARD_INSTANCE } },
 		.subnet_mask = IPv4_SUBNET_MASK(24),
 		.default_gateway_ip_addr = { .bytes = { 192, 168, 8, 1 } },
 		.next_tx_ip_packet_seq_num = 0,
@@ -228,9 +228,9 @@ networking_init(void)
 	net_rx_packet_queue_init(local_l3_end_point_p);
 
 	/*
-	 * Initialize network interface (ENET device):
+	 * Activate network interface (ENET device):
 	 */
-	enet_init(local_l3_end_point_p->enet_device_p, local_l3_end_point_p);
+	enet_start(local_l3_end_point_p->enet_device_p, local_l3_end_point_p);
 
 	/*
 	 * Initialize ARP cache for each local network end point
@@ -339,14 +339,8 @@ net_dequeue_rx_packet(struct local_l3_end_point *local_l3_end_point_p,
     FDC_ASSERT(rx_packet_p->state_flags == NET_PACKET_IN_RX_QUEUE,
 	       rx_packet_p->state_flags, rx_packet_p);
 
-    volatile struct enet_rx_buffer_descriptor *rx_buf_desc_p = rx_packet_p->rx_buf_desc_p;
-
-    FDC_ASSERT(rx_buf_desc_p->data_buffer == rx_packet_p->data_buffer,
-               rx_buf_desc_p->data_buffer, rx_packet_p->data_buffer);
-    FDC_ASSERT((rx_buf_desc_p->control & ENET_RX_BD_EMPTY_MASK) == 0,
-	       rx_buf_desc_p->control, rx_buf_desc_p);
-    FDC_ASSERT(rx_buf_desc_p->data_length <= ETHERNET_MAX_FRAME_DATA_SIZE,
-	       rx_buf_desc_p->data_length, rx_buf_desc_p);
+    FDC_ASSERT(rx_packet_p->rx_buf_desc_p == NULL,
+               rx_packet_p->rx_buf_desc_p, rx_packet_p);
 
     rx_packet_p->state_flags = NET_PACKET_IN_RX_USE_BY_APP;
     *rx_packet_pp = rx_packet_p;
@@ -369,12 +363,8 @@ net_enqueue_rx_packet(struct local_l3_end_point *local_l3_end_point_p,
     FDC_ASSERT(rx_packet_p->state_flags == 0,
 	       rx_packet_p->state_flags, rx_packet_p);
 
-    volatile struct enet_rx_buffer_descriptor *rx_buf_desc_p = rx_packet_p->rx_buf_desc_p;
-
-    FDC_ASSERT(rx_buf_desc_p->data_buffer == rx_packet_p->data_buffer,
-               rx_buf_desc_p->data_buffer, rx_packet_p->data_buffer);
-    FDC_ASSERT((rx_buf_desc_p->control & ENET_RX_BD_EMPTY_MASK) == 0,
-	       rx_buf_desc_p->control, rx_buf_desc_p);
+    FDC_ASSERT(rx_packet_p->rx_buf_desc_p == NULL,
+	       rx_packet_p->rx_buf_desc_p, rx_packet_p);
 
     rx_packet_p->state_flags = NET_PACKET_IN_RX_QUEUE;
     rtos_k_queue_add(&local_l3_end_point_p->rx_packet_queue, &rx_packet_p->node);
@@ -583,6 +573,32 @@ choose_ipv4_local_l3_end_point(const struct ipv4_address *dest_ip_addr_p)
 }
 
 
+static uint16_t
+net_compute_checksum(void *data_p, size_t data_length)
+{
+    FDC_ASSERT((uintptr_t)data_p % sizeof(uint16_t) == 0 &&
+	       data_length != 0 && data_length % sizeof(uint16_t) == 0,
+	       data_p, data_length);
+
+    uint16_t *end_data_p = (uint16_t *)((uint8_t *)data_p + data_length);
+    uint32_t one_complement_sum = 0;
+    uint16_t checksum = 0;
+
+    for (uint16_t *val_p = data_p; val_p != end_data_p; val_p ++) {
+	one_complement_sum += *val_p;
+	if (one_complement_sum & BIT(16)) {
+	    one_complement_sum = (uint16_t)one_complement_sum + 1;
+	}
+
+	FDC_ASSERT(one_complement_sum <= UINT16_MAX,
+		   one_complement_sum, 0);
+    }
+
+    checksum = ~one_complement_sum;
+    return checksum;
+}
+
+
 /**
  * Sends an IPv4 packet over Ethernet
  */
@@ -637,15 +653,22 @@ net_send_ipv4_packet(const struct ipv4_address *dest_ip_addr_p,
     enet_frame->ipv4_header.time_to_live = 64; /* max routing hops */
     enet_frame->ipv4_header.protocol_type = l4_protocol;
 
-    /*
-     * NOTE: enet_frame->ipv4_header.header_checksum is filled by hardware
-     */
-
     COPY_UNALIGNED_IPv4_ADDRESS(&enet_frame->ipv4_header.source_ip_addr,
 				&local_l3_end_point_p->ipv4.local_ip_addr);
 
     COPY_UNALIGNED_IPv4_ADDRESS(&enet_frame->ipv4_header.dest_ip_addr,
 				dest_ip_addr_p);
+
+#if 0 //??
+    /*
+     * NOTE: enet_frame->ipv4_header.header_checksum is filled by hardware
+     */
+#else
+    enet_frame->ipv4_header.header_checksum = 0;
+    enet_frame->ipv4_header.header_checksum =
+	net_compute_checksum(&enet_frame->ipv4_header,
+			     sizeof(struct ipv4_header));
+#endif
 
     /*
      * Populate Ethernet header
@@ -742,9 +765,16 @@ net_send_ipv4_icmp_message(const struct ipv4_address *dest_ip_addr_p,
     icmp_header_p->msg_type = msg_type;
     icmp_header_p->msg_code = msg_code;
 
+#if 0 //??
     /*
      * NOTE: icmp_header_p->msg_checksum is filled by hardware
      */
+#else
+    icmp_header_p->msg_checksum = 0;
+    icmp_header_p->msg_checksum =
+	net_compute_checksum(icmp_header_p,
+			     sizeof(struct icmpv4_header) + data_payload_length);
+#endif
 
     /*
      * Send IP packet:
@@ -757,15 +787,21 @@ net_send_ipv4_icmp_message(const struct ipv4_address *dest_ip_addr_p,
 
 
 void
-net_send_ipv4_ping_request(const struct ipv4_address *dest_ip_addr_p)
+net_send_ipv4_ping_request(const struct ipv4_address *dest_ip_addr_p,
+	                   uint16_t seq_num)
 {
     struct network_packet *tx_packet_p = net_allocate_tx_packet(true);
+    struct icmpv4_echo_message *echo_msg_p =
+	(struct icmpv4_echo_message *)GET_IPV4_DATA_PAYLOAD_AREA(tx_packet_p);
 
+    echo_msg_p->identifier = 0;
+    echo_msg_p->seq_num = seq_num;
     net_send_ipv4_icmp_message(dest_ip_addr_p,
 			       tx_packet_p,
 			       ICMP_TYPE_PING_REQUEST,
 		               ICMP_CODE_PING_REQUEST,
-		               0);
+		               sizeof(struct icmpv4_echo_message) -
+			       sizeof(struct icmpv4_header));
 }
 
 
@@ -873,11 +909,22 @@ net_receive_ipv4_packet(struct local_l3_end_point *local_l3_end_point_p,
     FDC_ASSERT(rx_packet_p->total_length >=
 	       sizeof(struct ethernet_header) + sizeof(struct ipv4_header),
 	       rx_packet_p->total_length, rx_packet_p);
+//???
+    static int count = 0;
+
+    count++;
+    CONSOLE_POS_PRINTF(33,1, "Received IPv4 packets: %d\n", count);
+//???
 
 #if 0 //???
     struct ethernet_frame *rx_frame =
 	(struct ethernet_frame *)rx_packet_p->data_buffer;
 #endif //???
+
+    /*
+     * TODO: Only repost packet if not enqueued in a local transport end point
+     */
+    enet_repost_rx_packet(local_l3_end_point_p->enet_device_p, rx_packet_p);
 }
 
 
@@ -890,10 +937,22 @@ net_receive_ipv6_packet(struct local_l3_end_point *local_l3_end_point_p,
 	       sizeof(struct ethernet_header) + sizeof(struct ipv6_header),
 	       rx_packet_p->total_length, rx_packet_p);
 
+//???
+    static int count = 0;
+
+    count++;
+    CONSOLE_POS_PRINTF(34,1, "Received IPv6 packets: %d\n", count);
+//???
+
 #if 0 //???
     struct ethernet_frame *rx_frame =
 	(struct ethernet_frame *)rx_packet_p->data_buffer;
 #endif //???
+
+    /*
+     * TODO: Only repost packet if not enqueued in a local transport end point
+     */
+    enet_repost_rx_packet(local_l3_end_point_p->enet_device_p, rx_packet_p);
 }
 
 
@@ -942,6 +1001,7 @@ net_receive_thread_f(void *arg)
 	switch (ntoh16(rx_frame->enet_header.frame_type)) {
 	case ENET_ARP_PACKET:
 	    net_receive_arp_packet(local_l3_end_point_p, rx_packet_p);
+	    enet_repost_rx_packet(enet_device_p, rx_packet_p);
 	    break;
 	case ENET_IPv4_PACKET:
 	    net_receive_ipv4_packet(local_l3_end_point_p, rx_packet_p);
@@ -952,8 +1012,9 @@ net_receive_thread_f(void *arg)
 	default:
 	    capture_fdc_msg_printf("Received frame of unknown type: %#x\n",
 				   ntoh16(rx_frame->enet_header.frame_type));
-	}
 
+	    enet_repost_rx_packet(enet_device_p, rx_packet_p);
+	}
     }
 
     fdc_error = CAPTURE_FDC_ERROR(
