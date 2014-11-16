@@ -650,7 +650,8 @@ net_send_ipv4_packet(const struct ipv4_address *dest_ip_addr_p,
     /*
      * No IP packet fragmentation is supported:
      */
-    enet_frame->ipv4_header.flags_and_fragment_offset = 0;
+    enet_frame->ipv4_header.flags_and_fragment_offset =
+	hton16(IP_FLAG_DONT_FRAGMENT_MASK);
 
     enet_frame->ipv4_header.time_to_live = 64; /* max routing hops */
     enet_frame->ipv4_header.protocol_type = l4_protocol;

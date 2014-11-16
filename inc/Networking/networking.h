@@ -400,10 +400,11 @@ struct ipv4_header {
      *  ntoh16() must be invoked after reading this field.)
      */
     uint16_t flags_and_fragment_offset;
-#   define IP_FLAGS_MASK	    MULTI_BIT_MASK(2, 0)
-#   define IP_FLAGS_SHIFT	    0
-#   define IP_FRAGMENT_OFFSET_MASK  MULTI_BIT_MASK(15, 3)
-#   define IP_FRAGMENT_OFFSET_SHIFT 3
+#   define IP_FLAG_RESERVED_MASK	BIT(15)
+#   define IP_FLAG_DONT_FRAGMENT_MASK	BIT(14)
+#   define IP_FLAG_MORE_FRAGMENTS_MASK	BIT(13)
+#   define IP_FRAGMENT_OFFSET_MASK	MULTI_BIT_MASK(12, 0)
+#   define IP_FRAGMENT_OFFSET_SHIFT	0
 
     /**
      * Packet time to live
