@@ -173,18 +173,25 @@ C_ASSERT(BOARD_INSTANCE == 1 || BOARD_INSTANCE == 2);
 	 ((_dest_ip_addr_p)->value & (_subnet_mask)))
 
 /**
- * Returns pointer to the data payload area of a network packet
+ * Returns pointer to the data payload area of an IPv4 packet
+ */
+#define GET_IPV4_HEADER(_net_packet_p) \
+        ((struct ipv4_header *)((_net_packet_p)->data_buffer +	\
+				sizeof(struct ethernet_header)))
+
+/**
+ * Returns pointer to the data payload area of an IPv4 packet
  */
 #define GET_IPV4_DATA_PAYLOAD_AREA(_net_packet_p)   \
-        ((_net_packet_p)->data_buffer +		    \
-	 (sizeof(struct ethernet_header) +	    \
-	  sizeof(struct ipv4_header)))
+        ((void *)((_net_packet_p)->data_buffer +    \
+		  (sizeof(struct ethernet_header) + \
+	  sizeof(struct ipv4_header))))
 
 /**
  * Returns pointer to the data payload area of a UDP datagram
  */
 #define GET_UDP_DATA_PAYLOAD_AREA(_net_packet_p)	\
-        (GET_IPV4_DATA_PAYLOAD_AREA(_net_packet_p) +	\
+        ((uint8_t *)GET_IPV4_DATA_PAYLOAD_AREA(_net_packet_p) +	\
 	 sizeof(struct udp_header))
 
 /**
@@ -418,8 +425,6 @@ struct ipv4_header {
 
     /**
      * Header checksum
-     * (hton16() must be invoked before writing this field.
-     *  ntoh16() must be invoked after reading this field.)
      */
     uint16_t header_checksum;
 
@@ -519,8 +524,6 @@ struct icmpv4_header {
 
     /**
      * message checksum
-     * (hton16() must be invoked before writing this field.
-     *  ntoh16() must be invoked after reading this field.)
      */
     uint16_t msg_checksum;
 }; //  __attribute__((packed));
@@ -556,8 +559,6 @@ struct icmpv6_header {
 
     /**
      * Message checksum
-     * (hton16() must be invoked before writing this field.
-     *  ntoh16() must be invoked after reading this field.)
      */
     uint16_t msg_checksum;
 
@@ -601,8 +602,6 @@ struct udp_header {
 
     /**
      * UDP datagram checksum
-     * (hton16() must be invoked before writing this field.
-     *  ntoh16() must be invoked after reading this field.)
      */
     uint16_t datagram_checksum;
 }; //  __attribute__((packed));
@@ -927,11 +926,17 @@ net_send_ipv4_packet(const struct ipv4_address *dest_ip_addr_p,
 		     enum l4_protocols l4_protocol);
 
 void
-net_send_ipv4_udp_packet(struct local_l4_end_point *local_l4_end_point_p,
-		         const struct ipv4_address *dest_ip_addr_p,
-			 uint16_t dest_port,
-		         struct network_packet *tx_packet_p,
-		         size_t data_payload_length);
+net_send_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
+		           const struct ipv4_address *dest_ip_addr_p,
+			   uint16_t dest_port,
+		           struct network_packet *tx_packet_p,
+		           size_t data_payload_length);
+void
+net_send_ipv4_tcp_segment(struct local_l4_end_point *local_l4_end_point_p,
+		          const struct ipv4_address *dest_ip_addr_p,
+			  uint16_t dest_port,
+		          struct network_packet *tx_packet_p,
+		          size_t data_payload_length);
 
 void
 net_send_ipv4_icmp_message(const struct ipv4_address *dest_ip_addr_p,

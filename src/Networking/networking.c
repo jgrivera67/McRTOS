@@ -619,7 +619,7 @@ net_send_ipv4_packet(const struct ipv4_address *dest_ip_addr_p,
     FDC_ASSERT(data_payload_length < UINT16_MAX + sizeof(struct ipv4_header),
 	       data_payload_length, tx_packet_p);
 
-    struct ethernet_frame *enet_frame =
+    struct ethernet_frame *tx_frame_p =
        (struct ethernet_frame *)tx_packet_p->data_buffer;
 
    struct local_l3_end_point *local_l3_end_point_p =
@@ -633,44 +633,44 @@ net_send_ipv4_packet(const struct ipv4_address *dest_ip_addr_p,
     /*
      * Populate IP header
      */
-    enet_frame->ipv4_header.version_and_header_length = 0;
-    SET_BIT_FIELD(enet_frame->ipv4_header.version_and_header_length,
+    tx_frame_p->ipv4_header.version_and_header_length = 0;
+    SET_BIT_FIELD(tx_frame_p->ipv4_header.version_and_header_length,
 		  IP_VERSION_MASK, IP_VERSION_SHIFT, 4);
-    SET_BIT_FIELD(enet_frame->ipv4_header.version_and_header_length,
+    SET_BIT_FIELD(tx_frame_p->ipv4_header.version_and_header_length,
 		  IP_HEADER_LENGTH_MASK, IP_HEADER_LENGTH_SHIFT, 5);
 
-    enet_frame->ipv4_header.type_of_service = 0; /* normal service */
-    enet_frame->ipv4_header.total_length =
+    tx_frame_p->ipv4_header.type_of_service = 0; /* normal service */
+    tx_frame_p->ipv4_header.total_length =
 	hton16(sizeof(struct ipv4_header) + data_payload_length);
 
-    enet_frame->ipv4_header.identification = hton16(
+    tx_frame_p->ipv4_header.identification = hton16(
 	ATOMIC_POST_INCREMENT_UINT16(
 	    &local_l3_end_point_p->ipv4.next_tx_ip_packet_seq_num));
 
     /*
      * No IP packet fragmentation is supported:
      */
-    enet_frame->ipv4_header.flags_and_fragment_offset =
+    tx_frame_p->ipv4_header.flags_and_fragment_offset =
 	hton16(IP_FLAG_DONT_FRAGMENT_MASK);
 
-    enet_frame->ipv4_header.time_to_live = 64; /* max routing hops */
-    enet_frame->ipv4_header.protocol_type = l4_protocol;
+    tx_frame_p->ipv4_header.time_to_live = 64; /* max routing hops */
+    tx_frame_p->ipv4_header.protocol_type = l4_protocol;
 
-    COPY_UNALIGNED_IPv4_ADDRESS(&enet_frame->ipv4_header.source_ip_addr,
+    COPY_UNALIGNED_IPv4_ADDRESS(&tx_frame_p->ipv4_header.source_ip_addr,
 				&local_l3_end_point_p->ipv4.local_ip_addr);
 
-    COPY_UNALIGNED_IPv4_ADDRESS(&enet_frame->ipv4_header.dest_ip_addr,
+    COPY_UNALIGNED_IPv4_ADDRESS(&tx_frame_p->ipv4_header.dest_ip_addr,
 				dest_ip_addr_p);
 
     /*
      * NOTE: enet_frame->ipv4_header.header_checksum is computed by hardware.
      * We just need to initialize the checksum field to 0
      */
-    enet_frame->ipv4_header.header_checksum = 0;
+    tx_frame_p->ipv4_header.header_checksum = 0;
 
 #ifdef SOFTWARE_BASED_CHECKSUM
-    enet_frame->ipv4_header.header_checksum =
-	net_compute_checksum(&enet_frame->ipv4_header,
+    tx_frame_p->ipv4_header.header_checksum =
+	net_compute_checksum(&tx_frame_p->ipv4_header,
 			     sizeof(struct ipv4_header));
 #endif
 
@@ -678,12 +678,12 @@ net_send_ipv4_packet(const struct ipv4_address *dest_ip_addr_p,
      * Populate Ethernet header
      */
 
-#if 0 // Hw does this
-    ENET_COPY_MAC_ADDRESS(&enet_frame->enet_header.source_mac_addr,
+#if 0 /* ENET hardware does this automatically */
+    ENET_COPY_MAC_ADDRESS(&tx_frame_p->enet_header.source_mac_addr,
 			  &enet_device_p->mac_address);
 #endif
 
-    enet_frame->enet_header.frame_type = hton16(ENET_IPv4_PACKET);
+    tx_frame_p->enet_header.frame_type = hton16(ENET_IPv4_PACKET);
 
     tx_packet_p->total_length = sizeof(struct ethernet_header) +
 				sizeof(struct ipv4_header) +
@@ -708,7 +708,7 @@ net_send_ipv4_packet(const struct ipv4_address *dest_ip_addr_p,
 	return fdc_error;
     }
 
-    COPY_MAC_ADDRESS(&enet_frame->enet_header.dest_mac_addr, &dest_mac_addr);
+    COPY_MAC_ADDRESS(&tx_frame_p->enet_header.dest_mac_addr, &dest_mac_addr);
 
     /*
      * Transmit packet:
@@ -719,11 +719,11 @@ net_send_ipv4_packet(const struct ipv4_address *dest_ip_addr_p,
 
 
 void
-net_send_ipv4_udp_packet(struct local_l4_end_point *local_l4_end_point_p,
-		         const struct ipv4_address *dest_ip_addr_p,
-			 uint16_t dest_port,
-		         struct network_packet *tx_packet_p,
-		         size_t data_payload_length)
+net_send_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
+		           const struct ipv4_address *dest_ip_addr_p,
+			   uint16_t dest_port,
+		           struct network_packet *tx_packet_p,
+		           size_t data_payload_length)
 {
     /*
      * Populate UPD header:
@@ -750,6 +750,46 @@ net_send_ipv4_udp_packet(struct local_l4_end_point *local_l4_end_point_p,
 		         tx_packet_p,
 		         sizeof(struct udp_header) + data_payload_length,
 		         TRANSPORT_PROTO_UDP);
+}
+
+
+void
+net_send_ipv4_tcp_segment(struct local_l4_end_point *local_l4_end_point_p,
+		          const struct ipv4_address *dest_ip_addr_p,
+			  uint16_t dest_port,
+		          struct network_packet *tx_packet_p,
+		          size_t data_payload_length)
+{
+#if 0 // TODO: Finish implementing this
+    /*
+     * Populate TCP header:
+     */
+    struct tcp_header *tcp_header_p =
+	(struct tcp_header *)GET_IPV4_DATA_PAYLOAD_AREA(tx_packet_p);
+
+    FDC_ASSERT(local_l4_end_point_p->protocol == TRANSPORT_PROTO_TCP,
+	       local_l4_end_point_p->protocol, local_l4_end_point_p);
+
+    tcp_header_p->source_port = local_l4_end_point_p->port;
+    tcp_header_p->dest_port = dest_port;
+    tcp_header_p->datagram_length = hton16(sizeof(struct tcp_header) +
+	                                   data_payload_length);
+
+    /*
+     * NOTE: tcp_header_p->segment_checksum is filled by hardware
+     */
+    tcp_header_p->segment_checksum = 0;
+
+    /*
+     * Send IP packet:
+     */
+    net_send_ipv4_packet(dest_ip_addr_p,
+		         tx_packet_p,
+		         sizeof(struct tcp_header) + data_payload_length,
+		         TRANSPORT_PROTO_TCP);
+#else
+    DEBUG_PRINTF("Not implemented yet\n");
+#endif
 }
 
 
@@ -903,6 +943,119 @@ net_receive_arp_packet(struct local_l3_end_point *local_l3_end_point_p,
 	capture_fdc_msg_printf("Recieved ARP packet with unsupported operation (%#x)\n",
 			       arp_operation);
     }
+
+    enet_repost_rx_packet(enet_device_p, rx_packet_p);
+}
+
+
+static void
+net_send_ipv4_ping_reply(const struct ipv4_address *dest_ip_addr_p,
+			 const struct icmpv4_echo_message *ping_request_msg_p)
+{
+    struct network_packet *tx_packet_p = net_allocate_tx_packet(true);
+    struct icmpv4_echo_message *echo_msg_p =
+	(struct icmpv4_echo_message *)GET_IPV4_DATA_PAYLOAD_AREA(tx_packet_p);
+
+    echo_msg_p->identifier = ping_request_msg_p->identifier;
+    echo_msg_p->seq_num = ping_request_msg_p->seq_num;
+    net_send_ipv4_icmp_message(dest_ip_addr_p,
+			       tx_packet_p,
+			       ICMP_TYPE_PING_REPLY,
+		               ICMP_CODE_PING_REPLY,
+		               sizeof(struct icmpv4_echo_message) -
+			       sizeof(struct icmpv4_header));
+}
+
+
+static void
+net_receive_icmpv4_message(struct local_l3_end_point *local_l3_end_point_p,
+	                   struct network_packet *rx_packet_p)
+{
+
+    FDC_ASSERT(rx_packet_p->total_length >=
+	       sizeof(struct ethernet_header) + sizeof(struct ipv4_header) +
+	       sizeof(struct icmpv4_header),
+	       rx_packet_p->total_length, rx_packet_p);
+
+    struct ipv4_header *ipv4_header_p = GET_IPV4_HEADER(rx_packet_p);
+    struct icmpv4_header *icmpv4_header_p = GET_IPV4_DATA_PAYLOAD_AREA(rx_packet_p);
+
+    switch (icmpv4_header_p->msg_type) {
+    case ICMP_TYPE_PING_REPLY:
+	FDC_ASSERT(icmpv4_header_p->msg_code == ICMP_CODE_PING_REPLY,
+		   icmpv4_header_p->msg_code, rx_packet_p);
+
+	struct icmpv4_echo_message *echo_msg_p =
+	    (struct icmpv4_echo_message *)(icmpv4_header_p);
+
+	//???
+	CONSOLE_POS_PRINTF(34,1, "Received ping reply: %d\n", echo_msg_p->seq_num);
+	//???
+	break;
+
+    case ICMP_TYPE_PING_REQUEST:
+	FDC_ASSERT(icmpv4_header_p->msg_code == ICMP_CODE_PING_REQUEST,
+		   icmpv4_header_p->msg_code, rx_packet_p);
+
+	const struct ipv4_address dest_ip_addr;
+
+	COPY_UNALIGNED_IPv4_ADDRESS(&dest_ip_addr,
+				    &ipv4_header_p->source_ip_addr);
+
+	net_send_ipv4_ping_reply(
+	    &dest_ip_addr,
+	    (struct icmpv4_echo_message *)(icmpv4_header_p));
+	break;
+
+    default:
+	capture_fdc_msg_printf("Received ICMP message with unsupported type: %#x\n",
+			       icmpv4_header_p->msg_type);
+    }
+
+    enet_repost_rx_packet(local_l3_end_point_p->enet_device_p, rx_packet_p);
+}
+
+
+static void
+net_receive_tcp_segment(struct local_l3_end_point *local_l3_end_point_p,
+	                struct network_packet *rx_packet_p)
+{
+#if 0 // TODO: Finish implementing this:
+    FDC_ASSERT(rx_packet_p->total_length >=
+	       sizeof(struct ethernet_header) + sizeof(struct ipv4_header) +
+	       sizeof(struct tcp_header),
+	       rx_packet_p->total_length, rx_packet_p);
+
+    struct tcp_header *tcp_header_p = GET_IPV4_DATA_PAYLOAD_AREA(rx_packet_p);
+
+#else
+    DEBUG_PRINTF("Received TCP segment ignored - not supported yet\n");
+    enet_repost_rx_packet(local_l3_end_point_p->enet_device_p, rx_packet_p);
+#endif
+}
+
+
+static void
+net_receive_udp_datagram(struct local_l3_end_point *local_l3_end_point_p,
+	                 struct network_packet *rx_packet_p)
+{
+
+    FDC_ASSERT(rx_packet_p->total_length >=
+	       sizeof(struct ethernet_header) + sizeof(struct ipv4_header) +
+	       sizeof(struct udp_header),
+	       rx_packet_p->total_length, rx_packet_p);
+
+#if 0 // TODO: Finish implementing this:
+    struct udp_header *udp_header_p = GET_IPV4_DATA_PAYLOAD_AREA(rx_packet_p);
+
+    /*
+     * Lookup local Layer-4 end point by destination port:
+     */
+
+#else
+    DEBUG_PRINTF("Received UDP datagram ignored - not supported yet\n");
+    enet_repost_rx_packet(local_l3_end_point_p->enet_device_p, rx_packet_p);
+#endif
 }
 
 
@@ -910,7 +1063,6 @@ static void
 net_receive_ipv4_packet(struct local_l3_end_point *local_l3_end_point_p,
 	                struct network_packet *rx_packet_p)
 {
-
     FDC_ASSERT(rx_packet_p->total_length >=
 	       sizeof(struct ethernet_header) + sizeof(struct ipv4_header),
 	       rx_packet_p->total_length, rx_packet_p);
@@ -921,15 +1073,24 @@ net_receive_ipv4_packet(struct local_l3_end_point *local_l3_end_point_p,
     CONSOLE_POS_PRINTF(33,1, "Received IPv4 packets: %d\n", count);
 //???
 
-#if 0 //???
-    struct ethernet_frame *rx_frame =
-	(struct ethernet_frame *)rx_packet_p->data_buffer;
-#endif //???
+    struct ipv4_header *ipv4_header_p = GET_IPV4_HEADER(rx_packet_p);
 
-    /*
-     * TODO: Only repost packet if not enqueued in a local transport end point
-     */
-    enet_repost_rx_packet(local_l3_end_point_p->enet_device_p, rx_packet_p);
+    switch (ipv4_header_p->protocol_type) {
+    case TRANSPORT_PROTO_ICMP:
+	net_receive_icmpv4_message(local_l3_end_point_p, rx_packet_p);
+	break;
+    case TRANSPORT_PROTO_TCP:
+        net_receive_tcp_segment(local_l3_end_point_p, rx_packet_p);
+	break;
+    case TRANSPORT_PROTO_UDP:
+	net_receive_udp_datagram(local_l3_end_point_p, rx_packet_p);
+	break;
+    default:
+	capture_fdc_msg_printf("Received IPv4 packet with unknown protocol type: %#x\n",
+			       ipv4_header_p->protocol_type);
+
+	enet_repost_rx_packet(local_l3_end_point_p->enet_device_p, rx_packet_p);
+    }
 }
 
 
@@ -1006,7 +1167,6 @@ net_receive_thread_f(void *arg)
 	switch (ntoh16(rx_frame->enet_header.frame_type)) {
 	case ENET_ARP_PACKET:
 	    net_receive_arp_packet(local_l3_end_point_p, rx_packet_p);
-	    enet_repost_rx_packet(enet_device_p, rx_packet_p);
 	    break;
 	case ENET_IPv4_PACKET:
 	    net_receive_ipv4_packet(local_l3_end_point_p, rx_packet_p);
