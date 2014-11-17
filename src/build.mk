@@ -195,7 +195,7 @@ CFLAGS  = 	$(MCFLAGS) $(OPT) -gdwarf-2 \
 		-Wundef \
 		-Wdouble-promotion \
 		$(CPPFLAGS) \
-		${COMMON_CFLAGS} ${CMD_LINE_CFLAGS}
+		${COMMON_CFLAGS} ${EXTRA_CFLAGS}
 
 LDFLAGS = 	$(MCFLAGS) -nostartfiles -T$(LDSCRIPT) \
 		-Wl,-Map=$(PLATFORM).map,--cref,--no-warn-mismatch \

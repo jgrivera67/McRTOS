@@ -65,7 +65,11 @@ C_ASSERT(sizeof(struct app_state_vars) % SOC_MPU_REGION_ALIGNMENT == 0);
 static struct app_state_vars g_app;
 
 static const struct ipv4_address g_dest_ip_addr[] = {
-    { .bytes = { 192, 168, 8, 1 } },
+#if BOARD_INSTANCE == 1
+    { .bytes = { 192, 168, 8, 3 } },
+#else
+    { .bytes = { 192, 168, 8, 2 } },
+#endif
 };
 
 
@@ -188,7 +192,8 @@ void app_hardware_stop(void)
 static
 void app_software_init(void)
 {
-    static const char g_app_version[] = "FRDM board application v0.1";
+    static const char g_app_version[] = "FRDM board ping application v0.1 "
+					"(board " STRINGIFY_LITERAL(BOARD_INSTANCE) ")";
     static const char g_app_build_timestamp[] = "built " __DATE__ " " __TIME__;
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();

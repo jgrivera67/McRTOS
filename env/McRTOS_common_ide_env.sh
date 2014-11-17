@@ -83,6 +83,30 @@ function my_update_flash
     return 0
 }
 
+function my_update_flash2
+{
+    typeset dest_dir
+
+    echo "copying $BIN_FILE to $PLATFORM flash ..."
+    #dest_dir=/media/$USER/$PLATFORM
+    dest_dir=/media/$USER/MBED1
+
+    if [ ! -d $dest_dir ]; then
+	echo "*** Error: $dest_dir is not a directory"
+	return 1
+    fi
+
+    cp $BIN_FILE $dest_dir
+    status=$?
+    if [ $status != 0 ]; then
+	echo "*** cp failed with error $status ***"
+	return 1
+    fi
+
+    sync
+    return 0
+}
+
 function my_gdb
 {
     typeset init_script

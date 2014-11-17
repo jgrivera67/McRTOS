@@ -6,7 +6,7 @@
 # Author: German Rivera - September, 2013
 #
 # NOTE: additional CFLAGS can be specfied in the command line like this:
-# make CMD_LINE_CFLAGS=...
+# make EXTRA_CFLAGS=...
 #
 
 #
@@ -40,7 +40,7 @@ RUN_BUILD_MAKEFILE := $(MAKE) --directory=$(OBJECT_DIR) \
 			      APPLICATION='$(APPLICATION)' \
 			      PLATFORM='$(PLATFORM)' \
 			      BUILD_FLAVOR='$(BUILD_FLAVOR)' \
-			      CMD_LINE_CFLAGS='$(CMD_LINE_CFLAGS)' \
+			      EXTRA_CFLAGS='$(EXTRA_CFLAGS)' \
 
 RUN_TESTS_MAKEFILE := $(MAKE) --directory=$(UNIT_TESTS_DIR)
 

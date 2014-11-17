@@ -371,6 +371,29 @@ net_enqueue_rx_packet(struct local_l3_end_point *local_l3_end_point_p,
 }
 
 
+/**
+ * Recycle a Rx packet for receiving another packet
+ */
+void
+net_recycle_rx_packet(struct local_l3_end_point *local_l3_end_point_p,
+		      struct network_packet *rx_packet_p)
+{
+    FDC_ASSERT(
+        local_l3_end_point_p->signature == LOCAL_L3_END_POINT_SIGNATURE,
+        local_l3_end_point_p->signature, local_l3_end_point_p);
+
+    FDC_ASSERT(rx_packet_p->signature == NET_RX_PACKET_SIGNATURE,
+	       rx_packet_p->signature, rx_packet_p);
+    FDC_ASSERT(rx_packet_p->state_flags == NET_PACKET_IN_RX_USE_BY_APP,
+	       rx_packet_p->state_flags, rx_packet_p);
+
+    FDC_ASSERT(rx_packet_p->rx_buf_desc_p == NULL,
+	       rx_packet_p->rx_buf_desc_p, rx_packet_p);
+
+    enet_repost_rx_packet(local_l3_end_point_p->enet_device_p, rx_packet_p);
+}
+
+
 static struct arp_cache_entry *
 arp_cache_lookup(struct arp_cache *arp_cache_p,
 		 const struct ipv4_address *dest_ip_addr_p)
@@ -868,10 +891,11 @@ net_receive_arp_packet(struct local_l3_end_point *local_l3_end_point_p,
     //???
     CONSOLE_POS_PRINTF(31,1,
 		"Received ARP packet: "
-		"operation: %x "
+		"operation: %x (%s) "
 		"source mac addr: %x:%x:%x:%x:%x:%x "
 		"dest mac addr: %x:%x:%x:%x:%x:%x\n",
 		arp_operation,
+		arp_operation == ARP_REQUEST ? "ARP request" : "ARP reply  ",
 		rx_frame_p->arp_packet.source_mac_addr.bytes[0],
 		rx_frame_p->arp_packet.source_mac_addr.bytes[1],
 		rx_frame_p->arp_packet.source_mac_addr.bytes[2],
@@ -989,7 +1013,12 @@ net_receive_icmpv4_message(struct local_l3_end_point *local_l3_end_point_p,
 	    (struct icmpv4_echo_message *)(icmpv4_header_p);
 
 	//???
-	CONSOLE_POS_PRINTF(34,1, "Received ping reply: %d\n", echo_msg_p->seq_num);
+	CONSOLE_POS_PRINTF(34,1, "Received ping reply: %d for %u.%u.%u.%u\n",
+			   echo_msg_p->seq_num,
+			   ipv4_header_p->source_ip_addr.bytes[0],
+			   ipv4_header_p->source_ip_addr.bytes[1],
+			   ipv4_header_p->source_ip_addr.bytes[2],
+			   ipv4_header_p->source_ip_addr.bytes[3]);
 	//???
 	break;
 

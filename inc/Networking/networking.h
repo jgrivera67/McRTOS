@@ -164,10 +164,23 @@ C_ASSERT(BOARD_INSTANCE == 1 || BOARD_INSTANCE == 2);
 	    *(uint16_t *)((_ip_addr2_p)->bytes + 2))
 
 /**
- * Build an IPv4 subnet mask in network byte order
+ * Build an IPv4 subnet mask in network byte order (big endian),
+ * assuming that the target CPU runs in little endian.
+ *
+ * NOTE: This macro can be used in static initializers, if
+ * '_num_bits' is a constant,
  */
-#define IPv4_SUBNET_MASK(_num_bits) MULTI_BIT_MASK(_num_bits, 0)
+#define IPv4_SUBNET_MASK(_num_bits) \
+	((_num_bits) % 8 == 0 ?						\
+	     MULTI_BIT_MASK((_num_bits) - 1, 0) :			\
+	     (MULTI_BIT_MASK((((_num_bits) / 8) * 8) - 1, 0) |		\
+	      (MULTI_BIT_MASK(7, 7 - ((_num_bits) % 8)) <<		\
+	       (((_num_bits) / 8) * 8))))
 
+/**
+ * Check if two IPv4 addresses are in the same subnet, for a given
+ * subnet mask
+ */
 #define SAME_IPv4_SUBNET(_local_ip_addr_p, _dest_ip_addr_p, _subnet_mask) \
 	(((_local_ip_addr_p)->value & (_subnet_mask)) == \
 	 ((_dest_ip_addr_p)->value & (_subnet_mask)))
@@ -918,6 +931,9 @@ void net_dequeue_rx_packet(struct local_l3_end_point *local_l3_end_point_p,
 void net_enqueue_rx_packet(struct local_l3_end_point *local_l3_end_point_p,
 			   struct network_packet *rx_packet_p);
 
+void
+net_recycle_rx_packet(struct local_l3_end_point *local_l3_end_point_p,
+		      struct network_packet *rx_packet_p);
 
 fdc_error_t
 net_send_ipv4_packet(const struct ipv4_address *dest_ip_addr_p,
