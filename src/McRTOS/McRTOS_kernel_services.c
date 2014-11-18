@@ -1422,7 +1422,12 @@ rtos_k_condvar_wait_internal(
 
 
 /**
- * Waits on a McRTOS condition variable
+ * Waits on a McRTOS condition variable. If timeout_ms_p != NULL and
+ * the condition variable is not signaled before *timeout_ms_p milliseconds,
+ * the calling thread will be awaken and *timeout_ms_p will be set 0.
+ * Otherwise, if the cond variable is signaled before the timeout expires,
+ * *timeout_ms_p will be set to the amount of time left before the timeout
+ * expiration.
  */
 void
 rtos_k_condvar_wait(

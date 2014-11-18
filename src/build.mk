@@ -191,7 +191,7 @@ CFLAGS  = 	$(MCFLAGS) $(OPT) -gdwarf-2 \
 		-Winline \
 		-fverbose-asm -Wa,-ahlms=$(<:.c=.lst) \
 		-Werror \
-		-Wstack-usage=144 \
+		-Wstack-usage=184 \
 		-Wundef \
 		-Wdouble-promotion \
 		$(CPPFLAGS) \

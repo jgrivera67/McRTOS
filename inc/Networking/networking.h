@@ -64,11 +64,10 @@ C_ASSERT(BOARD_INSTANCE == 1 || BOARD_INSTANCE == 2);
 	MILLISECONDS_TO_TICKS(20u * 60 * 1000)
 
 /**
- * Timeout to wait for an ARP reply after sending a non-gratuitous
- * ARP request (3 minutes)
+ * Timeout in milliseconds to wait for an ARP reply after sending a
+ * non-gratuitous ARP request (3 minutes)
  */
-#define ARP_REPLY_WAIT_TIMEOUT_IN_TICKS \
-	MILLISECONDS_TO_TICKS(3u * 60 * 1000)
+#define ARP_REPLY_WAIT_TIMEOUT_IN_MS	(3u * 60 * 1000)
 
 /**
  * Maximum number of ARP requests to be sent for a given destination

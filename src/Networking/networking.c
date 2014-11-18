@@ -17,6 +17,15 @@
 #pragma GCC diagnostic ignored "-Wunused-variable" // ???
 #pragma GCC diagnostic ignored "-Wunused-parameter" // ???
 
+#define NET_TRACE //???
+
+#ifdef NET_TRACE
+#define NET_TRACE_RECEIVED_ARP_PACKET(_packet_p) \
+	net_trace_received_arp_packet(_packet_p)
+#else
+#define NET_TRACE_RECEIVED_ARP_PACKET(_packet_p)
+#endif
+
 /**
  * Ethernet link speed: 100 Mbps
  */
@@ -391,28 +400,59 @@ net_recycle_rx_packet(struct local_l3_end_point *local_l3_end_point_p,
 
 
 static struct arp_cache_entry *
-arp_cache_lookup(struct arp_cache *arp_cache_p,
-		 const struct ipv4_address *dest_ip_addr_p)
+arp_cache_lookup_or_allocate(struct arp_cache *arp_cache_p,
+			     const struct ipv4_address *dest_ip_addr_p,
+			     struct arp_cache_entry **free_entry_pp)
 {
-    unsigned int i;
-    struct arp_cache_entry *chosen_entry_p = NULL;
+    struct arp_cache_entry *first_free_entry_p = NULL;
+    struct arp_cache_entry *least_recently_used_entry_p = NULL;
+    rtos_ticks_t least_recently_used_ticks_delta = 0;
+    struct arp_cache_entry *matching_entry_p = NULL;
 
-    for (i = 0; i < ARP_CACHE_NUM_ENTRIES; i++) {
+    *free_entry_pp = NULL;
+    for (unsigned int i = 0; i < ARP_CACHE_NUM_ENTRIES; i++) {
 	struct arp_cache_entry *entry_p = &arp_cache_p->entries[i];
+	rtos_ticks_t current_ticks = rtos_k_get_ticks();
 
 	if (entry_p->state == ARP_ENTRY_INVALID) {
-	    continue;
-	}
+	    if (first_free_entry_p == NULL) {
+		first_free_entry_p = entry_p;
+	    }
+	} else {
+	    FDC_ASSERT(entry_p->state == ARP_ENTRY_FILLED ||
+		       entry_p->state == ARP_ENTRY_HALF_FILLED,
+		       entry_p->state, entry_p);
 
-	if (entry_p->dest_ip_addr.value == dest_ip_addr_p->value) {
-	    entry_p->last_lookup_time_stamp = rtos_k_get_ticks();
-	    chosen_entry_p = entry_p;
-	    break;
-	}
+	    if (entry_p->dest_ip_addr.value == dest_ip_addr_p->value) {
+		matching_entry_p = entry_p;
+		break;
+	    }
 
+	    if (least_recently_used_entry_p == NULL ||
+		RTOS_TICKS_DELTA(entry_p->last_lookup_time_stamp, current_ticks) >
+		       least_recently_used_ticks_delta) {
+		least_recently_used_entry_p = entry_p;
+		least_recently_used_ticks_delta =
+		    RTOS_TICKS_DELTA(entry_p->last_lookup_time_stamp,
+				     current_ticks);
+	    }
+	}
     }
 
-    return chosen_entry_p;
+    if (matching_entry_p == NULL) {
+	if (first_free_entry_p != NULL) {
+	    *free_entry_pp = first_free_entry_p;
+	} else {
+	    /*
+	     * Overwrite the least recently used entry:
+	     */
+	    FDC_ASSERT(least_recently_used_entry_p != NULL, 0, 0);
+	    least_recently_used_entry_p->state = ARP_ENTRY_INVALID;
+	    *free_entry_pp = least_recently_used_entry_p;
+	}
+    }
+
+    return matching_entry_p;
 }
 
 
@@ -422,38 +462,47 @@ find_dest_mac_addr(struct local_l3_end_point *local_l3_end_point_p,
 		   struct ethernet_mac_address *dest_mac_addr_p)
 {
     unsigned int arp_request_retries = 0;
-    struct arp_cache_entry *arp_entry_p = NULL;
+    struct arp_cache_entry *matching_entry_p = NULL;
+    struct arp_cache_entry *free_entry_p = NULL;
     struct arp_cache *arp_cache_p = &local_l3_end_point_p->ipv4.arp_cache;
     fdc_error_t fdc_error;
 
     rtos_k_mutex_acquire(&arp_cache_p->mutex);
     for ( ; ; ) {
 	bool send_arp_request = false;
-	arp_entry_p = arp_cache_lookup(arp_cache_p, dest_ip_addr_p);
+	matching_entry_p = arp_cache_lookup_or_allocate(arp_cache_p, dest_ip_addr_p,
+							&free_entry_p);
 	rtos_ticks_t current_ticks = rtos_k_get_ticks();
 
-	if (arp_entry_p == NULL) {
+	if (matching_entry_p == NULL) {
 	    send_arp_request = true;
-	} else if (arp_entry_p->state == ARP_ENTRY_FILLED) {
-	    if (RTOS_TICKS_DELTA(arp_entry_p->arp_reply_time_stamp, current_ticks) <
+	} else if (matching_entry_p->state == ARP_ENTRY_FILLED) {
+	    if (RTOS_TICKS_DELTA(matching_entry_p->arp_reply_time_stamp, current_ticks) <
 		ARP_CACHE_ENTRY_LIFETIME_IN_TICKS) {
 		/*
 		 * ARP cache hit
 		 */
-		*dest_mac_addr_p = arp_entry_p->dest_mac_addr;
+		*dest_mac_addr_p = matching_entry_p->dest_mac_addr;
 		break;
 	    } else {
 		/*
 		 * ARP entry expired, send a new ARP request:
 		 */
+		DEBUG_PRINTF("Expired ARP cache entry for IP address %u.%u.%u.%u\n",
+			     dest_ip_addr_p->bytes[0],
+			     dest_ip_addr_p->bytes[1],
+			     dest_ip_addr_p->bytes[2],
+			     dest_ip_addr_p->bytes[3]);
+
+		matching_entry_p->state = ARP_ENTRY_INVALID;
 		send_arp_request = true;
 	    }
 	} else {
-	    FDC_ASSERT(arp_entry_p->state == ARP_ENTRY_HALF_FILLED,
-		       arp_entry_p->state, arp_entry_p);
+	    FDC_ASSERT(matching_entry_p->state == ARP_ENTRY_HALF_FILLED,
+		       matching_entry_p->state, matching_entry_p);
 
-	    if (RTOS_TICKS_DELTA(arp_entry_p->arp_request_time_stamp, current_ticks) >=
-		ARP_REPLY_WAIT_TIMEOUT_IN_TICKS) {
+	    if (RTOS_TICKS_DELTA(matching_entry_p->arp_request_time_stamp, current_ticks) >=
+		MILLISECONDS_TO_TICKS(ARP_REPLY_WAIT_TIMEOUT_IN_MS)) {
 		/*
 		 * Re-send ARP request:
 		 */
@@ -485,9 +534,14 @@ find_dest_mac_addr(struct local_l3_end_point *local_l3_end_point_p,
 	    }
 
 	    arp_request_retries ++;
-	    if (arp_entry_p != NULL) {
-		arp_entry_p->arp_request_time_stamp = rtos_k_get_ticks();
-		arp_entry_p->state = ARP_ENTRY_HALF_FILLED;
+	    if (matching_entry_p != NULL) {
+		matching_entry_p->arp_request_time_stamp = rtos_k_get_ticks();
+		matching_entry_p->state = ARP_ENTRY_HALF_FILLED;
+	    } else {
+		FDC_ASSERT(free_entry_p != NULL, dest_ip_addr_p, arp_cache_p);
+		free_entry_p->dest_ip_addr.value = dest_ip_addr_p->value;
+		free_entry_p->arp_request_time_stamp = rtos_k_get_ticks();
+		free_entry_p->state = ARP_ENTRY_HALF_FILLED;
 	    }
 
 	    net_send_arp_request(local_l3_end_point_p->enet_device_p,
@@ -498,9 +552,10 @@ find_dest_mac_addr(struct local_l3_end_point *local_l3_end_point_p,
 	/*
 	 * Wait for ARP cache update:
 	 */
+	rtos_milliseconds_t timeout = ARP_REPLY_WAIT_TIMEOUT_IN_MS;
 	rtos_condvar_wait(&arp_cache_p->cache_updated_condvar,
 			  &arp_cache_p->mutex,
-			  NULL);
+			  &timeout);
     }
 
     fdc_error = 0;
@@ -516,38 +571,16 @@ arp_cache_update(struct arp_cache *arp_cache_p,
 		 const struct ipv4_address *dest_ip_addr_p,
 		 struct ethernet_mac_address *dest_mac_addr_p)
 {
-    struct arp_cache_entry *first_free_entry_p = NULL;
-    struct arp_cache_entry *least_recently_used_entry_p = NULL;
-    rtos_ticks_t least_recently_used_ticks_delta = 0;
     struct arp_cache_entry *chosen_entry_p = NULL;
+    struct arp_cache_entry *free_entry_p = NULL;
 
     rtos_k_mutex_acquire(&arp_cache_p->mutex);
-    for (unsigned int i = 0; i < ARP_CACHE_NUM_ENTRIES; i++) {
-	struct arp_cache_entry *entry_p = &arp_cache_p->entries[i];
-	rtos_ticks_t current_ticks = rtos_k_get_ticks();
-
-	if (entry_p->state == ARP_ENTRY_INVALID ||
-	    entry_p->dest_ip_addr.value == dest_ip_addr_p->value) {
-	    chosen_entry_p = entry_p;
-	    break;
-	}
-
-	if (least_recently_used_entry_p == NULL ||
-	    RTOS_TICKS_DELTA(entry_p->last_lookup_time_stamp, current_ticks) >
-		   least_recently_used_ticks_delta) {
-	    least_recently_used_entry_p = entry_p;
-	    least_recently_used_ticks_delta =
-		RTOS_TICKS_DELTA(entry_p->last_lookup_time_stamp,
-				 current_ticks);
-	}
-    }
+    chosen_entry_p = arp_cache_lookup_or_allocate(arp_cache_p, dest_ip_addr_p,
+					          &free_entry_p);
 
     if (chosen_entry_p == NULL) {
-	/*
-	 * Overwrite the least recently used entry:
-	 */
-	FDC_ASSERT(least_recently_used_entry_p != NULL, 0, 0);
-	chosen_entry_p = least_recently_used_entry_p;
+	FDC_ASSERT(free_entry_p != NULL, dest_ip_addr_p, arp_cache_p);
+	chosen_entry_p = free_entry_p;
 	chosen_entry_p->dest_ip_addr.value = dest_ip_addr_p->value;
     }
 
@@ -869,42 +902,62 @@ net_send_ipv4_ping_request(const struct ipv4_address *dest_ip_addr_p,
 }
 
 
+#ifdef NET_TRACE
+static void
+net_trace_received_arp_packet(struct network_packet *packet_p)
+{
+    struct ethernet_frame *frame_p =
+	(struct ethernet_frame *)packet_p->data_buffer;
+
+    uint16_t arp_operation = ntoh16(frame_p->arp_packet.operation);
+
+    DEBUG_PRINTF("Received ARP packet:\n"
+		"\toperation: %s (%#x)\n"
+		"\tsource mac addr: %x:%x:%x:%x:%x:%x\n"
+		"\tsource IP address: %u.%u.%u.%u\n"
+		"\tdest mac addr: %x:%x:%x:%x:%x:%x\n"
+		"\tdest IP address: %u.%u.%u.%u\n",
+		arp_operation == ARP_REQUEST ? "ARP request" : "ARP reply",
+		arp_operation,
+		frame_p->arp_packet.source_mac_addr.bytes[0],
+		frame_p->arp_packet.source_mac_addr.bytes[1],
+		frame_p->arp_packet.source_mac_addr.bytes[2],
+		frame_p->arp_packet.source_mac_addr.bytes[3],
+		frame_p->arp_packet.source_mac_addr.bytes[4],
+		frame_p->arp_packet.source_mac_addr.bytes[5],
+		frame_p->arp_packet.source_ip_addr.bytes[0],
+		frame_p->arp_packet.source_ip_addr.bytes[1],
+		frame_p->arp_packet.source_ip_addr.bytes[2],
+		frame_p->arp_packet.source_ip_addr.bytes[3],
+		frame_p->arp_packet.dest_mac_addr.bytes[0],
+		frame_p->arp_packet.dest_mac_addr.bytes[1],
+		frame_p->arp_packet.dest_mac_addr.bytes[2],
+		frame_p->arp_packet.dest_mac_addr.bytes[3],
+		frame_p->arp_packet.dest_mac_addr.bytes[4],
+		frame_p->arp_packet.dest_mac_addr.bytes[5],
+		frame_p->arp_packet.dest_ip_addr.bytes[0],
+		frame_p->arp_packet.dest_ip_addr.bytes[1],
+		frame_p->arp_packet.dest_ip_addr.bytes[2],
+		frame_p->arp_packet.dest_ip_addr.bytes[3]);
+}
+#endif
+
+
 static void
 net_receive_arp_packet(struct local_l3_end_point *local_l3_end_point_p,
 	               struct network_packet *rx_packet_p)
 {
-
     FDC_ASSERT(rx_packet_p->total_length >=
 	       sizeof(struct ethernet_header) + sizeof(struct arp_packet),
 	       rx_packet_p->total_length, rx_packet_p);
+
+    NET_TRACE_RECEIVED_ARP_PACKET(rx_packet_p);
 
     const struct enet_device *enet_device_p = local_l3_end_point_p->enet_device_p;
     struct ethernet_frame *rx_frame_p =
 	(struct ethernet_frame *)rx_packet_p->data_buffer;
 
     uint16_t arp_operation = ntoh16(rx_frame_p->arp_packet.operation);
-
-    //???
-    CONSOLE_POS_PRINTF(31,1,
-		"Received ARP packet: "
-		"operation: %x (%s) "
-		"source mac addr: %x:%x:%x:%x:%x:%x "
-		"dest mac addr: %x:%x:%x:%x:%x:%x\n",
-		arp_operation,
-		arp_operation == ARP_REQUEST ? "ARP request" : "ARP reply  ",
-		rx_frame_p->arp_packet.source_mac_addr.bytes[0],
-		rx_frame_p->arp_packet.source_mac_addr.bytes[1],
-		rx_frame_p->arp_packet.source_mac_addr.bytes[2],
-		rx_frame_p->arp_packet.source_mac_addr.bytes[3],
-		rx_frame_p->arp_packet.source_mac_addr.bytes[4],
-		rx_frame_p->arp_packet.source_mac_addr.bytes[5],
-		rx_frame_p->arp_packet.dest_mac_addr.bytes[0],
-		rx_frame_p->arp_packet.dest_mac_addr.bytes[1],
-		rx_frame_p->arp_packet.dest_mac_addr.bytes[2],
-		rx_frame_p->arp_packet.dest_mac_addr.bytes[3],
-		rx_frame_p->arp_packet.dest_mac_addr.bytes[4],
-		rx_frame_p->arp_packet.dest_mac_addr.bytes[5]);
-    //???
 
     if (arp_operation == ARP_REQUEST || arp_operation == ARP_REPLY) {
 	FDC_ASSERT(rx_frame_p->arp_packet.link_addr_type == hton16(0x1),
@@ -951,16 +1004,32 @@ net_receive_arp_packet(struct local_l3_end_point *local_l3_end_point_p,
 	    &rx_frame_p->arp_packet.dest_mac_addr,
 	    &local_l3_end_point_p->enet_device_p->mac_address);
 
-	/*
-	 * Update ARP cache with (source IP addr, source MAC addr)
-	 */
-	arp_cache_update(&local_l3_end_point_p->ipv4.arp_cache,
-			 &rx_frame_p->arp_packet.source_ip_addr,
-			 &rx_frame_p->arp_packet.source_mac_addr);
+	if (UNALIGNED_IPv4_ADDRESSES_EQUAL(&rx_frame_p->arp_packet.source_ip_addr,
+					   &local_l3_end_point_p->ipv4.local_ip_addr)) {
+	    capture_fdc_msg_printf(
+		"Another Layer-3 end point (%x:%x:%x:%x:%x:%x) has the same IP address (%u.%u.%u.%u):\n",
+		rx_frame_p->arp_packet.source_mac_addr.bytes[0],
+		rx_frame_p->arp_packet.source_mac_addr.bytes[1],
+		rx_frame_p->arp_packet.source_mac_addr.bytes[2],
+		rx_frame_p->arp_packet.source_mac_addr.bytes[3],
+		rx_frame_p->arp_packet.source_mac_addr.bytes[4],
+		rx_frame_p->arp_packet.source_mac_addr.bytes[5],
+		rx_frame_p->arp_packet.source_ip_addr.bytes[0],
+		rx_frame_p->arp_packet.source_ip_addr.bytes[1],
+		rx_frame_p->arp_packet.source_ip_addr.bytes[2],
+		rx_frame_p->arp_packet.source_ip_addr.bytes[3]);
+	} else {
+	    /*
+	     * Update ARP cache with (source IP addr, source MAC addr)
+	     */
+	    arp_cache_update(&local_l3_end_point_p->ipv4.arp_cache,
+			     &rx_frame_p->arp_packet.source_ip_addr,
+			     &rx_frame_p->arp_packet.source_mac_addr);
+	}
 	break;
 
     default:
-	capture_fdc_msg_printf("Recieved ARP packet with unsupported operation (%#x)\n",
+	capture_fdc_msg_printf("Received ARP packet with unsupported operation (%#x)\n",
 			       arp_operation);
     }
 
