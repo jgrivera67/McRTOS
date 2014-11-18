@@ -140,7 +140,6 @@ rtos_k_create_thread(
     fdc_error_t fdc_error = 0;
     bool fatal_error = false;
     struct rtos_thread_execution_stack *thread_stack_p = NULL;
-    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
     /*
      * Allocate a thread object:
@@ -201,7 +200,6 @@ rtos_k_create_thread(
     rtos_k_thread_init(
         params_p,
         thread_stack_p,
-        cpu_id,
         false,
         new_thread_p - g_McRTOS_p->rts_app_threads,
         new_thread_p);
@@ -229,8 +227,6 @@ Exit:
  *
  * @param   thread_stack_p: Pointer to the thread's execution stack.
  *
- * @param   cpu_id: CPU ID of the CPU core where this thread exists.
- *
  * @param   thread_is_privileged: true if thread to initialize is
  *          a system thread. False otherwise.
  *
@@ -244,7 +240,6 @@ void
 rtos_k_thread_init(
     _IN_ const struct rtos_thread_creation_params *params_p,
     _IN_ struct rtos_thread_execution_stack *thread_stack_p,
-    _IN_ cpu_id_t cpu_id,
     _IN_ bool thread_is_privileged,
     _IN_ uint8_t context_id,
     _INOUT_ struct rtos_thread *rtos_thread_p)
@@ -258,14 +253,12 @@ rtos_k_thread_init(
 
     rtos_thread_prio_t thread_prio = params_p->p_priority;
 
-    FDC_ASSERT(cpu_id < SOC_NUM_CPU_CORES,
-        cpu_id, SOC_NUM_CPU_CORES);
-
     FDC_ASSERT(thread_prio < RTOS_NUM_THREAD_PRIORITIES,
         thread_prio, RTOS_NUM_THREAD_PRIORITIES);
 
     FDC_ASSERT_VALID_FUNCTION_POINTER(params_p->p_function_p);
 
+    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
     struct rtos_cpu_controller *cpu_controller_p =
         &g_McRTOS_p->rts_cpu_controllers[cpu_id];
 
@@ -371,7 +364,6 @@ rtos_k_thread_init(
      */
     rtos_k_timer_init(
         params_p->p_name_p,
-        cpu_id,
         rtos_thread_timer_callback,
         &rtos_thread_p->thr_timer);
 
@@ -380,7 +372,6 @@ rtos_k_thread_init(
      */
     rtos_k_condvar_init(
         params_p->p_name_p,
-        cpu_id,
         &rtos_thread_p->thr_condvar);
 
     /*
@@ -393,9 +384,6 @@ rtos_k_thread_init(
 
     rtos_add_tail_runnable_thread(
         cpu_controller_p, rtos_thread_p);
-
-    FDC_ASSERT(cpu_id == SOC_GET_CURRENT_CPU_ID(),
-        cpu_id, SOC_GET_CURRENT_CPU_ID());
 
     /*
      * If we are being called after the thread scheduler has been activated
@@ -907,7 +895,6 @@ rtos_k_create_mutex(
 
     fdc_error_t fdc_error = 0;
     bool fatal_error = false;
-    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
     /*
      * Allocate a mutex object:
@@ -931,7 +918,6 @@ rtos_k_create_mutex(
 
     rtos_k_mutex_init(
         params_p->p_name_p,
-        cpu_id,
         new_mutex_p);
 
     *params_p->p_mutex_pp = new_mutex_p;
@@ -949,12 +935,11 @@ Exit:
 void
 rtos_k_mutex_init(
     _IN_  const char *mutex_name_p,
-    _IN_ cpu_id_t cpu_id,
     _OUT_ struct rtos_mutex *rtos_mutex_p)
 {
     FDC_ASSERT_VALID_RAM_OR_ROM_POINTER(mutex_name_p, sizeof(char));
     FDC_ASSERT_VALID_RAM_POINTER(rtos_mutex_p, sizeof(uint32_t));
-    FDC_ASSERT(cpu_id < SOC_NUM_CPU_CORES, cpu_id, SOC_NUM_CPU_CORES);
+    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
     rtos_mutex_p->mtx_signature = RTOS_MUTEX_SIGNATURE;
     rtos_mutex_p->mtx_name_p = mutex_name_p;
@@ -1272,7 +1257,6 @@ rtos_k_create_condvar(
 
     fdc_error_t fdc_error = 0;
     bool fatal_error = false;
-    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
     /*
      * Allocate a condvar object:
@@ -1296,7 +1280,6 @@ rtos_k_create_condvar(
 
     rtos_k_condvar_init(
         params_p->p_name_p,
-        cpu_id,
         new_condvar_p);
 
     *params_p->p_condvar_pp = new_condvar_p;
@@ -1314,12 +1297,11 @@ Exit:
 void
 rtos_k_condvar_init(
     _IN_  const char *condvar_name_p,
-    _IN_  cpu_id_t cpu_id,
     _OUT_ struct rtos_condvar *rtos_condvar_p)
 {
     FDC_ASSERT_VALID_RAM_OR_ROM_POINTER(condvar_name_p, sizeof(char));
     FDC_ASSERT_VALID_RAM_POINTER(rtos_condvar_p, sizeof(uint32_t));
-    FDC_ASSERT(cpu_id < SOC_NUM_CPU_CORES, cpu_id, SOC_NUM_CPU_CORES);
+    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
     rtos_condvar_p->cv_signature = RTOS_CONDVAR_SIGNATURE;
     rtos_condvar_p->cv_name_p = condvar_name_p;
@@ -1632,7 +1614,6 @@ rtos_k_create_timer(
 
     fdc_error_t fdc_error = 0;
     bool fatal_error = false;
-    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
     /*
      * Allocate a timer object:
@@ -1656,7 +1637,6 @@ rtos_k_create_timer(
 
     rtos_k_timer_init(
         params_p->p_name_p,
-        cpu_id,
         params_p->p_function_p,
         new_timer_p);
 
@@ -1675,14 +1655,13 @@ Exit:
 void
 rtos_k_timer_init(
     _IN_  const char *timer_name_p,
-    _IN_  cpu_id_t cpu_id,
     _IN_  rtos_timer_function_t *timer_function_p,
     _OUT_ struct rtos_timer *rtos_timer_p)
 {
     FDC_ASSERT_VALID_RAM_OR_ROM_POINTER(timer_name_p, sizeof(char));
     FDC_ASSERT_VALID_FUNCTION_POINTER(timer_function_p);
     FDC_ASSERT_VALID_RAM_POINTER(rtos_timer_p, sizeof(uint32_t));
-    FDC_ASSERT(cpu_id < SOC_NUM_CPU_CORES, cpu_id, SOC_NUM_CPU_CORES);
+    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
     rtos_timer_p->tmr_signature = RTOS_TIMER_SIGNATURE;
     rtos_timer_p->tmr_name_p = timer_name_p;
@@ -2995,7 +2974,6 @@ rtos_k_mpu_remove_thread_data_region(void)
             _IN_ uint16_t num_entries,                                      \
             _IN_ _entry_type *storage_array_p,                              \
             _IN_ struct rtos_mutex *mutex_p,                                \
-            _IN_ cpu_id_t cpu_id,                                           \
             _OUT_ struct rtos_circular_buffer *circ_buf_p)                  \
         {                                                                   \
             FDC_ASSERT_VALID_RAM_OR_ROM_POINTER(name_p, sizeof(char));      \
@@ -3010,9 +2988,6 @@ rtos_k_mpu_remove_thread_data_region(void)
                     mutex_p->mtx_signature, mutex_p);                       \
             }                                                               \
                                                                             \
-            FDC_ASSERT(cpu_id < SOC_NUM_CPU_CORES, cpu_id,                  \
-                SOC_NUM_CPU_CORES);                                         \
-                                                                            \
             *((uint32_t *)&circ_buf_p->cb_signature) = _signature;          \
             *((const char **)&circ_buf_p->cb_name_p) = name_p;              \
             *((uint16_t *)&circ_buf_p->cb_num_entries) = num_entries;       \
@@ -3024,9 +2999,9 @@ rtos_k_mpu_remove_thread_data_region(void)
             circ_buf_p->cb_write_cursor = 0;                                \
                                                                             \
             rtos_k_condvar_init(                                            \
-                name_p, cpu_id, &circ_buf_p->cb_not_empty_condvar);         \
+                name_p, &circ_buf_p->cb_not_empty_condvar);		    \
             rtos_k_condvar_init(                                            \
-                name_p, cpu_id, &circ_buf_p->cb_not_full_condvar);          \
+                name_p, &circ_buf_p->cb_not_full_condvar);		    \
                                                                             \
             check_circular_buffer_invariants(circ_buf_p, _signature);       \
         }
@@ -3287,16 +3262,14 @@ rtos_k_queue_init(
     _IN_ bool use_mutex,
     _OUT_ struct rtos_queue *queue_p)
 {
-    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
-
     queue_p->signature = RTOS_QUEUE_SIGNATURE;
     GLIST_NODE_INIT(&queue_p->list_anchor);
     queue_p->use_mutex = use_mutex;
     if (use_mutex) {
-	rtos_k_mutex_init(queue_name_p, cpu_id, &queue_p->mutex);
+	rtos_k_mutex_init(queue_name_p, &queue_p->mutex);
     }
 
-    rtos_k_condvar_init(queue_name_p, cpu_id, &queue_p->non_empty_condvar);
+    rtos_k_condvar_init(queue_name_p, &queue_p->non_empty_condvar);
 }
 
 

@@ -52,16 +52,12 @@ static struct networking g_networking = {
 static void
 arp_cache_init(struct arp_cache *arp_cache_p)
 {
-    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
-
     rtos_k_mutex_init(
 	"ARP cache mutex",
-	cpu_id,
 	&arp_cache_p->mutex);
 
     rtos_k_condvar_init(
 	"ARP cache updated condvar",
-	cpu_id,
 	&arp_cache_p->cache_updated_condvar);
 
 

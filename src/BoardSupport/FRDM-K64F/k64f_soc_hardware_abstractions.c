@@ -1670,7 +1670,6 @@ uart_init(
     uint8_t mode)
 {
     uint32_t reg_value;
-    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
     FDC_ASSERT(
         uart_device_p->urt_signature == UART_DEVICE_SIGNATURE,
@@ -1809,7 +1808,6 @@ uart_init(
         UART_TRANSMIT_QUEUE_SIZE_IN_BYTES,
         uart_device_p->urt_transmit_queue_storage_p,
         NULL,
-        cpu_id,
         &uart_var_p->urt_transmit_queue);
 
     /*
@@ -1820,7 +1818,6 @@ uart_init(
         UART_RECEIVE_QUEUE_SIZE_IN_BYTES,
         uart_device_p->urt_receive_queue_storage_p,
         NULL,
-        cpu_id,
         &uart_var_p->urt_receive_queue);
 
     /*
@@ -3221,7 +3218,6 @@ i2c_init(
 
     rtos_k_condvar_init(
         i2c_device_p->i2c_condvar_name,
-        SOC_GET_CURRENT_CPU_ID(),
         &i2c_var_p->i2c_condvar);
 
     i2c_var_p->i2c_byte_transfer_completed = false;

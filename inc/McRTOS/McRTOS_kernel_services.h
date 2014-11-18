@@ -855,7 +855,6 @@ void
 rtos_k_thread_init(
     _IN_ const struct rtos_thread_creation_params *params_p,
     _IN_ struct rtos_thread_execution_stack *thread_stack_p,
-    _IN_ cpu_id_t cpu_id,
     _IN_ bool thread_is_privileged,
     _IN_ uint8_t context_id,
     _OUT_ struct rtos_thread *rtos_thread_p);
@@ -919,7 +918,6 @@ rtos_k_create_mutex(
 void
 rtos_k_mutex_init(
     _IN_  const char *mutex_name_p,
-    _IN_ cpu_id_t cpu_id,
     _OUT_ struct rtos_mutex *rtos_mutex_p);
 
 _THREAD_CALLERS_ONLY_
@@ -939,7 +937,6 @@ rtos_k_create_condvar(
 void
 rtos_k_condvar_init(
     _IN_  const char *condvar_name_p,
-    _IN_  cpu_id_t cpu_id,
     _OUT_ struct rtos_condvar *rtos_condvar_p);
 
 _THREAD_CALLERS_ONLY_
@@ -970,7 +967,6 @@ rtos_k_create_timer(
 void
 rtos_k_timer_init(
     _IN_  const char *timer_name_p,
-    _IN_  cpu_id_t cpu_id,
     _IN_  rtos_timer_function_t *timer_function_p,
     _OUT_ struct rtos_timer *rtos_timer_p);
 
@@ -1100,7 +1096,6 @@ void rtos_k_pointer_circular_buffer_init(
         _IN_ uint16_t num_entries,
         _IN_ void **storage_array_p,
         _IN_ struct rtos_mutex *cb_mutex_p,
-        _IN_ cpu_id_t cpu_id,
         _OUT_ struct rtos_circular_buffer *circ_buf_p);
 
 bool rtos_k_pointer_circular_buffer_write(
@@ -1119,7 +1114,6 @@ void rtos_k_byte_circular_buffer_init(
         _IN_ uint16_t num_entries,
         _IN_ uint8_t *storage_array_p,
         _IN_ struct rtos_mutex *cb_mutex_p,
-        _IN_ cpu_id_t cpu_id,
         _OUT_ struct rtos_circular_buffer *circ_buf_p);
 
 bool rtos_k_byte_circular_buffer_write(

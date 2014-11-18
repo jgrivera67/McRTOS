@@ -74,7 +74,7 @@ static void rtos_parse_command_line(const char *cmd_line);
 static void McRTOS_display_help(void);
 static void McRTOS_display_stats(void);
 
-static const char g_McRTOS_version[] = "McRTOS v1.0 (" RTOS_BUILD_FLAVOR ")";
+static const char g_McRTOS_version[] = "McRTOS v1.1 (" RTOS_BUILD_FLAVOR ")";
 
 static const char g_McRTOS_build_timestamp[] = "built "__DATE__ " " __TIME__;
 
@@ -380,7 +380,6 @@ rtos_startup(
     rtos_k_thread_init(
         &g_rtos_system_threads[RTOS_ROOT_SYSTEM_THREAD],
         &cpu_controller_p->cpc_system_threads_execution_stacks_p[RTOS_ROOT_SYSTEM_THREAD],
-        cpu_id,
         true,
         RTOS_ROOT_SYSTEM_THREAD,
         rtos_thread_p);
@@ -578,7 +577,6 @@ rtos_root_thread_f(void *arg)
         rtos_k_thread_init(
             &g_rtos_system_threads[i],
             &cpu_controller_p->cpc_system_threads_execution_stacks_p[i],
-            cpu_id,
             true,
             i,
             rtos_thread_p);

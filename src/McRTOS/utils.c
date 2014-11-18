@@ -364,7 +364,6 @@ console_printf_init(void)
 {
     rtos_k_mutex_init(
         "console printf mutex",
-        0,
         &g_console_printf_mutex);
 }
 

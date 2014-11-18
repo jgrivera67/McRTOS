@@ -98,21 +98,23 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
 
     [2] =
     {
-        .p_name_p = "accelerometer thread",
-        .p_function_p = accelerometer_thread_f,
-        .p_function_arg_p = NULL,
-        .p_priority = ACCELEROMETER_THREAD_PRIORITY,
-        .p_thread_pp = NULL,
-    },
-
-    [3] =
-    {
         .p_name_p = "ping thread",
         .p_function_p = ping_thread_f,
         .p_function_arg_p = (void *)&g_dest_ip_addr[0],
         .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 2,
         .p_thread_pp = NULL,
     },
+
+#if 0 //???
+    [3] =
+    {
+        .p_name_p = "accelerometer thread",
+        .p_function_p = accelerometer_thread_f,
+        .p_function_arg_p = NULL,
+        .p_priority = ACCELEROMETER_THREAD_PRIORITY,
+        .p_thread_pp = NULL,
+    },
+#endif
 };
 
 C_ASSERT(
