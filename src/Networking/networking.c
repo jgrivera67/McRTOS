@@ -501,7 +501,8 @@ find_dest_mac_addr(struct local_l3_end_point *local_l3_end_point_p,
 	if (matching_entry_p == NULL) {
 	    send_arp_request = true;
 	} else if (matching_entry_p->state == ARP_ENTRY_FILLED) {
-	    if (RTOS_TICKS_DELTA(matching_entry_p->arp_reply_time_stamp, current_ticks) <
+	    if (RTOS_TICKS_DELTA(matching_entry_p->entry_filled_time_stamp,
+				 current_ticks) <
 		ARP_CACHE_ENTRY_LIFETIME_IN_TICKS) {
 		/*
 		 * ARP cache hit
@@ -548,7 +549,7 @@ find_dest_mac_addr(struct local_l3_end_point *local_l3_end_point_p,
 		fdc_error = CAPTURE_FDC_ERROR("Unreachable IP address",
 					      dest_ip_addr_p->value, 0);
 
-		capture_fdc_msg_printf("Unreachable IP address: %u%u%u%u\n",
+		capture_fdc_msg_printf("Unreachable IP address: %u.%u.%u.%u\n",
 				       dest_ip_addr_p->bytes[0],
 				       dest_ip_addr_p->bytes[1],
 				       dest_ip_addr_p->bytes[2],
@@ -610,7 +611,7 @@ arp_cache_update(struct arp_cache *arp_cache_p,
 
     COPY_MAC_ADDRESS(&chosen_entry_p->dest_mac_addr, dest_mac_addr_p);
     chosen_entry_p->state = ARP_ENTRY_FILLED;
-    chosen_entry_p->arp_request_time_stamp = rtos_k_get_ticks();
+    chosen_entry_p->entry_filled_time_stamp = rtos_k_get_ticks();
     rtos_k_mutex_release(&arp_cache_p->mutex);
     rtos_k_condvar_signal(&arp_cache_p->cache_updated_condvar);
 }

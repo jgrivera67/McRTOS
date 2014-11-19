@@ -642,11 +642,11 @@ struct arp_cache_entry {
     rtos_ticks_t arp_request_time_stamp;
 
     /**
-     * Timestamp in ticks when the last ARP reply for this entry was received.
+     * Timestamp in ticks when this entry was last filled.
      * It is used to determine when the entry has expired and a new ARP request
      * must be sent.
      */
-    rtos_ticks_t arp_reply_time_stamp;
+    rtos_ticks_t entry_filled_time_stamp;
 
     /**
      * Timestamp in ticks when the last lookup was done for this entry. It is
