@@ -365,13 +365,14 @@ net_dequeue_rx_packet(struct local_l3_end_point *local_l3_end_point_p,
 
     FDC_ASSERT(rx_packet_p->signature == NET_RX_PACKET_SIGNATURE,
 	       rx_packet_p->signature, rx_packet_p);
-    FDC_ASSERT(rx_packet_p->state_flags == NET_PACKET_IN_RX_QUEUE,
+    FDC_ASSERT(rx_packet_p->state_flags & NET_PACKET_IN_RX_QUEUE,
 	       rx_packet_p->state_flags, rx_packet_p);
 
     FDC_ASSERT(rx_packet_p->rx_buf_desc_p == NULL,
                rx_packet_p->rx_buf_desc_p, rx_packet_p);
 
-    rx_packet_p->state_flags = NET_PACKET_IN_RX_USE_BY_APP;
+    rx_packet_p->state_flags &= ~NET_PACKET_IN_RX_QUEUE;
+    rx_packet_p->state_flags |= NET_PACKET_IN_RX_USE_BY_APP;
     *rx_packet_pp = rx_packet_p;
 }
 
@@ -395,7 +396,7 @@ net_enqueue_rx_packet(struct local_l3_end_point *local_l3_end_point_p,
     FDC_ASSERT(rx_packet_p->rx_buf_desc_p == NULL,
 	       rx_packet_p->rx_buf_desc_p, rx_packet_p);
 
-    rx_packet_p->state_flags = NET_PACKET_IN_RX_QUEUE;
+    rx_packet_p->state_flags |= NET_PACKET_IN_RX_QUEUE;
     rtos_k_queue_add(&local_l3_end_point_p->rx_packet_queue, &rx_packet_p->node);
 }
 
@@ -1196,9 +1197,9 @@ net_receive_ipv4_packet(struct local_l3_end_point *local_l3_end_point_p,
 
     switch (ipv4_header_p->protocol_type) {
     case TRANSPORT_PROTO_ICMP:
+	rx_packet_p->state_flags |= NET_PACKET_IN_ICMP_QUEUE;
 	rtos_k_queue_add(&local_l3_end_point_p->ipv4.rx_icmpv4_packet_queue,
 			 &rx_packet_p->node);
-	rx_packet_p->state_flags |= NET_PACKET_IN_ICMP_QUEUE;
 	break;
 
     case TRANSPORT_PROTO_TCP:
