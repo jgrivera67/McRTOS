@@ -105,7 +105,6 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
         .p_thread_pp = NULL,
     },
 
-#if 0 //???
     [3] =
     {
         .p_name_p = "accelerometer thread",
@@ -114,7 +113,6 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
         .p_priority = ACCELEROMETER_THREAD_PRIORITY,
         .p_thread_pp = NULL,
     },
-#endif
 };
 
 C_ASSERT(

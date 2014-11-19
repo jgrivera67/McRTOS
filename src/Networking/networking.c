@@ -213,8 +213,23 @@ net_rx_packet_queue_init(struct local_l3_end_point *local_l3_end_point_p)
 void
 networking_init(void)
 {
+    struct rtos_thread_creation_params threads[] = {
+	[0] = {
+	    .p_name_p = "Network Packet Receive thread",
+	    .p_function_p = net_receive_thread_f,
+	    .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 2,
+	    .p_thread_pp = NULL,
+	},
+
+	[1] = {
+	    .p_name_p = "ICMPv4 packet receive thread",
+	    .p_function_p = net_icmpv4_receive_thread_f,
+	    .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 2,
+	    .p_thread_pp = NULL,
+	},
+    };
+
     fdc_error_t fdc_error;
-    struct rtos_thread_creation_params thread_params;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
     FDC_ASSERT(!g_networking.initialized, 0, 0);
@@ -250,44 +265,21 @@ networking_init(void)
 	//TODO: Init IPv6 neighbor cache
 
 	/*
-	 * Create packet receive thread for this layer-3 end point:
+	 * Create threads for this layer-3 end point:
 	 */
-	thread_params.p_name_p = "Network Packet Receive thread";
-	thread_params.p_function_p = net_receive_thread_f;
-	thread_params.p_function_arg_p = (void *)local_l3_end_point_p;
-	thread_params.p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 2;
-	thread_params.p_thread_pp = NULL;
+	for (unsigned int i = 0; i < ARRAY_SIZE(threads); i ++) {
+	    threads[i].p_function_arg_p = (void *)local_l3_end_point_p;
+	    fdc_error = rtos_k_create_thread(&threads[i]);
+	    if (fdc_error != 0) {
+		console_printf(
+		    "CPU core %u: *** Error creating application thread '%s' ***\n",
+		    cpu_id, threads[i].p_name_p);
 
-	fdc_error = rtos_k_create_thread(&thread_params);
-	if (fdc_error != 0) {
-	    console_printf(
-		"CPU core %u: *** Error creating application thread '%s' ***\n",
-		cpu_id, thread_params.p_name_p);
+		fatal_error_handler(fdc_error);
+	    }
 
-	    fatal_error_handler(fdc_error);
+	    console_printf("CPU core %u: %s started\n", cpu_id, threads[i].p_name_p);
 	}
-
-	console_printf("CPU core %u: %s started\n", cpu_id, thread_params.p_name_p);
-
-	/*
-	 * Create ICMPv4 packet receive thread for this layer-3 end point:
-	 */
-	thread_params.p_name_p = "ICMPv4 packet receive thread";
-	thread_params.p_function_p = net_icmpv4_receive_thread_f;
-	thread_params.p_function_arg_p = (void *)local_l3_end_point_p;
-	thread_params.p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 2;
-	thread_params.p_thread_pp = NULL;
-
-	fdc_error = rtos_k_create_thread(&thread_params);
-	if (fdc_error != 0) {
-	    console_printf(
-		"CPU core %u: *** Error creating application thread '%s' ***\n",
-		cpu_id, thread_params.p_name_p);
-
-	    fatal_error_handler(fdc_error);
-	}
-
-	console_printf("CPU core %u: %s started\n", cpu_id, thread_params.p_name_p);
     }
 
     g_networking.initialized = true;
