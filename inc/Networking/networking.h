@@ -731,6 +731,11 @@ struct ipv4_end_point {
     uint16_t next_tx_ip_packet_seq_num;
 
     /**
+     * Queue of received ICMPv4 packets
+     */
+    struct rtos_queue rx_icmpv4_packet_queue;
+
+    /**
      * ARP cache
      */
     struct arp_cache arp_cache;
@@ -779,6 +784,7 @@ struct network_packet {
 #   define NET_PACKET_IN_RX_QUEUE		BIT(5)
 #   define NET_PACKET_RX_FAILED			BIT(6)
 #   define NET_PACKET_IN_TX_POOL		BIT(7)
+#   define NET_PACKET_IN_ICMP_QUEUE		BIT(8)
 
     /**
      * Total packet length, including L2 L3 and L4 headers

@@ -937,6 +937,9 @@ k64f_enet_transmit_interrupt_e_handler(
 	    FDC_ASSERT(tx_packet_p->state_flags & NET_PACKET_IN_TX_USE_BY_APP,
 		       tx_packet_p->state_flags, tx_packet_p);
 
+#if 0 /* To enable this, need to increase RTOS_MAX_TIME_INTERRUPTS_DISABLED */
+	    DEBUG_PRINTF("Transmitted packet %p\n", tx_packet_p);
+#endif
 	    tx_packet_p->state_flags &= ~NET_PACKET_IN_TX_TRANSIT;
 	    tx_packet_p->tx_buf_desc_p = NULL;
 	    buffer_desc_p->data_buffer = NULL;
@@ -1062,6 +1065,11 @@ k64f_enet_receive_interrupt_e_handler(
 		rx_packet_p->total_length = buffer_desc_p->data_length;
 	    }
 
+#if 0 /* To enable this, need to increase RTOS_MAX_TIME_INTERRUPTS_DISABLED */
+	    DEBUG_PRINTF("Received packet %p (type %#x, state_flags %#x)\n",
+			 rx_packet_p, buffer_desc_p->protocol_type,
+			 rx_packet_p->state_flags);
+#endif
 	    /*
 	     * Queue received packet for layer-3 processing:
 	     */

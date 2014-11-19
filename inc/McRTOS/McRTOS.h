@@ -226,7 +226,7 @@ struct rtos_thread_creation_params
     /**
      * Pointer to area to store the pointer to the created McRTOS thread object
      */
-    struct rtos_thread **const p_thread_pp;
+    struct rtos_thread **p_thread_pp;
 };
 
 /**

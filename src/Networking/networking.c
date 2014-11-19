@@ -17,8 +17,6 @@
 #pragma GCC diagnostic ignored "-Wunused-variable" // ???
 #pragma GCC diagnostic ignored "-Wunused-parameter" // ???
 
-#define NET_TRACE //???
-
 #ifdef NET_TRACE
 #define NET_TRACE_RECEIVED_ARP_PACKET(_packet_p) \
 	net_trace_received_arp_packet(_packet_p)
@@ -32,6 +30,8 @@
 #define ETHERNET_LINK_SPEED_IN_BPS   UINT32_C(100000000)
 
 static fdc_error_t net_receive_thread_f(void *arg);
+
+static fdc_error_t net_icmpv4_receive_thread_f(void *arg);
 
 static const struct ethernet_mac_address enet_broadcast_mac_addr = {
     .bytes = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff }
@@ -214,6 +214,7 @@ void
 networking_init(void)
 {
     fdc_error_t fdc_error;
+    struct rtos_thread_creation_params thread_params;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
     FDC_ASSERT(!g_networking.initialized, 0, 0);
@@ -232,6 +233,11 @@ networking_init(void)
 
 	net_rx_packet_queue_init(local_l3_end_point_p);
 
+	rtos_k_queue_init(
+	    "ICMPv4 incoming packet queue",
+	    true,
+	    &local_l3_end_point_p->ipv4.rx_icmpv4_packet_queue);
+
 	/*
 	 * Activate network interface (ENET device):
 	 */
@@ -244,26 +250,44 @@ networking_init(void)
 	//TODO: Init IPv6 neighbor cache
 
 	/*
-	 * Create packet receiving thread for this layer-3 end point:
+	 * Create packet receive thread for this layer-3 end point:
 	 */
-	struct rtos_thread_creation_params thread_creation_params = {
-	    .p_name_p = "Network Packet Receive thread",
-	    .p_function_p = net_receive_thread_f,
-	    .p_function_arg_p = (void *)local_l3_end_point_p,
-	    .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 2,
-	    .p_thread_pp = NULL,
-	};
+	thread_params.p_name_p = "Network Packet Receive thread";
+	thread_params.p_function_p = net_receive_thread_f;
+	thread_params.p_function_arg_p = (void *)local_l3_end_point_p;
+	thread_params.p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 2;
+	thread_params.p_thread_pp = NULL;
 
-	fdc_error = rtos_k_create_thread(&thread_creation_params);
+	fdc_error = rtos_k_create_thread(&thread_params);
 	if (fdc_error != 0) {
 	    console_printf(
 		"CPU core %u: *** Error creating application thread '%s' ***\n",
-		cpu_id, thread_creation_params.p_name_p);
+		cpu_id, thread_params.p_name_p);
 
 	    fatal_error_handler(fdc_error);
 	}
 
-	console_printf("CPU core %u: %s started\n", cpu_id, thread_creation_params.p_name_p);
+	console_printf("CPU core %u: %s started\n", cpu_id, thread_params.p_name_p);
+
+	/*
+	 * Create ICMPv4 packet receive thread for this layer-3 end point:
+	 */
+	thread_params.p_name_p = "ICMPv4 packet receive thread";
+	thread_params.p_function_p = net_icmpv4_receive_thread_f;
+	thread_params.p_function_arg_p = (void *)local_l3_end_point_p;
+	thread_params.p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 2;
+	thread_params.p_thread_pp = NULL;
+
+	fdc_error = rtos_k_create_thread(&thread_params);
+	if (fdc_error != 0) {
+	    console_printf(
+		"CPU core %u: *** Error creating application thread '%s' ***\n",
+		cpu_id, thread_params.p_name_p);
+
+	    fatal_error_handler(fdc_error);
+	}
+
+	console_printf("CPU core %u: %s started\n", cpu_id, thread_params.p_name_p);
     }
 
     g_networking.initialized = true;
@@ -506,7 +530,7 @@ find_dest_mac_addr(struct local_l3_end_point *local_l3_end_point_p,
 		/*
 		 * Re-send ARP request:
 		 */
-		capture_fdc_msg_printf("Outstanding ARP request re-sent for IP address: %u%u%u%u\n",
+		capture_fdc_msg_printf("Outstanding ARP request re-sent for IP address: %u.%u.%u.%u\n",
 				       dest_ip_addr_p->bytes[0],
 				       dest_ip_addr_p->bytes[1],
 				       dest_ip_addr_p->bytes[2],
@@ -1033,7 +1057,7 @@ net_receive_arp_packet(struct local_l3_end_point *local_l3_end_point_p,
 			       arp_operation);
     }
 
-    enet_repost_rx_packet(enet_device_p, rx_packet_p);
+    net_recycle_rx_packet(local_l3_end_point_p, rx_packet_p);
 }
 
 
@@ -1106,7 +1130,7 @@ net_receive_icmpv4_message(struct local_l3_end_point *local_l3_end_point_p,
 			       icmpv4_header_p->msg_type);
     }
 
-    enet_repost_rx_packet(local_l3_end_point_p->enet_device_p, rx_packet_p);
+    net_recycle_rx_packet(local_l3_end_point_p, rx_packet_p);
 }
 
 
@@ -1124,7 +1148,7 @@ net_receive_tcp_segment(struct local_l3_end_point *local_l3_end_point_p,
 
 #else
     DEBUG_PRINTF("Received TCP segment ignored - not supported yet\n");
-    enet_repost_rx_packet(local_l3_end_point_p->enet_device_p, rx_packet_p);
+    net_recycle_rx_packet(local_l3_end_point_p, rx_packet_p);
 #endif
 }
 
@@ -1148,7 +1172,7 @@ net_receive_udp_datagram(struct local_l3_end_point *local_l3_end_point_p,
 
 #else
     DEBUG_PRINTF("Received UDP datagram ignored - not supported yet\n");
-    enet_repost_rx_packet(local_l3_end_point_p->enet_device_p, rx_packet_p);
+    net_recycle_rx_packet(local_l3_end_point_p, rx_packet_p);
 #endif
 }
 
@@ -1171,19 +1195,24 @@ net_receive_ipv4_packet(struct local_l3_end_point *local_l3_end_point_p,
 
     switch (ipv4_header_p->protocol_type) {
     case TRANSPORT_PROTO_ICMP:
-	net_receive_icmpv4_message(local_l3_end_point_p, rx_packet_p);
+	rtos_k_queue_add(&local_l3_end_point_p->ipv4.rx_icmpv4_packet_queue,
+			 &rx_packet_p->node);
+	rx_packet_p->state_flags |= NET_PACKET_IN_ICMP_QUEUE;
 	break;
+
     case TRANSPORT_PROTO_TCP:
         net_receive_tcp_segment(local_l3_end_point_p, rx_packet_p);
 	break;
+
     case TRANSPORT_PROTO_UDP:
 	net_receive_udp_datagram(local_l3_end_point_p, rx_packet_p);
 	break;
+
     default:
 	capture_fdc_msg_printf("Received IPv4 packet with unknown protocol type: %#x\n",
 			       ipv4_header_p->protocol_type);
 
-	enet_repost_rx_packet(local_l3_end_point_p->enet_device_p, rx_packet_p);
+	net_recycle_rx_packet(local_l3_end_point_p, rx_packet_p);
     }
 }
 
@@ -1212,12 +1241,12 @@ net_receive_ipv6_packet(struct local_l3_end_point *local_l3_end_point_p,
     /*
      * TODO: Only repost packet if not enqueued in a local transport end point
      */
-    enet_repost_rx_packet(local_l3_end_point_p->enet_device_p, rx_packet_p);
+    net_recycle_rx_packet(local_l3_end_point_p, rx_packet_p);
 }
 
 
 /**
- * Packet receive processing thread for a given Ethernet interface
+ * Packet receive processing thread for a given Layer-3 end point
  */
 static fdc_error_t
 net_receive_thread_f(void *arg)
@@ -1252,7 +1281,8 @@ net_receive_thread_f(void *arg)
 	DBG_ASSERT(rx_packet_p != NULL, enet_device_p, cpu_id);
 
 	if (rx_packet_p->state_flags == NET_PACKET_RX_FAILED) {
-	    enet_repost_rx_packet(enet_device_p, rx_packet_p);
+	    net_recycle_rx_packet(local_l3_end_point_p, rx_packet_p);
+	    continue;
 	}
 
 	struct ethernet_frame *rx_frame =
@@ -1272,8 +1302,52 @@ net_receive_thread_f(void *arg)
 	    capture_fdc_msg_printf("Received frame of unknown type: %#x\n",
 				   ntoh16(rx_frame->enet_header.frame_type));
 
-	    enet_repost_rx_packet(enet_device_p, rx_packet_p);
+	    net_recycle_rx_packet(local_l3_end_point_p, rx_packet_p);
 	}
+    }
+
+    fdc_error = CAPTURE_FDC_ERROR(
+        "thread should not have terminated",
+        cpu_id, rtos_thread_self());
+
+    rtos_exit_privileged_mode();
+    return fdc_error;
+}
+
+
+/**
+ * ICMPv4 receive thread for a given Layer-3 end point
+ */
+static fdc_error_t
+net_icmpv4_receive_thread_f(void *arg)
+{
+    fdc_error_t fdc_error;
+    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
+    struct local_l3_end_point *local_l3_end_point_p =
+	(struct local_l3_end_point *)arg;
+
+    rtos_enter_privileged_mode();
+
+    FDC_ASSERT(local_l3_end_point_p->signature == LOCAL_L3_END_POINT_SIGNATURE,
+	       local_l3_end_point_p->signature, local_l3_end_point_p);
+
+    const struct enet_device *enet_device_p = local_l3_end_point_p->enet_device_p;
+
+    FDC_ASSERT(enet_device_p->signature == ENET_DEVICE_SIGNATURE,
+	       enet_device_p->signature, enet_device_p);
+
+    for ( ; ; ) {
+	struct network_packet *rx_packet_p = NULL;
+
+	rx_packet_p = GLIST_NODE_TO_NETWORK_PACKET(
+		rtos_k_queue_remove(&local_l3_end_point_p->ipv4.rx_icmpv4_packet_queue, 0));
+
+	DBG_ASSERT(rx_packet_p != NULL &&
+		   (rx_packet_p->state_flags & NET_PACKET_IN_ICMP_QUEUE),
+		   rx_packet_p, local_l3_end_point_p);
+
+	rx_packet_p->state_flags &= ~NET_PACKET_IN_ICMP_QUEUE;
+	net_receive_icmpv4_message(local_l3_end_point_p, rx_packet_p);
     }
 
     fdc_error = CAPTURE_FDC_ERROR(
