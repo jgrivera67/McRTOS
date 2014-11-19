@@ -1965,6 +1965,135 @@ uart_disable_tx_rx_fifos(
 
 
 /**
+ * Handling of "Tx FIFO empty" interrupt
+ */
+static void
+k64f_uart_tx_interrupt_handling(UART_MemMapPtr uart_mmio_registers_p,
+				struct uart_device_var *restrict uart_var_p)
+{
+    /*
+     * NOTE: This interrupt source will be cleared when
+     * the next character is transmitted
+     */
+    bool sw_transmit_queue_empty = false;
+
+    /*
+     * Disable interrupts, to prevent higher priority interrupts to write
+     * data to the UART (i.e., printf's)
+     */
+    cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
+
+    /*
+     * Fill the Tx FIFO as much as possible:
+     */
+#   ifdef DEBUG
+    uint_fast8_t tx_fifo_length =
+		read_8bit_mmio_register(&UART_TCFIFO_REG(uart_mmio_registers_p));
+
+    DBG_ASSERT(tx_fifo_length == 0, tx_fifo_length, 0);
+#   endif
+
+    for (uint_fast8_t i = 0; i < uart_var_p->urt_tx_fifo_size; ++i) {
+	uint8_t byte_to_transmit;
+	bool entry_read = rtos_k_byte_circular_buffer_read(
+			    &uart_var_p->urt_transmit_queue,
+			    &byte_to_transmit,
+			    false, 0);
+
+	if (!entry_read) {
+	    sw_transmit_queue_empty = true;
+	    break;
+	}
+
+	write_8bit_mmio_register(&UART_D_REG(uart_mmio_registers_p),
+				 byte_to_transmit);
+    }
+
+    rtos_k_restore_cpu_interrupts(cpu_status_register);
+
+    if (sw_transmit_queue_empty) {
+	/*
+	 * Disable "transmit data register empty" interrupt:
+	 */
+	uint32_t reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
+	reg_value &= ~UART_C2_TIE_MASK;
+	write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
+    }
+}
+
+
+/**
+ * Handling of "Rx FIFO not empty" interrupt
+ */
+static void
+k64f_uart_rx_interrupt_handling(UART_MemMapPtr uart_mmio_registers_p,
+				struct uart_device_var *restrict uart_var_p)
+{
+    uint_fast8_t i;
+    uint_fast8_t byte_received;
+    bool entry_written;
+    uint32_t reg_value;
+    uint_fast8_t rx_fifo_length =
+		read_8bit_mmio_register(&UART_RCFIFO_REG(uart_mmio_registers_p));
+
+    do {
+	DBG_ASSERT(
+		rx_fifo_length > 0 && rx_fifo_length <= uart_var_p->urt_rx_fifo_size,
+		rx_fifo_length, uart_var_p->urt_rx_fifo_size);
+	/*
+	 * Drain the Rx FIFO but leave one byte in it:
+	 */
+	for (i = 0; i < rx_fifo_length - 1; i++) {
+            byte_received =
+		    read_8bit_mmio_register(&UART_D_REG(uart_mmio_registers_p));
+
+	    entry_written = rtos_k_byte_circular_buffer_write(
+				&uart_var_p->urt_receive_queue,
+				byte_received,
+				false);
+
+            if (!entry_written) {
+		uart_var_p->urt_received_bytes_dropped ++;
+		break;
+            }
+	}
+
+	/*
+	 * Drain the last byte from the FIFO in a special way to clear the
+	 * RDRF flag in the S1 register:
+	 * - read first the S1 register
+	 * - then read the D register
+	 */
+	if (i == rx_fifo_length - 1) {
+	    (void)read_8bit_mmio_register(&UART_S1_REG(uart_mmio_registers_p));
+
+	    byte_received =
+		    read_8bit_mmio_register(&UART_D_REG(uart_mmio_registers_p));
+
+	    entry_written = rtos_k_byte_circular_buffer_write(
+				&uart_var_p->urt_receive_queue,
+				byte_received,
+				false);
+
+            if (!entry_written) {
+		uart_var_p->urt_received_bytes_dropped ++;
+	    }
+	}
+
+	rx_fifo_length =
+	    read_8bit_mmio_register(&UART_RCFIFO_REG(uart_mmio_registers_p));
+    } while (rx_fifo_length != 0);
+
+    /*
+     * Disable generation of receive interrupts:
+     */
+    reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
+    reg_value &= ~UART_C2_RIE_MASK;
+    write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
+}
+
+
+/**
  * UART Rx/Tx interrupt handler with interrupts enabled
  */
 void
@@ -1980,7 +2109,6 @@ k64f_uart_rx_tx_interrupt_e_handler(
         uart_device_p->urt_signature == UART_DEVICE_SIGNATURE,
         uart_device_p->urt_signature, uart_device_p);
 
-    uint32_t reg_value;
     struct uart_device_var *const restrict uart_var_p = uart_device_p->urt_var_p;
     UART_MemMapPtr uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
 
@@ -2007,116 +2135,14 @@ k64f_uart_rx_tx_interrupt_e_handler(
      * "Tx FIFO empty" interrupt:
      */
     if (s1_reg_value & UART_S1_TDRE_MASK) {
-        /*
-         * NOTE: This interrupt source will be cleared when
-         * the next character is transmitted
-         */
-	bool sw_transmit_queue_empty = false;
-
-	/*
-	 * Disable interrupts, to prevent higher priority interrupts to write
-	 * data to the UART (i.e., printf's)
-	 */
-        cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
-
-	/*
-	 * Fill the Tx FIFO as much as possible:
-	 */
-#	ifdef DEBUG
-	uint_fast8_t tx_fifo_length =
-		    read_8bit_mmio_register(&UART_TCFIFO_REG(uart_mmio_registers_p));
-
-	DBG_ASSERT(tx_fifo_length == 0, tx_fifo_length, 0);
-#	endif
-
-	for (uint_fast8_t i = 0; i < uart_var_p->urt_tx_fifo_size; ++i) {
-            uint8_t byte_to_transmit;
-            bool entry_read = rtos_k_byte_circular_buffer_read(
-                                &uart_var_p->urt_transmit_queue,
-                                &byte_to_transmit,
-                                false, 0);
-
-            if (!entry_read) {
-		sw_transmit_queue_empty = true;
-	        break;
-	    }
-
-	    write_8bit_mmio_register(&UART_D_REG(uart_mmio_registers_p),
-				     byte_to_transmit);
-        }
-
-	rtos_k_restore_cpu_interrupts(cpu_status_register);
-
-	if (sw_transmit_queue_empty) {
-            /*
-             * Disable "transmit data register empty" interrupt:
-             */
-            reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
-            reg_value &= ~UART_C2_TIE_MASK;
-            write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
-        }
+	k64f_uart_tx_interrupt_handling(uart_mmio_registers_p, uart_var_p);
     }
 
     /*
      * "Rx FIFO not empty" interrupt:
      */
     if (s1_reg_value & UART_S1_RDRF_MASK) {
-	uint_fast8_t i;
-        uint_fast8_t byte_received;
-	bool entry_written;
-
-        uint_fast8_t rx_fifo_length =
-		    read_8bit_mmio_register(&UART_RCFIFO_REG(uart_mmio_registers_p));
-	DBG_ASSERT(
-	        rx_fifo_length > 0 && rx_fifo_length <= uart_var_p->urt_rx_fifo_size,
-	        rx_fifo_length, uart_var_p->urt_rx_fifo_size);
-
-	/*
-	 * Drain the Rx FIFO but leave one byte in it:
-	 */
-	for (i = 0; i < rx_fifo_length - 1; i++) {
-            byte_received =
-		    read_8bit_mmio_register(&UART_D_REG(uart_mmio_registers_p));
-
-	    entry_written = rtos_k_byte_circular_buffer_write(
-				&uart_var_p->urt_receive_queue,
-				byte_received,
-				false);
-
-            if (!entry_written) {
-		uart_var_p->urt_received_bytes_dropped ++;
-		break;
-            }
-	}
-
-	/*
-	 * Drain the last byte from the FIFO in a special way to clear the
-	 * RDRF flag in the S1 register:
-	 */
-	if (i == rx_fifo_length - 1) {
-	    s1_reg_value = read_8bit_mmio_register(&UART_S1_REG(uart_mmio_registers_p));
-	    byte_received =
-		    read_8bit_mmio_register(&UART_D_REG(uart_mmio_registers_p));
-
-	    entry_written = rtos_k_byte_circular_buffer_write(
-				&uart_var_p->urt_receive_queue,
-				byte_received,
-				false);
-
-            if (!entry_written) {
-		uart_var_p->urt_received_bytes_dropped ++;
-	    }
-
-	    rx_fifo_length =
-		read_8bit_mmio_register(&UART_RCFIFO_REG(uart_mmio_registers_p));
-	}
-
-	/*
-         * Disable generation of receive interrupts:
-         */
-        reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
-        reg_value &= ~UART_C2_RIE_MASK;
-	write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
+	k64f_uart_rx_interrupt_handling(uart_mmio_registers_p, uart_var_p);
     }
 }
 
