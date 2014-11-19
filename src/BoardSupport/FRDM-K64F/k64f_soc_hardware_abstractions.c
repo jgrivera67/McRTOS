@@ -2109,8 +2109,6 @@ k64f_uart_rx_tx_interrupt_e_handler(
 
 	    rx_fifo_length =
 		read_8bit_mmio_register(&UART_RCFIFO_REG(uart_mmio_registers_p));
-
-	    DBG_ASSERT(rx_fifo_length == 0, 0, 0);
 	}
 
 	/*
