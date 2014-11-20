@@ -3165,7 +3165,8 @@ i2c_start_or_continue_transaction(
             (reg_value & (I2C_C1_MST_MASK|I2C_C1_RSTA_MASK|I2C_C1_TX_MASK)) == 0,
             reg_value, i2c_device_p);
         FDC_ASSERT(
-            (reg_value2 & I2C_S_BUSY_MASK) == 0, reg_value2, i2c_device_p);
+            (reg_value2 & I2C_S_BUSY_MASK) == 0 ||
+	    (reg_value2 & I2C_S_TCF_MASK) != 0, reg_value2, i2c_device_p);
 
         reg_value |= I2C_C1_MST_MASK;
     } else {
@@ -3228,7 +3229,6 @@ i2c_init(
     const struct i2c_device *i2c_device_p)
 {
     uint32_t reg_value;
-    uint32_t reg_value2;
 
     FDC_ASSERT(
         i2c_device_p->i2c_signature == I2C_DEVICE_SIGNATURE,
@@ -3272,22 +3272,8 @@ i2c_init(
     /*
      * Clear any pending interrupt:
      */
-    reg_value =
-        read_8bit_mmio_register(&I2C_S_REG(i2c_mmio_registers_p));
-
-    reg_value2 = 0;
-    if (reg_value & I2C_S_IICIF_MASK) {
-        reg_value2 |= I2C_S_IICIF_MASK;
-    }
-
-    if (reg_value & I2C_S_ARBL_MASK) {
-        reg_value2 |= I2C_S_ARBL_MASK;
-    }
-
-    if (reg_value2 != 0) {
-        write_8bit_mmio_register(
-            &I2C_S_REG(i2c_mmio_registers_p), reg_value2);
-    }
+    write_8bit_mmio_register(
+	&I2C_S_REG(i2c_mmio_registers_p), I2C_S_IICIF_MASK | I2C_S_ARBL_MASK);
 
     /*
      * Enable IIC mode and enable interrupt generation:
@@ -3425,14 +3411,17 @@ k64f_i2c_interrupt_e_handler(
         (reg_value & I2C_S_IICIF_MASK) != 0, reg_value, i2c_device_p);
     FDC_ASSERT(
         (reg_value & I2C_S_TCF_MASK) != 0, reg_value, i2c_device_p);
-    FDC_ASSERT(
-        (reg_value & I2C_S_ARBL_MASK) == 0, reg_value, i2c_device_p);
 
     /*
      * Clear the interrupt flag, by writing 1 to it:
      */
-    write_8bit_mmio_register(
-        &I2C_S_REG(i2c_mmio_registers_p), I2C_S_IICIF_MASK);
+    if (reg_value & I2C_S_ARBL_MASK) {
+	write_8bit_mmio_register(
+	    &I2C_S_REG(i2c_mmio_registers_p), I2C_S_IICIF_MASK | I2C_S_ARBL_MASK);
+    } else {
+	write_8bit_mmio_register(
+	    &I2C_S_REG(i2c_mmio_registers_p), I2C_S_IICIF_MASK);
+    }
 
 #   ifdef DEBUG
     reg_value =

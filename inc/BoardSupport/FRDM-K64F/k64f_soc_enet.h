@@ -169,6 +169,11 @@ struct enet_device_var {
     volatile struct enet_rx_buffer_descriptor *rx_ring_read_cursor;
 
     /**
+     * Mutex to serialize access to the Ethernet PHY
+     */
+    struct rtos_mutex phy_mutex;
+
+    /**
      * Tx buffer descriptor ring accessed by the Ethernet MAC (ENET device)
      */
     volatile struct enet_tx_buffer_descriptor tx_buffer_descriptors[NET_MAX_TX_PACKETS];

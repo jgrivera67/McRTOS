@@ -527,8 +527,9 @@ ethernet_mac_init(const struct enet_device *enet_device_p)
         enet_device_p->error_rtos_interrupt_pp, enet_device_p);
 }
 
-void
-enet_phy_write(const struct enet_device *enet_device_p, uint32_t phy_reg, uint32_t data)
+static void
+enet_phy_write_nolock(const struct enet_device *enet_device_p, uint32_t phy_reg,
+		      uint32_t data)
 {
     volatile ENET_Type *enet_regs_p = enet_device_p->mmio_registers_p;
     uint32_t reg_value;
@@ -585,8 +586,20 @@ enet_phy_write(const struct enet_device *enet_device_p, uint32_t phy_reg, uint32
 }
 
 
-uint32_t
-enet_phy_read(const struct enet_device *enet_device_p, uint32_t phy_reg)
+void
+enet_phy_write(const struct enet_device *enet_device_p, uint32_t phy_reg, uint32_t data)
+{
+    struct enet_device_var *const enet_var_p = enet_device_p->var_p;
+
+    FDC_ASSERT(enet_var_p->initialized, enet_device_p, enet_var_p);
+    rtos_k_mutex_acquire(&enet_var_p->phy_mutex);
+    enet_phy_write_nolock(enet_device_p, phy_reg, data);
+    rtos_k_mutex_release(&enet_var_p->phy_mutex);
+}
+
+
+static uint32_t
+enet_phy_read_nolock(const struct enet_device *enet_device_p, uint32_t phy_reg)
 {
     volatile ENET_Type *enet_regs_p = enet_device_p->mmio_registers_p;
     uint32_t reg_value;
@@ -601,7 +614,7 @@ enet_phy_read(const struct enet_device *enet_device_p, uint32_t phy_reg)
 	       reg_value, enet_device_p);
 
     /*
-     * Set write command
+     * Set read command
      */
     reg_value = 0;
     SET_BIT_FIELD(reg_value, ENET_MMFR_ST_MASK, ENET_MMFR_ST_SHIFT,
@@ -645,6 +658,20 @@ enet_phy_read(const struct enet_device *enet_device_p, uint32_t phy_reg)
 }
 
 
+uint32_t
+enet_phy_read(const struct enet_device *enet_device_p, uint32_t phy_reg)
+{
+    uint32_t reg_value;
+    struct enet_device_var *const enet_var_p = enet_device_p->var_p;
+
+    FDC_ASSERT(enet_var_p->initialized, enet_device_p, enet_var_p);
+    rtos_k_mutex_acquire(&enet_var_p->phy_mutex);
+    reg_value =	enet_phy_read_nolock(enet_device_p, phy_reg);
+    rtos_k_mutex_release(&enet_var_p->phy_mutex);
+    return reg_value;
+}
+
+
 /**
  * Initializes the Ethernet PHY chip (Micrel KSZ8081RNA)
  */
@@ -659,17 +686,22 @@ ethernet_phy_init(const struct enet_device *enet_device_p)
         enet_device_p->signature == ENET_DEVICE_SIGNATURE,
         enet_device_p->signature, enet_device_p);
 
+    struct enet_device_var *const enet_var_p = enet_device_p->var_p;
+
+    FDC_ASSERT(!enet_var_p->initialized, enet_device_p, enet_var_p);
+    rtos_k_mutex_init("Ethernet PHY mutex", &enet_var_p->phy_mutex);
+
     /*
      * Reset Phy
      */
-    enet_phy_write(enet_device_p, ENET_PHY_CONTROL_REG, ENET_PHY_RESET_MASK);
+    enet_phy_write_nolock(enet_device_p, ENET_PHY_CONTROL_REG, ENET_PHY_RESET_MASK);
 
     /*
      * Wait for reset to complete:
      */
     polling_count = MAX_POLLING_COUNT;
     do {
-	reg_value = enet_phy_read(enet_device_p, ENET_PHY_CONTROL_REG);
+	reg_value = enet_phy_read_nolock(enet_device_p, ENET_PHY_CONTROL_REG);
 	polling_count --;
     } while ((reg_value & ENET_PHY_RESET_MASK) != 0 && polling_count != 0);
 
@@ -680,22 +712,22 @@ ethernet_phy_init(const struct enet_device *enet_device_p)
         fatal_error_handler(fdc_error);
     }
 
-    reg_value = enet_phy_read(enet_device_p, ENET_PHY_STATUS_REG);
+    reg_value = enet_phy_read_nolock(enet_device_p, ENET_PHY_STATUS_REG);
     if ((reg_value & ENET_PHY_AUTO_NEG_CAPABLE_MASK) != 0 &&
 	(reg_value & ENET_PHY_AUTO_NEG_COMPLETE_MASK) == 0) {
 	/*
 	 * Set auto-negotiation:
 	 */
-	reg_value = enet_phy_read(enet_device_p, ENET_PHY_CONTROL_REG);
+	reg_value = enet_phy_read_nolock(enet_device_p, ENET_PHY_CONTROL_REG);
 	reg_value |= ENET_PHY_AUTO_NEGOTIATION_MASK;
-	enet_phy_write(enet_device_p, ENET_PHY_CONTROL_REG, reg_value);
+	enet_phy_write_nolock(enet_device_p, ENET_PHY_CONTROL_REG, reg_value);
 
 	/*
 	 * Wait for auto-negotiation completion:
 	 */
 	polling_count = MAX_POLLING_COUNT;
 	do {
-	    reg_value = enet_phy_read(enet_device_p, ENET_PHY_STATUS_REG);
+	    reg_value = enet_phy_read_nolock(enet_device_p, ENET_PHY_STATUS_REG);
 	    polling_count --;
 	} while ((reg_value & ENET_PHY_AUTO_NEG_COMPLETE_MASK) == 0 &&
 		 polling_count != 0);
