@@ -400,13 +400,19 @@ C_ASSERT(RTOS_NUM_SYSTEM_THREAD_INDEXES <= RTOS_NUM_SYSTEM_THREADS_PER_CPU);
  */
 struct McRTOS
 {
-#   define      MCRTOS_SIGNATURE  GEN_SIGNATURE('R', 'T', 'O', 'S')
-    uint32_t    rts_signature;
+#   define MCRTOS_SIGNATURE  GEN_SIGNATURE('R', 'T', 'O', 'S')
+    uint32_t rts_signature;
 
     /**
      * Per-CPU execution controllers, one for each CPU core
      */
     struct rtos_cpu_controller rts_cpu_controllers[SOC_NUM_CPU_CORES];
+
+    /**
+     * Flag to to be set when CPU cores other than the first one can
+     * start running
+     */
+    volatile bool rts_release_secondary_cores;
 
     /**
      * Cause of last SoC reset

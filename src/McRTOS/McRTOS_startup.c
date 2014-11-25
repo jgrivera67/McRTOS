@@ -131,6 +131,8 @@ static struct McRTOS g_McRTOS =
 {
     .rts_signature = MCRTOS_SIGNATURE,
 
+    .rts_release_secondary_cores = false,
+
     .rts_next_free_interrupt_p = &g_McRTOS.rts_interrupts[0],
 
     .rts_next_free_app_thread_p = &g_McRTOS.rts_app_threads[0],
@@ -351,6 +353,14 @@ rtos_startup(
             g_McRTOS_p->rts_cpu_cycles_measure_overhead,
             SOC_CPU_CLOCK_FREQ_IN_MEGA_HZ);
 #       endif
+
+	g_McRTOS_p->rts_release_secondary_cores = true;
+	__DSB();
+	__SEV();
+    } else {
+	while (!g_McRTOS_p->rts_release_secondary_cores) {
+		__WFE();
+	}
     }
 
     /*
@@ -620,6 +630,13 @@ rtos_root_thread_f(void *arg)
 #       ifdef LCD_SUPPORTED
             lcd_display_greetings();
 #       endif
+    }
+    else
+    {
+	/*
+	 * TODO: This needs to be be done in a better way
+	 */
+	rtos_k_thread_abort(0);
     }
 
     for ( ; ; )
