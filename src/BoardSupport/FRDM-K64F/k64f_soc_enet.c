@@ -426,12 +426,25 @@ ethernet_mac_init(const struct enet_device *enet_device_p)
      *   (automatically insert IP header checksum)
      * - Enable layer-4 checksum offload (for TCP, UDP, ICMP)
      *   (automatically insert layer-4 checksum)
+     * - Enable Tx FIFO shift 16, so that the data payload of
+     *   an outgoing Ethernet frame can be 32-bit aligned in memory.
+     *   (Like if 2 dummy bytes were added at the beginning of the
+     *   14-byte long Ethernet header. However, with the SHIFT16 flag,
+     *   the 2 dummy bytes are not transmitted on the wire)
      */
+
+    reg_value = 0;
+
 #   ifndef SOFTWARE_BASED_CHECKSUM
     reg_value =	ENET_TACC_PROCHK_MASK |
 		ENET_TACC_IPCHK_MASK;
-    write_32bit_mmio_register(&enet_regs_p->TACC, reg_value);
 #   endif
+
+#   ifdef ENET_DATA_PAYLOAD_32_BIT_ALIGNED
+    reg_value |= ENET_TACC_SHIFT16_MASK;
+#   endif
+
+    write_32bit_mmio_register(&enet_regs_p->TACC, reg_value);
 
     /*
      * Set Rx accelerators:
@@ -441,13 +454,23 @@ ethernet_mac_init(const struct enet_device *enet_device_p)
      *   (automatically discard frames with wrong IP header checksum)
      * - Enable layer-4 checksum offload for TCP, UDP, ICMP
      *   (automatically discard frames with wrong layer-4 checksum)
+     * - Enable Rx FIFO shift 16, so that the data payload of
+     *   an incoming Ethernet frame can be 32-bit aligned in memory.
+     *   (Like if 2 dummy bytes were added at the beginning of the
+     *    14-byte long Ethernet header, right after the frame is
+     *    received.)
      */
+
     reg_value =	ENET_RACC_PADREM_MASK |
 		ENET_RACC_LINEDIS_MASK;
 
 #   ifndef SOFTWARE_BASED_CHECKSUM
     reg_value |= ENET_RACC_IPDIS_MASK |
 		 ENET_RACC_PRODIS_MASK;
+#   endif
+
+#   ifdef ENET_DATA_PAYLOAD_32_BIT_ALIGNED
+    reg_value |= ENET_RACC_SHIFT16_MASK;
 #   endif
 
     write_32bit_mmio_register(&enet_regs_p->RACC, reg_value);

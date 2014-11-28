@@ -43,6 +43,9 @@ static const struct ethernet_mac_address enet_null_mac_addr = {
 
 static struct networking g_networking = {
     .initialized = false,
+    .next_udp_ephemeral_port = NET_FIRST_EPHEMERAL_PORT,
+    .next_tcp_ephemeral_port = NET_FIRST_EPHEMERAL_PORT,
+    .next_free_l4_end_point_p = &g_networking.local_l4_end_points[0],
     .local_l3_end_points = {
 	[0] = {
 	    .signature = LOCAL_L3_END_POINT_SIGNATURE,
@@ -180,6 +183,7 @@ net_tx_packet_pool_init(void)
 	tx_packet_p->signature = NET_TX_PACKET_SIGNATURE;
 	tx_packet_p->state_flags = NET_PACKET_IN_TX_POOL;
 	tx_packet_p->tx_buf_desc_p = NULL;
+	tx_packet_p->local_l3_end_point_p = NULL;
 	GLIST_NODE_INIT(&tx_packet_p->node);
 
         rtos_k_queue_add(&g_networking.free_tx_packet_pool,
@@ -202,6 +206,7 @@ net_rx_packet_queue_init(struct local_l3_end_point *local_l3_end_point_p)
 	rx_packet_p->signature = NET_RX_PACKET_SIGNATURE;
 	rx_packet_p->state_flags = 0;
 	rx_packet_p->rx_buf_desc_p = NULL;
+	rx_packet_p->local_l3_end_point_p = local_l3_end_point_p;
 	GLIST_NODE_INIT(&rx_packet_p->node);
     }
 }
@@ -282,6 +287,7 @@ networking_init(void)
 	}
     }
 
+    rtos_k_mutex_init("local_l4_end_points mutex", &g_networking.local_l4_end_points_mutex);
     g_networking.initialized = true;
 }
 
@@ -397,9 +403,10 @@ net_enqueue_rx_packet(struct local_l3_end_point *local_l3_end_point_p,
  * Recycle a Rx packet for receiving another packet
  */
 void
-net_recycle_rx_packet(struct local_l3_end_point *local_l3_end_point_p,
-		      struct network_packet *rx_packet_p)
+net_recycle_rx_packet(struct network_packet *rx_packet_p)
 {
+    struct local_l3_end_point *local_l3_end_point_p = rx_packet_p->local_l3_end_point_p;
+
     FDC_ASSERT(
         local_l3_end_point_p->signature == LOCAL_L3_END_POINT_SIGNATURE,
         local_l3_end_point_p->signature, local_l3_end_point_p);
@@ -788,6 +795,74 @@ net_send_ipv4_packet(const struct ipv4_address *dest_ip_addr_p,
 }
 
 
+fdc_error_t
+net_create_local_l4_end_point(enum l4_protocols l4_protocol,
+	                      uint16_t l4_port,
+			      struct local_l4_end_point **local_l4_end_point_pp)
+{
+    fdc_error_t fdc_error;
+    struct local_l4_end_point *l4_end_point_p;
+
+    if (l4_protocol != TRANSPORT_PROTO_UDP &&
+	l4_protocol != TRANSPORT_PROTO_TCP) {
+        fdc_error = CAPTURE_FDC_ERROR(
+                        "Invalid layer-4 protocol",
+                        l4_protocol, l4_port);
+	return fdc_error;
+    }
+
+    rtos_k_mutex_acquire(&g_networking.local_l4_end_points_mutex);
+    if (g_networking.next_free_l4_end_point_p ==
+        &g_networking.local_l4_end_points[NET_MAX_LOCAL_L4_END_POINTS]) {
+        fdc_error = CAPTURE_FDC_ERROR(
+                        "No more local_l4_end_points can be created",
+                        l4_protocol, l4_port);
+	goto error_release_mutex;
+    }
+
+    if (l4_port == 0) {
+	if (l4_protocol == TRANSPORT_PROTO_UDP) {
+	    if (g_networking.next_udp_ephemeral_port == 0) {
+		fdc_error = CAPTURE_FDC_ERROR(
+				"No more UDP ephemeral ports available",
+				0, 0);
+		goto error_release_mutex;
+	    }
+
+	    l4_port = hton16(g_networking.next_udp_ephemeral_port);
+	    g_networking.next_udp_ephemeral_port ++;
+	} else {
+	    DBG_ASSERT(l4_protocol == TRANSPORT_PROTO_TCP, l4_protocol, 0);
+	    if (g_networking.next_tcp_ephemeral_port == 0) {
+		fdc_error = CAPTURE_FDC_ERROR(
+				"No more TCP ephemeral ports available",
+				0, 0);
+		goto error_release_mutex;
+	    }
+
+	    l4_port = hton16(g_networking.next_tcp_ephemeral_port);
+	    g_networking.next_tcp_ephemeral_port ++;
+	}
+    }
+
+    l4_end_point_p = g_networking.next_free_l4_end_point_p;
+    g_networking.next_free_l4_end_point_p ++;
+    rtos_k_mutex_release(&g_networking.local_l4_end_points_mutex);
+
+    l4_end_point_p->l4_protocol = l4_protocol;
+    l4_end_point_p->l4_port = l4_port;
+    rtos_k_queue_init("l4_end_point Rx packet queue", true,
+	              &l4_end_point_p->l4_rx_packet_queue);
+
+    *local_l4_end_point_pp = l4_end_point_p;
+    return 0;
+
+error_release_mutex:
+    rtos_k_mutex_release(&g_networking.local_l4_end_points_mutex);
+    return fdc_error;
+}
+
+
 void
 net_send_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
 		           const struct ipv4_address *dest_ip_addr_p,
@@ -801,17 +876,19 @@ net_send_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
     struct udp_header *udp_header_p =
 	(struct udp_header *)GET_IPV4_DATA_PAYLOAD_AREA(tx_packet_p);
 
-    FDC_ASSERT(local_l4_end_point_p->protocol == TRANSPORT_PROTO_UDP,
-	       local_l4_end_point_p->protocol, local_l4_end_point_p);
+    FDC_ASSERT(local_l4_end_point_p->l4_protocol == TRANSPORT_PROTO_UDP,
+	       local_l4_end_point_p->l4_protocol, local_l4_end_point_p);
 
-    udp_header_p->source_port = local_l4_end_point_p->port;
+    udp_header_p->source_port = local_l4_end_point_p->l4_port;
     udp_header_p->dest_port = dest_port;
     udp_header_p->datagram_length = hton16(sizeof(struct udp_header) +
 	                                   data_payload_length);
 
     /*
      * NOTE: udp_header_p->datagram_checksum is filled by hardware
+     * We just need to initialize it to 0
      */
+    udp_header_p->datagram_checksum = 0;
 
     /*
      * Send IP packet:
@@ -820,6 +897,45 @@ net_send_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
 		         tx_packet_p,
 		         sizeof(struct udp_header) + data_payload_length,
 		         TRANSPORT_PROTO_UDP);
+}
+
+
+void
+net_receive_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
+			      rtos_milliseconds_t timeout_ms,
+		              struct ipv4_address *source_ip_addr_p,
+			      uint16_t *source_port_p,
+			      struct network_packet **rx_packet_pp)
+{
+    FDC_ASSERT(local_l4_end_point_p->l4_protocol == TRANSPORT_PROTO_UDP,
+	       local_l4_end_point_p->l4_protocol, local_l4_end_point_p);
+
+    struct glist_node *rx_packet_node_p =
+	    rtos_k_queue_remove(&local_l4_end_point_p->l4_rx_packet_queue,
+			        timeout_ms);
+
+    if (rx_packet_node_p == NULL) {
+	*rx_packet_pp = NULL;
+	return;
+    }
+
+    struct network_packet *rx_packet_p =
+	GLIST_NODE_TO_NETWORK_PACKET(rx_packet_node_p);
+
+    struct ipv4_header *ipv4_header_p = GET_IPV4_HEADER(rx_packet_p);
+
+    FDC_ASSERT(ipv4_header_p->protocol_type == TRANSPORT_PROTO_UDP,
+	       ipv4_header_p->protocol_type, rx_packet_p);
+
+    struct udp_header *udp_header_p =
+	(struct udp_header *)GET_IPV4_DATA_PAYLOAD_AREA(rx_packet_p);
+
+    FDC_ASSERT(udp_header_p->dest_port == local_l4_end_point_p->l4_port,
+               udp_header_p->dest_port, local_l4_end_point_p->l4_port);
+
+    COPY_UNALIGNED_IPv4_ADDRESS(source_ip_addr_p, &ipv4_header_p->source_ip_addr);
+    *source_port_p = udp_header_p->source_port;
+    *rx_packet_pp = rx_packet_p;
 }
 
 
@@ -962,8 +1078,7 @@ net_trace_received_arp_packet(struct network_packet *packet_p)
 
 
 static void
-net_receive_arp_packet(struct local_l3_end_point *local_l3_end_point_p,
-	               struct network_packet *rx_packet_p)
+net_receive_arp_packet(struct network_packet *rx_packet_p)
 {
     FDC_ASSERT(rx_packet_p->total_length >=
 	       sizeof(struct ethernet_header) + sizeof(struct arp_packet),
@@ -971,11 +1086,13 @@ net_receive_arp_packet(struct local_l3_end_point *local_l3_end_point_p,
 
     NET_TRACE_RECEIVED_ARP_PACKET(rx_packet_p);
 
+    struct local_l3_end_point *local_l3_end_point_p = rx_packet_p->local_l3_end_point_p;
     const struct enet_device *enet_device_p = local_l3_end_point_p->enet_device_p;
     struct ethernet_frame *rx_frame_p =
 	(struct ethernet_frame *)rx_packet_p->data_buffer;
 
     uint16_t arp_operation = ntoh16(rx_frame_p->arp_packet.operation);
+    struct ipv4_address source_ip_addr;
 
     if (arp_operation == ARP_REQUEST || arp_operation == ARP_REPLY) {
 	FDC_ASSERT(rx_frame_p->arp_packet.link_addr_type == hton16(0x1),
@@ -1004,8 +1121,10 @@ net_receive_arp_packet(struct local_l3_end_point *local_l3_end_point_p,
 	/*
 	 * Update ARP cache with (source IP addr, source MAC addr)
 	 */
+	COPY_UNALIGNED_IPv4_ADDRESS(&source_ip_addr,
+				    &rx_frame_p->arp_packet.source_ip_addr);
 	arp_cache_update(&local_l3_end_point_p->ipv4.arp_cache,
-			 &rx_frame_p->arp_packet.source_ip_addr,
+			 &source_ip_addr,
 			 &rx_frame_p->arp_packet.source_mac_addr);
 	break;
 
@@ -1040,8 +1159,10 @@ net_receive_arp_packet(struct local_l3_end_point *local_l3_end_point_p,
 	    /*
 	     * Update ARP cache with (source IP addr, source MAC addr)
 	     */
+	    COPY_UNALIGNED_IPv4_ADDRESS(&source_ip_addr,
+					&rx_frame_p->arp_packet.source_ip_addr);
 	    arp_cache_update(&local_l3_end_point_p->ipv4.arp_cache,
-			     &rx_frame_p->arp_packet.source_ip_addr,
+			     &source_ip_addr,
 			     &rx_frame_p->arp_packet.source_mac_addr);
 	}
 	break;
@@ -1051,7 +1172,7 @@ net_receive_arp_packet(struct local_l3_end_point *local_l3_end_point_p,
 			       arp_operation);
     }
 
-    net_recycle_rx_packet(local_l3_end_point_p, rx_packet_p);
+    net_recycle_rx_packet(rx_packet_p);
 }
 
 
@@ -1075,8 +1196,7 @@ net_send_ipv4_ping_reply(const struct ipv4_address *dest_ip_addr_p,
 
 
 static void
-net_receive_icmpv4_message(struct local_l3_end_point *local_l3_end_point_p,
-	                   struct network_packet *rx_packet_p)
+net_receive_icmpv4_message(struct network_packet *rx_packet_p)
 {
 
     FDC_ASSERT(rx_packet_p->total_length >=
@@ -1124,13 +1244,12 @@ net_receive_icmpv4_message(struct local_l3_end_point *local_l3_end_point_p,
 			       icmpv4_header_p->msg_type);
     }
 
-    net_recycle_rx_packet(local_l3_end_point_p, rx_packet_p);
+    net_recycle_rx_packet(rx_packet_p);
 }
 
 
 static void
-net_receive_tcp_segment(struct local_l3_end_point *local_l3_end_point_p,
-	                struct network_packet *rx_packet_p)
+net_process_incoming_tcp_segment(struct network_packet *rx_packet_p)
 {
 #if 0 // TODO: Finish implementing this:
     FDC_ASSERT(rx_packet_p->total_length >=
@@ -1142,14 +1261,13 @@ net_receive_tcp_segment(struct local_l3_end_point *local_l3_end_point_p,
 
 #else
     DEBUG_PRINTF("Received TCP segment ignored - not supported yet\n");
-    net_recycle_rx_packet(local_l3_end_point_p, rx_packet_p);
+    net_recycle_rx_packet(rx_packet_p);
 #endif
 }
 
 
 static void
-net_receive_udp_datagram(struct local_l3_end_point *local_l3_end_point_p,
-	                 struct network_packet *rx_packet_p)
+net_process_incoming_udp_datagram(struct network_packet *rx_packet_p)
 {
 
     FDC_ASSERT(rx_packet_p->total_length >=
@@ -1157,23 +1275,38 @@ net_receive_udp_datagram(struct local_l3_end_point *local_l3_end_point_p,
 	       sizeof(struct udp_header),
 	       rx_packet_p->total_length, rx_packet_p);
 
-#if 0 // TODO: Finish implementing this:
     struct udp_header *udp_header_p = GET_IPV4_DATA_PAYLOAD_AREA(rx_packet_p);
 
     /*
      * Lookup local Layer-4 end point by destination port:
      */
+    struct local_l4_end_point *local_l4_end_point_p = NULL;
 
-#else
-    DEBUG_PRINTF("Received UDP datagram ignored - not supported yet\n");
-    net_recycle_rx_packet(local_l3_end_point_p, rx_packet_p);
-#endif
+    rtos_k_mutex_acquire(&g_networking.local_l4_end_points_mutex);
+    for (struct local_l4_end_point *p = g_networking.local_l4_end_points;
+	 p != g_networking.next_free_l4_end_point_p; p ++) {
+	if (p->l4_protocol == TRANSPORT_PROTO_UDP &&
+	    p->l4_port == udp_header_p->dest_port) {
+	    local_l4_end_point_p = p;
+	    break;
+	}
+    }
+
+    rtos_k_mutex_release(&g_networking.local_l4_end_points_mutex);
+
+    if (local_l4_end_point_p != NULL) {
+	rtos_k_queue_add(&local_l4_end_point_p->l4_rx_packet_queue,
+		         &rx_packet_p->node);
+    } else {
+	capture_fdc_msg_printf("Received UDP datagram ignored: unknown port %u\n",
+			       udp_header_p->dest_port);
+	net_recycle_rx_packet(rx_packet_p);
+    }
 }
 
 
 static void
-net_receive_ipv4_packet(struct local_l3_end_point *local_l3_end_point_p,
-	                struct network_packet *rx_packet_p)
+net_receive_ipv4_packet(struct network_packet *rx_packet_p)
 {
     FDC_ASSERT(rx_packet_p->total_length >=
 	       sizeof(struct ethernet_header) + sizeof(struct ipv4_header),
@@ -1182,9 +1315,10 @@ net_receive_ipv4_packet(struct local_l3_end_point *local_l3_end_point_p,
     static int count = 0;
 
     count++;
-    CONSOLE_POS_PRINTF(33,1, "Received IPv4 packets: %d\n", count);
+    CONSOLE_POS_PRINTF(35,1, "Received IPv4 packets: %d\n", count);
 //???
 
+    struct local_l3_end_point *local_l3_end_point_p = rx_packet_p->local_l3_end_point_p;
     struct ipv4_header *ipv4_header_p = GET_IPV4_HEADER(rx_packet_p);
 
     switch (ipv4_header_p->protocol_type) {
@@ -1195,25 +1329,24 @@ net_receive_ipv4_packet(struct local_l3_end_point *local_l3_end_point_p,
 	break;
 
     case TRANSPORT_PROTO_TCP:
-        net_receive_tcp_segment(local_l3_end_point_p, rx_packet_p);
+        net_process_incoming_tcp_segment(rx_packet_p);
 	break;
 
     case TRANSPORT_PROTO_UDP:
-	net_receive_udp_datagram(local_l3_end_point_p, rx_packet_p);
+	net_process_incoming_udp_datagram(rx_packet_p);
 	break;
 
     default:
 	capture_fdc_msg_printf("Received IPv4 packet with unknown protocol type: %#x\n",
 			       ipv4_header_p->protocol_type);
 
-	net_recycle_rx_packet(local_l3_end_point_p, rx_packet_p);
+	net_recycle_rx_packet(rx_packet_p);
     }
 }
 
 
 static void
-net_receive_ipv6_packet(struct local_l3_end_point *local_l3_end_point_p,
-		        struct network_packet *rx_packet_p)
+net_receive_ipv6_packet(struct network_packet *rx_packet_p)
 {
 
     FDC_ASSERT(rx_packet_p->total_length >=
@@ -1224,7 +1357,7 @@ net_receive_ipv6_packet(struct local_l3_end_point *local_l3_end_point_p,
     static int count = 0;
 
     count++;
-    CONSOLE_POS_PRINTF(34,1, "Received IPv6 packets: %d\n", count);
+    CONSOLE_POS_PRINTF(35,60, "Received IPv6 packets: %d\n", count);
 //???
 
 #if 0 //???
@@ -1235,7 +1368,7 @@ net_receive_ipv6_packet(struct local_l3_end_point *local_l3_end_point_p,
     /*
      * TODO: Only repost packet if not enqueued in a local transport end point
      */
-    net_recycle_rx_packet(local_l3_end_point_p, rx_packet_p);
+    net_recycle_rx_packet(rx_packet_p);
 }
 
 
@@ -1272,10 +1405,13 @@ net_receive_thread_f(void *arg)
 	struct network_packet *rx_packet_p = NULL;
 
 	net_dequeue_rx_packet(local_l3_end_point_p, &rx_packet_p);
+
 	DBG_ASSERT(rx_packet_p != NULL, enet_device_p, cpu_id);
+	DBG_ASSERT(rx_packet_p->local_l3_end_point_p == local_l3_end_point_p,
+		   rx_packet_p->local_l3_end_point_p, local_l3_end_point_p);
 
 	if (rx_packet_p->state_flags == NET_PACKET_RX_FAILED) {
-	    net_recycle_rx_packet(local_l3_end_point_p, rx_packet_p);
+	    net_recycle_rx_packet(rx_packet_p);
 	    continue;
 	}
 
@@ -1284,19 +1420,19 @@ net_receive_thread_f(void *arg)
 
 	switch (ntoh16(rx_frame->enet_header.frame_type)) {
 	case ENET_ARP_PACKET:
-	    net_receive_arp_packet(local_l3_end_point_p, rx_packet_p);
+	    net_receive_arp_packet(rx_packet_p);
 	    break;
 	case ENET_IPv4_PACKET:
-	    net_receive_ipv4_packet(local_l3_end_point_p, rx_packet_p);
+	    net_receive_ipv4_packet(rx_packet_p);
 	    break;
 	case ENET_IPv6_PACKET:
-	    net_receive_ipv6_packet(local_l3_end_point_p, rx_packet_p);
+	    net_receive_ipv6_packet(rx_packet_p);
 	    break;
 	default:
 	    capture_fdc_msg_printf("Received frame of unknown type: %#x\n",
 				   ntoh16(rx_frame->enet_header.frame_type));
 
-	    net_recycle_rx_packet(local_l3_end_point_p, rx_packet_p);
+	    net_recycle_rx_packet(rx_packet_p);
 	}
     }
 
@@ -1336,12 +1472,12 @@ net_icmpv4_receive_thread_f(void *arg)
 	rx_packet_p = GLIST_NODE_TO_NETWORK_PACKET(
 		rtos_k_queue_remove(&local_l3_end_point_p->ipv4.rx_icmpv4_packet_queue, 0));
 
-	DBG_ASSERT(rx_packet_p != NULL &&
+	DBG_ASSERT(rx_packet_p->signature == NET_RX_PACKET_SIGNATURE &&
 		   (rx_packet_p->state_flags & NET_PACKET_IN_ICMP_QUEUE),
 		   rx_packet_p, local_l3_end_point_p);
 
 	rx_packet_p->state_flags &= ~NET_PACKET_IN_ICMP_QUEUE;
-	net_receive_icmpv4_message(local_l3_end_point_p, rx_packet_p);
+	net_receive_icmpv4_message(rx_packet_p);
     }
 
     fdc_error = CAPTURE_FDC_ERROR(

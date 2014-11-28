@@ -569,10 +569,6 @@ rtos_root_thread_f(void *arg)
 
     /*
      * Initialize tick timer interrupts for this CPU core:
-     *
-     * NOTE: Even if tick timer interrupts start coming right away,
-     * we will not get interrupted yet, as we still have interrupts
-     * disabled.
      */
     initialize_tick_timer();
 

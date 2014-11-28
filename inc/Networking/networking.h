@@ -17,6 +17,13 @@
 
 C_ASSERT(BOARD_INSTANCE == 1 || BOARD_INSTANCE == 2);
 
+/*
+ * Networking subsystem configuration options
+ */
+#define ENET_DATA_PAYLOAD_32_BIT_ALIGNED
+#undef	SOFTWARE_BASED_CHECKSUM
+#undef	NET_TRACE
+
 /**
  * Maximum transfer unit for Ethernet (frame size without CRC)
  */
@@ -199,17 +206,16 @@ C_ASSERT(BOARD_INSTANCE == 1 || BOARD_INSTANCE == 2);
 		  (sizeof(struct ethernet_header) + \
 	  sizeof(struct ipv4_header))))
 
-/**
- * Returns pointer to the data payload area of a UDP datagram
- */
-#define GET_UDP_DATA_PAYLOAD_AREA(_net_packet_p)	\
-        ((uint8_t *)GET_IPV4_DATA_PAYLOAD_AREA(_net_packet_p) +	\
-	 sizeof(struct udp_header))
 
 /**
  * Maximum number of local layer-3 end points (network interfaces)
  */
 #define NET_MAX_LOCAL_L3_END_POINTS 1
+
+/**
+ * Maximum number of local layer-4 end points
+ */
+#define NET_MAX_LOCAL_L4_END_POINTS 8
 
 /**
  * Maximum number of Tx packet buffers
@@ -220,6 +226,12 @@ C_ASSERT(BOARD_INSTANCE == 1 || BOARD_INSTANCE == 2);
  * Maximum number of Rx packet buffers per layer-3 end point
  */
 #define NET_MAX_RX_PACKETS   8
+
+/**
+ * First ephemeral port. All port number greater or equal
+ * to this value are ephemeral ports.
+ */
+#define NET_FIRST_EPHEMERAL_PORT 49152
 
 /**
  * Ethernet MAC address in network byte order
@@ -238,7 +250,22 @@ C_ASSERT(sizeof(struct ethernet_mac_address) == 6);
  * Ethernet header in network byte order
  */
 struct ethernet_header {
+#   ifdef ENET_DATA_PAYLOAD_32_BIT_ALIGNED
+    /**
+     * Alignment padding so that data payload of the Ethernet frame
+     * starts at a 32-bit boundary.
+     */
+    uint16_t alignment_padding;
+#   endif
+
+    /**
+     * Destination MAC address
+     */
     struct ethernet_mac_address dest_mac_addr;
+
+    /**
+     * Source MAC address
+     */
     struct ethernet_mac_address source_mac_addr;
 
     /**
@@ -253,10 +280,18 @@ struct ethernet_header {
 #   define ENET_IPv6_PACKET	    0x86dd
 }; // __attribute__((packed));
 
+#ifdef ENET_DATA_PAYLOAD_32_BIT_ALIGNED
+C_ASSERT(sizeof(struct ethernet_header) == 16);
+C_ASSERT(offsetof(struct ethernet_header, dest_mac_addr) == 2);
+C_ASSERT(offsetof(struct ethernet_header, source_mac_addr) == 8);
+C_ASSERT(offsetof(struct ethernet_header, frame_type) == 14);
+#else
 C_ASSERT(sizeof(struct ethernet_header) == 14);
 C_ASSERT(offsetof(struct ethernet_header, dest_mac_addr) == 0);
 C_ASSERT(offsetof(struct ethernet_header, source_mac_addr) == 6);
 C_ASSERT(offsetof(struct ethernet_header, frame_type) == 12);
+#endif
+
 
 /**
  * IPv4 address in network byte order
@@ -770,10 +805,19 @@ struct network_packet {
 #   define NET_TX_PACKET_SIGNATURE  GEN_SIGNATURE('T', 'X', 'B', 'U')
 #   define NET_RX_PACKET_SIGNATURE  GEN_SIGNATURE('R', 'X', 'B', 'U')
 
+    /**
+     * ENET-MAC device buffer descriptor associated with the packet
+     */
     union {
 	volatile struct enet_tx_buffer_descriptor *tx_buf_desc_p;
 	volatile struct enet_rx_buffer_descriptor *rx_buf_desc_p;
     };
+
+    /**
+     * Pointer to the local layer-3 end point that owns this network packet
+     * object. Only meaningful for Rx packets.
+     */
+    struct local_l3_end_point *local_l3_end_point_p;
 
     uint16_t state_flags;
 #   define NET_PACKET_IN_TX_TRANSIT		BIT(0)
@@ -858,12 +902,18 @@ struct local_l4_end_point {
     /**
      * Transport protocol type
      */
-    enum l4_protocols protocol;
+    enum l4_protocols l4_protocol;
 
     /**
      * Protocol-specific port number (must be different from 0)
      */
-    uint16_t port;
+    uint16_t l4_port;
+
+    /**
+     * Queue of incoming network packets received for this
+     * layer-4 end point
+     */
+    struct rtos_queue l4_rx_packet_queue;
 };
 
 /**
@@ -874,6 +924,26 @@ struct networking {
      * Flag indicating if the networking subsystem has been initialzied
      */
     bool initialized;
+
+    /**
+     * Next ephemeral port to assign to local UDP end point.
+     */
+    uint16_t next_udp_ephemeral_port;
+
+    /**
+     * Next ephemeral port to assign to local TCP end point.
+     */
+    uint16_t next_tcp_ephemeral_port;
+
+    /**
+     * Pointer to the next free entry in local_l4_end_points[]
+     */
+    struct local_l4_end_point *next_free_l4_end_point_p;
+
+    /**
+     * Mutex to serialize access calls to table of loca layer-4 end points
+     */
+    struct rtos_mutex local_l4_end_points_mutex;
 
     /**
      * Pool of free Tx packets
@@ -889,6 +959,11 @@ struct networking {
      * Local layer-3 end points (one per NIC)
      */
     struct local_l3_end_point local_l3_end_points[NET_MAX_LOCAL_L3_END_POINTS];
+
+    /**
+     * Local layer-4 end points
+     */
+    struct local_l4_end_point local_l4_end_points[NET_MAX_LOCAL_L4_END_POINTS];
 };
 
 /**
@@ -924,6 +999,46 @@ static inline uint32_t byte_swap32(uint32_t value)
     return swapped_val;
 }
 
+/**
+ * Returns pointer to the data payload area of a UDP datagram
+ */
+static inline void *net_get_udp_data_payload_area(struct network_packet *net_packet_p)
+{
+    struct ipv4_header *ipv4_header_p = GET_IPV4_HEADER(net_packet_p);
+
+    if (net_packet_p->signature == NET_RX_PACKET_SIGNATURE) {
+	FDC_ASSERT(ipv4_header_p->protocol_type == TRANSPORT_PROTO_UDP,
+		   ipv4_header_p->protocol_type, net_packet_p);
+    } else {
+	FDC_ASSERT(net_packet_p->signature == NET_TX_PACKET_SIGNATURE,
+		   net_packet_p->signature, net_packet_p);
+    }
+
+    return (void *)((uint8_t *)GET_IPV4_DATA_PAYLOAD_AREA(net_packet_p) +
+		    sizeof(struct udp_header));
+}
+
+
+/**
+ * Returns the data payload length of an incoming UDP datagram
+ */
+static inline size_t net_get_udp_data_payload_length(struct network_packet *net_packet_p)
+{
+    struct ipv4_header *ipv4_header_p = GET_IPV4_HEADER(net_packet_p);
+
+    FDC_ASSERT(net_packet_p->signature == NET_RX_PACKET_SIGNATURE,
+	       net_packet_p->signature, net_packet_p);
+
+    FDC_ASSERT(ipv4_header_p->protocol_type == TRANSPORT_PROTO_UDP,
+	       ipv4_header_p->protocol_type, net_packet_p);
+
+    struct udp_header *udp_header_p =
+	(struct udp_header *)GET_IPV4_DATA_PAYLOAD_AREA(net_packet_p);
+
+    return ntoh16(udp_header_p->datagram_length) - sizeof(struct udp_header);
+}
+
+
 void networking_init(void);
 
 struct network_packet *net_allocate_tx_packet(bool free_after_tx_complete);
@@ -937,8 +1052,7 @@ void net_enqueue_rx_packet(struct local_l3_end_point *local_l3_end_point_p,
 			   struct network_packet *rx_packet_p);
 
 void
-net_recycle_rx_packet(struct local_l3_end_point *local_l3_end_point_p,
-		      struct network_packet *rx_packet_p);
+net_recycle_rx_packet(struct network_packet *rx_packet_p);
 
 fdc_error_t
 net_send_ipv4_packet(const struct ipv4_address *dest_ip_addr_p,
@@ -946,12 +1060,25 @@ net_send_ipv4_packet(const struct ipv4_address *dest_ip_addr_p,
 		     size_t data_payload_length,
 		     enum l4_protocols l4_protocol);
 
+fdc_error_t
+net_create_local_l4_end_point(enum l4_protocols l4_protocol,
+	                      uint16_t l4_port,
+			      struct local_l4_end_point **local_l4_end_point_pp);
+
 void
 net_send_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
 		           const struct ipv4_address *dest_ip_addr_p,
 			   uint16_t dest_port,
 		           struct network_packet *tx_packet_p,
 		           size_t data_payload_length);
+
+void
+net_receive_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
+			      rtos_milliseconds_t timeout_ms,
+		              struct ipv4_address *source_ip_addr_p,
+			      uint16_t *source_port_p,
+			      struct network_packet **rx_packet_pp);
+
 void
 net_send_ipv4_tcp_segment(struct local_l4_end_point *local_l4_end_point_p,
 		          const struct ipv4_address *dest_ip_addr_p,

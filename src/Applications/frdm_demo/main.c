@@ -20,6 +20,8 @@ TODO("Remove these pragmas")
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-function"
 
+#define MY_UDP_SERVER_PORT  8888
+
 /**
  * Application thread priorities
  */
@@ -32,11 +34,12 @@ static void app_hardware_init(void);
 static void app_hardware_stop(void);
 static void app_software_init(void);
 static void ping_command(const char *cmd_line);
+
 static fdc_error_t hello_world_thread_f(void *arg);
-
 static fdc_error_t accelerometer_thread_f(void *arg);
-
 static fdc_error_t ping_thread_f(void *arg);
+static fdc_error_t udp_server_thread_f(void *arg);
+static fdc_error_t udp_client_thread_f(void *arg);
 
 struct app_state_vars {
     /**
@@ -113,6 +116,26 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
         .p_priority = ACCELEROMETER_THREAD_PRIORITY,
         .p_thread_pp = NULL,
     },
+
+#if BOARD_INSTANCE == 1
+    [4] =
+    {
+        .p_name_p = "UDP server thread",
+        .p_function_p = udp_server_thread_f,
+        .p_function_arg_p = NULL,
+        .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 3,
+        .p_thread_pp = NULL,
+    },
+#else
+    [4] =
+    {
+        .p_name_p = "UDP client thread",
+        .p_function_p = udp_client_thread_f,
+        .p_function_arg_p = (void *)&g_dest_ip_addr[0],
+        .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 3,
+        .p_thread_pp = NULL,
+    },
+#endif
 };
 
 C_ASSERT(
@@ -247,9 +270,9 @@ hello_world_thread_f(void *arg)
     float x = 0.1f;
 
     for ( ; ; ) {
-	CONSOLE_POS_PRINTF(28, 60 + thread_id * 20, "Hello thread %1d", arg);
+	CONSOLE_POS_PRINTF(32, 60 + thread_id * 20, "Hello thread %1d", arg);
 	rtos_thread_delay(500);
-	CONSOLE_POS_PRINTF(28, 60 + thread_id * 20, "              ");
+	CONSOLE_POS_PRINTF(32, 60 + thread_id * 20, "              ");
 	if (thread_id == 1) {
 	    x += 0.2f;
 	    x -= 0.2f;
@@ -288,7 +311,7 @@ ping_thread_f(void *arg)
     uint32_t ping_count = 0;
 
     for ( ; ; ) {
-	CONSOLE_POS_PRINTF(32, 60, "Ping thread %u", ping_count);
+	CONSOLE_POS_PRINTF(33, 1, "Pings sent %u", ping_count);
         rtos_enter_privileged_mode();
 	net_send_ipv4_ping_request(dest_ip_addr_p, ping_count);
         rtos_exit_privileged_mode();
@@ -363,7 +386,7 @@ accelerometer_thread_f(void *arg)
 	    }
 
 	    if (motion_detected) {
-		CONSOLE_POS_PRINTF(28, 1, "x_accel: %8d  y_accel: %8d  z_accel: %8d",
+		CONSOLE_POS_PRINTF(32, 1, "x_accel: %8d  y_accel: %8d  z_accel: %8d",
 		    g_app.x_acceleration,
 		    g_app.y_acceleration,
 		    g_app.z_acceleration);
@@ -402,3 +425,136 @@ exit:
 
     return fdc_error;
 }
+
+
+#if BOARD_INSTANCE == 1
+static fdc_error_t
+udp_server_thread_f(void *arg)
+{
+    fdc_error_t fdc_error;
+    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
+
+    uint32_t seq_num = 0;
+
+    rtos_enter_privileged_mode();
+
+    struct local_l4_end_point *server_end_point_p;
+
+    fdc_error = net_create_local_l4_end_point(TRANSPORT_PROTO_UDP,
+					      MY_UDP_SERVER_PORT,
+					      &server_end_point_p);
+    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+
+    struct network_packet *tx_packet_p = net_allocate_tx_packet(false);
+
+    for ( ; ; ) {
+	struct network_packet *rx_packet_p = NULL;
+	struct ipv4_address client_ip_addr;
+	uint16_t client_port;
+	uint32_t *in_msg_p;
+	uint32_t *out_msg_p;
+	size_t in_msg_size;
+
+	net_receive_ipv4_udp_datagram(server_end_point_p,
+				      0,
+				      &client_ip_addr,
+				      &client_port,
+				      &rx_packet_p);
+
+	in_msg_size = net_get_udp_data_payload_length(rx_packet_p);
+	FDC_ASSERT(in_msg_size == sizeof(uint32_t), in_msg_size, 0);
+	in_msg_p = net_get_udp_data_payload_area(rx_packet_p);
+	seq_num = *in_msg_p;
+	CONSOLE_POS_PRINTF(38, 1, "UDP server received %u", seq_num);
+	net_recycle_rx_packet(rx_packet_p);
+
+	out_msg_p = net_get_udp_data_payload_area(tx_packet_p);
+	*out_msg_p = seq_num;
+	net_send_ipv4_udp_datagram(server_end_point_p, &client_ip_addr,
+				   client_port,
+		                   tx_packet_p, sizeof(uint32_t));
+	CONSOLE_POS_PRINTF(39, 1, "UDP server sent %u", seq_num);
+    }
+
+    net_free_tx_packet(tx_packet_p);
+    rtos_exit_privileged_mode();
+    fdc_error = CAPTURE_FDC_ERROR(
+        "thread should not have terminated",
+        cpu_id, rtos_thread_self());
+
+    return fdc_error;
+}
+#else
+
+static fdc_error_t
+udp_client_thread_f(void *arg)
+{
+    fdc_error_t fdc_error;
+    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
+
+    FDC_ASSERT(arg != NULL, arg, cpu_id);
+    const struct ipv4_address *dest_ip_addr_p = arg;
+    uint32_t seq_num = 0;
+
+    rtos_enter_privileged_mode();
+
+    struct local_l4_end_point *client_end_point_p;
+
+    fdc_error = net_create_local_l4_end_point(TRANSPORT_PROTO_UDP, 0,
+					      &client_end_point_p);
+    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+
+    struct network_packet *tx_packet_p = net_allocate_tx_packet(false);
+
+    for ( ; ; ) {
+	struct network_packet *rx_packet_p = NULL;
+	struct ipv4_address server_ip_addr;
+	uint16_t server_port;
+	uint32_t *out_msg_p;
+	uint32_t *in_msg_p;
+	size_t in_msg_size;
+
+	CONSOLE_POS_PRINTF(36, 1, "UDP client sent %u", seq_num);
+
+	out_msg_p = net_get_udp_data_payload_area(tx_packet_p);
+	*out_msg_p = seq_num;
+	net_send_ipv4_udp_datagram(client_end_point_p, dest_ip_addr_p,
+		                   MY_UDP_SERVER_PORT,
+		                   tx_packet_p, sizeof(uint32_t));
+
+	net_receive_ipv4_udp_datagram(client_end_point_p,
+		                      5000,
+				      &server_ip_addr,
+				      &server_port,
+				      &rx_packet_p);
+	if (rx_packet_p == NULL) {
+	    CONSOLE_POS_PRINTF(37, 1, "UDP client receive timeout", seq_num);
+	    continue;
+	}
+
+	FDC_ASSERT(server_ip_addr.value == dest_ip_addr_p->value,
+	           server_ip_addr.value, dest_ip_addr_p->value);
+	FDC_ASSERT(server_port == MY_UDP_SERVER_PORT,
+		   server_port, 0);
+
+	in_msg_size = net_get_udp_data_payload_length(rx_packet_p);
+	FDC_ASSERT(in_msg_size == sizeof(uint32_t), in_msg_size, 0);
+	in_msg_p = net_get_udp_data_payload_area(rx_packet_p);
+	FDC_ASSERT(*in_msg_p == seq_num, *in_msg_p, seq_num);
+	CONSOLE_POS_PRINTF(37, 1, "UDP client received %u      ", *in_msg_p);
+	net_recycle_rx_packet(rx_packet_p);
+
+	seq_num ++;
+	rtos_thread_delay(1500);
+    }
+
+    net_free_tx_packet(tx_packet_p);
+    rtos_exit_privileged_mode();
+    fdc_error = CAPTURE_FDC_ERROR(
+        "thread should not have terminated",
+        cpu_id, rtos_thread_self());
+
+    return fdc_error;
+}
+
+#endif
