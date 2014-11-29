@@ -73,6 +73,7 @@ static fdc_error_t rtos_touch_screen_reader_thread_f(void *arg);
 static void rtos_parse_command_line(const char *cmd_line);
 static void McRTOS_display_help(void);
 static void McRTOS_display_stats(void);
+static void McRTOS_change_console_cpu(cpu_id_t cpu_id);
 
 static const char g_McRTOS_version[] = "McRTOS v1.1 (" RTOS_BUILD_FLAVOR ")";
 
@@ -132,6 +133,8 @@ static struct McRTOS g_McRTOS =
     .rts_signature = MCRTOS_SIGNATURE,
 
     .rts_release_secondary_cores = false,
+
+    .rts_console_input_cpu_id = 0,
 
     .rts_next_free_interrupt_p = &g_McRTOS.rts_interrupts[0],
 
@@ -381,6 +384,9 @@ rtos_startup(
             &cpu_controller_p->cpc_timer_wheel_hash_chains_anchors[i]);
     }
 
+    rtos_k_condvar_init("inter-processor-interrupt condvar",
+		        &cpu_controller_p->cpc_inter_processor_interrupt_condvar);
+
     /*
      * Create root system thread to continue system initialization in that thread:
      */
@@ -627,17 +633,15 @@ rtos_root_thread_f(void *arg)
             lcd_display_greetings();
 #       endif
     }
-    else
-    {
-	/*
-	 * TODO: This needs to be be done in a better way
-	 */
-	rtos_k_thread_abort(0);
-    }
 
     for ( ; ; )
     {
-        console_printf("McRTOS> ");
+	while (g_McRTOS_p->rts_console_input_cpu_id != cpu_id) {
+	   rtos_k_condvar_wait(&cpu_controller_p->cpc_inter_processor_interrupt_condvar,
+			       NULL, NULL);
+	}
+
+        console_printf("McRTOS-cpu%u> ", cpu_id);
         read_command_line(
             (putchar_func_t *)rtos_console_putchar,
             (getchar_func_t *)rtos_console_getchar,
@@ -747,6 +751,10 @@ rtos_parse_command_line(
 	rtos_run_debugger(NULL, NULL);
 	__enable_irq();
         break;
+
+    case 'C': //???
+	McRTOS_change_console_cpu((SOC_GET_CURRENT_CPU_ID() + 1) % SOC_NUM_CPU_CORES);
+	break;
 
     default:
         for (i = 0; i < g_McRTOS_p->rts_num_app_console_commands; i++) {
@@ -873,4 +881,13 @@ McRTOS_display_stats(void)
             context_p->ctx_last_switched_out_reason
         );
     }
+}
+
+
+static void
+McRTOS_change_console_cpu(cpu_id_t cpu_id)
+{
+    g_McRTOS_p->rts_console_input_cpu_id = cpu_id;
+    __DSB();
+    send_inter_processor_interrupt(cpu_id);
 }

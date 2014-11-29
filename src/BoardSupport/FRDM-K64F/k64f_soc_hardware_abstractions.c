@@ -3476,6 +3476,16 @@ notify_interrupt_controller_isr_done(interrupt_channel_t interrupt_channel)
 }
 
 
+/**
+ * Sends an inter-processor interrupt to the given CPU
+ */
+void
+send_inter_processor_interrupt(cpu_id_t cpu_id)
+{
+    DEBUG_PRINTF("Not implemented yet\n");
+}
+
+
 /*
  * Generate dummy NVIC interrupt handler functions
  */

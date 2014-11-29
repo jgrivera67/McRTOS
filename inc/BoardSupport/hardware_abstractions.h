@@ -475,6 +475,8 @@ void i2c_write(
 
 void wait_for_interrupts(void);
 
+void send_inter_processor_interrupt(cpu_id_t cpu_id);
+
 uint32_t read_32bit_mmio_register(const volatile uint32_t *io_reg_p);
 
 void write_32bit_mmio_register(volatile uint32_t *io_reg_p, uint32_t value);

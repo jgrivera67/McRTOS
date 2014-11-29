@@ -1437,7 +1437,6 @@ rtos_k_condvar_wait(
 {
     FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
     FDC_ASSERT_PRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED();
-    FDC_ASSERT(rtos_mutex_p != NULL, rtos_condvar_p, 0);
 
     /*
      * Disable interrupts in the ARM core
@@ -1451,10 +1450,12 @@ rtos_k_condvar_wait(
      */
     rtos_k_restore_cpu_interrupts(cpu_status_register);
 
-    /*
-     * Reacquire the mutex:
-     */
-    rtos_k_mutex_acquire(rtos_mutex_p);
+    if (rtos_mutex_p != NULL) {
+	/*
+	 * Reacquire the mutex:
+	 */
+	rtos_k_mutex_acquire(rtos_mutex_p);
+    }
 }
 
 
@@ -3430,6 +3431,7 @@ rtos_k_disable_cpu_interrupts(void)
 uint32_t
 rtos_k_atomic_fetch_add_uint32(volatile uint32_t *counter_p, uint32_t value)
 {
+#if 0
     cpu_status_register_t old_primask = __get_PRIMASK();
 
     __disable_irq();
@@ -3443,6 +3445,15 @@ rtos_k_atomic_fetch_add_uint32(volatile uint32_t *counter_p, uint32_t value)
     }
 
     return old_value;
+#else
+    uint32_t old_value;
+
+    do {
+	old_value = __LDREXW(counter_p);
+    } while (__STREXW(old_value + value, counter_p) != 0);
+
+    return old_value;
+#endif
 }
 
 
@@ -3459,6 +3470,7 @@ rtos_k_atomic_fetch_add_uint32(volatile uint32_t *counter_p, uint32_t value)
 uint32_t
 rtos_k_atomic_fetch_sub_uint32(volatile uint32_t *counter_p, uint32_t value)
 {
+#if 0
     cpu_status_register_t old_primask = __get_PRIMASK();
 
     __disable_irq();
@@ -3472,6 +3484,15 @@ rtos_k_atomic_fetch_sub_uint32(volatile uint32_t *counter_p, uint32_t value)
     }
 
     return old_value;
+#else
+    uint32_t old_value;
+
+    do {
+	old_value = __LDREXW(counter_p);
+    } while (__STREXW(old_value - value, counter_p) != 0);
+
+    return old_value;
+#endif
 }
 
 
@@ -3488,6 +3509,7 @@ rtos_k_atomic_fetch_sub_uint32(volatile uint32_t *counter_p, uint32_t value)
 uint16_t
 rtos_k_atomic_fetch_add_uint16(volatile uint16_t *counter_p, uint16_t value)
 {
+#if 0
     cpu_status_register_t old_primask = __get_PRIMASK();
 
     __disable_irq();
@@ -3501,6 +3523,15 @@ rtos_k_atomic_fetch_add_uint16(volatile uint16_t *counter_p, uint16_t value)
     }
 
     return old_value;
+#else
+    uint16_t old_value;
+
+    do {
+	old_value = __LDREXH(counter_p);
+    } while (__STREXH(old_value + value, counter_p) != 0);
+
+    return old_value;
+#endif
 }
 
 
@@ -3517,6 +3548,7 @@ rtos_k_atomic_fetch_add_uint16(volatile uint16_t *counter_p, uint16_t value)
 uint16_t
 rtos_k_atomic_fetch_sub_uint16(volatile uint16_t *counter_p, uint16_t value)
 {
+#if 0
     cpu_status_register_t old_primask = __get_PRIMASK();
 
     __disable_irq();
@@ -3530,6 +3562,15 @@ rtos_k_atomic_fetch_sub_uint16(volatile uint16_t *counter_p, uint16_t value)
     }
 
     return old_value;
+#else
+    uint16_t old_value;
+
+    do {
+	old_value = __LDREXH(counter_p);
+    } while (__STREXH(old_value - value, counter_p) != 0);
+
+    return old_value;
+#endif
 }
 
 

@@ -320,6 +320,12 @@ struct rtos_cpu_controller
     cpu_clock_cycles_t cpc_longest_time_interrupts_disabled;
 
     /**
+     * Condition variable to be signaled when an inter-processor
+     * interrupt is received for this CPU
+     */
+    struct rtos_condvar cpc_inter_processor_interrupt_condvar;
+
+    /**
      * Pointer to the per-CPU application startup configuration
      */
     const struct rtos_per_cpu_startup_app_configuration *cpc_app_config_p;
@@ -413,6 +419,12 @@ struct McRTOS
      * start running
      */
     volatile bool rts_release_secondary_cores;
+
+    /**
+     * CPU ID of the CPU currently receiving input
+     * from the system console
+     */
+    volatile cpu_id_t rts_console_input_cpu_id;
 
     /**
      * Cause of last SoC reset
