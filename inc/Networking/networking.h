@@ -21,7 +21,7 @@ C_ASSERT(BOARD_INSTANCE == 1 || BOARD_INSTANCE == 2);
  * Networking subsystem configuration options
  */
 #define ENET_DATA_PAYLOAD_32_BIT_ALIGNED
-#undef	SOFTWARE_BASED_CHECKSUM
+#define	ENET_CHECKSUM_OFFLOAD
 #undef	NET_TRACE
 
 /**
@@ -112,40 +112,18 @@ C_ASSERT(BOARD_INSTANCE == 1 || BOARD_INSTANCE == 2);
  */
 #define COPY_MAC_ADDRESS(_dest_p, _src_p) \
 	do {								\
-	    if ((uintptr_t)(_dest_p) % 4 == 0 &&			\
-	        (uintptr_t)(_src_p) % 4 == 0) {				\
-		*(uint32_t *)((_dest_p)->bytes) =			\
-		    *(uint32_t *)((_src_p)->bytes);			\
-		*(uint16_t *)((_dest_p)->bytes + 4) =			\
-		    *(uint16_t *)((_src_p)->bytes + 4);			\
-	    } else {							\
-		*(uint16_t *)((_dest_p)->bytes) =			\
-		    *(uint16_t *)((_src_p)->bytes);			\
-		*(uint16_t *)((_dest_p)->bytes + 2) =			\
-		    *(uint16_t *)((_src_p)->bytes + 2);			\
-		*(uint16_t *)((_dest_p)->bytes + 4) =			\
-		    *(uint16_t *)((_src_p)->bytes + 4);			\
-	    }								\
+	    (_dest_p)->hwords[0] = (_src_p)->hwords[0];			\
+	    (_dest_p)->hwords[1] = (_src_p)->hwords[1];			\
+	    (_dest_p)->hwords[2] = (_src_p)->hwords[2];			\
 	} while (0)
 
 /**
  * Compares two MAC addresses. Their storage must be at least 2-byte aligned
  */
 #define MAC_ADDRESSES_EQUAL(_mac_addr1_p, _mac_addr2_p) \
-	(((uintptr_t)(_mac_addr1_p) % 4 == 0 &&				\
-	  (uintptr_t)(_mac_addr2_p) % 4 == 0)				\
-	 ?								\
-	 (*(uint32_t *)((_mac_addr1_p)->bytes) ==			\
-	     *(uint32_t *)((_mac_addr2_p)->bytes) &&			\
-	  *(uint16_t *)((_mac_addr1_p)->bytes + 4) ==			\
-	     *(uint16_t *)((_mac_addr2_p)->bytes + 4))			\
-	 : 							        \
-	 (*(uint16_t *)((_mac_addr1_p)->bytes) ==			\
-	     *(uint16_t *)((_mac_addr2_p)->bytes) &&			\
-	  *(uint16_t *)((_mac_addr1_p)->bytes + 2) ==			\
-	     *(uint16_t *)((_mac_addr2_p)->bytes + 2) &&		\
-	  *(uint16_t *)((_mac_addr1_p)->bytes + 4) ==			\
-	     *(uint16_t *)((_mac_addr2_p)->bytes + 4)))
+	 ((_mac_addr1_p)->hwords[0] == (_mac_addr2_p)->hwords[0] &&	\
+	  (_mac_addr1_p)->hwords[1] == (_mac_addr2_p)->hwords[1] &&	\
+	  (_mac_addr1_p)->hwords[2] == (_mac_addr2_p)->hwords[2])
 
 /**
  * Copies an IPv4 address, where the source or destination are not 4-byte
@@ -153,10 +131,8 @@ C_ASSERT(BOARD_INSTANCE == 1 || BOARD_INSTANCE == 2);
  */
 #define COPY_UNALIGNED_IPv4_ADDRESS(_dest_p, _src_p) \
 	do {								\
-	    *(uint16_t *)((_dest_p)->bytes) =				\
-		*(uint16_t *)((_src_p)->bytes);				\
-	    *(uint16_t *)((_dest_p)->bytes + 2) =			\
-		*(uint16_t *)((_src_p)->bytes + 2);			\
+	    (_dest_p)->hwords[0] = (_src_p)->hwords[0];			\
+	    (_dest_p)->hwords[1] = (_src_p)->hwords[1];			\
 	} while (0)
 
 /**
@@ -164,10 +140,8 @@ C_ASSERT(BOARD_INSTANCE == 1 || BOARD_INSTANCE == 2);
  * aligned, but they must be at least 2-byte aligned.
  */
 #define UNALIGNED_IPv4_ADDRESSES_EQUAL(_ip_addr1_p, _ip_addr2_p) \
-	(*(uint16_t *)((_ip_addr1_p)->bytes) ==				\
-	    *(uint16_t *)((_ip_addr2_p)->bytes) &&			\
-	 *(uint16_t *)((_ip_addr1_p)->bytes + 2) ==			\
-	    *(uint16_t *)((_ip_addr2_p)->bytes + 2))
+	((_ip_addr1_p)->hwords[0] == (_ip_addr2_p)->hwords[0] &&	\
+	 (_ip_addr1_p)->hwords[1] == (_ip_addr2_p)->hwords[1])
 
 /**
  * Build an IPv4 subnet mask in network byte order (big endian),
@@ -237,12 +211,15 @@ C_ASSERT(BOARD_INSTANCE == 1 || BOARD_INSTANCE == 2);
  * Ethernet MAC address in network byte order
  */
 struct ethernet_mac_address {
-    /**
-     * bytes[0] = most significant byte
-     * bytes[5] = less significant byte
-     */
-    uint8_t bytes[6];
-}; // __attribute__((packed));
+    union {
+	/**
+	 * bytes[0] = most significant byte
+	 * bytes[5] = less significant byte
+	 */
+	uint8_t bytes[6];
+	uint16_t hwords[3];
+    };
+};
 
 C_ASSERT(sizeof(struct ethernet_mac_address) == 6);
 
@@ -304,8 +281,10 @@ struct ipv4_address {
 	 */
 	uint8_t bytes[4];
 
+	uint16_t hwords[2];
+
 	/**
-	 * Address seen as a 32-bit value in big endian
+	 * IP address seen as a 32-bit value in big endian
 	 */
 	uint32_t value;
     } __attribute__((packed));
@@ -1004,9 +983,10 @@ static inline uint32_t byte_swap32(uint32_t value)
  */
 static inline void *net_get_udp_data_payload_area(struct network_packet *net_packet_p)
 {
-    struct ipv4_header *ipv4_header_p = GET_IPV4_HEADER(net_packet_p);
-
     if (net_packet_p->signature == NET_RX_PACKET_SIGNATURE) {
+#   ifdef _RELIABILITY_CHECKS_
+	struct ipv4_header *ipv4_header_p = GET_IPV4_HEADER(net_packet_p);
+#   endif
 	FDC_ASSERT(ipv4_header_p->protocol_type == TRANSPORT_PROTO_UDP,
 		   ipv4_header_p->protocol_type, net_packet_p);
     } else {
@@ -1024,10 +1004,12 @@ static inline void *net_get_udp_data_payload_area(struct network_packet *net_pac
  */
 static inline size_t net_get_udp_data_payload_length(struct network_packet *net_packet_p)
 {
-    struct ipv4_header *ipv4_header_p = GET_IPV4_HEADER(net_packet_p);
-
     FDC_ASSERT(net_packet_p->signature == NET_RX_PACKET_SIGNATURE,
 	       net_packet_p->signature, net_packet_p);
+
+#ifdef _RELIABILITY_CHECKS_
+    struct ipv4_header *ipv4_header_p = GET_IPV4_HEADER(net_packet_p);
+#endif
 
     FDC_ASSERT(ipv4_header_p->protocol_type == TRANSPORT_PROTO_UDP,
 	       ipv4_header_p->protocol_type, net_packet_p);

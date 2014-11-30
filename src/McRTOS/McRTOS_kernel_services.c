@@ -809,8 +809,10 @@ rtos_k_thread_disable_fpu(void)
  	       current_thread_p->thr_fpu_enable_count,
  	       current_thread_p);
 
+#   ifdef _RELIABILITY_CHECKS_
     struct rtos_cpu_controller *cpu_controller_p =
 	&g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
+#   endif
 
     FDC_ASSERT(cpu_controller_p->cpc_last_fpu_thread_p == current_thread_p,
                cpu_controller_p->cpc_last_fpu_thread_p,
@@ -3322,7 +3324,7 @@ rtos_k_queue_remove(
     _IN_ rtos_milliseconds_t timeout_ms)
 {
     struct glist_node *elem_p = NULL;
-    cpu_status_register_t saved_cpu_intr_mask;
+    cpu_status_register_t saved_cpu_intr_mask = 0;
 
     FDC_ASSERT(queue_p->signature == RTOS_QUEUE_SIGNATURE,
 	       queue_p->signature, queue_p);

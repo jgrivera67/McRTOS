@@ -972,7 +972,9 @@ k64f_mpu_init(void)
 void
 mpu_disable(void)
 {
+#   ifdef _RELIABILITY_CHECKS_
     struct mpu_device_var *mpu_var_p = g_mpu.var_p;
+#   endif
     volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
 
     FDC_ASSERT(g_mpu.signature == MPU_DEVICE_SIGNATURE, g_mpu.signature, 0);
@@ -988,7 +990,9 @@ mpu_disable(void)
 void
 mpu_enable(void)
 {
+#   ifdef _RELIABILITY_CHECKS_
     struct mpu_device_var *mpu_var_p = g_mpu.var_p;
+#   endif
     volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
 
     FDC_ASSERT(g_mpu.signature == MPU_DEVICE_SIGNATURE, g_mpu.signature, 0);
@@ -1180,10 +1184,8 @@ mpu_set_mpu_region_for_dma(
         g_mpu.signature == MPU_DEVICE_SIGNATURE,
         g_mpu.signature, 0);
 
-#   ifdef _RELIABILITY_CHECKS_
     struct mpu_device_var *mpu_var_p = g_mpu.var_p;
     FDC_ASSERT(mpu_var_p->initialized, mpu_var_p, 0);
-#   endif
 
     volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
 
@@ -3157,8 +3159,10 @@ i2c_start_or_continue_transaction(
 
     reg_value = read_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p));
 
+#   ifdef _RELIABILITY_CHECKS_
     uint32_t reg_value2 =
         read_8bit_mmio_register(&I2C_S_REG(i2c_mmio_registers_p));
+#   endif
 
     if (first_transaction) {
         FDC_ASSERT(

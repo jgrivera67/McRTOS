@@ -19,6 +19,7 @@ TODO("Remove these pragmas")
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-function"
+#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
 
 #define MY_UDP_SERVER_PORT  8888
 

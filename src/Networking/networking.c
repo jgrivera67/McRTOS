@@ -650,7 +650,7 @@ choose_ipv4_local_l3_end_point(const struct ipv4_address *dest_ip_addr_p)
 }
 
 
-#ifdef SOFTWARE_BASED_CHECKSUM
+#ifndef ENET_CHECKSUM_OFFLOAD
 static uint16_t
 net_compute_checksum(void *data_p, size_t data_length)
 {
@@ -733,11 +733,18 @@ net_send_ipv4_packet(const struct ipv4_address *dest_ip_addr_p,
     tx_frame_p->ipv4_header.time_to_live = 64; /* max routing hops */
     tx_frame_p->ipv4_header.protocol_type = l4_protocol;
 
+#   ifdef ENET_DATA_PAYLOAD_32_BIT_ALIGNED
+    tx_frame_p->ipv4_header.source_ip_addr.value =
+	local_l3_end_point_p->ipv4.local_ip_addr.value;
+
+    tx_frame_p->ipv4_header.dest_ip_addr.value = dest_ip_addr_p->value;
+#   else
     COPY_UNALIGNED_IPv4_ADDRESS(&tx_frame_p->ipv4_header.source_ip_addr,
 				&local_l3_end_point_p->ipv4.local_ip_addr);
 
     COPY_UNALIGNED_IPv4_ADDRESS(&tx_frame_p->ipv4_header.dest_ip_addr,
 				dest_ip_addr_p);
+#   endif
 
     /*
      * NOTE: enet_frame->ipv4_header.header_checksum is computed by hardware.
@@ -745,11 +752,11 @@ net_send_ipv4_packet(const struct ipv4_address *dest_ip_addr_p,
      */
     tx_frame_p->ipv4_header.header_checksum = 0;
 
-#ifdef SOFTWARE_BASED_CHECKSUM
+#   ifndef ENET_CHECKSUM_OFFLOAD
     tx_frame_p->ipv4_header.header_checksum =
 	net_compute_checksum(&tx_frame_p->ipv4_header,
 			     sizeof(struct ipv4_header));
-#endif
+#   endif
 
     /*
      * Populate Ethernet header
@@ -933,7 +940,12 @@ net_receive_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
     FDC_ASSERT(udp_header_p->dest_port == local_l4_end_point_p->l4_port,
                udp_header_p->dest_port, local_l4_end_point_p->l4_port);
 
+#   ifdef ENET_DATA_PAYLOAD_32_BIT_ALIGNED
+    source_ip_addr_p->value = ipv4_header_p->source_ip_addr.value;
+#   else
     COPY_UNALIGNED_IPv4_ADDRESS(source_ip_addr_p, &ipv4_header_p->source_ip_addr);
+#   endif
+
     *source_port_p = udp_header_p->source_port;
     *rx_packet_pp = rx_packet_p;
 }
@@ -1001,11 +1013,11 @@ net_send_ipv4_icmp_message(const struct ipv4_address *dest_ip_addr_p,
      */
     icmp_header_p->msg_checksum = 0;
 
-#ifdef SOFTWARE_BASED_CHECKSUM
+#   ifndef ENET_CHECKSUM_OFFLOAD
     icmp_header_p->msg_checksum =
 	net_compute_checksum(icmp_header_p,
 			     sizeof(struct icmpv4_header) + data_payload_length);
-#endif
+#   endif
 
     /*
      * Send IP packet:
@@ -1229,10 +1241,14 @@ net_receive_icmpv4_message(struct network_packet *rx_packet_p)
 	FDC_ASSERT(icmpv4_header_p->msg_code == ICMP_CODE_PING_REQUEST,
 		   icmpv4_header_p->msg_code, rx_packet_p);
 
-	const struct ipv4_address dest_ip_addr;
+	struct ipv4_address dest_ip_addr;
 
+#	ifdef ENET_DATA_PAYLOAD_32_BIT_ALIGNED
+	dest_ip_addr.value = ipv4_header_p->source_ip_addr.value;
+#	else
 	COPY_UNALIGNED_IPv4_ADDRESS(&dest_ip_addr,
 				    &ipv4_header_p->source_ip_addr);
+#	endif
 
 	net_send_ipv4_ping_reply(
 	    &dest_ip_addr,

@@ -435,7 +435,7 @@ ethernet_mac_init(const struct enet_device *enet_device_p)
 
     reg_value = 0;
 
-#   ifndef SOFTWARE_BASED_CHECKSUM
+#   ifdef ENET_CHECKSUM_OFFLOAD
     reg_value =	ENET_TACC_PROCHK_MASK |
 		ENET_TACC_IPCHK_MASK;
 #   endif
@@ -464,7 +464,7 @@ ethernet_mac_init(const struct enet_device *enet_device_p)
     reg_value =	ENET_RACC_PADREM_MASK |
 		ENET_RACC_LINEDIS_MASK;
 
-#   ifndef SOFTWARE_BASED_CHECKSUM
+#   ifdef ENET_CHECKSUM_OFFLOAD
     reg_value |= ENET_RACC_IPDIS_MASK |
 		 ENET_RACC_PRODIS_MASK;
 #   endif
