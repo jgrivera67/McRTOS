@@ -391,14 +391,15 @@ rtos_k_thread_init(
      * priority than the calling thread, perform a synchronous context switch
      * to run the thread scheduler.
      */
-    if (cpu_controller_p->cpc_startup_completed)
+
+    struct rtos_execution_context *current_execution_context_p =
+	cpu_controller_p->cpc_current_execution_context_p;
+
+    DBG_ASSERT(
+	current_execution_context_p != NULL, cpu_controller_p, 0);
+
+    if (current_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT)
     {
-        struct rtos_execution_context *current_execution_context_p =
-            cpu_controller_p->cpc_current_execution_context_p;
-
-        DBG_ASSERT(
-            current_execution_context_p != NULL, cpu_controller_p, 0);
-
         struct rtos_thread *current_thread_p =
             RTOS_EXECUTION_CONTEXT_GET_THREAD(current_execution_context_p);
 

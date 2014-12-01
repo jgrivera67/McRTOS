@@ -17,15 +17,6 @@
 TODO("Remove these pragmas")
 #pragma GCC diagnostic ignored "-Wunused-function"
 
-/**
- * System thread priorities
- */
-enum system_thread_priorities
-{
-    RTOS_ROOT_THREAD_PRIORITY = RTOS_HIGHEST_THREAD_PRIORITY,
-    RTOS_IDLE_THREAD_PRIORITY = RTOS_LOWEST_THREAD_PRIORITY,
-};
-
 #define RTOS_CPU_CONTROLLER_INITIALIZER(_cpu_id) \
         .rts_cpu_controllers[_cpu_id] =                                 \
         {                                                               \
@@ -43,7 +34,6 @@ enum system_thread_priorities
             .cpc_accumulated_thread_scheduler_overhead = 0,             \
             .cpc_interrupts_disabled_being_measured_count = 0,          \
             .cpc_measure_interrupts_disabled_time = false,		\
-            .cpc_startup_completed = false,                             \
             .cpc_pending_thread_time_slice_decrement = false,           \
             .cpc_current_timer_wheel_spoke_index = 0,                   \
             .cpc_ticks_since_boot_count = 0,                            \
@@ -89,7 +79,7 @@ static const struct rtos_thread_creation_params g_rtos_system_threads[] =
         .p_name_p = "McRTOS root thread",
         .p_function_p = rtos_root_thread_f,
         .p_function_arg_p = NULL,
-        .p_priority = RTOS_ROOT_THREAD_PRIORITY,
+        .p_priority = RTOS_HIGHEST_THREAD_PRIORITY,
 #       ifdef LCD_SUPPORTED
         .p_lcd_channel = RTOS_LCD_CHANNEL_NONE,
 #       endif
@@ -101,7 +91,7 @@ static const struct rtos_thread_creation_params g_rtos_system_threads[] =
         .p_name_p = "McRTOS idle thread",
         .p_function_p = rtos_idle_thread_f,
         .p_function_arg_p = NULL,
-        .p_priority = RTOS_IDLE_THREAD_PRIORITY,
+        .p_priority = RTOS_LOWEST_THREAD_PRIORITY,
 #       ifdef LCD_SUPPORTED
         .p_lcd_channel = RTOS_LCD_CHANNEL_NONE,
 #       endif
@@ -400,17 +390,16 @@ rtos_startup(
         RTOS_ROOT_SYSTEM_THREAD,
         rtos_thread_p);
 
-    FDC_ASSERT(
-        cpu_controller_p->cpc_current_execution_context_p ==
-        &cpu_controller_p->cpc_reset_execution_context,
-        cpu_controller_p->cpc_current_execution_context_p,
-        cpu_controller_p);
+    struct rtos_execution_context *current_context_p =
+	cpu_controller_p->cpc_current_execution_context_p;
 
-    cpu_controller_p->cpc_startup_completed = true;
+    FDC_ASSERT(
+        current_context_p == &cpu_controller_p->cpc_reset_execution_context,
+        current_context_p, cpu_controller_p);
 
     DBG_ASSERT_CPU_INTERRUPTS_DISABLED();
 
-#ifdef _MEASURE_INTERRUPTS_DISABLED_TIME_
+#   ifdef _MEASURE_INTERRUPTS_DISABLED_TIME_
     /*
      * Start measuring interrupts disabled time from here:
      */
@@ -421,7 +410,18 @@ rtos_startup(
 
     cpu_controller_p->cpc_measure_interrupts_disabled_time = true;
     RTOS_START_INTERRUPTS_DISABLED_TIME_MEASURE();
-#endif
+#   endif
+
+#   ifdef _CPU_CYCLES_MEASURE_
+    cpu_clock_cycles_t used_cpu_cycles = get_cpu_clock_cycles();
+
+    RTOS_EXECUTION_CONTEXT_UPDATE_CPU_USAGE(
+        current_context_p, used_cpu_cycles);
+#   endif
+
+    RTOS_EXECUTION_CONTEXT_SET_SWITCHED_OUT_REASON(
+        current_context_p, CTX_SWITCHED_OUT_RESET_TO_ROOT_THREAD,
+        cpu_controller_p);
 
     /*
      * Do a synchronous context switch, to switch from running the reset
@@ -557,6 +557,19 @@ rtos_root_thread_f(void *arg)
 
     FDC_ASSERT(arg == NULL, arg, cpu_id);
     FDC_ASSERT(rtos_app_config_p != NULL, 0, 0);
+    struct rtos_thread *root_thread_p = (struct rtos_thread *)rtos_thread_self();
+
+    /*
+     * The root system thread is created with the highest priority thread, so
+     * that it is not preempted by any other thread, while completing the
+     * system initialization. After completing the system initialization,
+     * its priority will be lowered to be just above the idle thread.
+     */
+    FDC_ASSERT(
+	root_thread_p->thr_base_priority == RTOS_HIGHEST_THREAD_PRIORITY &&
+	root_thread_p->thr_current_priority == root_thread_p->thr_base_priority,
+	root_thread_p->thr_base_priority, root_thread_p->thr_current_priority);
+
     if (cpu_id == 0)
     {
         /*
@@ -633,6 +646,15 @@ rtos_root_thread_f(void *arg)
             lcd_display_greetings();
 #       endif
     }
+
+    /*
+     * Lower priority of the root system thread, so that the root system
+     * thread does not interfere with more time-critical threads:
+     */
+    cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
+    root_thread_p->thr_base_priority = RTOS_LOWEST_THREAD_PRIORITY - 1;
+    root_thread_p->thr_current_priority = RTOS_LOWEST_THREAD_PRIORITY - 1;
+    rtos_k_restore_cpu_interrupts(cpu_status_register);
 
     for ( ; ; )
     {

@@ -74,6 +74,11 @@ enum rtos_execution_context_switched_out_reasons
     CTX_SWITCHED_OUT_INTERRUPT_SERVICED =           0x8,
 
     /*
+     * The following value reasons only apply to interrupts
+     */
+    CTX_SWITCHED_OUT_RESET_TO_ROOT_THREAD =         0x9,
+
+    /*
      * Last dummy value. New reasons must be added above here:
      */
     CTX_SWITCHED_OUT_LAST_INVALID_VALUE
@@ -236,12 +241,6 @@ struct rtos_cpu_controller
      * enabled
      */
     bool cpc_measure_interrupts_disabled_time;
-
-    /*
-     * Boolean flag indicating that rtos_startup() has been completed for this
-     * CPU controller.
-     */
-    bool cpc_startup_completed;
 
     /**
      * Boolean flag indicating that there is a pending time slice decrement

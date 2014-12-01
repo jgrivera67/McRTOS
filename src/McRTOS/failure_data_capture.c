@@ -1098,64 +1098,62 @@ check_rtos_public_kernel_service_preconditions(bool thread_callers_only)
     CAPTURE_ARM_CPSR_REGISTER(cpu_status_register);
     CAPTURE_ARM_LR_REGISTER(cpu_lr_register);
 
-    if (cpu_controller_p->cpc_startup_completed)
+    struct rtos_execution_context *current_context_p =
+	cpu_controller_p->cpc_current_execution_context_p;
+
+    FDC_ASSERT(
+	current_context_p->ctx_signature == RTOS_EXECUTION_CONTEXT_SIGNATURE,
+	current_context_p->ctx_signature, current_context_p);
+
+    /*
+     * Current execution context is a thread running in privileged mode
+     * or is an interrupt context or it is the reset context:
+     */
+    if (current_context_p->ctx_context_type == RTOS_THREAD_CONTEXT)
     {
-        struct rtos_execution_context *current_context_p =
-            cpu_controller_p->cpc_current_execution_context_p;
+	struct rtos_thread *current_thread =
+	    RTOS_EXECUTION_CONTEXT_GET_THREAD(current_context_p);
 
-        FDC_ASSERT(
-            current_context_p->ctx_signature == RTOS_EXECUTION_CONTEXT_SIGNATURE,
-            current_context_p->ctx_signature, current_context_p);
+	FDC_ASSERT_RTOS_THREAD_INVARIANTS(current_thread_p);
 
-        /*
-         * Current execution context is a thread running in privileged mode
-         * or is an interrupt context:
-         */
-        if (current_context_p->ctx_context_type == RTOS_THREAD_CONTEXT)
-        {
-            struct rtos_thread *current_thread =
-                RTOS_EXECUTION_CONTEXT_GET_THREAD(current_context_p);
+	FDC_ASSERT_RUNNING_THREAD_INVARIANTS(current_thread_p, cpu_controller_p);
 
-            FDC_ASSERT_RTOS_THREAD_INVARIANTS(current_thread_p);
+	FDC_ASSERT(
+	    current_context_p->ctx_cpu_mode == RTOS_PRIVILEGED_THREAD_MODE,
+	    current_context_p->ctx_cpu_mode, cpu_lr_register);
 
-            FDC_ASSERT_RUNNING_THREAD_INVARIANTS(current_thread_p, cpu_controller_p);
+	FDC_ASSERT(
+	    CPU_MODE_IS_PRIVILEGED(cpu_status_register),
+	    cpu_status_register, current_context_p);
 
-            FDC_ASSERT(
-                current_context_p->ctx_cpu_mode == RTOS_PRIVILEGED_THREAD_MODE,
-                current_context_p->ctx_cpu_mode, cpu_lr_register);
+    }
+    else if (current_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT)
+    {
+	FDC_ASSERT(
+	    current_context_p->ctx_cpu_mode == RTOS_INTERRUPT_MODE,
+	    current_context_p->ctx_cpu_mode, current_context_p);
 
-            FDC_ASSERT(
-                CPU_MODE_IS_PRIVILEGED(cpu_status_register),
-                cpu_status_register, current_context_p);
+	FDC_ASSERT(
+	    CPU_MODE_IS_PRIVILEGED(cpu_status_register),
+	    cpu_status_register, current_context_p);
 
-        }
-        else
-        {
-            FDC_ASSERT(
-                current_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
-                current_context_p->ctx_context_type, current_context_p);
-
-            FDC_ASSERT(
-                current_context_p->ctx_cpu_mode == RTOS_INTERRUPT_MODE,
-                current_context_p->ctx_cpu_mode, current_context_p);
-
-            FDC_ASSERT(
-                CPU_MODE_IS_PRIVILEGED(cpu_status_register),
-                cpu_status_register, current_context_p);
-
-            FDC_ASSERT(!thread_callers_only, 0, 0);
-        }
+	FDC_ASSERT(!thread_callers_only, 0, 0);
     }
     else
     {
-        FDC_ASSERT(
-            cpu_controller_p->cpc_current_execution_context_p == NULL,
-            cpu_controller_p->cpc_current_execution_context_p,
-            cpu_controller_p);
+	FDC_ASSERT(
+	    current_context_p->ctx_context_type == RTOS_RESET_CONTEXT,
+	    current_context_p->ctx_context_type, current_context_p);
+
+	FDC_ASSERT(
+	    current_context_p->ctx_cpu_mode == RTOS_RESET_MODE,
+	    current_context_p->ctx_cpu_mode, current_context_p);
 
         FDC_ASSERT(
             CPU_MODE_IS_SUPERVISOR(cpu_status_register),
             cpu_status_register, cpu_controller_p);
+
+	FDC_ASSERT(!thread_callers_only, 0, 0);
     }
 
 #   elif DEFINED_ARM_CORTEX_M_ARCH()
@@ -1167,71 +1165,57 @@ check_rtos_public_kernel_service_preconditions(bool thread_callers_only)
     cpu_register_t cpu_control_register = __get_CONTROL();
     cpu_register_t cpu_ipsr_register = __get_IPSR();
 
-    if (cpu_controller_p->cpc_startup_completed)
+    struct rtos_execution_context *current_context_p =
+	cpu_controller_p->cpc_current_execution_context_p;
+
+    FDC_ASSERT(
+	current_context_p->ctx_signature == RTOS_EXECUTION_CONTEXT_SIGNATURE,
+	current_context_p->ctx_signature, current_context_p);
+
+    /*
+     * Current execution context is a thread running in privileged mode
+     * or is an interrupt context or the reset context:
+     */
+    if (current_context_p->ctx_context_type == RTOS_THREAD_CONTEXT)
     {
-        struct rtos_execution_context *current_context_p =
-            cpu_controller_p->cpc_current_execution_context_p;
+	struct rtos_thread *current_thread_p =
+	    RTOS_EXECUTION_CONTEXT_GET_THREAD(current_context_p);
 
-        FDC_ASSERT(
-            current_context_p->ctx_signature == RTOS_EXECUTION_CONTEXT_SIGNATURE,
-            current_context_p->ctx_signature, current_context_p);
+    FDC_ASSERT_RTOS_THREAD_INVARIANTS(current_thread_p);
 
-        /*
-         * Current execution context is a thread running in privileged mode
-         * or is an interrupt context:
-         */
-        if (current_context_p->ctx_context_type == RTOS_THREAD_CONTEXT)
-        {
-            struct rtos_thread *current_thread_p =
-                RTOS_EXECUTION_CONTEXT_GET_THREAD(current_context_p);
+	FDC_ASSERT_RUNNING_THREAD_INVARIANTS(current_thread_p, cpu_controller_p);
 
-            FDC_ASSERT_RTOS_THREAD_INVARIANTS(current_thread_p);
+	FDC_ASSERT(
+	    current_context_p->ctx_cpu_mode == RTOS_PRIVILEGED_THREAD_MODE,
+	    current_context_p->ctx_cpu_mode, cpu_lr_register);
 
-            FDC_ASSERT_RUNNING_THREAD_INVARIANTS(current_thread_p, cpu_controller_p);
-
-            FDC_ASSERT(
-                current_context_p->ctx_cpu_mode == RTOS_PRIVILEGED_THREAD_MODE,
-                current_context_p->ctx_cpu_mode, cpu_lr_register);
-
-            FDC_ASSERT(
-                CPU_MODE_IS_PRIVILEGED(cpu_control_register, cpu_ipsr_register),
-                cpu_control_register, cpu_ipsr_register);
-        }
-        else
-        {
-            FDC_ASSERT(
-                current_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT,
-                current_context_p->ctx_context_type, current_context_p);
-
-            FDC_ASSERT(
-                current_context_p->ctx_cpu_mode == RTOS_INTERRUPT_MODE,
-                current_context_p->ctx_cpu_mode, current_context_p);
-
-            FDC_ASSERT(
-                CPU_MODE_IS_PRIVILEGED(cpu_control_register, cpu_ipsr_register),
-                cpu_control_register, cpu_ipsr_register);
-
-            FDC_ASSERT(!thread_callers_only, 0, 0);
-        }
+	FDC_ASSERT(
+	    CPU_MODE_IS_PRIVILEGED(cpu_control_register, cpu_ipsr_register),
+	cpu_control_register, cpu_ipsr_register);
     }
     else
     {
-        FDC_ASSERT(
-            cpu_controller_p->cpc_current_execution_context_p ==
-            &cpu_controller_p->cpc_reset_execution_context,
-            cpu_controller_p->cpc_current_execution_context_p,
-            cpu_controller_p);
+	FDC_ASSERT(
+	    current_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT ||
+	    current_context_p->ctx_context_type == RTOS_RESET_CONTEXT,
+	    current_context_p->ctx_context_type, current_context_p);
 
-        TODO("Enable this when SVC excpetion handler is implemented");
-#       if 0
-        cpu_status_register_t cpu_status_register = __get_IPSR();
+	if (current_context_p->ctx_context_type == RTOS_INTERRUPT_CONTEXT) {
+	    FDC_ASSERT(
+		current_context_p->ctx_cpu_mode == RTOS_INTERRUPT_MODE,
+		current_context_p->ctx_cpu_mode, current_context_p);
+	} else {
+	    FDC_ASSERT(
+		current_context_p->ctx_cpu_mode == RTOS_RESET_MODE,
+		current_context_p->ctx_cpu_mode, current_context_p);
+	}
 
-        FDC_ASSERT(
-            CPU_MODE_IS_SUPERVISOR(cpu_status_register),
-            cpu_status_register, cpu_controller_p);
-#       endif
+	FDC_ASSERT(
+	    CPU_MODE_IS_PRIVILEGED(cpu_control_register, cpu_ipsr_register),
+	    cpu_control_register, cpu_ipsr_register);
+
+	FDC_ASSERT(!thread_callers_only, 0, 0);
     }
-
 #   else
 #        error "CPU architecture not supported"
 #   endif
