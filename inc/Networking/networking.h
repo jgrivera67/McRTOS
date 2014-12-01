@@ -900,9 +900,15 @@ struct local_l4_end_point {
  */
 struct networking {
     /**
-     * Flag indicating if the networking subsystem has been initialzied
+     * Flag indicating if the networking subsystem has been initialized
      */
     bool initialized;
+
+    /**
+     * Flag indicating if there is an outstanding ping request for which no reply
+     * has been received yet
+     */
+    bool expecting_ping_reply;
 
     /**
      * Next ephemeral port to assign to local UDP end point.
@@ -915,12 +921,28 @@ struct networking {
     uint16_t next_tcp_ephemeral_port;
 
     /**
+     * Queue of received IPPv4 ping replies
+     */
+    struct rtos_queue rx_ipv4_ping_reply_packet_queue;
+
+    /**
      * Pointer to the next free entry in local_l4_end_points[]
      */
     struct local_l4_end_point *next_free_l4_end_point_p;
 
     /**
-     * Mutex to serialize access calls to table of loca layer-4 end points
+     * Mutex to serialize access to expecting_ping_reply
+     */
+    struct rtos_mutex expecting_ping_reply_mutex;
+
+    /**
+     * Condvar to be signal when the ping reply for an outstanding ping request
+     * has been received.
+     */
+    struct rtos_condvar ping_reply_recceived_condvar;
+
+    /**
+     * Mutex to serialize access calls to table of local layer-4 end points
      */
     struct rtos_mutex local_l4_end_points_mutex;
 
@@ -1077,6 +1099,13 @@ net_send_ipv4_icmp_message(const struct ipv4_address *dest_ip_addr_p,
 
 void
 net_send_ipv4_ping_request(const struct ipv4_address *dest_ip_addr_p,
+			   uint16_t identifier,
 		           uint16_t seq_num);
+
+bool
+net_receive_ipv4_ping_reply(rtos_milliseconds_t timeout_ms,
+			    struct ipv4_address *remote_ip_addr_p,
+			    uint16_t *identifier_p,
+			    uint16_t *seq_num_p);
 
 #endif /* _NETWORKING_H */

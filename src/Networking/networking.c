@@ -287,7 +287,14 @@ networking_init(void)
 	}
     }
 
+    rtos_k_queue_init(
+	"Incoming IPv4 ping reply packet queue",
+	true,
+	&g_networking.rx_ipv4_ping_reply_packet_queue);
+
     rtos_k_mutex_init("local_l4_end_points mutex", &g_networking.local_l4_end_points_mutex);
+    rtos_k_mutex_init("expecting_ping_reply mutex", &g_networking.expecting_ping_reply_mutex);
+    rtos_k_condvar_init("ping_reply_recceived condvar", &g_networking.ping_reply_recceived_condvar);
     g_networking.initialized = true;
 }
 
@@ -1031,13 +1038,24 @@ net_send_ipv4_icmp_message(const struct ipv4_address *dest_ip_addr_p,
 
 void
 net_send_ipv4_ping_request(const struct ipv4_address *dest_ip_addr_p,
+			   uint16_t identifier,
 	                   uint16_t seq_num)
 {
+    rtos_k_mutex_acquire(&g_networking.expecting_ping_reply_mutex);
+    while (g_networking.expecting_ping_reply) {
+	rtos_k_condvar_wait(&g_networking.ping_reply_recceived_condvar,
+			    &g_networking.expecting_ping_reply_mutex,
+			    NULL);
+    }
+
+    g_networking.expecting_ping_reply = true;
+    rtos_k_mutex_release(&g_networking.expecting_ping_reply_mutex);
+
     struct network_packet *tx_packet_p = net_allocate_tx_packet(true);
     struct icmpv4_echo_message *echo_msg_p =
 	(struct icmpv4_echo_message *)GET_IPV4_DATA_PAYLOAD_AREA(tx_packet_p);
 
-    echo_msg_p->identifier = 0;
+    echo_msg_p->identifier = identifier;
     echo_msg_p->seq_num = seq_num;
     net_send_ipv4_icmp_message(dest_ip_addr_p,
 			       tx_packet_p,
@@ -1045,6 +1063,36 @@ net_send_ipv4_ping_request(const struct ipv4_address *dest_ip_addr_p,
 		               ICMP_CODE_PING_REQUEST,
 		               sizeof(struct icmpv4_echo_message) -
 			       sizeof(struct icmpv4_header));
+}
+
+
+bool
+net_receive_ipv4_ping_reply(rtos_milliseconds_t timeout_ms,
+			    struct ipv4_address *remote_ip_addr_p,
+			    uint16_t *identifier_p,
+			    uint16_t *seq_num_p)
+{
+    struct glist_node *rx_packet_node_p =
+	rtos_k_queue_remove(&g_networking.rx_ipv4_ping_reply_packet_queue, timeout_ms);
+
+    if (rx_packet_node_p == NULL) {
+	return false;
+    }
+
+    struct network_packet *rx_packet_p = GLIST_NODE_TO_NETWORK_PACKET(rx_packet_node_p);
+
+    DBG_ASSERT(rx_packet_p->signature == NET_RX_PACKET_SIGNATURE,
+	       rx_packet_p, 0);
+
+    struct ipv4_header *ipv4_header_p = GET_IPV4_HEADER(rx_packet_p);
+    struct icmpv4_header *icmpv4_header_p = GET_IPV4_DATA_PAYLOAD_AREA(rx_packet_p);
+    struct icmpv4_echo_message *echo_msg_p = (struct icmpv4_echo_message *)(icmpv4_header_p);
+
+    remote_ip_addr_p->value = ipv4_header_p->source_ip_addr.value;
+    *identifier_p = echo_msg_p->identifier;
+    *seq_num_p = echo_msg_p->seq_num;
+    net_recycle_rx_packet(rx_packet_p);
+    return true;
 }
 
 
@@ -1208,8 +1256,9 @@ net_send_ipv4_ping_reply(const struct ipv4_address *dest_ip_addr_p,
 
 
 static void
-net_receive_icmpv4_message(struct network_packet *rx_packet_p)
+net_process_incoming_icmpv4_message(struct network_packet *rx_packet_p)
 {
+    bool signal_ping_reply_received = false;
 
     FDC_ASSERT(rx_packet_p->total_length >=
 	       sizeof(struct ethernet_header) + sizeof(struct ipv4_header) +
@@ -1224,17 +1273,24 @@ net_receive_icmpv4_message(struct network_packet *rx_packet_p)
 	FDC_ASSERT(icmpv4_header_p->msg_code == ICMP_CODE_PING_REPLY,
 		   icmpv4_header_p->msg_code, rx_packet_p);
 
-	struct icmpv4_echo_message *echo_msg_p =
-	    (struct icmpv4_echo_message *)(icmpv4_header_p);
+	rtos_k_mutex_acquire(&g_networking.expecting_ping_reply_mutex);
+	if (g_networking.expecting_ping_reply) {
+	    rtos_k_queue_add(&g_networking.rx_ipv4_ping_reply_packet_queue,
+		             &rx_packet_p->node);
+	    g_networking.expecting_ping_reply = false;
+	    signal_ping_reply_received = true;
+	} else {
+	    /*
+	     * Drop unmatched ping reply
+	     */
+	    net_recycle_rx_packet(rx_packet_p);
+	}
 
-	//???
-	CONSOLE_POS_PRINTF(34,1, "Received ping reply: %d for %u.%u.%u.%u\n",
-			   echo_msg_p->seq_num,
-			   ipv4_header_p->source_ip_addr.bytes[0],
-			   ipv4_header_p->source_ip_addr.bytes[1],
-			   ipv4_header_p->source_ip_addr.bytes[2],
-			   ipv4_header_p->source_ip_addr.bytes[3]);
-	//???
+	rtos_k_mutex_release(&g_networking.expecting_ping_reply_mutex);
+	if (signal_ping_reply_received) {
+	    rtos_k_condvar_signal(&g_networking.ping_reply_recceived_condvar);
+	}
+
 	break;
 
     case ICMP_TYPE_PING_REQUEST:
@@ -1253,14 +1309,15 @@ net_receive_icmpv4_message(struct network_packet *rx_packet_p)
 	net_send_ipv4_ping_reply(
 	    &dest_ip_addr,
 	    (struct icmpv4_echo_message *)(icmpv4_header_p));
+
+	net_recycle_rx_packet(rx_packet_p);
 	break;
 
     default:
 	capture_fdc_msg_printf("Received ICMP message with unsupported type: %#x\n",
 			       icmpv4_header_p->msg_type);
+	net_recycle_rx_packet(rx_packet_p);
     }
-
-    net_recycle_rx_packet(rx_packet_p);
 }
 
 
@@ -1493,7 +1550,7 @@ net_icmpv4_receive_thread_f(void *arg)
 		   rx_packet_p, local_l3_end_point_p);
 
 	rx_packet_p->state_flags &= ~NET_PACKET_IN_ICMP_QUEUE;
-	net_receive_icmpv4_message(rx_packet_p);
+	net_process_incoming_icmpv4_message(rx_packet_p);
     }
 
     fdc_error = CAPTURE_FDC_ERROR(

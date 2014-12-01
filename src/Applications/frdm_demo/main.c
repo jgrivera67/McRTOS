@@ -232,17 +232,67 @@ void app_software_init(void)
     networking_init();
 }
 
+
+static bool
+ping_remote_ip_addr(const struct ipv4_address *dest_ip_addr_p, uint16_t seq_num)
+{
+    struct ipv4_address remote_ip_addr;
+    uint16_t reply_seq_num;
+    uint16_t reply_identifier;
+    bool reply_received_ok;
+    uint16_t identifier = (uintptr_t)rtos_thread_self();
+
+    net_send_ipv4_ping_request(dest_ip_addr_p, identifier, seq_num);
+    reply_received_ok = net_receive_ipv4_ping_reply(3000,
+						    &remote_ip_addr,
+						    &reply_identifier,
+						    &reply_seq_num);
+
+    if (reply_received_ok) {
+	    FDC_ASSERT(remote_ip_addr.value == dest_ip_addr_p->value,
+		       remote_ip_addr.value, dest_ip_addr_p->value);
+	    FDC_ASSERT(reply_identifier == identifier,
+	               reply_identifier, identifier);
+	    FDC_ASSERT(reply_seq_num == seq_num,
+		       reply_seq_num, seq_num);
+
+	    CONSOLE_POS_PRINTF(34,1, "Ping %d for %u.%u.%u.%u\n",
+			       reply_seq_num,
+			       remote_ip_addr.bytes[0],
+			       remote_ip_addr.bytes[1],
+			       remote_ip_addr.bytes[2],
+			       remote_ip_addr.bytes[3]);
+
+	    return true;
+    } else {
+	    CONSOLE_POS_PRINTF(34,1, "Ping %d timedout for %u.%u.%u.%u\n",
+			       seq_num,
+			       dest_ip_addr_p->bytes[0],
+			       dest_ip_addr_p->bytes[1],
+			       dest_ip_addr_p->bytes[2],
+			       dest_ip_addr_p->bytes[3]);
+	    return false;
+    }
+}
+
+
 static void
 ping_command(const char *cmd_line)
 {
     static uint16_t seq_num = 0;
+
+    /*
+     * TODO: parse command line to extract dest_ip_addr
+     */
     struct ipv4_address dest_ip_addr = {
 	.bytes = { 192, 168, 8, 1 }
     };
 
-    net_send_ipv4_ping_request(&dest_ip_addr, seq_num);
-    seq_num ++;
+    if (ping_remote_ip_addr(&dest_ip_addr, seq_num)) {
+	    seq_num ++;
+    };
 }
+
 
 static fdc_error_t
 hello_world_thread_f(void *arg)
@@ -312,11 +362,12 @@ ping_thread_f(void *arg)
     uint32_t ping_count = 0;
 
     for ( ; ; ) {
-	CONSOLE_POS_PRINTF(33, 1, "Pings sent %u", ping_count);
         rtos_enter_privileged_mode();
-	net_send_ipv4_ping_request(dest_ip_addr_p, ping_count);
+	if (ping_remote_ip_addr(dest_ip_addr_p, ping_count)) {
+	    ping_count ++;
+	}
+
         rtos_exit_privileged_mode();
-	ping_count ++;
 	rtos_thread_delay(1500);
     }
 
