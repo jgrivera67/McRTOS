@@ -76,7 +76,7 @@ C_ASSERT(
 /**
  * MPU region index for the first data region for threads
  */
-#define FIRST_MPU_THREAD_DATA_REGION   (RTOS_NUM_GLOBAL_MPU_REGIONS + 1)
+#define FIRST_MPU_THREAD_DATA_REGION   RTOS_NUM_GLOBAL_MPU_REGIONS
 
 static cpu_reset_cause_t find_reset_cause(void);
 
@@ -705,6 +705,9 @@ soc_early_init(void)
 }
 
 
+/**
+ * Configure an MPU region (region index must be non 0, as region 0 is special)
+ */
 static void
 k64f_set_mpu_region_for_cpu(
     struct mpu_device_var *mpu_var_p,
@@ -726,36 +729,12 @@ k64f_set_mpu_region_for_cpu(
 	    .mask = MPU_WORD_M0SM_MASK,
 	    .shift = MPU_WORD_M0SM_SHIFT
 	},
-        [1] = {
-	    .mask = MPU_WORD_M1SM_MASK,
-	    .shift = MPU_WORD_M1SM_SHIFT
-	},
-        [2] = {
-	    .mask = MPU_WORD_M2SM_MASK,
-	    .shift = MPU_WORD_M2SM_SHIFT
-	},
-        [3] = {
-	    .mask = MPU_WORD_M3SM_MASK,
-	    .shift = MPU_WORD_M3SM_SHIFT
-	},
     };
 
     static const struct permissions_bit_field unprivileged_permissions_fields[] = {
         [0] = {
 	    .mask = MPU_WORD_M0UM_MASK,
 	    .shift = MPU_WORD_M0UM_SHIFT
-	},
-        [1] = {
-	    .mask = MPU_WORD_M1UM_MASK,
-	    .shift = MPU_WORD_M1UM_SHIFT
-	},
-        [2] = {
-	    .mask = MPU_WORD_M2UM_MASK,
-	    .shift = MPU_WORD_M2UM_SHIFT
-	},
-        [3] = {
-	    .mask = MPU_WORD_M3UM_MASK,
-	    .shift = MPU_WORD_M3UM_SHIFT
 	},
     };
 
@@ -768,13 +747,20 @@ k64f_set_mpu_region_for_cpu(
     DBG_ASSERT(cpu_id < ARRAY_SIZE(privileged_permissions_fields),
  	       cpu_id, ARRAY_SIZE(privileged_permissions_fields));
 
-    DBG_ASSERT(region_index < mpu_var_p->num_regions,
+    DBG_ASSERT(region_index > 0 && region_index < mpu_var_p->num_regions,
  	       region_index, mpu_var_p->num_regions);
 
     DBG_ASSERT(start_addr < end_addr &&
 	       (uintptr_t)start_addr % SOC_MPU_REGION_ALIGNMENT == 0,
 	       start_addr, end_addr);
 
+    /*
+     * Configure region:
+     *
+     * NOTE: writing to registers WORD[region_index][0], WORD[region_index][1] and
+     * WORD[region_index][2] of the region descriptor 'region_index' will disable
+     * the region (turn off bit MPU_WORD_VLD_MASK in WORD[region_index][3]):
+     */
     reg_value = ((uintptr_t)start_addr & SOC_MPU_REGION_ALIGNMENT_MASK);
     write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][0], reg_value);
 
@@ -794,68 +780,134 @@ k64f_set_mpu_region_for_cpu(
 		  unprivileged_permissions);
 
     write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][2], reg_value);
+
+    /*
+     * Re-enable region:
+     */
     write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][3], MPU_WORD_VLD_MASK);
 }
 
 
 static void
-k64f_set_mpu_region_for_dma(
+k64f_mpu_register_dma_device(
     struct mpu_device_var *mpu_var_p,
     volatile MPU_Type *mpu_regs_p,
-    uint8_t region_index,
-    void *start_addr,
-    void *end_addr,
-    mpu_dma_master_t mpu_dma_master)
+    enum mpu_bus_masters mpu_bus_master)
 {
-    struct permissions_bit_field {
+    struct bus_master_type1_permissions_bit_field {
+	uint32_t mask;
+	uint32_t shift;
+    };
+
+    struct bus_master_type2_permissions_bit_field {
 	uint32_t write_mask;
 	uint32_t read_mask;
     };
 
-    static const struct permissions_bit_field rw_permissions_fields[] = {
+    static const struct bus_master_type1_permissions_bit_field privileged_permissions_fields[] = {
         [0] = {
+	    .mask = MPU_WORD_M0SM_MASK,
+	    .shift = MPU_WORD_M0SM_SHIFT
+	},
+        [1] = {
+	    .mask = MPU_WORD_M1SM_MASK,
+	    .shift = MPU_WORD_M1SM_SHIFT
+	},
+        [2] = {
+	    .mask = MPU_WORD_M2SM_MASK,
+	    .shift = MPU_WORD_M2SM_SHIFT
+	},
+        [3] = {
+	    .mask = MPU_WORD_M3SM_MASK,
+	    .shift = MPU_WORD_M3SM_SHIFT
+	},
+    };
+
+    static const struct bus_master_type1_permissions_bit_field unprivileged_permissions_fields[] = {
+        [0] = {
+	    .mask = MPU_WORD_M0UM_MASK,
+	    .shift = MPU_WORD_M0UM_SHIFT
+	},
+        [1] = {
+	    .mask = MPU_WORD_M1UM_MASK,
+	    .shift = MPU_WORD_M1UM_SHIFT
+	},
+        [2] = {
+	    .mask = MPU_WORD_M2UM_MASK,
+	    .shift = MPU_WORD_M2UM_SHIFT
+	},
+        [3] = {
+	    .mask = MPU_WORD_M3UM_MASK,
+	    .shift = MPU_WORD_M3UM_SHIFT
+	},
+    };
+
+    C_ASSERT2(assert_permissions_fields_same_size,
+	  ARRAY_SIZE(privileged_permissions_fields) ==
+	  ARRAY_SIZE(unprivileged_permissions_fields));
+
+    static const struct bus_master_type2_permissions_bit_field rw_permissions_fields[] = {
+        [4] = {
 	    .write_mask = MPU_WORD_M4WE_MASK,
 	    .read_mask = MPU_WORD_M4RE_MASK
 	},
-        [1] = {
+
+        [5] = {
 	    .write_mask = MPU_WORD_M5WE_MASK,
 	    .read_mask = MPU_WORD_M5RE_MASK
 	},
-        [2] = {
+        [6] = {
 	    .write_mask = MPU_WORD_M6WE_MASK,
 	    .read_mask = MPU_WORD_M6RE_MASK
 	},
-        [3] = {
+        [7] = {
 	    .write_mask = MPU_WORD_M7WE_MASK,
 	    .read_mask = MPU_WORD_M7RE_MASK
 	},
     };
 
+    C_ASSERT2(assert_rw_permissions_fields_size,
+	      ARRAY_SIZE(rw_permissions_fields) > MPU_BUS_MASTER_SDHC);
+
     uint32_t reg_value;
 
-    DBG_ASSERT(mpu_dma_master < ARRAY_SIZE(rw_permissions_fields),
- 	       mpu_dma_master, ARRAY_SIZE(rw_permissions_fields));
+    DEBUG_PRINTF("mpu_bus_master: %u\n", mpu_bus_master);
+    DBG_ASSERT(mpu_bus_master >= MPU_BUS_MASTER_DEBUGGER &&
+	       mpu_bus_master <= MPU_BUS_MASTER_SDHC,
+ 	       mpu_bus_master, 0);
 
-    DBG_ASSERT(region_index < mpu_var_p->num_regions,
- 	       region_index, mpu_var_p->num_regions);
+    /*
+     * Update access permissions to region 0 for the corresponding
+     * bus master:
+     *
+     * NOTE: To avoid disabling region region 0, while changing its
+     * access permissions, modify register RGDAAC[0] instead of
+     * WORD[0][2]
+     */
 
-    DBG_ASSERT(start_addr < end_addr &&
-	       (uintptr_t)start_addr % SOC_MPU_REGION_ALIGNMENT == 0,
-	       start_addr, end_addr);
+    reg_value = read_32bit_mmio_register(&mpu_regs_p->WORD[0][3]);
+    FDC_ASSERT((reg_value & MPU_WORD_VLD_MASK) != 0, reg_value, 0);
 
-    reg_value = ((uintptr_t)start_addr & SOC_MPU_REGION_ALIGNMENT_MASK);
-    write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][0], reg_value);
+    reg_value = read_32bit_mmio_register(&mpu_regs_p->RGDAAC[0]);
+    if (mpu_bus_master < ARRAY_SIZE(privileged_permissions_fields)) {
+	SET_BIT_FIELD(reg_value,
+		      privileged_permissions_fields[mpu_bus_master].mask,
+		      privileged_permissions_fields[mpu_bus_master].shift,
+		      0x2  /* privileged rw- */);
 
-    reg_value = (((uintptr_t)end_addr & SOC_MPU_REGION_ALIGNMENT_MASK) |
-		 (SOC_MPU_REGION_ALIGNMENT - 1));
-    write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][1], reg_value);
+	SET_BIT_FIELD(reg_value,
+		      unprivileged_permissions_fields[mpu_bus_master].mask,
+		      unprivileged_permissions_fields[mpu_bus_master].shift,
+		      0x6 /* unprivileged rw- */);
+    } else {
+	DBG_ASSERT(mpu_bus_master < ARRAY_SIZE(rw_permissions_fields),
+	           mpu_bus_master, ARRAY_SIZE(rw_permissions_fields));
 
-    reg_value = read_32bit_mmio_register(&mpu_regs_p->WORD[region_index][2]);
-    reg_value |= rw_permissions_fields[mpu_dma_master].write_mask |
-                 rw_permissions_fields[mpu_dma_master].read_mask;
+	reg_value |= rw_permissions_fields[mpu_bus_master].write_mask |
+		     rw_permissions_fields[mpu_bus_master].read_mask;
+    }
 
-    write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][2], reg_value);
-    write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][3], MPU_WORD_VLD_MASK);
+    write_32bit_mmio_register(&mpu_regs_p->RGDAAC[0], reg_value);
 }
 
 
@@ -897,16 +949,20 @@ k64f_mpu_init(void)
      */
     write_32bit_mmio_register(&mpu_regs_p->CESR, 0);
 
+    /*
+     * Make region 0 non-accessible. It will be made accessible for DMA access
+     * for devices that do DMA, by the corresponding device driver, by calling
+     * mpu_register_dma_device()):
+     *
+     * NOTE: Region 0 is defined by default as the whole address space.
+     * Only its permissions can be changed.
+     */
+    write_32bit_mmio_register(&mpu_regs_p->RGDAAC[0], 0);
+
     for (cpu_id_t cpu_id = 0; cpu_id < SOC_NUM_CPU_CORES; cpu_id ++) {
 	/*
-	 * Define global MPU regions:
-	 *
-	 * NOTE: Region 0 is defined by default as the whole address space.
-	 * Only its permissions can be changed.
+	 * Define global MPU regions accessible from this CPU:
 	 */
-
-	/* Make region 0 non-accessible: */
-        write_32bit_mmio_register(&mpu_regs_p->RGDAAC[0], 0);
 
 	/*
 	 * region 1 is interrupt vector table in flash:
@@ -929,10 +985,10 @@ k64f_mpu_init(void)
 				    0x5); /* unprivileged r-x */
 
 
-	/* region 3 is McRTOS global data in SRAM: */
+	/* region 3 is all SRAM accessible in privileged mode: */
 	k64f_set_mpu_region_for_cpu(mpu_var_p, mpu_regs_p, cpu_id, 3,
-				    g_McRTOS_p,
-				    g_McRTOS_p + 1,
+				    (void *)SOC_SRAM_BASE,
+				    (void *)(SOC_SRAM_BASE + SOC_SRAM_SIZE),
 				    0x2,  /* privileged rw- */
 				    0x0); /* unprivileged --- */
 
@@ -1174,11 +1230,8 @@ mpu_set_privileged_global_data_region(
 
 
 void
-mpu_set_mpu_region_for_dma(
-    uint8_t region_index,
-    void *start_addr,
-    void *end_addr,
-    mpu_dma_master_t mpu_dma_master)
+mpu_register_dma_device(
+    enum mpu_bus_masters mpu_bus_master)
 {
     FDC_ASSERT(
         g_mpu.signature == MPU_DEVICE_SIGNATURE,
@@ -1189,8 +1242,7 @@ mpu_set_mpu_region_for_dma(
 
     volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
 
-    k64f_set_mpu_region_for_dma(mpu_var_p, mpu_regs_p, region_index,
-				start_addr, end_addr, mpu_dma_master);
+    k64f_mpu_register_dma_device(mpu_var_p, mpu_regs_p, mpu_bus_master);
 }
 
 

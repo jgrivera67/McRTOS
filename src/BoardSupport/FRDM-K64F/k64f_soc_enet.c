@@ -155,8 +155,6 @@ const struct enet_device g_enet_device0 = {
 	  */
 	.bytes = { 0x82, 0x88, 0x88, 0x88, 0x88, 0x80 + BOARD_INSTANCE }
     },
-
-    .mpu_region_index = RTOS_NUM_GLOBAL_MPU_REGIONS,
 };
 
 static void
@@ -824,21 +822,9 @@ enet_init(const struct enet_device *enet_device_p)
     set_pin_function(&enet_device_p->mii_txer_pin, 0);
 
     /*
-     * NOTE: The K64F ENET MAC DMA engine does not work with the K64F MPU
-     * so, unfortunately we have to disable the MPU
+     * Configure MPU access for ENET DMA engine:
      */
-#if 0
-    /*
-     * Configure MPU access for CPU and ENET DMA engine:
-     */
-    mpu_set_privileged_global_data_region(enet_device_p->mpu_region_index,
-					  enet_var_p, enet_var_p + 1);
-    mpu_set_mpu_region_for_dma(enet_device_p->mpu_region_index,
-			       enet_var_p, enet_var_p + 1, 0);
-#else
-    mpu_disable();
-    capture_fdc_msg_printf("MPU had to be disabled for ENET MAC DMA to work\n");
-#endif
+    mpu_register_dma_device(MPU_BUS_MASTER_ENET);
 
     ethernet_mac_init(enet_device_p);
     ethernet_phy_init(enet_device_p);

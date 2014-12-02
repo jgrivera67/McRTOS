@@ -283,15 +283,16 @@ enum soc_interrupt_vectors {
 };
 
 /**
- * Max number of DMA bus masters
+ * MPU bus masters (see section 3.3.7.2 of K64 Sub-Family Reference Manual)
  */
-#define MPU_NUM_DMA_MASTERS 4
-
-/**
- * MPU DMA bus masters
- */
-typedef _RANGE_(0, MPU_NUM_DMA_MASTERS - 1)
-        uint8_t mpu_dma_master_t;
+enum mpu_bus_masters {
+	MPU_BUS_MASTER_CPU_CORE =   0,
+	MPU_BUS_MASTER_DEBUGGER =   1,
+	MPU_BUS_MASTER_DMA_EZPORT = 2,
+	MPU_BUS_MASTER_ENET =	    3,
+	MPU_BUS_MASTER_USB =	    4,
+	MPU_BUS_MASTER_SDHC =	    5,
+};
 
 /**
  * ADC result range type

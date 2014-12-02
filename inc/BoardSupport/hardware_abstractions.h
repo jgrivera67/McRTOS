@@ -299,11 +299,8 @@ void mpu_set_privileged_global_data_region(
     void *start_addr,
     void *end_addr);
 
-void mpu_set_mpu_region_for_dma(
-    uint8_t region_index,
-    void *start_addr,
-    void *end_addr,
-    mpu_dma_master_t mpu_dma_master);
+void mpu_register_dma_device(
+    enum mpu_bus_masters mpu_bus_master);
 
 void install_isr(
     interrupt_channel_t channel,

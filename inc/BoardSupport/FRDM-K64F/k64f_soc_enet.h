@@ -222,7 +222,6 @@ struct enet_device {
     struct rtos_interrupt **error_rtos_interrupt_pp;
     uint32_t clock_gate_mask;
     struct ethernet_mac_address mac_address;
-    uint8_t mpu_region_index;
 };
 
 void enet_init(const struct enet_device *enet_device_p);
