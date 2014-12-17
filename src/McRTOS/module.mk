@@ -26,6 +26,7 @@ endif
 
 local_src += $(subdirectory)/McRTOS_startup.c \
 	     $(subdirectory)/McRTOS_kernel_services.c \
+	     $(subdirectory)/McRTOS_command_processor.c \
 	     $(subdirectory)/McRTOS_debugger.c \
 	     $(subdirectory)/McRTOS_kernel_services_$(CPU_ARCHITECTURE).s \
 	     $(subdirectory)/McRTOS_interrupt_service_routines_$(CPU_ARCHITECTURE).s \

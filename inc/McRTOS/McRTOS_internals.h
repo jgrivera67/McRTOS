@@ -900,6 +900,8 @@ void rtos_run_debugger(
         _IN_ const struct rtos_execution_context *current_execution_context_p,
         _IN_ const uint32_t *stack_p);
 
+void rtos_command_processor(void);
+
 /**
  * Add an execution context at the top of the preemption chain
  */
