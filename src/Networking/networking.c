@@ -51,9 +51,6 @@ static struct networking g_networking = {
 	    .signature = LOCAL_L3_END_POINT_SIGNATURE,
 	    .enet_device_p = &g_enet_device0,
 	    .ipv4 = {
-		.local_ip_addr = { .bytes = { 192, 168, 8, 1 + BOARD_INSTANCE } },
-		.subnet_mask = IPv4_SUBNET_MASK(24),
-		.default_gateway_ip_addr = { .bytes = { 192, 168, 8, 1 } },
 		.next_tx_ip_packet_seq_num = 0,
 	    },
 	},
@@ -216,7 +213,7 @@ net_rx_packet_queue_init(struct local_l3_end_point *local_l3_end_point_p)
  * Initialize networking subsystem
  */
 void
-networking_init(void)
+networking_init(struct local_l3_end_point_config local_l3_end_points[])
 {
     struct rtos_thread_creation_params threads[] = {
 	[0] = {
@@ -250,6 +247,14 @@ networking_init(void)
     for (unsigned int i = 0; i < ARRAY_SIZE(g_networking.local_l3_end_points); i ++) {
 	struct local_l3_end_point *local_l3_end_point_p =
 	    &g_networking.local_l3_end_points[i];
+
+	local_l3_end_point_p->ipv4.local_ip_addr = local_l3_end_points[i].ipv4_addr;
+	local_l3_end_point_p->ipv4.subnet_mask = local_l3_end_points[i].ipv4_subnet_mask;
+	local_l3_end_point_p->ipv4.default_gateway_ip_addr =
+	    local_l3_end_points[i].default_gateway_ipv4_addr;
+	local_l3_end_point_p->ipv6.local_ip_addr = local_l3_end_points[i].ipv6_addr;
+	local_l3_end_point_p->ipv6.default_gateway_ip_addr =
+	    local_l3_end_points[i].default_gateway_ipv6_addr;
 
 	net_rx_packet_queue_init(local_l3_end_point_p);
 

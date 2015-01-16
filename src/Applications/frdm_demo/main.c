@@ -34,7 +34,7 @@ enum app_thread_priorities
 static void app_hardware_init(void);
 static void app_hardware_stop(void);
 static void app_software_init(void);
-static void ping_command(const char *cmd_line);
+static void demo_command(void);
 
 static fdc_error_t hello_world_thread_f(void *arg);
 static fdc_error_t accelerometer_thread_f(void *arg);
@@ -149,9 +149,9 @@ static const struct rtos_console_command g_app_console_commands[] =
 {
     [0] =
     {
-        .cmd_name_p = "p",
-        .cmd_description_p = "ping command",
-        .cmd_function_p = ping_command,
+        .cmd_name_p = "demo",
+        .cmd_description_p = "demo command",
+        .cmd_function_p = demo_command,
     },
 };
 
@@ -216,6 +216,16 @@ void app_hardware_stop(void)
 static
 void app_software_init(void)
 {
+    static struct local_l3_end_point_config local_l3_end_points[] = {
+	[0] = {
+	    .ipv4_addr = { .bytes = { 192, 168, 8, 1 + BOARD_INSTANCE } },
+	    .ipv4_subnet_mask = IPv4_SUBNET_MASK(24),
+	    .default_gateway_ipv4_addr = { .bytes = { 192, 168, 8, 1 } },
+	},
+    };
+
+    C_ASSERT(ARRAY_SIZE(local_l3_end_points) == NET_MAX_LOCAL_L3_END_POINTS);
+
     static const char g_app_version[] = "FRDM board ping application v0.1 "
 					"(board " STRINGIFY_LITERAL(BOARD_INSTANCE) ")";
     static const char g_app_build_timestamp[] = "built " __DATE__ " " __TIME__;
@@ -229,7 +239,7 @@ void app_software_init(void)
         g_app_version, g_app_build_timestamp);
 
     g_app.led_color_mask = LED_COLOR_RED;
-    networking_init();
+    networking_init(local_l3_end_points);
 }
 
 
@@ -277,7 +287,7 @@ ping_remote_ip_addr(const struct ipv4_address *dest_ip_addr_p, uint16_t seq_num)
 
 
 static void
-ping_command(const char *cmd_line)
+demo_command(void)
 {
     static uint16_t seq_num = 0;
 

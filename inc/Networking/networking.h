@@ -718,6 +718,35 @@ struct neighbor_cache {
     struct neighbor_cache_entry entries[NEIGHBOR_CACHE_NUM_ENTRIES];
 };
 
+/**
+ * Llocal layer-3 end point configuration
+ */
+struct local_l3_end_point_config {
+    /**
+     * Local IPv4 address
+     */
+    struct ipv4_address ipv4_addr;
+
+    /**
+     * Subnet mask in network byte order
+     */
+    uint32_t ipv4_subnet_mask;
+
+    /**
+     * Local IPv4 address
+     */
+    struct ipv4_address default_gateway_ipv4_addr;
+
+    /**
+     * Local IPv6 address
+     */
+    struct ipv6_address ipv6_addr;
+
+    /**
+     * Local IPv6 address
+     */
+    struct ipv6_address default_gateway_ipv6_addr;
+};
 
 /**
  * IPv4 network end point
@@ -1043,7 +1072,7 @@ static inline size_t net_get_udp_data_payload_length(struct network_packet *net_
 }
 
 
-void networking_init(void);
+void networking_init(struct local_l3_end_point_config local_l3_end_points[]);
 
 struct network_packet *net_allocate_tx_packet(bool free_after_tx_complete);
 
