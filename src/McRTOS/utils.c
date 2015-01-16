@@ -832,6 +832,12 @@ read_command_line(
             }
             break;
 
+	case CTRL_C:
+            putchar_func_p(char_io_arg_p, '^');
+            putchar_func_p(char_io_arg_p, 'C');
+            *cmd_line_cursor = CTRL_C;
+	    return;
+
         default:
             if (cmd_line_cursor < cmd_line_end && IS_PRINT(c))
             {
@@ -865,17 +871,81 @@ signature_to_string(
 
 
 uint32_t
-convert_string_to_hexadecimal(
-    _IN_ const char *str)
+convert_string_to_hexadecimal(_IN_ const char *str)
 {
-    return 0;
+    uint32_t value = 0;
+    uint32_t multiplier = 1;
+
+    FDC_ASSERT(str[0] == '0' && to_lower(str[1]) == 'x', str[0], str[1]);
+
+    for (const char *p = str + strlen(str) - 1; p >= str; p --) {
+	int c = *p;
+
+	if (!is_xdigit(c)) {
+	    break;
+	}
+
+	if (is_digit(c)) {
+	    value += (c - '0') * multiplier;
+	} else {
+	    value += (c - 'a') * multiplier;
+	}
+
+	multiplier *= 16;
+    }
+
+    return value;
 }
 
 
 uint32_t
-convert_string_to_decimal(
-    _IN_ const char *str)
+convert_string_to_decimal(_IN_ const char *str)
 {
-    return 0;
+    uint32_t value = 0;
+    uint32_t multiplier = 1;
+
+    for (const char *p = str + strlen(str) - 1; p >= str; p --) {
+	int c = *p;
+
+	FDC_ASSERT(is_digit(c), c, 0);
+	value += (c - '0') * multiplier;
+	multiplier *= 10;
+    }
+
+    return value;
 }
 
+
+int
+strcmp(_IN_ const char *s1, _IN_ const char *s2)
+{
+    for ( ; ; ) {
+	int c1 = *s1 ++;
+	int c2 = *s2 ++;
+
+	if (c1 < c2) {
+	    return -1;
+	}
+
+	if (c1 > c2) {
+	    return 1;
+	}
+
+	if (c1 == '\0') {
+	    return 0;
+	}
+    }
+}
+
+
+int
+strlen(_IN_ const char *s)
+{
+    int len = 0;
+
+   for (const char *p = s; *p != '\0'; p ++) {
+       len ++;
+   }
+
+   return len;
+}

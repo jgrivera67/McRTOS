@@ -513,7 +513,7 @@ struct McRTOS
 #   endif
 
     /**
-     * Flag indicating that the idle thread is to stop the CPU in the idle thread
+     * Flag indicating that the idle thread is to stop the CPU
      * and wait for interrupts, instead of busy-waiting.
      */
     volatile bool rts_stop_idle_cpu;
@@ -606,6 +606,9 @@ C_ASSERT(
 
 extern struct McRTOS *const g_McRTOS_p;
 
+extern const char g_McRTOS_version[];
+
+extern const char g_McRTOS_build_timestamp[];
 
 /**
  * Get the current execution context for the calling CPU

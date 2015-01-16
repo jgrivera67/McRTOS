@@ -221,4 +221,39 @@ uint32_t convert_string_to_decimal(
 char * signature_to_string(
         _IN_ uint32_t signature);
 
+int strcmp(_IN_ const char *s1, _IN_ const char *s2);
+int strlen(_IN_ const char *s);
+
+static inline int to_lower(int c)
+{
+    return (c >= 'A' && c <= 'Z') ? 'a' + (c - 'A')
+	                          : c;
+}
+
+static inline bool is_digit(int c)
+{
+    return c >= '0' && c <= '9';
+}
+
+static inline bool is_xdigit(int c)
+{
+    if (is_digit(c)) {
+	return true;
+    }
+
+    c = to_lower(c);
+    return c >= 'a' && c <= 'f';
+}
+
+static inline bool is_space(int c)
+{
+    return c == ' ' || c == '\t';
+}
+
+static inline bool is_alpha(int c)
+{
+    return (c >= 'A' && c <= 'Z') ||
+           (c >= 'a' && c <= 'z');
+}
+
 #endif /* __UTILS_H */

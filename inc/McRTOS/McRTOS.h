@@ -315,7 +315,7 @@ struct rtos_msg_channel_creation_params
     struct rtos_msg_channel **const p_msg_channel_pp;
 };
 
-typedef void cmd_function_t(const char *cmd_line);
+typedef void cmd_function_t(void);
 
 /**
  * Console command
