@@ -51,6 +51,9 @@ static struct networking g_networking = {
 	    .signature = LOCAL_L3_END_POINT_SIGNATURE,
 	    .enet_device_p = &g_enet_device0,
 	    .ipv4 = {
+		.local_ip_addr.value = IPV4_NULL_ADDR,
+		.subnet_mask = 0x0,
+		.default_gateway_ip_addr.value = IPV4_NULL_ADDR,
 		.next_tx_ip_packet_seq_num = 0,
 	    },
 	},
@@ -213,7 +216,7 @@ net_rx_packet_queue_init(struct local_l3_end_point *local_l3_end_point_p)
  * Initialize networking subsystem
  */
 void
-networking_init(struct local_l3_end_point_config local_l3_end_points[])
+networking_init(void)
 {
     struct rtos_thread_creation_params threads[] = {
 	[0] = {
@@ -247,14 +250,6 @@ networking_init(struct local_l3_end_point_config local_l3_end_points[])
     for (unsigned int i = 0; i < ARRAY_SIZE(g_networking.local_l3_end_points); i ++) {
 	struct local_l3_end_point *local_l3_end_point_p =
 	    &g_networking.local_l3_end_points[i];
-
-	local_l3_end_point_p->ipv4.local_ip_addr = local_l3_end_points[i].ipv4_addr;
-	local_l3_end_point_p->ipv4.subnet_mask = local_l3_end_points[i].ipv4_subnet_mask;
-	local_l3_end_point_p->ipv4.default_gateway_ip_addr =
-	    local_l3_end_points[i].default_gateway_ipv4_addr;
-	local_l3_end_point_p->ipv6.local_ip_addr = local_l3_end_points[i].ipv6_addr;
-	local_l3_end_point_p->ipv6.default_gateway_ip_addr =
-	    local_l3_end_points[i].default_gateway_ipv6_addr;
 
 	net_rx_packet_queue_init(local_l3_end_point_p);
 
@@ -301,6 +296,36 @@ networking_init(struct local_l3_end_point_config local_l3_end_points[])
     rtos_k_mutex_init("expecting_ping_reply mutex", &g_networking.expecting_ping_reply_mutex);
     rtos_k_condvar_init("ping_reply_recceived condvar", &g_networking.ping_reply_recceived_condvar);
     g_networking.initialized = true;
+}
+
+
+/**
+ * Set IPv4 address for the given local layer-3 end point
+ */
+void
+net_set_local_ipv4_address(uint8_t local_l3_end_point_index,
+			   const struct ipv4_address *ip_addr_p,
+			   uint8_t subnet_prefix)
+{
+    FDC_ASSERT(g_networking.initialized, 0, 0);
+    FDC_ASSERT(local_l3_end_point_index < NET_MAX_LOCAL_L3_END_POINTS,
+	       local_l3_end_point_index , NET_MAX_LOCAL_L3_END_POINTS);
+    FDC_ASSERT(ip_addr_p->value != IPV4_NULL_ADDR, ip_addr_p->value, 0);
+    FDC_ASSERT(subnet_prefix < 32, subnet_prefix, 0);
+
+    struct local_l3_end_point *local_l3_end_point_p =
+	 &g_networking.local_l3_end_points[local_l3_end_point_index];
+
+    local_l3_end_point_p->ipv4.local_ip_addr = *ip_addr_p;
+    local_l3_end_point_p->ipv4.subnet_mask = IPv4_SUBNET_MASK(subnet_prefix);
+
+    /*
+     * Send gratuitous ARP request (to catch if someone else is using the same
+     * IP address):
+     */
+    net_send_arp_request(local_l3_end_point_p->enet_device_p,
+			 &local_l3_end_point_p->ipv4.local_ip_addr,
+			 &local_l3_end_point_p->ipv4.local_ip_addr);
 }
 
 
@@ -711,13 +736,13 @@ net_send_ipv4_packet(const struct ipv4_address *dest_ip_addr_p,
     struct ethernet_frame *tx_frame_p =
        (struct ethernet_frame *)tx_packet_p->data_buffer;
 
-   struct local_l3_end_point *local_l3_end_point_p =
-	   choose_ipv4_local_l3_end_point(dest_ip_addr_p);
+    struct local_l3_end_point *local_l3_end_point_p =
+	choose_ipv4_local_l3_end_point(dest_ip_addr_p);
 
-   const struct enet_device *enet_device_p = local_l3_end_point_p->enet_device_p;
+    const struct enet_device *enet_device_p = local_l3_end_point_p->enet_device_p;
 
-   FDC_ASSERT(enet_device_p->signature == ENET_DEVICE_SIGNATURE,
-	      enet_device_p->signature, enet_device_p);
+    FDC_ASSERT(enet_device_p->signature == ENET_DEVICE_SIGNATURE,
+	       enet_device_p->signature, enet_device_p);
 
     /*
      * Populate IP header
@@ -788,12 +813,18 @@ net_send_ipv4_packet(const struct ipv4_address *dest_ip_addr_p,
     /*
      * Get destination MAC address:
      */
-    if (SAME_IPv4_SUBNET(&local_l3_end_point_p->ipv4.local_ip_addr,
+    if (local_l3_end_point_p->ipv4.local_ip_addr.value == dest_ip_addr_p->value) {
+	fdc_error = CAPTURE_FDC_ERROR("IPv4 Loopback not supported", 0, 0);
+    } else if (dest_ip_addr_p->value == IPV4_BROADCAST_ADDR) {
+	dest_mac_addr = enet_broadcast_mac_addr;
+    } else if (SAME_IPv4_SUBNET(&local_l3_end_point_p->ipv4.local_ip_addr,
 		         dest_ip_addr_p,
 			 local_l3_end_point_p->ipv4.subnet_mask)) {
-	 fdc_error = find_dest_mac_addr(local_l3_end_point_p,
-					dest_ip_addr_p,
-					&dest_mac_addr);
+	fdc_error = find_dest_mac_addr(local_l3_end_point_p,
+				       dest_ip_addr_p,
+				       &dest_mac_addr);
+    } else if (local_l3_end_point_p->ipv4.default_gateway_ip_addr.value == IPV4_NULL_ADDR) {
+	fdc_error = CAPTURE_FDC_ERROR("No default IPv4 gateway defined", 0, 0);
     } else {
 	 fdc_error = find_dest_mac_addr(local_l3_end_point_p,
 					&local_l3_end_point_p->ipv4.default_gateway_ip_addr,
@@ -882,7 +913,7 @@ error_release_mutex:
 }
 
 
-void
+fdc_error_t
 net_send_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
 		           const struct ipv4_address *dest_ip_addr_p,
 			   uint16_t dest_port,
@@ -912,20 +943,21 @@ net_send_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
     /*
      * Send IP packet:
      */
-    net_send_ipv4_packet(dest_ip_addr_p,
-		         tx_packet_p,
-		         sizeof(struct udp_header) + data_payload_length,
-		         TRANSPORT_PROTO_UDP);
+    return net_send_ipv4_packet(dest_ip_addr_p,
+			        tx_packet_p,
+			        sizeof(struct udp_header) + data_payload_length,
+			        TRANSPORT_PROTO_UDP);
 }
 
 
-void
+fdc_error_t
 net_receive_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
 			      rtos_milliseconds_t timeout_ms,
 		              struct ipv4_address *source_ip_addr_p,
 			      uint16_t *source_port_p,
 			      struct network_packet **rx_packet_pp)
 {
+    fdc_error_t fdc_error;
     FDC_ASSERT(local_l4_end_point_p->l4_protocol == TRANSPORT_PROTO_UDP,
 	       local_l4_end_point_p->l4_protocol, local_l4_end_point_p);
 
@@ -935,7 +967,8 @@ net_receive_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
 
     if (rx_packet_node_p == NULL) {
 	*rx_packet_pp = NULL;
-	return;
+        fdc_error = CAPTURE_FDC_ERROR("No Rx packet available", timeout_ms, 0);
+	return fdc_error;
     }
 
     struct network_packet *rx_packet_p =
@@ -960,6 +993,7 @@ net_receive_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
 
     *source_port_p = udp_header_p->source_port;
     *rx_packet_pp = rx_packet_p;
+    return 0;
 }
 
 
@@ -1003,7 +1037,7 @@ net_send_ipv4_tcp_segment(struct local_l4_end_point *local_l4_end_point_p,
 }
 
 
-void
+fdc_error_t
 net_send_ipv4_icmp_message(const struct ipv4_address *dest_ip_addr_p,
 		           struct network_packet *tx_packet_p,
 			   uint8_t msg_type,
@@ -1034,18 +1068,20 @@ net_send_ipv4_icmp_message(const struct ipv4_address *dest_ip_addr_p,
     /*
      * Send IP packet:
      */
-    net_send_ipv4_packet(dest_ip_addr_p,
-		         tx_packet_p,
-		         sizeof(struct icmpv4_header) + data_payload_length,
-		         TRANSPORT_PROTO_ICMP);
+    return net_send_ipv4_packet(dest_ip_addr_p,
+				tx_packet_p,
+				sizeof(struct icmpv4_header) + data_payload_length,
+				TRANSPORT_PROTO_ICMP);
 }
 
 
-void
+fdc_error_t
 net_send_ipv4_ping_request(const struct ipv4_address *dest_ip_addr_p,
 			   uint16_t identifier,
 	                   uint16_t seq_num)
 {
+    fdc_error_t fdc_error;
+
     rtos_k_mutex_acquire(&g_networking.expecting_ping_reply_mutex);
     while (g_networking.expecting_ping_reply) {
 	rtos_k_condvar_wait(&g_networking.ping_reply_recceived_condvar,
@@ -1062,26 +1098,33 @@ net_send_ipv4_ping_request(const struct ipv4_address *dest_ip_addr_p,
 
     echo_msg_p->identifier = identifier;
     echo_msg_p->seq_num = seq_num;
-    net_send_ipv4_icmp_message(dest_ip_addr_p,
-			       tx_packet_p,
-			       ICMP_TYPE_PING_REQUEST,
-		               ICMP_CODE_PING_REQUEST,
-		               sizeof(struct icmpv4_echo_message) -
-			       sizeof(struct icmpv4_header));
+    fdc_error = net_send_ipv4_icmp_message(dest_ip_addr_p,
+					   tx_packet_p,
+					   ICMP_TYPE_PING_REQUEST,
+					   ICMP_CODE_PING_REQUEST,
+					   sizeof(struct icmpv4_echo_message) -
+					   sizeof(struct icmpv4_header));
+    if (fdc_error != 0) {
+	g_networking.expecting_ping_reply = false;
+    }
+
+    return fdc_error;
 }
 
 
-bool
+fdc_error_t
 net_receive_ipv4_ping_reply(rtos_milliseconds_t timeout_ms,
 			    struct ipv4_address *remote_ip_addr_p,
 			    uint16_t *identifier_p,
 			    uint16_t *seq_num_p)
 {
+    fdc_error_t fdc_error;
     struct glist_node *rx_packet_node_p =
 	rtos_k_queue_remove(&g_networking.rx_ipv4_ping_reply_packet_queue, timeout_ms);
 
     if (rx_packet_node_p == NULL) {
-	return false;
+        fdc_error = CAPTURE_FDC_ERROR("No Rx packet available", timeout_ms, 0);
+	return fdc_error;
     }
 
     struct network_packet *rx_packet_p = GLIST_NODE_TO_NETWORK_PACKET(rx_packet_node_p);
@@ -1097,7 +1140,7 @@ net_receive_ipv4_ping_reply(rtos_milliseconds_t timeout_ms,
     *identifier_p = echo_msg_p->identifier;
     *seq_num_p = echo_msg_p->seq_num;
     net_recycle_rx_packet(rx_packet_p);
-    return true;
+    return 0;
 }
 
 
@@ -1183,14 +1226,17 @@ net_receive_arp_packet(struct network_packet *rx_packet_p)
 			       &rx_frame_p->arp_packet.source_ip_addr);
 	}
 
-	/*
-	 * Update ARP cache with (source IP addr, source MAC addr)
-	 */
-	COPY_UNALIGNED_IPv4_ADDRESS(&source_ip_addr,
-				    &rx_frame_p->arp_packet.source_ip_addr);
-	arp_cache_update(&local_l3_end_point_p->ipv4.arp_cache,
-			 &source_ip_addr,
-			 &rx_frame_p->arp_packet.source_mac_addr);
+	if (source_ip_addr.value != IPV4_NULL_ADDR) {
+	    /*
+	     * Update ARP cache with (source IP addr, source MAC addr)
+	     */
+	    COPY_UNALIGNED_IPv4_ADDRESS(&source_ip_addr,
+					&rx_frame_p->arp_packet.source_ip_addr);
+	    arp_cache_update(&local_l3_end_point_p->ipv4.arp_cache,
+			     &source_ip_addr,
+			     &rx_frame_p->arp_packet.source_mac_addr);
+	}
+
 	break;
 
     case ARP_REPLY:
@@ -1475,9 +1521,11 @@ net_receive_thread_f(void *arg)
      * Send gratuitous ARP request (to catch if someone else is using the same
      * IP address):
      */
-    net_send_arp_request(enet_device_p,
-		         &local_l3_end_point_p->ipv4.local_ip_addr,
-		         &local_l3_end_point_p->ipv4.local_ip_addr);
+    if (local_l3_end_point_p->ipv4.local_ip_addr.value != IPV4_NULL_ADDR) {
+	net_send_arp_request(enet_device_p,
+			     &local_l3_end_point_p->ipv4.local_ip_addr,
+			     &local_l3_end_point_p->ipv4.local_ip_addr);
+    }
 
     for ( ; ; ) {
 	struct network_packet *rx_packet_p = NULL;

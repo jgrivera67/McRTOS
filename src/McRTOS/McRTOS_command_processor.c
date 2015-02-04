@@ -21,31 +21,40 @@ TODO("Remove these pragmas")
 #pragma GCC diagnostic ignored "-Wunused-variable"
 
 static void rtos_parse_command_line(const char *cmd_line);
-static void McRTOS_display_help(void);
 static void McRTOS_display_stats(void);
 static void McRTOS_change_console_cpu(cpu_id_t cpu_id);
 
 enum tokens {
-    CLEAR = FIRST_KEYWORD_TOKEN,
-    HELP,
-    REBOOT,
-    TOP,
-    PING,
+    ADDR = FIRST_KEYWORD_TOKEN,
+    CLEAR,
     CPU,
+    DMESG,
+    GATEWAY,
+    HELP,
+    IP4,
+    IP6,
+    PING,
+    REBOOT,
     SET,
-    IP,
+    STACK,
+    TOP,
     VERSION,
 };
 
 static const char *const keyword_table[] = {
+    "addr",
     "clear",
-    "help",
-    "reboot",
-    "top",
-    "ping",
     "cpu",
+    "dmesg",
+    "gateway",
+    "help",
+    "ip4",
+    "ip6",
+    "ping",
+    "reboot",
     "set",
-    "ip",
+    "stack",
+    "top",
     "version",
 };
 
@@ -117,9 +126,7 @@ get_next_token(struct tokenizer *tokenizer_p)
     if (c == '\0') {
 	token = END_OF_INPUT;
     } else if (is_alpha(c)) {
-	*lex_cursor++ = c;
-	c = *tokenizer_p->cmd_line_cursor ++;
-	while (is_alpha(c)) {
+	do {
 	    if (lex_cursor == end_lex_cursor) {
 		console_printf("lexical error at %s\n", tokenizer_p->cmd_line_cursor - 1);
 		goto out;
@@ -127,10 +134,11 @@ get_next_token(struct tokenizer *tokenizer_p)
 
 	    *lex_cursor++ = c;
 	    c = *tokenizer_p->cmd_line_cursor ++;
-	}
+	} while (is_alpha(c) || is_digit(c));
 
 	*lex_cursor = '\0';
 	token = lookup_keyword_token(tokenizer_p);
+	tokenizer_p->cmd_line_cursor --;
     } else if (c == '0') {
 	*lex_cursor++ = c;
 	c = *tokenizer_p->cmd_line_cursor ++;
@@ -154,14 +162,21 @@ get_next_token(struct tokenizer *tokenizer_p)
 
 	    *lex_cursor = '\0';
 	    token = HEXADECIMAL_NUMBER;
+	    tokenizer_p->cmd_line_cursor --;
 	} else if (is_space(c)) {
 	    *lex_cursor = '\0';
 	    token = DECIMAL_NUMBER; /* 0 */
 	} else {
 	    console_printf("lexical error at %s\n", tokenizer_p->cmd_line_cursor - 1);
 	}
-    } else if (is_digit(c)) {
+    } else if (is_xdigit(c)) {
+	bool non_decimal_digits_count = 0;
+
 	do {
+	    if (!is_digit(c)) {
+		non_decimal_digits_count ++;
+	    }
+
 	    if (lex_cursor == end_lex_cursor) {
 		console_printf("lexical error at %s\n", tokenizer_p->cmd_line_cursor - 1);
 		goto out;
@@ -169,14 +184,22 @@ get_next_token(struct tokenizer *tokenizer_p)
 
 	    *lex_cursor++ = c;
 	    c = *tokenizer_p->cmd_line_cursor ++;
-	} while (is_digit(c));
+	} while (is_xdigit(c));
 
 	*lex_cursor = '\0';
-	token = DECIMAL_NUMBER;
+	if (non_decimal_digits_count == 0) {
+	    token = DECIMAL_NUMBER;
+	} else {
+	    token = HEXADECIMAL_NUMBER;
+	}
+
+	tokenizer_p->cmd_line_cursor --;
     } else if (c == '.') {
 	token = DOT_TOKEN;
     } else if (c == ':') {
 	token = COLON_TOKEN;
+    } else if (c == '/') {
+	token = SLASH_TOKEN;
     } else if (c == CTRL_C) {
 	token = BREAK_INPUT;
     } else {
@@ -189,52 +212,110 @@ out:
 
 
 static bool
-parse_ip_address(struct ipv4_address *ip_addr_p)
+parse_ip4_address(struct ipv4_address *ip_addr_p)
 {
     token_t token;
     uint32_t value;
 
     value = convert_string_to_decimal(g_tokenizer.last_lexical_unit);
     if (value > UINT8_MAX) {
-	goto error;
+	console_printf("Invalid value \'%u\'\n", value);
+	console_printf("line: %d\n", __LINE__);//???
+	return false;
     }
 
     ip_addr_p->bytes[0] = value;
     token = get_next_token(&g_tokenizer);
     if (token != DOT_TOKEN) {
-	goto error;
+	console_printf("Invalid token \'%s\'\n", g_tokenizer.last_lexical_unit);
+	console_printf("line: %d\n", __LINE__);//???
+	return false;
     }
 
     token = get_next_token(&g_tokenizer);
     if (token != DECIMAL_NUMBER) {
-	goto error;
+	console_printf("Invalid token \'%s\'\n", g_tokenizer.last_lexical_unit);
+	console_printf("line: %d\n", __LINE__);//???
+	return false;
     }
 
     value = convert_string_to_decimal(g_tokenizer.last_lexical_unit);
     if (value > UINT8_MAX) {
-	goto error;
+	console_printf("Invalid value \'%u\'\n", value);
+	console_printf("line: %d\n", __LINE__);//???
+	return false;
     }
 
     ip_addr_p->bytes[1] = value;
     token = get_next_token(&g_tokenizer);
     if (token != DOT_TOKEN) {
-	goto error;
+	console_printf("Invalid token \'%s\'\n", g_tokenizer.last_lexical_unit);
+	console_printf("line: %d\n", __LINE__);//???
+	return false;
     }
 
     token = get_next_token(&g_tokenizer);
     if (token != DECIMAL_NUMBER) {
-	goto error;
+	console_printf("Invalid token \'%s\'\n", g_tokenizer.last_lexical_unit);
+	console_printf("line: %d\n", __LINE__);//???
+	return false;
     }
 
     value = convert_string_to_decimal(g_tokenizer.last_lexical_unit);
     if (value > UINT8_MAX) {
-	goto error;
+	console_printf("Invalid value \'%u\'\n", value);
+	console_printf("line: %d\n", __LINE__);//???
+	return false;
     }
 
     ip_addr_p->bytes[2] = value;
     token = get_next_token(&g_tokenizer);
     if (token != DOT_TOKEN) {
-	goto error;
+	console_printf("Invalid token \'%s\'\n", g_tokenizer.last_lexical_unit);
+	console_printf("line: %d\n", __LINE__);//???
+	return false;
+    }
+
+    token = get_next_token(&g_tokenizer);
+    if (token != DECIMAL_NUMBER) {
+	console_printf("Invalid token \'%s\'\n", g_tokenizer.last_lexical_unit);
+	console_printf("line: %d\n", __LINE__);//???
+	return false;
+    }
+
+    value = convert_string_to_decimal(g_tokenizer.last_lexical_unit);
+    if (value > UINT8_MAX) {
+	console_printf("Invalid value \'%u\'\n", value);
+	console_printf("line: %d\n", __LINE__);//???
+	return false;
+    }
+
+    ip_addr_p->bytes[3] = value;
+
+    if (ip_addr_p->value == IPV4_NULL_ADDR ||
+        ip_addr_p->value == IPV4_BORADCAST_ADDR) {
+	console_printf("Invalid IP address %u.%u.%u.%u\n",
+		       ip_addr_p->bytes[0],
+		       ip_addr_p->bytes[1],
+		       ip_addr_p->bytes[2],
+		       ip_addr_p->bytes[3]);
+	return false;
+    }
+
+    return true;
+}
+
+
+static bool
+parse_subnet_prefix(uint8_t *subnet_prefix)
+{
+    token_t token;
+    uint32_t value;
+
+    token = get_next_token(&g_tokenizer);
+    if (token != SLASH_TOKEN) {
+	console_printf("Missing subnet prefix (expected token \'/\')\n");
+	return false;
     }
 
     token = get_next_token(&g_tokenizer);
@@ -243,28 +324,64 @@ parse_ip_address(struct ipv4_address *ip_addr_p)
     }
 
     value = convert_string_to_decimal(g_tokenizer.last_lexical_unit);
-    if (value > UINT8_MAX) {
+    if (value >= 32) {
 	goto error;
     }
 
-    ip_addr_p->bytes[3] = value;
+    *subnet_prefix = value;
     return true;
 
 error:
-    console_printf("Invalid IP address \'%s\'\n", g_tokenizer.last_lexical_unit);
+    console_printf("Invalid subnet mask \'%s\'\n", g_tokenizer.last_lexical_unit);
     return false;
 }
 
 
+static bool
+parse_ip4_address_and_subnet_prefix(void)
+{
+    struct ipv4_address ip_addr;
+    uint8_t subnet_prefix;
+    token_t token = get_next_token(&g_tokenizer);
+
+    switch (token) {
+    case INVALID_TOKEN:
+	return false;
+
+    case END_OF_INPUT:
+	console_printf("Missing arguments for \'set ip4 addr\' command\n");
+	return false;
+
+    case DECIMAL_NUMBER:
+	if (!parse_ip4_address(&ip_addr)) {
+	    return false;
+	}
+
+	if (!parse_subnet_prefix(&subnet_prefix)) {
+	    return false;
+	}
+
+	net_set_local_ipv4_address(0, &ip_addr, subnet_prefix);
+	break;
+
+    default:
+	console_printf("Unexpected token \'%s\'\n", g_tokenizer.last_lexical_unit);
+	return false;
+    }
+
+    return true;
+}
+
+
 static void
-cmd_set_local_ip_address(const struct ipv4_address *dest_ip_addr_p)
+cmd_set_default_ip4_gateway(const struct ipv4_address *ip_addr_p)
 {
     console_printf("ERROR: %s not implemented yet\n", __func__);
 }
 
 
 static bool
-parse_set_ip_address(void)
+parse_ip4_gateway(void)
 {
     struct ipv4_address ip_addr;
     token_t token = get_next_token(&g_tokenizer);
@@ -274,15 +391,15 @@ parse_set_ip_address(void)
 	return false;
 
     case END_OF_INPUT:
-	console_printf("Missing arguments for \'set ip\' command\n");
+	console_printf("Missing arguments for \'set ip4 gateway\' command\n");
 	return false;
 
     case DECIMAL_NUMBER:
-	if (!parse_ip_address(&ip_addr)) {
+	if (!parse_ip4_address(&ip_addr)) {
 	    return false;
 	}
 
-	cmd_set_local_ip_address(&ip_addr);
+	cmd_set_default_ip4_gateway(&ip_addr);
 	break;
 
     default:
@@ -291,7 +408,112 @@ parse_set_ip_address(void)
     }
 
     return true;
+}
 
+
+static bool
+parse_set_ip4_command(void)
+{
+    token_t token = get_next_token(&g_tokenizer);
+
+    switch (token) {
+    case INVALID_TOKEN:
+	return false;
+
+    case END_OF_INPUT:
+	console_printf("Missing arguments for \'set ip4\' command\n");
+	return false;
+
+    case ADDR:
+	return parse_ip4_address_and_subnet_prefix();
+
+    case GATEWAY:
+	return parse_ip4_gateway();
+
+    default:
+	console_printf("Unexpected token \'%s\'\n", g_tokenizer.last_lexical_unit);
+	return false;
+    }
+}
+
+
+static bool
+parse_ip6_address(struct ipv6_address *ip_addr_p)
+{
+    console_printf("ERROR: %s not implemented yet\n", __func__);
+    return false;
+}
+
+
+static void
+cmd_set_local_ip6_address(const struct ipv6_address *dest_ip_addr_p,
+			  uint8_t subnet_prefix)
+{
+    console_printf("ERROR: %s not implemented yet\n", __func__);
+}
+
+
+static bool
+parse_ip6_address_and_subnet_prefix(void)
+{
+    struct ipv6_address ip_addr;
+    uint8_t subnet_prefix;
+    token_t token = get_next_token(&g_tokenizer);
+
+    switch (token) {
+    case INVALID_TOKEN:
+	return false;
+
+    case END_OF_INPUT:
+	console_printf("Missing arguments for \'set ip6 addr\' command\n");
+	return false;
+
+    case DECIMAL_NUMBER:
+    case HEXADECIMAL_NUMBER:
+	/*
+	 * NOTE: here we interpret string of decimal digits as a hexadecimal
+	 * number
+	 */
+	if (!parse_ip6_address(&ip_addr)) {
+	    return false;
+	}
+
+	if (!parse_subnet_prefix(&subnet_prefix)) {
+	    return false;
+	}
+
+	cmd_set_local_ip6_address(&ip_addr, subnet_prefix);
+	break;
+
+    default:
+	console_printf("Unexpected token \'%s\'\n", g_tokenizer.last_lexical_unit);
+	return false;
+    }
+
+    return true;
+}
+
+
+static bool
+parse_set_ip6_command(void)
+{
+    token_t token = get_next_token(&g_tokenizer);
+
+    switch (token) {
+    case INVALID_TOKEN:
+	return false;
+
+    case END_OF_INPUT:
+	console_printf("Missing arguments for \'set ip6\' command\n");
+	return false;
+
+    case ADDR:
+	return parse_ip6_address_and_subnet_prefix();
+
+    default:
+	console_printf("Unexpected token \'%s\'\n", g_tokenizer.last_lexical_unit);
+	return false;
+    }
 }
 
 
@@ -305,11 +527,20 @@ parse_set(void)
 	return false;
 
     case END_OF_INPUT:
-	console_printf("Missing arguments for \'set\' command\n");
-	return false;
+    case HELP:
+	console_printf(
+	    "\tset ip4 addr <IP addr>/<subnet prefix size>\n"
+	    "\tset ip6 addr <IP addr>/<subnet prefix size>\n"
+	    "\tset ip4 gateway <IP addr>\n"
+	    "\n");
 
-    case IP:
-	return parse_set_ip_address();
+	return true;
+
+    case IP4:
+	return parse_set_ip4_command();
+
+    case IP6:
+	return parse_set_ip6_command();
 
     default:
 	console_printf("Unexpected token \'%s\'\n", g_tokenizer.last_lexical_unit);
@@ -318,39 +549,30 @@ parse_set(void)
 }
 
 static void
-cmd_ping_remote_ip_addr(const struct ipv4_address *dest_ip_addr_p)
+cmd_ping_remote_ip4_addr(const struct ipv4_address *dest_ip_addr_p)
 {
+    fdc_error_t fdc_error;
     struct ipv4_address remote_ip_addr;
     static uint16_t req_seq_num = 0;
     uint16_t reply_seq_num;
     uint16_t reply_identifier;
-    bool reply_received_ok;
     uint16_t identifier = (uintptr_t)rtos_thread_self();
 
     for (int i = 0; i < 8; i ++) {
-	net_send_ipv4_ping_request(dest_ip_addr_p, identifier, req_seq_num);
-	reply_received_ok = net_receive_ipv4_ping_reply(3000,
-							&remote_ip_addr,
-							&reply_identifier,
-							&reply_seq_num);
+	fdc_error = net_send_ipv4_ping_request(dest_ip_addr_p, identifier,
+					       req_seq_num);
+	if (fdc_error != 0) {
+	    console_printf("net_send_ipv4_ping_request() failed with error %#x\n",
+		           fdc_error);
+	    return;
+	}
 
-	if (reply_received_ok) {
-	    FDC_ASSERT(remote_ip_addr.value == dest_ip_addr_p->value,
-		       remote_ip_addr.value, dest_ip_addr_p->value);
-	    FDC_ASSERT(reply_identifier == identifier,
-		       reply_identifier, identifier);
-	    FDC_ASSERT(reply_seq_num == req_seq_num,
-		       reply_seq_num, req_seq_num);
+	fdc_error = net_receive_ipv4_ping_reply(3000,
+						&remote_ip_addr,
+						&reply_identifier,
+						&reply_seq_num);
 
-	    CONSOLE_POS_PRINTF(34,1, "Ping %d for %u.%u.%u.%u\n",
-			       reply_seq_num,
-			       remote_ip_addr.bytes[0],
-			       remote_ip_addr.bytes[1],
-			       remote_ip_addr.bytes[2],
-			       remote_ip_addr.bytes[3]);
-
-	    req_seq_num ++;
-	} else {
+	if (fdc_error != 0) {
 	    CONSOLE_POS_PRINTF(34,1, "Ping %d timedout for %u.%u.%u.%u\n",
 			       req_seq_num,
 			       dest_ip_addr_p->bytes[0],
@@ -359,6 +581,22 @@ cmd_ping_remote_ip_addr(const struct ipv4_address *dest_ip_addr_p)
 			       dest_ip_addr_p->bytes[3]);
 	    return;
 	}
+
+	FDC_ASSERT(remote_ip_addr.value == dest_ip_addr_p->value,
+		   remote_ip_addr.value, dest_ip_addr_p->value);
+	FDC_ASSERT(reply_identifier == identifier,
+		   reply_identifier, identifier);
+	FDC_ASSERT(reply_seq_num == req_seq_num,
+		   reply_seq_num, req_seq_num);
+
+	CONSOLE_POS_PRINTF(34,1, "Ping %d for %u.%u.%u.%u\n",
+			   reply_seq_num,
+			   remote_ip_addr.bytes[0],
+			   remote_ip_addr.bytes[1],
+			   remote_ip_addr.bytes[2],
+			   remote_ip_addr.bytes[3]);
+
+	req_seq_num ++;
     }
 }
 
@@ -374,15 +612,16 @@ parse_ping(void)
 	return false;
 
     case END_OF_INPUT:
-	console_printf("Missing arguments for \'set\' command\n");
-	return false;
+    case HELP:
+	console_printf("\tping <IPv4 address>\n\n");
+	break;
 
     case DECIMAL_NUMBER:
-	if (!parse_ip_address(&ip_addr)) {
+	if (!parse_ip4_address(&ip_addr)) {
 	    return false;
 	}
 
-	cmd_ping_remote_ip_addr(&ip_addr);
+	cmd_ping_remote_ip4_addr(&ip_addr);
 	break;
 
     default:
@@ -393,6 +632,126 @@ parse_ping(void)
     return true;
 }
 
+
+static void
+cmd_display_help(void)
+{
+    console_printf(
+        "\nMcRTOS commands\n"
+        "\tclear - clear screen\n"
+        "\tcpu - Switch to the given CPU\n"
+        "\tdmesg - Display message log\n"
+        "\thelp - display this message\n"
+	"\tping - send ping to a given IP address\n"
+        "\treset - reset CPU\n"
+        "\tset - Set config option\n"
+        "\tstack - display stack trace of a given thread/ISR\n"
+        "\ttop - display McRTOS stats\n"
+        "\tversion - display McRTOS version\n");
+
+    for (int i = 0; i < g_McRTOS_p->rts_num_app_console_commands; i++) {
+        console_printf("\t%s - %s\n",
+            g_McRTOS_p->rts_app_console_commands_p[i].cmd_name_p,
+            g_McRTOS_p->rts_app_console_commands_p[i].cmd_description_p);
+    }
+
+    console_printf("\n");
+}
+
+
+static bool parse_help(void)
+{
+    token_t token = get_next_token(&g_tokenizer);
+
+    switch (token) {
+    case INVALID_TOKEN:
+	return false;
+
+    case END_OF_INPUT:
+	cmd_display_help();
+	break;
+
+    default:
+	console_printf("Unexpected token (%d) \'%s\'\n", token, g_tokenizer.last_lexical_unit);
+	return false;
+    }
+
+    return true;
+}
+
+
+static void
+cmd_display_msg_log(void)
+{
+    console_printf("ERROR: %s not implemented yet\n", __func__);
+}
+
+
+static bool parse_dmesg(void)
+{
+    token_t token = get_next_token(&g_tokenizer);
+
+    switch (token) {
+    case INVALID_TOKEN:
+	return false;
+
+    case END_OF_INPUT:
+	cmd_display_msg_log();
+	break;
+
+    default:
+	console_printf("Unexpected token (%d) \'%s\'\n", token, g_tokenizer.last_lexical_unit);
+	return false;
+    }
+
+    return true;
+}
+
+
+static void
+cmd_display_stack_trace(uintptr_t mem_addr)
+{
+    console_printf("ERROR: %s not implemented yet\n", __func__);
+}
+
+
+static bool
+parse_mem_address(uintptr_t *mem_address_p)
+{
+    console_printf("ERROR: %s not implemented yet\n", __func__);
+    return false;
+}
+
+
+static bool parse_stack(void)
+{
+    token_t token = get_next_token(&g_tokenizer);
+    uintptr_t mem_addr;
+
+    switch (token) {
+    case INVALID_TOKEN:
+	return false;
+
+    case END_OF_INPUT:
+    case HELP:
+	console_printf("\tstack <execution context address>\n\n");
+	break;
+
+    case HEXADECIMAL_NUMBER:
+	if (!parse_mem_address(&mem_addr)) {
+	    return false;
+	}
+
+	cmd_display_stack_trace(mem_addr);
+	break;
+
+    default:
+	console_printf("Unexpected token (%d) \'%s\'\n", token, g_tokenizer.last_lexical_unit);
+	return false;
+    }
+
+    return true;
+}
 
 void
 rtos_parse_command_line(const char *cmd_line)
@@ -417,7 +776,7 @@ rtos_parse_command_line(const char *cmd_line)
 	    break;
 
 	case HELP:
-	    McRTOS_display_help();
+	    parse_help();
 	    break;
 
 	case REBOOT:
@@ -477,30 +836,6 @@ rtos_parse_command_line(const char *cmd_line)
 	    console_printf("Invalid command: %s\n", g_tokenizer.last_lexical_unit);
 	}
     }
-}
-
-
-static void
-McRTOS_display_help(void)
-{
-    console_printf(
-        "\nMcRTOS commands\n"
-        "\tclear - clear screen\n"
-        "\tcpu - Switch to the given CPU\n"
-        "\thelp - display this message\n"
-	"\tping - send ping to a given IP address\n"
-        "\treset - reset CPU\n"
-        "\tset - Set config option\n"
-        "\ttop - display McRTOS stats\n"
-        "\tversion - display McRTOS version\n");
-
-    for (int i = 0; i < g_McRTOS_p->rts_num_app_console_commands; i++) {
-        console_printf("\t%s - %s\n",
-            g_McRTOS_p->rts_app_console_commands_p[i].cmd_name_p,
-            g_McRTOS_p->rts_app_console_commands_p[i].cmd_description_p);
-    }
-
-    console_printf("\n");
 }
 
 

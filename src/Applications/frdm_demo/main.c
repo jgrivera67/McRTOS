@@ -38,7 +38,6 @@ static void demo_command(void);
 
 static fdc_error_t hello_world_thread_f(void *arg);
 static fdc_error_t accelerometer_thread_f(void *arg);
-static fdc_error_t ping_thread_f(void *arg);
 static fdc_error_t udp_server_thread_f(void *arg);
 static fdc_error_t udp_client_thread_f(void *arg);
 
@@ -102,15 +101,6 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
 
     [2] =
     {
-        .p_name_p = "ping thread",
-        .p_function_p = ping_thread_f,
-        .p_function_arg_p = (void *)&g_dest_ip_addr[0],
-        .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 2,
-        .p_thread_pp = NULL,
-    },
-
-    [3] =
-    {
         .p_name_p = "accelerometer thread",
         .p_function_p = accelerometer_thread_f,
         .p_function_arg_p = NULL,
@@ -118,8 +108,9 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
         .p_thread_pp = NULL,
     },
 
+#if 0
 #if BOARD_INSTANCE == 1
-    [4] =
+    [3] =
     {
         .p_name_p = "UDP server thread",
         .p_function_p = udp_server_thread_f,
@@ -128,7 +119,7 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
         .p_thread_pp = NULL,
     },
 #else
-    [4] =
+    [3] =
     {
         .p_name_p = "UDP client thread",
         .p_function_p = udp_client_thread_f,
@@ -136,6 +127,7 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
         .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 3,
         .p_thread_pp = NULL,
     },
+#endif
 #endif
 };
 
@@ -216,6 +208,7 @@ void app_hardware_stop(void)
 static
 void app_software_init(void)
 {
+#if 0 //??? Remove this
     static struct local_l3_end_point_config local_l3_end_points[] = {
 	[0] = {
 	    .ipv4_addr = { .bytes = { 192, 168, 8, 1 + BOARD_INSTANCE } },
@@ -225,6 +218,7 @@ void app_software_init(void)
     };
 
     C_ASSERT(ARRAY_SIZE(local_l3_end_points) == NET_MAX_LOCAL_L3_END_POINTS);
+#endif
 
     static const char g_app_version[] = "FRDM board ping application v0.1 "
 					"(board " STRINGIFY_LITERAL(BOARD_INSTANCE) ")";
@@ -239,10 +233,11 @@ void app_software_init(void)
         g_app_version, g_app_build_timestamp);
 
     g_app.led_color_mask = LED_COLOR_RED;
-    networking_init(local_l3_end_points);
+    networking_init();
 }
 
 
+#if 0 //???
 static bool
 ping_remote_ip_addr(const struct ipv4_address *dest_ip_addr_p, uint16_t seq_num)
 {
@@ -284,23 +279,13 @@ ping_remote_ip_addr(const struct ipv4_address *dest_ip_addr_p, uint16_t seq_num)
 	    return false;
     }
 }
+#endif
 
 
 static void
 demo_command(void)
 {
-    static uint16_t seq_num = 0;
-
-    /*
-     * TODO: parse command line to extract dest_ip_addr
-     */
-    struct ipv4_address dest_ip_addr = {
-	.bytes = { 192, 168, 8, 1 }
-    };
-
-    if (ping_remote_ip_addr(&dest_ip_addr, seq_num)) {
-	    seq_num ++;
-    };
+    console_printf("Demo command\n");
 }
 
 
@@ -361,6 +346,7 @@ exit:
 }
 
 
+#if 0 //???
 static fdc_error_t
 ping_thread_f(void *arg)
 {
@@ -387,6 +373,7 @@ ping_thread_f(void *arg)
 
     return fdc_error;
 }
+#endif
 
 
 /**

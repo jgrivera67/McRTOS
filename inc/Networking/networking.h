@@ -53,6 +53,15 @@ C_ASSERT(BOARD_INSTANCE == 1 || BOARD_INSTANCE == 2);
 #define NET_PACKET_DATA_BUFFER_SIZE \
 	ROUND_UP(ETHERNET_MAX_FRAME_SIZE, NET_PACKET_DATA_BUFFER_ALIGNMENT)
 
+/**
+ * Null IPv4 address (0.0.0.0)
+ */
+#define IPV4_NULL_ADDR	UINT32_C(0x0)
+
+/**
+ * Broadcast IPv4 address (255.255.255.255)
+ */
+#define IPV4_BORADCAST_ADDR UINT32_C(0xffffffff)
 
 /**
  * Number of entries for the IPv4 ARP cache table
@@ -1072,7 +1081,12 @@ static inline size_t net_get_udp_data_payload_length(struct network_packet *net_
 }
 
 
-void networking_init(struct local_l3_end_point_config local_l3_end_points[]);
+void networking_init(void);
+
+void
+net_set_local_ipv4_address(uint8_t local_l3_end_point_index,
+			   const struct ipv4_address *ip_addr_p,
+			   uint8_t subnet_prefix);
 
 struct network_packet *net_allocate_tx_packet(bool free_after_tx_complete);
 
@@ -1098,14 +1112,14 @@ net_create_local_l4_end_point(enum l4_protocols l4_protocol,
 	                      uint16_t l4_port,
 			      struct local_l4_end_point **local_l4_end_point_pp);
 
-void
+fdc_error_t
 net_send_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
 		           const struct ipv4_address *dest_ip_addr_p,
 			   uint16_t dest_port,
 		           struct network_packet *tx_packet_p,
 		           size_t data_payload_length);
 
-void
+fdc_error_t
 net_receive_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
 			      rtos_milliseconds_t timeout_ms,
 		              struct ipv4_address *source_ip_addr_p,
@@ -1119,19 +1133,19 @@ net_send_ipv4_tcp_segment(struct local_l4_end_point *local_l4_end_point_p,
 		          struct network_packet *tx_packet_p,
 		          size_t data_payload_length);
 
-void
+fdc_error_t
 net_send_ipv4_icmp_message(const struct ipv4_address *dest_ip_addr_p,
 		           struct network_packet *tx_packet_p,
 			   uint8_t msg_type,
 		           uint8_t msg_code,
 		           size_t data_payload_length);
 
-void
+fdc_error_t
 net_send_ipv4_ping_request(const struct ipv4_address *dest_ip_addr_p,
 			   uint16_t identifier,
 		           uint16_t seq_num);
 
-bool
+fdc_error_t
 net_receive_ipv4_ping_reply(rtos_milliseconds_t timeout_ms,
 			    struct ipv4_address *remote_ip_addr_p,
 			    uint16_t *identifier_p,
