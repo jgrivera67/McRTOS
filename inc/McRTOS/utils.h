@@ -223,6 +223,7 @@ char * signature_to_string(
 
 int strcmp(_IN_ const char *s1, _IN_ const char *s2);
 int strlen(_IN_ const char *s);
+void bzero(_INOUT_ uint8_t *buf, size_t len);
 
 static inline int to_lower(int c)
 {

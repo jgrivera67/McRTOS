@@ -293,7 +293,7 @@ parse_ip4_address(struct ipv4_address *ip_addr_p)
     ip_addr_p->bytes[3] = value;
 
     if (ip_addr_p->value == IPV4_NULL_ADDR ||
-        ip_addr_p->value == IPV4_BORADCAST_ADDR) {
+        ip_addr_p->value == IPV4_BROADCAST_ADDR) {
 	console_printf("Invalid IP address %u.%u.%u.%u\n",
 		       ip_addr_p->bytes[0],
 		       ip_addr_p->bytes[1],

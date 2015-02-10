@@ -212,6 +212,66 @@ net_rx_packet_queue_init(struct local_l3_end_point *local_l3_end_point_p)
 }
 
 
+static void
+net_send_ipv4_dhcp_discovery(struct local_l3_end_point *local_l3_end_point_p)
+{
+    fdc_error_t fdc_error;
+    struct local_l4_end_point *client_end_point_p;
+
+    fdc_error = net_create_local_l4_end_point(TRANSPORT_PROTO_UDP,
+					      DHCP_UDP_CLIENT_PORT,
+					      &client_end_point_p);
+    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+
+    struct network_packet *tx_packet_p = net_allocate_tx_packet(false);
+
+    struct dhcp_discover_message *dhcp_discovery_msg_p =
+	net_get_udp_data_payload_area(tx_packet_p);
+
+    dhcp_discovery_msg_p->op = 0x1;
+    dhcp_discovery_msg_p->hardware_type = 0x1; /* Ethernet */
+    dhcp_discovery_msg_p->hw_addr_len = 0x6;
+    dhcp_discovery_msg_p->hops = 0x0;
+    dhcp_discovery_msg_p->transaction_id = get_cpu_clock_cycles();
+    dhcp_discovery_msg_p->seconds = 0x0;
+    dhcp_discovery_msg_p->flags = 0x0;
+    dhcp_discovery_msg_p->client_ip_addr.value = IPV4_NULL_ADDR;
+    dhcp_discovery_msg_p->your_ip_addr.value = IPV4_NULL_ADDR;
+    dhcp_discovery_msg_p->next_server_ip_addr.value = IPV4_NULL_ADDR;
+    dhcp_discovery_msg_p->relay_agent_ip_addr.value = IPV4_NULL_ADDR;
+    COPY_MAC_ADDRESS(&dhcp_discovery_msg_p->client_mac_addr,
+		     &local_l3_end_point_p->enet_device_p->mac_address);
+    bzero(dhcp_discovery_msg_p->zero_filled,
+	  sizeof dhcp_discovery_msg_p->zero_filled);
+
+    dhcp_discovery_msg_p->magic_cookie = 0x63825363; /* DHCP */
+    dhcp_discovery_msg_p->options[0] = 53; /* option 1 type: DHCP message type */
+    dhcp_discovery_msg_p->options[1] = 1; /* option length */
+    dhcp_discovery_msg_p->options[2] = 0x01; /* option value: DHCPDISCOVER */
+
+    dhcp_discovery_msg_p->options[3] = 55; /* option 2 type: parameter request list */
+    dhcp_discovery_msg_p->options[4] = 11; /* option length */
+    dhcp_discovery_msg_p->options[5] = 0x01; /* option value[0]: subnet mask */
+    dhcp_discovery_msg_p->options[6] = 0x1c; /* option value[1]: broadcast address */
+    dhcp_discovery_msg_p->options[7] = 0x02; /* option value[2]: time offset */
+    dhcp_discovery_msg_p->options[8] = 0x03; /* option value[3]: router */
+    dhcp_discovery_msg_p->options[9] = 0x0f; /* option value[4]: domain name */
+    dhcp_discovery_msg_p->options[10] = 0x06; /* option value[5]: domain name server */
+    dhcp_discovery_msg_p->options[11] = 0x77; /* option value[6]: domain search */
+    dhcp_discovery_msg_p->options[12] = 0x0c; /* option value[7]: host name */
+    dhcp_discovery_msg_p->options[13] = 0x1a; /* option value[8]: interface MTU */
+    dhcp_discovery_msg_p->options[14] = 0x79; /* option value[9]: classless static route */
+    dhcp_discovery_msg_p->options[15] = 0x2a; /* option value[10]: network time protocol servers */
+
+    struct ipv4_address dest_ip_addr = { .value = IPV4_BROADCAST_ADDR };
+
+    net_send_ipv4_udp_datagram(client_end_point_p, &dest_ip_addr,
+			       DHCP_UDP_SERVER_PORT,
+			       tx_packet_p,
+			       sizeof(struct dhcp_discover_message) + 16);
+}
+
+
 /**
  * Initialize networking subsystem
  */
@@ -259,11 +319,6 @@ networking_init(void)
 	    &local_l3_end_point_p->ipv4.rx_icmpv4_packet_queue);
 
 	/*
-	 * Activate network interface (ENET device):
-	 */
-	enet_start(local_l3_end_point_p->enet_device_p, local_l3_end_point_p);
-
-	/*
 	 * Initialize ARP cache for each local network end point
 	 */
 	arp_cache_init(&local_l3_end_point_p->ipv4.arp_cache);
@@ -285,6 +340,16 @@ networking_init(void)
 
 	    console_printf("CPU core %u: %s started\n", cpu_id, threads[i].p_name_p);
 	}
+
+	/*
+	 * Activate network interface (ENET device):
+	 */
+	enet_start(local_l3_end_point_p->enet_device_p, local_l3_end_point_p);
+
+	/*
+	 * Send DHCP discovery message:
+	 */
+	net_send_ipv4_dhcp_discovery(local_l3_end_point_p);
     }
 
     rtos_k_queue_init(
@@ -294,7 +359,7 @@ networking_init(void)
 
     rtos_k_mutex_init("local_l4_end_points mutex", &g_networking.local_l4_end_points_mutex);
     rtos_k_mutex_init("expecting_ping_reply mutex", &g_networking.expecting_ping_reply_mutex);
-    rtos_k_condvar_init("ping_reply_recceived condvar", &g_networking.ping_reply_recceived_condvar);
+    rtos_k_condvar_init("ping_reply_received condvar", &g_networking.ping_reply_recceived_condvar);
     g_networking.initialized = true;
 }
 

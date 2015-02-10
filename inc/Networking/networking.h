@@ -61,7 +61,7 @@ C_ASSERT(BOARD_INSTANCE == 1 || BOARD_INSTANCE == 2);
 /**
  * Broadcast IPv4 address (255.255.255.255)
  */
-#define IPV4_BORADCAST_ADDR UINT32_C(0xffffffff)
+#define IPV4_BROADCAST_ADDR UINT32_C(0xffffffff)
 
 /**
  * Number of entries for the IPv4 ARP cache table
@@ -215,6 +215,16 @@ C_ASSERT(BOARD_INSTANCE == 1 || BOARD_INSTANCE == 2);
  * to this value are ephemeral ports.
  */
 #define NET_FIRST_EPHEMERAL_PORT 49152
+
+/**
+ * DHCP client port
+ */
+#define DHCP_UDP_CLIENT_PORT	68
+
+/**
+ * DHCP server port
+ */
+#define DHCP_UDP_SERVER_PORT	67
 
 /**
  * Ethernet MAC address in network byte order
@@ -576,6 +586,27 @@ struct icmpv4_echo_message {
 
 C_ASSERT(offsetof(struct icmpv4_echo_message, identifier) ==
 	 sizeof(struct icmpv4_header));
+
+/**
+ * IPv4 DHCPDISCOVER message layout
+ */
+struct dhcp_discover_message {
+	uint8_t op;
+	uint8_t hardware_type;
+	uint8_t hw_addr_len;
+	uint8_t hops;
+	uint32_t transaction_id;
+	uint16_t seconds;
+	uint16_t flags;
+	struct ipv4_address client_ip_addr;
+	struct ipv4_address your_ip_addr;
+	struct ipv4_address next_server_ip_addr;
+	struct ipv4_address relay_agent_ip_addr;
+	struct ethernet_mac_address client_mac_addr;
+	uint8_t zero_filled[10 + 192];
+	uint32_t magic_cookie;
+	uint8_t options[];
+};
 
 /**
  * IPv6 ICMPv6 header layout

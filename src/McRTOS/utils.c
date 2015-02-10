@@ -949,3 +949,16 @@ strlen(_IN_ const char *s)
 
    return len;
 }
+
+void
+bzero(_INOUT_ uint8_t *buf, size_t len)
+{
+	FDC_ASSERT_VALID_RAM_POINTER(buf, 1);
+
+	uint8_t *end = buf + len;
+
+	FDC_ASSERT_VALID_RAM_POINTER(end, 1);
+	for (uint8_t *p = buf; buf != end; p ++) {
+	   *p = 0x00;
+	}
+}
