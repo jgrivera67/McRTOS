@@ -33,6 +33,8 @@ static fdc_error_t net_receive_thread_f(void *arg);
 
 static fdc_error_t net_icmpv4_receive_thread_f(void *arg);
 
+static fdc_error_t net_dhcpv4_client_thread_f(void *arg);
+
 static const struct ethernet_mac_address enet_broadcast_mac_addr = {
     .bytes = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff }
 };
@@ -213,19 +215,13 @@ net_rx_packet_queue_init(struct local_l3_end_point *local_l3_end_point_p)
 
 
 static void
-net_send_ipv4_dhcp_discovery(struct local_l3_end_point *local_l3_end_point_p)
+net_send_ipv4_dhcp_discovery(struct local_l3_end_point *local_l3_end_point_p,
+                             struct local_l4_end_point *client_end_point_p)
 {
     fdc_error_t fdc_error;
-    struct local_l4_end_point *client_end_point_p;
+    struct network_packet *tx_packet_p = net_allocate_tx_packet(true);
 
-    fdc_error = net_create_local_l4_end_point(TRANSPORT_PROTO_UDP,
-					      DHCP_UDP_CLIENT_PORT,
-					      &client_end_point_p);
-    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
-
-    struct network_packet *tx_packet_p = net_allocate_tx_packet(false);
-
-    struct dhcp_discover_message *dhcp_discovery_msg_p =
+    struct dhcp_message *dhcp_discovery_msg_p =
 	net_get_udp_data_payload_area(tx_packet_p);
 
     dhcp_discovery_msg_p->op = 0x1;
@@ -268,7 +264,61 @@ net_send_ipv4_dhcp_discovery(struct local_l3_end_point *local_l3_end_point_p)
     net_send_ipv4_udp_datagram(client_end_point_p, &dest_ip_addr,
 			       DHCP_UDP_SERVER_PORT,
 			       tx_packet_p,
-			       sizeof(struct dhcp_discover_message) + 16);
+			       sizeof(struct dhcp_message) + 16);
+}
+
+
+static void
+net_send_ipv4_dhcp_request(struct local_l3_end_point *local_l3_end_point_p,
+                           struct local_l4_end_point *client_end_point_p,
+                           struct dhcp_message *dhcp_offer_msg_p)
+{
+    fdc_error_t fdc_error;
+    struct network_packet *tx_packet_p = net_allocate_tx_packet(true);
+
+    struct dhcp_message *dhcp_request_msg_p =
+	net_get_udp_data_payload_area(tx_packet_p);
+
+    *dhcp_request_msg_p = *dhcp_offer_msg_p;
+    dhcp_request_msg_p->op = 0x1;
+    dhcp_request_msg_p->options[0] = 53; /* option 1 type: DHCP message type */
+    dhcp_request_msg_p->options[1] = 1; /* option length */
+    dhcp_request_msg_p->options[2] = 0x03; /* option value: DHCPREQUEST */
+
+    dhcp_request_msg_p->options[3] = 54; /* option 2 type: DHCP server identifier */
+    dhcp_request_msg_p->options[4] = 4; /* option length */
+    dhcp_request_msg_p->options[5] = dhcp_offer_msg_p->next_server_ip_addr.bytes[0]; /* option value[0] */
+    dhcp_request_msg_p->options[6] = dhcp_offer_msg_p->next_server_ip_addr.bytes[1]; /* option value[1] */
+    dhcp_request_msg_p->options[7] = dhcp_offer_msg_p->next_server_ip_addr.bytes[2]; /* option value[2] */
+    dhcp_request_msg_p->options[8] = dhcp_offer_msg_p->next_server_ip_addr.bytes[3]; /* option value[3] */
+
+    dhcp_request_msg_p->options[9] = 50; /* option 3 type: Requested IP address */
+    dhcp_request_msg_p->options[10] = 4; /* option length */
+    dhcp_request_msg_p->options[11] = dhcp_offer_msg_p->your_ip_addr.bytes[0]; /* option value[0] */
+    dhcp_request_msg_p->options[12] = dhcp_offer_msg_p->your_ip_addr.bytes[1]; /* option value[1] */
+    dhcp_request_msg_p->options[13] = dhcp_offer_msg_p->your_ip_addr.bytes[2]; /* option value[2] */
+    dhcp_request_msg_p->options[14] = dhcp_offer_msg_p->your_ip_addr.bytes[3]; /* option value[3] */
+
+    dhcp_request_msg_p->options[15] = 55; /* option 2 type: parameter request list */
+    dhcp_request_msg_p->options[16] = 11; /* option length */
+    dhcp_request_msg_p->options[17] = 0x01; /* option value[0]: subnet mask */
+    dhcp_request_msg_p->options[18] = 0x1c; /* option value[1]: broadcast address */
+    dhcp_request_msg_p->options[19] = 0x02; /* option value[2]: time offset */
+    dhcp_request_msg_p->options[20] = 0x03; /* option value[3]: router */
+    dhcp_request_msg_p->options[21] = 0x0f; /* option value[4]: domain name */
+    dhcp_request_msg_p->options[22] = 0x06; /* option value[5]: domain name server */
+    dhcp_request_msg_p->options[23] = 0x77; /* option value[6]: domain search */
+    dhcp_request_msg_p->options[24] = 0x0c; /* option value[7]: host name */
+    dhcp_request_msg_p->options[25] = 0x1a; /* option value[8]: interface MTU */
+    dhcp_request_msg_p->options[26] = 0x79; /* option value[9]: classless static route */
+    dhcp_request_msg_p->options[27] = 0x2a; /* option value[10]: network time protocol servers */
+
+    struct ipv4_address dest_ip_addr = { .value = IPV4_BROADCAST_ADDR };
+
+    net_send_ipv4_udp_datagram(client_end_point_p, &dest_ip_addr,
+			       DHCP_UDP_SERVER_PORT,
+			       tx_packet_p,
+			       sizeof(struct dhcp_message) + 28);
 }
 
 
@@ -289,6 +339,13 @@ networking_init(void)
 	[1] = {
 	    .p_name_p = "ICMPv4 packet receive thread",
 	    .p_function_p = net_icmpv4_receive_thread_f,
+	    .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 2,
+	    .p_thread_pp = NULL,
+	},
+
+        [2] = {
+	    .p_name_p = "DHCPv4 client thread",
+	    .p_function_p = net_dhcpv4_client_thread_f,
 	    .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 2,
 	    .p_thread_pp = NULL,
 	},
@@ -345,11 +402,6 @@ networking_init(void)
 	 * Activate network interface (ENET device):
 	 */
 	enet_start(local_l3_end_point_p->enet_device_p, local_l3_end_point_p);
-
-	/*
-	 * Send DHCP discovery message:
-	 */
-	net_send_ipv4_dhcp_discovery(local_l3_end_point_p);
     }
 
     rtos_k_queue_init(
@@ -1678,4 +1730,181 @@ net_icmpv4_receive_thread_f(void *arg)
     rtos_exit_privileged_mode();
     return fdc_error;
 }
+
+
+static void
+net_set_local_ipv4_addr_from_dhcp(struct local_l3_end_point *local_l3_end_point_p,
+			          struct dhcp_message *dhcp_ack_msg_p,
+                                  size_t dhcp_ack_msg_size)
+{
+    uint32_t subnet_mask = 0;
+    uint32_t lease_time = 0;
+    struct ipv4_address router_ip_addr = { .value = IPV4_NULL_ADDR };
+    struct ipv4_address *local_ip_addr_p = &dhcp_ack_msg_p->your_ip_addr;
+    size_t options_len = dhcp_ack_msg_size - sizeof(struct dhcp_message);
+    unsigned int expected_options_found = 0;
+
+    FDC_ASSERT(g_networking.initialized, 0, 0);
+    FDC_ASSERT(local_ip_addr_p->value != IPV4_NULL_ADDR, local_ip_addr_p->value, 0);
+
+    /*
+     * Extract DHCP options:
+     */
+    for (unsigned int i = 0; i < options_len; ) {
+        if (dhcp_ack_msg_p->options[i] == 1) {          /* subnet mask option */
+            FDC_ASSERT(dhcp_ack_msg_p->options[i + 1] == 4,
+                       dhcp_ack_msg_p->options[i + 1],
+                       dhcp_ack_msg_p->options[i]);
+
+            uint8_t *subnet_mask_bytes_p = (uint8_t *)&subnet_mask;
+
+            subnet_mask_bytes_p[0] = dhcp_ack_msg_p->options[i + 2];
+            subnet_mask_bytes_p[1] = dhcp_ack_msg_p->options[i + 3];
+            subnet_mask_bytes_p[2] = dhcp_ack_msg_p->options[i + 4];
+            subnet_mask_bytes_p[3] = dhcp_ack_msg_p->options[i + 5];
+
+            expected_options_found ++;
+        } else if (dhcp_ack_msg_p->options[i] == 3) {   /* router option */
+            FDC_ASSERT(dhcp_ack_msg_p->options[i + 1] == 4,
+                       dhcp_ack_msg_p->options[i + 1],
+                       dhcp_ack_msg_p->options[i]);
+
+            router_ip_addr.bytes[0] = dhcp_ack_msg_p->options[i + 2];
+            router_ip_addr.bytes[1] = dhcp_ack_msg_p->options[i + 3];
+            router_ip_addr.bytes[2] = dhcp_ack_msg_p->options[i + 4];
+            router_ip_addr.bytes[3] = dhcp_ack_msg_p->options[i + 5];
+
+            expected_options_found ++;
+        } else if (dhcp_ack_msg_p->options[i] == 51) {  /* lease time option */
+            FDC_ASSERT(dhcp_ack_msg_p->options[i + 1] == 4,
+                       dhcp_ack_msg_p->options[i + 1],
+                       dhcp_ack_msg_p->options[i]);
+
+            uint8_t *lease_time_bytes_p = (uint8_t *)&lease_time;
+
+            lease_time_bytes_p[0] = dhcp_ack_msg_p->options[i + 2];
+            lease_time_bytes_p[1] = dhcp_ack_msg_p->options[i + 3];
+            lease_time_bytes_p[2] = dhcp_ack_msg_p->options[i + 4];
+            lease_time_bytes_p[3] = dhcp_ack_msg_p->options[i + 5];
+
+            lease_time = ntoh32(lease_time);
+            expected_options_found ++;
+        } 
+
+        /*
+         * Skip to next option:
+         */
+        i += dhcp_ack_msg_p->options[i + 1];
+    }
+
+    FDC_ASSERT(expected_options_found == 3, expected_options_found, 0);
+
+    local_l3_end_point_p->ipv4.local_ip_addr = *local_ip_addr_p;
+    local_l3_end_point_p->ipv4.subnet_mask = subnet_mask;
+    local_l3_end_point_p->ipv4.default_gateway_ip_addr = router_ip_addr;
+    local_l3_end_point_p->ipv4.dhcp_lease_time = lease_time;
+
+    /*
+     * Send gratuitous ARP request (to catch if someone else is using the same
+     * IP address):
+     */
+    net_send_arp_request(local_l3_end_point_p->enet_device_p,
+			 &local_l3_end_point_p->ipv4.local_ip_addr,
+			 &local_l3_end_point_p->ipv4.local_ip_addr);
+}
+
+
+/**
+ * DHCPv4 client thread
+ */
+static fdc_error_t
+net_dhcpv4_client_thread_f(void *arg)
+{
+    enum dhcp_client_states {
+        DHCP_OFFER_EXPECTED,
+        DHCP_ACKNOWLEDGE_EXPECTED,
+        DHCP_LEASE_GRANTED,
+    } state;
+
+    fdc_error_t fdc_error;
+    struct network_packet *rx_packet_p = NULL;
+    struct ipv4_address server_ip_addr;
+    uint16_t server_port;
+    struct dhcp_message *dhcp_msg_p;
+    size_t dhcp_msg_size;
+    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
+    rtos_milliseconds_t timeout_ms = 0;
+    struct local_l3_end_point *local_l3_end_point_p =
+	(struct local_l3_end_point *)arg;
+
+    rtos_enter_privileged_mode();
+
+    struct local_l4_end_point *client_end_point_p;
+
+    fdc_error = net_create_local_l4_end_point(TRANSPORT_PROTO_UDP,
+					      DHCP_UDP_CLIENT_PORT,
+					      &client_end_point_p);
+    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+
+    net_send_ipv4_dhcp_discovery(local_l3_end_point_p, client_end_point_p);
+    state = DHCP_UDP_CLIENT_PORT;
+
+    for ( ; ; ) {
+        /*
+         * Receive DHCP message:
+         */
+        net_receive_ipv4_udp_datagram(client_end_point_p,
+                                      timeout_ms,
+                                      &server_ip_addr,
+                                      &server_port,
+                                      &rx_packet_p);
+
+        FDC_ASSERT(rx_packet_p != NULL, 0, 0);
+        FDC_ASSERT(server_port == DHCP_UDP_SERVER_PORT,
+                   server_port, 0);
+
+        DEBUG_PRINTF("DHCP client received offer message from %u.%u.%u.%u\n",
+                     server_ip_addr.bytes[0],
+                     server_ip_addr.bytes[1],
+                     server_ip_addr.bytes[2],
+                     server_ip_addr.bytes[3]);
+
+        dhcp_msg_size = net_get_udp_data_payload_length(rx_packet_p);
+        FDC_ASSERT(dhcp_msg_size >= sizeof(struct dhcp_message), dhcp_msg_size, 0);
+        switch (state) {
+        case DHCP_OFFER_EXPECTED:
+            dhcp_msg_p = net_get_udp_data_payload_area(rx_packet_p);
+            FDC_ASSERT(dhcp_msg_p->op == 0x2, dhcp_msg_p->op, 0);
+            FDC_ASSERT(dhcp_msg_p->options[2] == 0x2, dhcp_msg_p->options[2], 0);
+            net_send_ipv4_dhcp_request(local_l3_end_point_p, client_end_point_p,
+                                       dhcp_msg_p);
+            state = DHCP_ACKNOWLEDGE_EXPECTED;
+            break;
+
+        case DHCP_ACKNOWLEDGE_EXPECTED:
+            dhcp_msg_p = net_get_udp_data_payload_area(rx_packet_p);
+            FDC_ASSERT(dhcp_msg_p->op == 0x2, dhcp_msg_p->op, 0);
+            FDC_ASSERT(dhcp_msg_p->options[2] == 0x5, dhcp_msg_p->options[2], 0);
+            net_set_local_ipv4_addr_from_dhcp(local_l3_end_point_p, dhcp_msg_p,
+                                              dhcp_msg_size);
+            state = DHCP_LEASE_GRANTED;
+            break;
+
+        default:
+            /* Drop packet */
+            DEBUG_PRINTF("Dropped DHCP message (DHCP client state: %d)\n",
+                         state);
+        }
+
+        net_recycle_rx_packet(rx_packet_p);
+    }
+
+    fdc_error = CAPTURE_FDC_ERROR(
+        "thread should not have terminated",
+        cpu_id, rtos_thread_self());
+
+    rtos_exit_privileged_mode();
+    return fdc_error;
+}
+
 

@@ -588,9 +588,9 @@ C_ASSERT(offsetof(struct icmpv4_echo_message, identifier) ==
 	 sizeof(struct icmpv4_header));
 
 /**
- * IPv4 DHCPDISCOVER message layout
+ * IPv4 DHCP message layout
  */
-struct dhcp_discover_message {
+struct dhcp_message {
 	uint8_t op;
 	uint8_t hardware_type;
 	uint8_t hw_addr_len;
@@ -806,6 +806,11 @@ struct ipv4_end_point {
      * Local IPv4 address
      */
     struct ipv4_address default_gateway_ip_addr;
+
+    /**
+     * DHCP lease time in seconds
+     */
+    uint32_t dhcp_lease_time;
 
     /**
      * Sequence number to use as the 'identification' field of the next

@@ -199,7 +199,7 @@ CFLAGS  = 	$(MCFLAGS) $(OPT) -gdwarf-2 \
 
 LDFLAGS = 	$(MCFLAGS) -nostartfiles -T$(LDSCRIPT) \
 		-Wl,-Map=$(PLATFORM).map,--cref,--no-warn-mismatch \
-		-nostdlib
+		#-nostdlib
 
 vpath %.h $(include_dirs)
 vpath %.c $(SOURCE_DIR)
