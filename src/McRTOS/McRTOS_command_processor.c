@@ -361,7 +361,7 @@ parse_ip4_address_and_subnet_prefix(void)
 	    return false;
 	}
 
-	net_set_local_ipv4_address(0, &ip_addr, subnet_prefix);
+	net_set_local_ipv4_address(&ip_addr, subnet_prefix);
 	break;
 
     default:
@@ -771,8 +771,22 @@ rtos_parse_command_line(const char *cmd_line)
 	}
 
 	switch (token) {
+	case BREAK_INPUT:
+	    __disable_irq();
+	    rtos_run_debugger(NULL, NULL);
+	    __enable_irq();
+	    break;
+
 	case CLEAR:
 	    console_clear();
+	    break;
+
+	case CPU:
+	    McRTOS_change_console_cpu((SOC_GET_CURRENT_CPU_ID() + 1) % SOC_NUM_CPU_CORES);
+	    break;
+
+	case DMESG:
+	    parse_dmesg();
 	    break;
 
 	case HELP:
@@ -784,25 +798,15 @@ rtos_parse_command_line(const char *cmd_line)
 	    /*UNREACHABLE*/
 	    break;
 
-	case TOP:
-	    McRTOS_display_stats();
-	    break;
-
-	case BREAK_INPUT:
-	    __disable_irq();
-	    rtos_run_debugger(NULL, NULL);
-	    __enable_irq();
-	    break;
-
-	case CPU:
-	    McRTOS_change_console_cpu((SOC_GET_CURRENT_CPU_ID() + 1) % SOC_NUM_CPU_CORES);
-	    break;
-
 	case SET:
 	    if (!parse_set()) {
 		return;
 	    }
 
+	    break;
+
+	case TOP:
+	    McRTOS_display_stats();
 	    break;
 
 	case VERSION:

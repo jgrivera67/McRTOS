@@ -53,6 +53,13 @@ C_ASSERT(BOARD_INSTANCE == 1 || BOARD_INSTANCE == 2);
 #define NET_PACKET_DATA_BUFFER_SIZE \
 	ROUND_UP(ETHERNET_MAX_FRAME_SIZE, NET_PACKET_DATA_BUFFER_ALIGNMENT)
 
+#define NET_MAX_IPV4_PACKET_PAYLOAD_SIZE \
+        (NET_PACKET_DATA_BUFFER_SIZE - \
+         (sizeof(struct ethernet_header) + sizeof(struct ipv4_header)))
+
+#define NET_MAX_UDP_PACKET_PAYLOAD_SIZE \
+        (NET_MAX_IPV4_PACKET_PAYLOAD_SIZE - sizeof(struct udp_header))
+
 /**
  * Null IPv4 address (0.0.0.0)
  */
@@ -187,13 +194,8 @@ C_ASSERT(BOARD_INSTANCE == 1 || BOARD_INSTANCE == 2);
 #define GET_IPV4_DATA_PAYLOAD_AREA(_net_packet_p)   \
         ((void *)((_net_packet_p)->data_buffer +    \
 		  (sizeof(struct ethernet_header) + \
-	  sizeof(struct ipv4_header))))
+                   sizeof(struct ipv4_header))))
 
-
-/**
- * Maximum number of local layer-3 end points (network interfaces)
- */
-#define NET_MAX_LOCAL_L3_END_POINTS 1
 
 /**
  * Maximum number of local layer-4 end points
@@ -203,7 +205,7 @@ C_ASSERT(BOARD_INSTANCE == 1 || BOARD_INSTANCE == 2);
 /**
  * Maximum number of Tx packet buffers
  */
-#define NET_MAX_TX_PACKETS   (8 * NET_MAX_LOCAL_L3_END_POINTS)
+#define NET_MAX_TX_PACKETS   8
 
 /**
  * Maximum number of Rx packet buffers per layer-3 end point
@@ -1031,15 +1033,18 @@ struct networking {
     struct network_packet tx_packets[NET_MAX_TX_PACKETS];
 
     /**
-     * Local layer-3 end points (one per NIC)
+     * Local layer-3 end point
      */
-    struct local_l3_end_point local_l3_end_points[NET_MAX_LOCAL_L3_END_POINTS];
+    struct local_l3_end_point local_l3_end_point;
 
     /**
      * Local layer-4 end points
      */
     struct local_l4_end_point local_l4_end_points[NET_MAX_LOCAL_L4_END_POINTS];
 };
+
+C_ASSERT(NET_MAX_IPV4_PACKET_PAYLOAD_SIZE <=
+         UINT16_MAX - sizeof(struct ipv4_header));
 
 /**
  * Invert byte order of a 16-bit value
@@ -1120,8 +1125,7 @@ static inline size_t net_get_udp_data_payload_length(struct network_packet *net_
 void networking_init(void);
 
 void
-net_set_local_ipv4_address(uint8_t local_l3_end_point_index,
-			   const struct ipv4_address *ip_addr_p,
+net_set_local_ipv4_address(const struct ipv4_address *ip_addr_p,
 			   uint8_t subnet_prefix);
 
 struct network_packet *net_allocate_tx_packet(bool free_after_tx_complete);

@@ -194,6 +194,7 @@ CFLAGS  = 	$(MCFLAGS) $(OPT) -gdwarf-2 \
 		-Wstack-usage=184 \
 		-Wundef \
 		-Wdouble-promotion \
+		-ffreestanding \
 		$(CPPFLAGS) \
 		${COMMON_CFLAGS} ${EXTRA_CFLAGS}
 

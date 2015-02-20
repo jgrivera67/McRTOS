@@ -16,6 +16,7 @@
 
 #pragma GCC diagnostic ignored "-Wunused-variable" // ???
 #pragma GCC diagnostic ignored "-Wunused-parameter" // ???
+#pragma GCC diagnostic ignored "-Wunused-function" // ???
 
 #ifdef NET_TRACE
 #define NET_TRACE_RECEIVED_ARP_PACKET(_packet_p) \
@@ -48,17 +49,15 @@ static struct networking g_networking = {
     .next_udp_ephemeral_port = NET_FIRST_EPHEMERAL_PORT,
     .next_tcp_ephemeral_port = NET_FIRST_EPHEMERAL_PORT,
     .next_free_l4_end_point_p = &g_networking.local_l4_end_points[0],
-    .local_l3_end_points = {
-	[0] = {
-	    .signature = LOCAL_L3_END_POINT_SIGNATURE,
-	    .enet_device_p = &g_enet_device0,
-	    .ipv4 = {
-		.local_ip_addr.value = IPV4_NULL_ADDR,
-		.subnet_mask = 0x0,
-		.default_gateway_ip_addr.value = IPV4_NULL_ADDR,
-		.next_tx_ip_packet_seq_num = 0,
-	    },
-	},
+    .local_l3_end_point = {
+        .signature = LOCAL_L3_END_POINT_SIGNATURE,
+        .enet_device_p = &g_enet_device0,
+        .ipv4 = {
+            .local_ip_addr.value = IPV4_NULL_ADDR,
+            .subnet_mask = 0x0,
+            .default_gateway_ip_addr.value = IPV4_NULL_ADDR,
+            .next_tx_ip_packet_seq_num = 0,
+        },
     },
 };
 
@@ -237,6 +236,7 @@ net_send_ipv4_dhcp_discovery(struct local_l3_end_point *local_l3_end_point_p,
     dhcp_discovery_msg_p->relay_agent_ip_addr.value = IPV4_NULL_ADDR;
     COPY_MAC_ADDRESS(&dhcp_discovery_msg_p->client_mac_addr,
 		     &local_l3_end_point_p->enet_device_p->mac_address);
+    
     bzero(dhcp_discovery_msg_p->zero_filled,
 	  sizeof dhcp_discovery_msg_p->zero_filled);
 
@@ -362,47 +362,28 @@ networking_init(void)
     net_tx_packet_pool_init();
 
     /*
-     * Initialize local network end points:
+     * Initialize local network end point:
      */
-    for (unsigned int i = 0; i < ARRAY_SIZE(g_networking.local_l3_end_points); i ++) {
-	struct local_l3_end_point *local_l3_end_point_p =
-	    &g_networking.local_l3_end_points[i];
+    struct local_l3_end_point *local_l3_end_point_p =
+	    &g_networking.local_l3_end_point;
 
-	net_rx_packet_queue_init(local_l3_end_point_p);
+    net_rx_packet_queue_init(local_l3_end_point_p);
 
-	rtos_k_queue_init(
-	    "ICMPv4 incoming packet queue",
-	    true,
-	    &local_l3_end_point_p->ipv4.rx_icmpv4_packet_queue);
+    rtos_k_queue_init(
+        "ICMPv4 incoming packet queue",
+        true,
+        &local_l3_end_point_p->ipv4.rx_icmpv4_packet_queue);
 
-	/*
-	 * Initialize ARP cache for each local network end point
-	 */
-	arp_cache_init(&local_l3_end_point_p->ipv4.arp_cache);
-	//TODO: Init IPv6 neighbor cache
+    /*
+     * Initialize ARP cache for each local network end point
+     */
+    arp_cache_init(&local_l3_end_point_p->ipv4.arp_cache);
+    //TODO: Init IPv6 neighbor cache
 
-	/*
-	 * Create threads for this layer-3 end point:
-	 */
-	for (unsigned int i = 0; i < ARRAY_SIZE(threads); i ++) {
-	    threads[i].p_function_arg_p = (void *)local_l3_end_point_p;
-	    fdc_error = rtos_k_create_thread(&threads[i]);
-	    if (fdc_error != 0) {
-		console_printf(
-		    "CPU core %u: *** Error creating application thread '%s' ***\n",
-		    cpu_id, threads[i].p_name_p);
-
-		fatal_error_handler(fdc_error);
-	    }
-
-	    console_printf("CPU core %u: %s started\n", cpu_id, threads[i].p_name_p);
-	}
-
-	/*
-	 * Activate network interface (ENET device):
-	 */
-	enet_start(local_l3_end_point_p->enet_device_p, local_l3_end_point_p);
-    }
+    /*
+     * Activate network interface (ENET device):
+     */
+    enet_start(local_l3_end_point_p->enet_device_p, local_l3_end_point_p);
 
     rtos_k_queue_init(
 	"Incoming IPv4 ping reply packet queue",
@@ -413,25 +394,39 @@ networking_init(void)
     rtos_k_mutex_init("expecting_ping_reply mutex", &g_networking.expecting_ping_reply_mutex);
     rtos_k_condvar_init("ping_reply_received condvar", &g_networking.ping_reply_recceived_condvar);
     g_networking.initialized = true;
+
+    /*
+     * Create threads for this layer-3 end point:
+     */
+    for (unsigned int i = 0; i < ARRAY_SIZE(threads); i ++) {
+        threads[i].p_function_arg_p = (void *)local_l3_end_point_p;
+        fdc_error = rtos_k_create_thread(&threads[i]);
+        if (fdc_error != 0) {
+            console_printf(
+                "CPU core %u: *** Error creating application thread '%s' ***\n",
+                cpu_id, threads[i].p_name_p);
+
+            fatal_error_handler(fdc_error);
+        }
+
+        console_printf("CPU core %u: %s started\n", cpu_id, threads[i].p_name_p);
+    }
 }
 
 
 /**
- * Set IPv4 address for the given local layer-3 end point
+ * Set IPv4 address for the local layer-3 end point
  */
 void
-net_set_local_ipv4_address(uint8_t local_l3_end_point_index,
-			   const struct ipv4_address *ip_addr_p,
+net_set_local_ipv4_address(const struct ipv4_address *ip_addr_p,
 			   uint8_t subnet_prefix)
 {
     FDC_ASSERT(g_networking.initialized, 0, 0);
-    FDC_ASSERT(local_l3_end_point_index < NET_MAX_LOCAL_L3_END_POINTS,
-	       local_l3_end_point_index , NET_MAX_LOCAL_L3_END_POINTS);
     FDC_ASSERT(ip_addr_p->value != IPV4_NULL_ADDR, ip_addr_p->value, 0);
     FDC_ASSERT(subnet_prefix < 32, subnet_prefix, 0);
 
     struct local_l3_end_point *local_l3_end_point_p =
-	 &g_networking.local_l3_end_points[local_l3_end_point_index];
+	 &g_networking.local_l3_end_point;
 
     local_l3_end_point_p->ipv4.local_ip_addr = *ip_addr_p;
     local_l3_end_point_p->ipv4.subnet_mask = IPv4_SUBNET_MASK(subnet_prefix);
@@ -778,29 +773,10 @@ arp_cache_update(struct arp_cache *arp_cache_p,
 static struct local_l3_end_point *
 choose_ipv4_local_l3_end_point(const struct ipv4_address *dest_ip_addr_p)
 {
-    struct local_l3_end_point *chosen_l3_end_point_p = NULL;
-
     /*
-     * Find local network endpoint that is in the same IP subnet as
-     * the destination IP address. If none, then just choose the first
-     * local network end point.
+     * There is only one local network end-point
      */
-    for (unsigned int i = 0; i < ARRAY_SIZE(g_networking.local_l3_end_points); i ++) {
-	struct local_l3_end_point *l3_end_point_p = &g_networking.local_l3_end_points[i];
-
-	if (SAME_IPv4_SUBNET(&l3_end_point_p->ipv4.local_ip_addr,
-		             dest_ip_addr_p,
-			     l3_end_point_p->ipv4.subnet_mask)) {
-	    chosen_l3_end_point_p = l3_end_point_p;
-	    break;
-	}
-    }
-
-    if (chosen_l3_end_point_p == NULL) {
-	chosen_l3_end_point_p = &g_networking.local_l3_end_points[0];
-    }
-
-    return chosen_l3_end_point_p;
+    return &g_networking.local_l3_end_point;
 }
 
 
@@ -847,7 +823,7 @@ net_send_ipv4_packet(const struct ipv4_address *dest_ip_addr_p,
 
     FDC_ASSERT(tx_packet_p->signature == NET_TX_PACKET_SIGNATURE,
 	       tx_packet_p->signature, tx_packet_p);
-    FDC_ASSERT(data_payload_length < UINT16_MAX + sizeof(struct ipv4_header),
+    FDC_ASSERT(data_payload_length <= NET_MAX_IPV4_PACKET_PAYLOAD_SIZE,
 	       data_payload_length, tx_packet_p);
 
     struct ethernet_frame *tx_frame_p =
@@ -1045,6 +1021,9 @@ net_send_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
 
     FDC_ASSERT(local_l4_end_point_p->l4_protocol == TRANSPORT_PROTO_UDP,
 	       local_l4_end_point_p->l4_protocol, local_l4_end_point_p);
+
+    FDC_ASSERT(data_payload_length <= NET_MAX_UDP_PACKET_PAYLOAD_SIZE,
+               data_payload_length, tx_packet_p);
 
     udp_header_p->source_port = local_l4_end_point_p->l4_port;
     udp_header_p->dest_port = dest_port;
@@ -1804,6 +1783,12 @@ net_set_local_ipv4_addr_from_dhcp(struct local_l3_end_point *local_l3_end_point_
     local_l3_end_point_p->ipv4.default_gateway_ip_addr = router_ip_addr;
     local_l3_end_point_p->ipv4.dhcp_lease_time = lease_time;
 
+    DEBUG_PRINTF("Local IP address: %u.%u.%u.%u\n",
+                 local_ip_addr_p->bytes[0],
+                 local_ip_addr_p->bytes[1],
+                 local_ip_addr_p->bytes[2],
+                 local_ip_addr_p->bytes[3]);
+
     /*
      * Send gratuitous ARP request (to catch if someone else is using the same
      * IP address):
@@ -1847,7 +1832,8 @@ net_dhcpv4_client_thread_f(void *arg)
     FDC_ASSERT(fdc_error == 0, fdc_error, 0);
 
     net_send_ipv4_dhcp_discovery(local_l3_end_point_p, client_end_point_p);
-    state = DHCP_UDP_CLIENT_PORT;
+
+    state = DHCP_OFFER_EXPECTED;
 
     for ( ; ; ) {
         /*
