@@ -888,7 +888,7 @@ convert_string_to_hexadecimal(_IN_ const char *str)
 	if (is_digit(c)) {
 	    value += (c - '0') * multiplier;
 	} else {
-	    value += (c - 'a') * multiplier;
+	    value += (to_lower(c) - 'a' + 10) * multiplier;
 	}
 
 	multiplier *= 16;

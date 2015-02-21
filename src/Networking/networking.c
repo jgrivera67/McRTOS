@@ -265,6 +265,8 @@ net_send_ipv4_dhcp_discovery(struct local_l3_end_point *local_l3_end_point_p,
 			       DHCP_UDP_SERVER_PORT,
 			       tx_packet_p,
 			       sizeof(struct dhcp_message) + 16);
+
+    DEBUG_PRINTF("DHCP client sent discovery message\n");
 }
 
 
@@ -319,6 +321,8 @@ net_send_ipv4_dhcp_request(struct local_l3_end_point *local_l3_end_point_p,
 			       DHCP_UDP_SERVER_PORT,
 			       tx_packet_p,
 			       sizeof(struct dhcp_message) + 28);
+
+    DEBUG_PRINTF("DHCP client sent request message\n");
 }
 
 
@@ -1849,7 +1853,8 @@ net_dhcpv4_client_thread_f(void *arg)
         FDC_ASSERT(server_port == DHCP_UDP_SERVER_PORT,
                    server_port, 0);
 
-        DEBUG_PRINTF("DHCP client received offer message from %u.%u.%u.%u\n",
+        DEBUG_PRINTF("DHCP client received message %#x from %u.%u.%u.%u\n",
+                     dhcp_msg_p->options[2],
                      server_ip_addr.bytes[0],
                      server_ip_addr.bytes[1],
                      server_ip_addr.bytes[2],

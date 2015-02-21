@@ -683,7 +683,17 @@ static bool parse_help(void)
 static void
 cmd_display_msg_log(void)
 {
-    console_printf("ERROR: %s not implemented yet\n", __func__);
+    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
+    struct rtos_cpu_controller *cpu_controller_p =
+        &g_McRTOS_p->rts_cpu_controllers[cpu_id];
+    struct fdc_info *fdc_info_p = &cpu_controller_p->cpc_failures_info;
+
+    fdc_info_p->fdc_msg_buffer[RTOS_FDC_MSG_BUFFER_SIZE - 1] = '\0';
+    console_printf("FDC message buffer for CPU: %u\n\n", cpu_id);
+
+    for (char *s = fdc_info_p->fdc_msg_buffer; *s != '\0'; s ++) {
+        uart_putchar(g_console_serial_port_p, *s);
+    }
 }
 
 
@@ -709,17 +719,57 @@ static bool parse_dmesg(void)
 
 
 static void
-cmd_display_stack_trace(uintptr_t mem_addr)
+cmd_display_stack_trace(uintptr_t mem_addr, bool only_call_entries)
 {
-    console_printf("ERROR: %s not implemented yet\n", __func__);
-}
+    if (!BOARD_VALID_RAM_ADDRESS(mem_addr) || mem_addr % 4 != 0) {
+        console_printf("ERROR: Invalid address %p\n", mem_addr);
+        return;
+    }
 
+    struct rtos_execution_context *execution_context_p =
+        (struct rtos_execution_context *)mem_addr;
 
-static bool
-parse_mem_address(uintptr_t *mem_address_p)
-{
-    console_printf("ERROR: %s not implemented yet\n", __func__);
-    return false;
+    if (execution_context_p->ctx_signature !=
+            RTOS_EXECUTION_CONTEXT_SIGNATURE) {
+        console_printf("ERROR: Invalid execution context address %p\n",
+                       mem_addr);
+        return;
+    }
+
+    if (execution_context_p->ctx_context_type != RTOS_THREAD_CONTEXT) {
+        console_printf("ERROR: Execution context %p is not a thread\n",
+                       execution_context_p);
+        return;
+    }
+
+    const uint32_t *context_stack_p;
+
+#   if DEFINED_ARM_CLASSIC_ARCH()
+    context_stack_p = execution_context_p->ctx_cpu_registers[CPU_REG_SP];
+#   elif DEFINED_ARM_CORTEX_M_ARCH()
+    context_stack_p =
+        (rtos_execution_stack_entry_t *)execution_context_p->ctx_cpu_saved_registers.cpu_reg_psp;
+#   else
+        #error "unsupported CPU architecture"
+#   endif    
+
+    console_printf("Stack trace for %s:\n",
+                   execution_context_p->ctx_name_p);
+
+    for ( ; context_stack_p < execution_context_p->ctx_execution_stack_bottom_end_p;
+         context_stack_p ++) {
+        uint32_t stack_entry = *context_stack_p;
+        if ((stack_entry & 0x1) != 0 && VALID_CODE_ADDRESS(stack_entry)) {
+            cpu_instruction_t *call_stack_entry =
+                 (cpu_instruction_t *)((stack_entry & ~0x1) -
+                                       sizeof(cpu_instruction_t));
+
+            console_printf("\t%#p: %#x (call stack entry: %#p)\n",
+                context_stack_p, stack_entry, call_stack_entry);
+        } else if (!only_call_entries) {
+            console_printf("\t%#p: %#x\n", context_stack_p, stack_entry);
+        }
+    }
 }
 
 
@@ -738,11 +788,8 @@ static bool parse_stack(void)
 	break;
 
     case HEXADECIMAL_NUMBER:
-	if (!parse_mem_address(&mem_addr)) {
-	    return false;
-	}
-
-	cmd_display_stack_trace(mem_addr);
+        mem_addr = convert_string_to_hexadecimal(g_tokenizer.last_lexical_unit);
+	cmd_display_stack_trace(mem_addr, true);
 	break;
 
     default:
@@ -786,7 +833,10 @@ rtos_parse_command_line(const char *cmd_line)
 	    break;
 
 	case DMESG:
-	    parse_dmesg();
+	    if (!parse_dmesg()) {
+                return;
+            }
+
 	    break;
 
 	case HELP:
@@ -802,6 +852,13 @@ rtos_parse_command_line(const char *cmd_line)
 	    if (!parse_set()) {
 		return;
 	    }
+
+	    break;
+
+	case STACK:
+	    if (!parse_stack()) {
+                return;
+            }
 
 	    break;
 

@@ -242,8 +242,8 @@ static inline bool is_xdigit(int c)
 	return true;
     }
 
-    c = to_lower(c);
-    return c >= 'a' && c <= 'f';
+    return (c >= 'a' && c <= 'f') ||
+           (c >= 'A' && c <= 'F');
 }
 
 static inline bool is_space(int c)

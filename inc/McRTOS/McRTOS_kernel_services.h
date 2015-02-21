@@ -240,7 +240,7 @@ struct rtos_execution_context
     /**
      * Pointer to the top end of the execution stack for this context.
      * Since the stack is full descending, the context's stack pointer register
-     * must always be > ctx_execution_stack_top_end_p.
+     * must always be >= ctx_execution_stack_top_end_p.
      */
     rtos_execution_stack_entry_t *ctx_execution_stack_top_end_p;
 
