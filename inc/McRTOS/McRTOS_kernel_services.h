@@ -71,19 +71,6 @@ typedef _RANGE_(RTOS_RESET_CONTEXT, RTOS_INTERRUPT_CONTEXT)
         uint8_t rtos_execution_context_type_t;
 
 /**
- * Execution stack entry type
- */
-typedef uint32_t rtos_execution_stack_entry_t;
-
-C_ASSERT(
-    sizeof(rtos_execution_stack_entry_t) == ARM_CPU_WORD_SIZE_IN_BYTES);
-
-/**
- * Number of timer ticks range type
- */
-typedef uint32_t rtos_ticks_t;
-
-/**
  * Thread states
  */
 enum rtos_thread_states
@@ -846,17 +833,11 @@ struct rtos_queue {
 
 
 _MAY_NOT_RETURN_
-fdc_error_t
-rtos_k_create_thread(
-    _IN_ const struct rtos_thread_creation_params *params_p);
-
-_MAY_NOT_RETURN_
 void
 rtos_k_thread_init(
-    _IN_ const struct rtos_thread_creation_params *params_p,
+    _IN_ const struct rtos_thread_creation_params *params_p,    
     _IN_ struct rtos_thread_execution_stack *thread_stack_p,
     _IN_ bool thread_is_privileged,
-    _IN_ uint8_t context_id,
     _OUT_ struct rtos_thread *rtos_thread_p);
 
 _THREAD_CALLERS_ONLY_
@@ -911,10 +892,6 @@ void
 rtos_k_thread_condvar_signal(
     _IN_ struct rtos_thread *rtos_thread_p);
 
-fdc_error_t
-rtos_k_create_mutex(
-    _IN_ const struct rtos_mutex_creation_params *params_p);
-
 void
 rtos_k_mutex_init(
     _IN_  const char *mutex_name_p,
@@ -929,10 +906,6 @@ _THREAD_CALLERS_ONLY_
 void
 rtos_k_mutex_release(
     _IN_ struct rtos_mutex *rtos_mutex_p);
-
-fdc_error_t
-rtos_k_create_condvar(
-    _IN_ const struct rtos_condvar_creation_params *params_p);
 
 void
 rtos_k_condvar_init(
@@ -959,10 +932,6 @@ rtos_k_condvar_signal(
 void
 rtos_k_condvar_broadcast(
     _INOUT_ struct rtos_condvar *rtos_condvar_p);
-
-fdc_error_t
-rtos_k_create_timer(
-    _IN_ const struct rtos_timer_creation_params *params_p);
 
 void
 rtos_k_timer_init(
@@ -1000,6 +969,14 @@ rtos_k_atomic_fetch_add_uint16(
 uint16_t
 rtos_k_atomic_fetch_sub_uint16(
     volatile uint16_t *counter_p, uint16_t value);
+
+uint8_t
+rtos_k_atomic_fetch_add_uint8(
+    volatile uint8_t *counter_p, uint8_t value);
+
+uint8_t
+rtos_k_atomic_fetch_sub_uint8(
+    volatile uint8_t *counter_p, uint8_t value);
 
 rtos_thread_prio_t
 rtos_k_find_highest_thread_priority(
@@ -1145,6 +1122,9 @@ rtos_k_queue_remove(
     _INOUT_ struct rtos_queue *queue_p,
     _IN_ rtos_milliseconds_t timeout_ms);
 
+void
+rtos_k_capture_fdc_msg_vprintf(const char *fmt, va_list va);
+
 #define ATOMIC_POST_INCREMENT_UINT32(_counter_p) \
         rtos_k_atomic_fetch_add_uint32(_counter_p, 1)
 
@@ -1156,6 +1136,12 @@ rtos_k_queue_remove(
 
 #define ATOMIC_POST_DECREMENT_UINT16(_counter_p) \
         rtos_k_atomic_fetch_sub_uint16(_counter_p, 1)
+
+#define ATOMIC_POST_INCREMENT_UINT8(_counter_p) \
+        rtos_k_atomic_fetch_add_uint8(_counter_p, 1)
+
+#define ATOMIC_POST_DECREMENT_UINT8(_counter_p) \
+        rtos_k_atomic_fetch_sub_uint8(_counter_p, 1)
 
 #define ATOMIC_POST_INCREMENT_POINTER(_pointer_p)                       \
         ((void *)rtos_k_atomic_fetch_add_uint32(                        \

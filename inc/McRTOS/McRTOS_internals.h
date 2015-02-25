@@ -91,41 +91,6 @@ enum rtos_execution_context_switched_out_reasons
 C_ASSERT(CTX_SWITCHED_OUT_LAST_INVALID_VALUE <= 0x10);
 
 
-#define RTOS_STACK_OVERFLOW_BUFFER_SIGNATURE    UINT32_C(0xAABBAABB)
-#define RTOS_STACK_OVERFLOW_MARKER              UINT32_C(0xFACEFFFF)
-#define RTOS_STACK_UNDERFLOW_MARKER             UINT32_C(0xFACEBBBB)
-#define RTOS_STACK_UNUSED_SIGNATURE             UINT32_C(0xFACECCCC)
-
-/**
- * Execution stack area for a McRTOS thread
- */
-struct rtos_thread_execution_stack
-{
-    /**
-     * Stack overflow buffer, to be initialized to RTOS_STACK_OVERFLOW_BUFFER_SIGNATURE
-     */
-    rtos_execution_stack_entry_t tes_stack_overflow_buffer
-        [RTOS_STACK_OVERFLOW_BUFFER_SIZE_IN_ENTRIES];
-
-    /**
-     * Stack overflow sentinel, to be initialized to RTOS_STACK_OVERFLOW_MARKER
-     */
-    rtos_execution_stack_entry_t tes_stack_overflow_marker;
-
-    /**
-     * Actual stack
-     */
-    rtos_execution_stack_entry_t tes_stack[RTOS_THREAD_STACK_NUM_ENTRIES];
-
-    /**
-     * Stack underflow sentinel, to be initialized to RTOS_STACK_UNDERFLOW_MARKER
-     */
-    rtos_execution_stack_entry_t tes_stack_underflow_marker;
-}  __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT)));
-
-C_ASSERT(sizeof(struct rtos_thread_execution_stack) % SOC_MPU_REGION_ALIGNMENT == 0);
-C_ASSERT(sizeof(struct rtos_thread_execution_stack) % SOC_CACHE_LINE_SIZE_IN_BYTES == 0);
-
 /**
  * McRTOS interrupt object
  */
@@ -325,11 +290,6 @@ struct rtos_cpu_controller
     struct rtos_condvar cpc_inter_processor_interrupt_condvar;
 
     /**
-     * Pointer to the per-CPU application startup configuration
-     */
-    const struct rtos_per_cpu_startup_app_configuration *cpc_app_config_p;
-
-    /**
      * Failures captured for this CPU core
      */
     struct fdc_info cpc_failures_info;
@@ -464,18 +424,6 @@ struct McRTOS
      * Pointer to the next free application object pool object
      */
     struct rtos_object_pool *rts_next_free_app_object_pool_p;
-
-    /**
-     * Pointer to the next free execution stack for application threads
-     */
-    struct rtos_thread_execution_stack *rts_next_free_app_thread_stack_p;
-
-    /**
-     * Pointer to the array of execution stacks for application threads
-     * (Execution stacks for application threads can be in DRAM or SRAM,
-     *  depending on how much memory they use)
-     */
-    struct rtos_thread_execution_stack *rts_app_threads_execution_stacks_p;
 
 #   ifdef _CPU_CYCLES_MEASURE_
     /**

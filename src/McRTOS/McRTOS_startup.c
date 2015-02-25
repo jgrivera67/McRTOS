@@ -39,7 +39,6 @@ TODO("Remove these pragmas")
             .cpc_ticks_since_boot_count = 0,                            \
             .cpc_interrupts_disabled_start_time_stamp = 0,              \
             .cpc_longest_time_interrupts_disabled = 0,                  \
-            .cpc_app_config_p = NULL,                                   \
             FDC_INFO_INITIALIZER(.cpc_failures_info),                   \
             .cpc_execution_contexts_list_anchor =                       \
                 GLIST_NODE_INITIALIZER(                                 \
@@ -76,10 +75,6 @@ static const struct rtos_thread_creation_params g_rtos_system_threads[] =
         .p_function_p = rtos_root_thread_f,
         .p_function_arg_p = NULL,
         .p_priority = RTOS_HIGHEST_THREAD_PRIORITY,
-#       ifdef LCD_SUPPORTED
-        .p_lcd_channel = RTOS_LCD_CHANNEL_NONE,
-#       endif
-        .p_thread_pp = NULL,
     },
 
     [RTOS_IDLE_SYSTEM_THREAD] =
@@ -88,28 +83,16 @@ static const struct rtos_thread_creation_params g_rtos_system_threads[] =
         .p_function_p = rtos_idle_thread_f,
         .p_function_arg_p = NULL,
         .p_priority = RTOS_LOWEST_THREAD_PRIORITY,
-#       ifdef LCD_SUPPORTED
-        .p_lcd_channel = RTOS_LCD_CHANNEL_NONE,
-#       endif
-        .p_thread_pp = NULL,
     },
 };
 
 C_ASSERT(ARRAY_SIZE(g_rtos_system_threads) <= RTOS_NUM_SYSTEM_THREADS_PER_CPU);
 
 /**
-* Array of execution stacks for system threads for each CPU core
-*/
+ * Array of execution stacks for system threads for each CPU core
+ */
 struct rtos_thread_execution_stack g_rtos_system_threads_execution_stacks
 				    [SOC_NUM_CPU_CORES][RTOS_NUM_SYSTEM_THREADS_PER_CPU];
-
-#ifndef RTOS_USE_DRAM_FOR_APP_THREAD_STACKS
-/**
-* Array of execution stacks for application threads
-*/
-struct rtos_thread_execution_stack g_rtos_app_threads_execution_stacks
-				    [RTOS_MAX_NUM_APP_THREADS];
-#endif
 
 /**
  * McRTOS global state variables
@@ -156,18 +139,6 @@ static struct McRTOS g_McRTOS =
 
     .rts_app_hardware_init_called = false,
 
-#ifdef RTOS_USE_DRAM_FOR_APP_THREAD_STACKS
-    .rts_next_free_app_thread_stack_p =
-        (struct rtos_thread_execution_stack *)RTOS_APP_THREAD_DRAM_STACKS_BASE_ADDR,
-
-    .rts_app_threads_execution_stacks_p =
-        (struct rtos_thread_execution_stack *)RTOS_APP_THREAD_DRAM_STACKS_BASE_ADDR,
-#else
-    .rts_next_free_app_thread_stack_p = &g_rtos_app_threads_execution_stacks[0],
-
-    .rts_app_threads_execution_stacks_p = g_rtos_app_threads_execution_stacks,
-#endif
-
     RTOS_CPU_CONTROLLER_INITIALIZER(0),
 };
 
@@ -191,15 +162,6 @@ check_mcrtos_common_compile_time_initializations(void)
     FDC_ASSERT(
         g_McRTOS_p->rts_signature == MCRTOS_SIGNATURE,
         g_McRTOS_p->rts_signature, g_McRTOS_p);
-
-#ifdef RTOS_USE_DRAM_FOR_APP_THREAD_STACKS
-    FDC_ASSERT(
-        g_McRTOS_p->rts_next_free_app_thread_stack_p ==
-        (struct rtos_thread_execution_stack *)
-            &g_sdram_map_p->sdr_rtos_app_thread_stacks[0],
-        g_McRTOS_p->rts_next_free_app_thread_stack_p,
-        &g_sdram_map_p->sdr_rtos_app_thread_stacks[0]);
-#endif
 }
 
 
@@ -273,7 +235,6 @@ rtos_startup(
             rtos_app_config_p->stc_app_console_commands_p[i].cmd_function_p);
     }
 
-    struct rtos_thread *rtos_thread_p;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
     struct rtos_cpu_controller *cpu_controller_p =
                                     &g_McRTOS_p->rts_cpu_controllers[cpu_id];
@@ -297,8 +258,6 @@ rtos_startup(
         rtos_app_config_p->stc_app_console_commands_p;
 
     rtos_init_reset_execution_context(cpu_controller_p);
-
-    cpu_controller_p->cpc_app_config_p = rtos_app_config_p->stc_per_cpu_config;
 
     /*
      * Check the compile-time initializations common to all CPU cores:
@@ -376,15 +335,11 @@ rtos_startup(
     /*
      * Create root system thread to continue system initialization in that thread:
      */
-    rtos_thread_p =
-        &(cpu_controller_p->cpc_system_threads[RTOS_ROOT_SYSTEM_THREAD]);
-
     rtos_k_thread_init(
         &g_rtos_system_threads[RTOS_ROOT_SYSTEM_THREAD],
         &cpu_controller_p->cpc_system_threads_execution_stacks_p[RTOS_ROOT_SYSTEM_THREAD],
         true,
-        RTOS_ROOT_SYSTEM_THREAD,
-        rtos_thread_p);
+        &cpu_controller_p->cpc_system_threads[RTOS_ROOT_SYSTEM_THREAD]);
 
     struct rtos_execution_context *current_context_p =
 	cpu_controller_p->cpc_current_execution_context_p;
@@ -548,11 +503,7 @@ rtos_root_thread_f(void *arg)
     struct rtos_cpu_controller *cpu_controller_p =
                                     &g_McRTOS_p->rts_cpu_controllers[cpu_id];
 
-    const struct rtos_per_cpu_startup_app_configuration *rtos_app_config_p =
-                                            cpu_controller_p->cpc_app_config_p;
-
     FDC_ASSERT(arg == NULL, arg, cpu_id);
-    FDC_ASSERT(rtos_app_config_p != NULL, 0, 0);
     struct rtos_thread *root_thread_p = (struct rtos_thread *)rtos_thread_self();
 
     /*
@@ -594,47 +545,20 @@ rtos_root_thread_f(void *arg)
      */
     for (uint8_t i = RTOS_IDLE_SYSTEM_THREAD; i < ARRAY_SIZE(g_rtos_system_threads); i ++)
     {
-        struct rtos_thread *rtos_thread_p = &cpu_controller_p->cpc_system_threads[i];
         rtos_k_thread_init(
             &g_rtos_system_threads[i],
             &cpu_controller_p->cpc_system_threads_execution_stacks_p[i],
             true,
-            i,
-            rtos_thread_p);
+            &cpu_controller_p->cpc_system_threads[i]);
 
         console_printf("CPU core %u: %s started\n", cpu_id,
             g_rtos_system_threads[i].p_name_p);
     }
 
     /*
-     * Do application-specific software initializations that are to be done before
-     * auto-start application threads are created:
+     * Do application-specific initialization:
      */
     g_McRTOS_p->rts_app_software_init_p();
-
-    /*
-     * Create auto-start application threads for this CPU core
-     */
-    rtos_num_app_threads_t num_app_threads =
-        rtos_app_config_p->stc_num_autostart_threads;
-
-    for (rtos_num_app_threads_t i = 0; i < num_app_threads; i ++)
-    {
-        fdc_error = rtos_k_create_thread(
-                        &rtos_app_config_p->stc_autostart_threads_p[i]);
-
-        if (fdc_error != 0)
-        {
-            console_printf(
-                "CPU core %u: *** Error creating application thread %u: '%s' ***\n",
-                cpu_id, i, rtos_app_config_p->stc_autostart_threads_p[i].p_name_p);
-
-            fatal_error_handler(fdc_error);
-        }
-
-        console_printf("CPU core %u: %s started\n", cpu_id,
-            rtos_app_config_p->stc_autostart_threads_p[i].p_name_p);
-    }
 
     if (cpu_id == 0)
     {
@@ -678,25 +602,11 @@ rtos_idle_thread_f(void *arg)
 
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
-    struct rtos_cpu_controller *cpu_controller_p =
-                                    &g_McRTOS_p->rts_cpu_controllers[cpu_id];
 
     FDC_ASSERT(arg == NULL, arg, cpu_id);
-    FDC_ASSERT(cpu_controller_p->cpc_app_config_p != NULL, cpu_id, 0);
-
-    rtos_idle_thread_hook_function_t *idle_thread_hook_function_p =
-        cpu_controller_p->cpc_app_config_p->stc_idle_thread_hook_function_p;
 
     for ( ; ; )
     {
-        /*
-         * Invoke application hook:
-         */
-        if (idle_thread_hook_function_p != NULL)
-        {
-            idle_thread_hook_function_p();
-        }
-
         TODO("Implement this")
         /*
          * TODO: Stop generation of tick timer interrupts if there are no active

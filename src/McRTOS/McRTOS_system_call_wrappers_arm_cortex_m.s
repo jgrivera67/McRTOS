@@ -184,21 +184,17 @@ L_exit_rtos_invoke_system_call:
  * Generate System call wrapper functions
  */
 
-#ifdef MCRTOS_DYNAMIC_OBJECT_CREATION
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_THREAD_INIT_SYSTEM_CALL, \
+                                 rtos_thread_init
 
-GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_CREATE_THREAD_SYSTEM_CALL, \
-                                 rtos_create_thread
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_MUTEX_INIT_SYSTEM_CALL, \
+                                 rtos_mutex_init
 
-GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_CREATE_MUTEX_SYSTEM_CALL, \
-                                 rtos_create_mutex
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_CONDVAR_INIT_SYSTEM_CALL, \
+                                 rtos_condvar_init
 
-GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_CREATE_CONDVAR_SYSTEM_CALL, \
-                                 rtos_create_condvar
-
-GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_CREATE_TIMER_SYSTEM_CALL, \
-                                 rtos_create_timer
-
-#endif /* MCRTOS_DYNAMIC_OBJECT_CREATION */
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_TIMER_INIT_SYSTEM_CALL, \
+                                 rtos_timer_init
 
 GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_THREAD_DELAY_SYSTEM_CALL, \
                                  rtos_thread_delay
@@ -282,5 +278,20 @@ GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_THREAD_ENABLE_FPU_SYSTEM_CALL, \
 
 GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_THREAD_DISABLE_FPU_SYSTEM_CALL, \
                                  rtos_thread_disable_fpu
+
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_QUEUE_INIT_SYSTEM_CALL, \
+                                 rtos_queue_init
+
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_QUEUE_ADD_SYSTEM_CALL, \
+                                 rtos_queue_add 
+
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_QUEUE_REMOVE_SYSTEM_CALL, \
+                                 rtos_queue_remove 
+
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_GET_TICKS_SYSTEM_CALL, \
+                                 rtos_get_ticks
+
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_CAPTURE_FDC_MSG_VPRINTF_SYSTEM_CALL, \
+                                 rtos_capture_fdc_msg_vprintf
 
 .end

@@ -972,7 +972,12 @@ struct local_l4_end_point {
 };
 
 /**
- * Networking state variables
+ * Number of threads for the networking stack
+ */
+#define NET_NUM_THREADS 3
+
+/**
+ * Networking stack state variables
  */
 struct networking {
     /**
@@ -1041,6 +1046,16 @@ struct networking {
      * Local layer-4 end points
      */
     struct local_l4_end_point local_l4_end_points[NET_MAX_LOCAL_L4_END_POINTS];
+
+    /**
+     * Array of execution stacks for networking stack threads
+     */
+    struct rtos_thread_execution_stack thread_execution_stacks[NET_NUM_THREADS];
+
+    /**
+     * Array of application threads
+     */
+    struct rtos_thread threads[NET_NUM_THREADS];
 };
 
 C_ASSERT(NET_MAX_IPV4_PACKET_PAYLOAD_SIZE <=

@@ -1478,7 +1478,6 @@ fdc_capture_msg_putchar(
 /**
  * Simplified printf that write messages to the FDC message buffer.
  * It only supports the format specifiers supported by embedded_vprintf().
- * No serialization for concurrent calls is provided.
  *
  * @param fmt               format string
  *
@@ -1490,6 +1489,25 @@ void
 capture_fdc_msg_printf(const char *fmt, ...)
 {
     va_list va;
+    va_start(va, fmt);
+    rtos_capture_fdc_msg_vprintf(fmt, va);
+    va_end(va);
+}
+
+
+/**
+ * Simplified vprintf that write messages to the FDC message buffer.
+ * It only supports the format specifiers supported by embedded_vprintf().
+ *
+ * @param fmt               format string
+ *
+ * @param ...               variable arguments
+ *
+ * @return None
+ */
+void
+rtos_k_capture_fdc_msg_vprintf(const char *fmt, va_list va)
+{
     struct rtos_cpu_controller *cpu_controller_p =
         &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
     struct fdc_info *fdc_info_p = &cpu_controller_p->cpc_failures_info;
@@ -1500,13 +1518,11 @@ capture_fdc_msg_printf(const char *fmt, ...)
     embedded_printf(fdc_capture_msg_putchar, fdc_info_p, "%u ",
 		    fdc_info_p->fdc_msg_seq_num);
 
-    va_start(va, fmt);
     embedded_vprintf(fdc_capture_msg_putchar, fdc_info_p, fmt, va);
-    va_end(va);
     fdc_info_p->fdc_msg_seq_num ++;
 
     if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
         __enable_irq();
-   }
+    }
 }
 

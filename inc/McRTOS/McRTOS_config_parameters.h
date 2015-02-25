@@ -14,17 +14,6 @@
 #include "hardware_abstractions.h"
 #include "arm_defs.h"
 
-/*
- * NOTE: MCRTOS_DYNAMIC_OBJECT_CREATION needs to be enabled to allow
- * application threads to create other threads and other McRTOS resources.
- *
- * By default dynamic creation of McRTOS objects from application threads
- * is disabled.
- */
-#if 0
-#define MCRTOS_DYNAMIC_OBJECT_CREATION
-#endif
-
 /**
  * Tick Timer frequency in Hz
  */

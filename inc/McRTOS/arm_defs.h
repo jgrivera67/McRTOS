@@ -383,19 +383,19 @@
  * System call numbers that can be specified as the immediate operand
  * of the SWI instruction for ARMv4 or the SVC instruction for ARMv7:
  */
-#define  RTOS_CREATE_THREAD_SYSTEM_CALL                 0x0
+#define  RTOS_THREAD_INIT_SYSTEM_CALL                   0x0
 #define  RTOS_THREAD_DELAY_SYSTEM_CALL                  0x1
 #define  RTOS_THREAD_ABORT_SYSTEM_CALL                  0x2
 #define  RTOS_THREAD_CONDVAR_WAIT_SYSTEM_CALL           0x3
 #define  RTOS_THREAD_CONDVAR_SIGNAL_SYSTEM_CALL         0x4
-#define  RTOS_CREATE_MUTEX_SYSTEM_CALL                  0x5
+#define  RTOS_MUTEX_INIT_SYSTEM_CALL                    0x5
 #define  RTOS_MUTEX_ACQUIRE_SYSTEM_CALL                 0x6
 #define  RTOS_MUTEX_RELEASE_SYSTEM_CALL                 0x7
-#define  RTOS_CREATE_CONDVAR_SYSTEM_CALL                0x8
+#define  RTOS_CONDVAR_INIT_SYSTEM_CALL                  0x8
 #define  RTOS_CONDVAR_WAIT_SYSTEM_CALL                  0x9
 #define  RTOS_CONDVAR_SIGNAL_SYSTEM_CALL                0xb
 #define  RTOS_CONDVAR_BROADCAST_SYSTEM_CALL             0xc
-#define  RTOS_CREATE_TIMER_SYSTEM_CALL                  0xd
+#define  RTOS_TIMER_INIT_SYSTEM_CALL                    0xd
 #define  RTOS_TIMER_START_SYSTEM_CALL                   0xe
 #define  RTOS_TIMER_STOP_SYSTEM_CALL                    0xf
 #define  RTOS_CAPTURE_FAILURE_DATA_SYSTEM_CALL          0x10
@@ -414,12 +414,17 @@
 #define  RTOS_MPU_REMOVE_THREAD_DATA_REGION_SYSTEM_CALL	0x1d
 #define  RTOS_THREAD_ENABLE_FPU_SYSTEM_CALL		0x1e
 #define  RTOS_THREAD_DISABLE_FPU_SYSTEM_CALL		0x1f
+#define  RTOS_QUEUE_INIT_SYSTEM_CALL                    0x20
+#define  RTOS_QUEUE_ADD_SYSTEM_CALL                     0x21
+#define  RTOS_QUEUE_REMOVE_SYSTEM_CALL                  0x22
+#define  RTOS_GET_TICKS_SYSTEM_CALL                     0x23
+#define  RTOS_CAPTURE_FDC_MSG_VPRINTF_SYSTEM_CALL       0x24
 
 /*
  * CAUTION: This macro needs to be updated when new system
  * calls are added.
  */
-#define __LAST_RTOS_SYSTEM_CALL	RTOS_THREAD_DISABLE_FPU_SYSTEM_CALL
+#define __LAST_RTOS_SYSTEM_CALL	RTOS_CAPTURE_FDC_MSG_VPRINTF_SYSTEM_CALL
 
 /**
  * Number of system calls supported:

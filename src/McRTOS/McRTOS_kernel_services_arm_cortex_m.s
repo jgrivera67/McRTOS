@@ -320,9 +320,10 @@ rtos_k_synchronous_context_switch:
 
 
 /**
- * Enter privilege mode
+ * Enter privilege mode. It returns true if the CPU was already
+ * in privileged mode before, and false otherwise.
  *
- * void
+ * bool
  * rtos_enter_privileged_mode(void)
  *
  * NOTE: This function is to be invoked from hardware driver functions
@@ -332,6 +333,33 @@ rtos_k_synchronous_context_switch:
 .func rtos_enter_privileged_mode
 
 rtos_enter_privileged_mode:
+    push    {r4-r5}
+    /*
+     * Check if caller is an ISR:
+     */
+    mrs	    r4, ipsr
+    mov	    r5, #CPU_REG_IPSR_EXCEPTION_NUMBER_MASK
+    tst	    r4, r5
+    beq	    L_do_enter_privileged_mode
+
+    /*
+     * Check if caller is a thread running in privileged mode:
+     */
+    mrs	    r4, control
+    mov	    r5, #CPU_REG_CONTROL_nPRIV_MASK
+    tst	    r4, r5
+    bne	    L_do_enter_privileged_mode
+
+    pop     {r4-r5}
+    mov     r0, #1
+    bx      lr
+
+L_do_enter_privileged_mode:
+    pop     {r4-r5}
+
+    /*
+     * Enter privilege mode:
+     */
     svc     #RTOS_ENTER_PRIVILEGED_MODE_SVC_CODE
 
     /*
@@ -345,7 +373,9 @@ rtos_enter_privileged_mode:
     mov	    r0, #RTOS_ENTER_PRIVILEGED_MODE_SVC_CODE
     bl      rtos_k_enter_privileged_mode
 
+    mov     r0, #0
     pop     {pc}
+
 .endfunc
 
 

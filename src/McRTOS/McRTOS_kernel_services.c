@@ -55,7 +55,7 @@ volatile uint32_t g_rtos_atomic_ops_spinlock = 0x0;
 const void *const g_rtos_system_call_dispatch_table[] =
 {
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
-        RTOS_CREATE_THREAD_SYSTEM_CALL, rtos_k_create_thread),
+        RTOS_THREAD_INIT_SYSTEM_CALL, rtos_k_thread_init),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
         RTOS_THREAD_DELAY_SYSTEM_CALL, rtos_k_thread_delay),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
@@ -65,13 +65,13 @@ const void *const g_rtos_system_call_dispatch_table[] =
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
         RTOS_THREAD_CONDVAR_SIGNAL_SYSTEM_CALL, rtos_k_thread_condvar_signal),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
-        RTOS_CREATE_MUTEX_SYSTEM_CALL, rtos_k_create_mutex),
+        RTOS_MUTEX_INIT_SYSTEM_CALL, rtos_k_mutex_init),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
         RTOS_MUTEX_ACQUIRE_SYSTEM_CALL, rtos_k_mutex_acquire),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
         RTOS_MUTEX_RELEASE_SYSTEM_CALL, rtos_k_mutex_release),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
-        RTOS_CREATE_CONDVAR_SYSTEM_CALL, rtos_k_create_condvar),
+        RTOS_CONDVAR_INIT_SYSTEM_CALL, rtos_k_condvar_init),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
         RTOS_CONDVAR_WAIT_SYSTEM_CALL, rtos_k_condvar_wait),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
@@ -79,7 +79,7 @@ const void *const g_rtos_system_call_dispatch_table[] =
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
         RTOS_CONDVAR_BROADCAST_SYSTEM_CALL, rtos_k_condvar_broadcast),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
-        RTOS_CREATE_TIMER_SYSTEM_CALL, rtos_k_create_timer),
+        RTOS_TIMER_INIT_SYSTEM_CALL, rtos_k_timer_init),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
         RTOS_TIMER_START_SYSTEM_CALL, rtos_k_timer_start),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
@@ -118,119 +118,30 @@ const void *const g_rtos_system_call_dispatch_table[] =
         RTOS_THREAD_ENABLE_FPU_SYSTEM_CALL, rtos_k_thread_enable_fpu),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
         RTOS_THREAD_DISABLE_FPU_SYSTEM_CALL, rtos_k_thread_disable_fpu),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_QUEUE_INIT_SYSTEM_CALL, rtos_k_queue_init),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_QUEUE_ADD_SYSTEM_CALL, rtos_k_queue_add),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_QUEUE_REMOVE_SYSTEM_CALL, rtos_k_queue_remove),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_GET_TICKS_SYSTEM_CALL, rtos_k_get_ticks),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_CAPTURE_FDC_MSG_VPRINTF_SYSTEM_CALL, rtos_k_capture_fdc_msg_vprintf),
 };
 
 C_ASSERT(ARRAY_SIZE(g_rtos_system_call_dispatch_table) == RTOS_NUM_SYSTEM_CALLS);
-
-/**
- * Create a McRTOS application thread on the calling CPU
- *
- * @param params_p Pointer to the thread's creation parameters.
- *
- * @return 0, on success
- *         Non-zero error code, on failure
- */
-fdc_error_t
-rtos_k_create_thread(
-    _IN_ const struct rtos_thread_creation_params *params_p)
-{
-    FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
-    FDC_ASSERT_VALID_RAM_OR_ROM_POINTER(params_p, sizeof(void *));
-
-    fdc_error_t fdc_error = 0;
-    bool fatal_error = false;
-    struct rtos_thread_execution_stack *thread_stack_p = NULL;
-
-    /*
-     * Allocate a thread object:
-     */
-    struct rtos_thread *new_thread_p =
-        ATOMIC_POST_INCREMENT_POINTER(g_McRTOS_p->rts_next_free_app_thread_p);
-
-    if (new_thread_p >= &g_McRTOS_p->rts_app_threads[RTOS_MAX_NUM_APP_THREADS])
-    {
-        fdc_error = CAPTURE_FDC_ERROR(
-                        "No more application threads can be created",
-                        new_thread_p,
-                        g_McRTOS_p->rts_next_free_app_thread_p);
-
-        /*
-         * This is considered a fatal error
-         */
-        fatal_error = true;
-        goto Exit;
-    }
-
-    /*
-     * Allocate an execution stack for the thread:
-     */
-    thread_stack_p =
-        ATOMIC_POST_INCREMENT_POINTER(
-            g_McRTOS_p->rts_next_free_app_thread_stack_p);
-
-    if (thread_stack_p >=
-            &g_McRTOS_p->rts_app_threads_execution_stacks_p[
-                RTOS_MAX_NUM_APP_THREADS])
-    {
-        fdc_error = CAPTURE_FDC_ERROR(
-                        "No more stacks for application threads can be created",
-                        thread_stack_p,
-                        g_McRTOS_p->rts_next_free_app_thread_stack_p);
-
-        /*
-         * This is considered a fatal error
-         */
-        fatal_error = true;
-        goto Exit;
-    }
-
-#ifdef RTOS_USE_DRAM_FOR_APP_THREAD_STACKS
-    /*
-     * Since application thread stacks are in DRAM and we do DRAM validation
-     * on first use, we need to validate the DRAM block the thread's stack here:
-     */
-    fdc_error = check_dram_memory_block(thread_stack_p, sizeof(*thread_stack_p));
-    if (fdc_error != 0)
-    {
-        fatal_error = true;
-        goto Exit;
-    }
-#endif
-
-    rtos_k_thread_init(
-        params_p,
-        thread_stack_p,
-        false,
-        new_thread_p - g_McRTOS_p->rts_app_threads,
-        new_thread_p);
-
-    if (params_p->p_thread_pp != NULL)
-    {
-        FDC_ASSERT_VALID_RAM_POINTER(params_p->p_thread_pp, sizeof(void *));
-        *params_p->p_thread_pp = new_thread_p;
-    }
-
-Exit:
-    if (fatal_error)
-    {
-        fatal_error_handler(fdc_error);
-    }
-
-    return fdc_error;
-}
 
 
 /**
  * Initializes a McRTOS thread
  *
- * @param   params_p: Pointer to the thread's creation parameters.
+ * @param   params_p: Pointer to thread creation parameters
  *
  * @param   thread_stack_p: Pointer to the thread's execution stack.
  *
  * @param   thread_is_privileged: true if thread to initialize is
  *          a system thread. False otherwise.
- *
- * @param context_id: Execution context ID for tracing purposes
  *
  * @param   rtos_thread_p: Pointer to the thread object
  *
@@ -238,16 +149,15 @@ Exit:
  */
 void
 rtos_k_thread_init(
-    _IN_ const struct rtos_thread_creation_params *params_p,
+    _IN_ const struct rtos_thread_creation_params *params_p,    
     _IN_ struct rtos_thread_execution_stack *thread_stack_p,
     _IN_ bool thread_is_privileged,
-    _IN_ uint8_t context_id,
-    _INOUT_ struct rtos_thread *rtos_thread_p)
+    _OUT_ struct rtos_thread *rtos_thread_p)
 {
+    static uint8_t next_thread_context_id = 0;
     cpu_status_register_t cpu_status_register = 0;
     rtos_cpu_mode_t rtos_cpu_mode = RTOS_INVALID_CPU_MODE;
 
-    FDC_ASSERT_VALID_RAM_OR_ROM_POINTER(params_p, sizeof(uint32_t));
     FDC_ASSERT_VALID_RAM_POINTER(thread_stack_p, sizeof(uint32_t));
     FDC_ASSERT_VALID_RAM_POINTER(rtos_thread_p, sizeof(uint32_t));
 
@@ -289,11 +199,13 @@ rtos_k_thread_init(
 
     fdc_context_switch_trace_entry_t prefilled_trace_entry = 0;
 
+    uint8_t thread_context_id = ATOMIC_POST_INCREMENT_UINT8(&next_thread_context_id);
+
     SET_BIT_FIELD(
         prefilled_trace_entry,
         FDC_CST_CONTEXT_ID_MASK,
         FDC_CST_CONTEXT_ID_SHIFT,
-        context_id);
+        thread_context_id);
 
     if (thread_is_privileged)
     {
@@ -885,56 +797,6 @@ rtos_k_thread_condvar_signal(
 }
 
 
-/**
- * Create a McRTOS mutex
- */
-fdc_error_t
-rtos_k_create_mutex(
-    _IN_ const struct rtos_mutex_creation_params *params_p)
-{
-    FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
-    FDC_ASSERT_VALID_RAM_OR_ROM_POINTER(params_p, sizeof(void *));
-    FDC_ASSERT_VALID_RAM_POINTER(params_p->p_mutex_pp, sizeof(void *));
-
-    fdc_error_t fdc_error = 0;
-    bool fatal_error = false;
-
-    /*
-     * Allocate a mutex object:
-     */
-    struct rtos_mutex *new_mutex_p =
-        ATOMIC_POST_INCREMENT_POINTER(g_McRTOS_p->rts_next_free_app_mutex_p);
-
-    if (new_mutex_p >= &g_McRTOS_p->rts_app_mutexes[RTOS_MAX_NUM_APP_MUTEXES])
-    {
-        fdc_error = CAPTURE_FDC_ERROR(
-                        "No more application mutexes can be created",
-                        new_mutex_p,
-                        g_McRTOS_p->rts_next_free_app_mutex_p);
-
-        /*
-         * This is considered a fatal error
-         */
-        fatal_error = true;
-        goto Exit;
-    }
-
-    rtos_k_mutex_init(
-        params_p->p_name_p,
-        new_mutex_p);
-
-    *params_p->p_mutex_pp = new_mutex_p;
-
-Exit:
-    if (fatal_error)
-    {
-        fatal_error_handler(fdc_error);
-    }
-
-    return fdc_error;
-}
-
-
 void
 rtos_k_mutex_init(
     _IN_  const char *mutex_name_p,
@@ -1244,56 +1106,6 @@ rtos_k_mutex_release(
 
     rtos_k_mutex_release_internal(
         rtos_mutex_p, current_thread_p, cpu_controller_p, false);
-}
-
-
-/**
- * Create a McRTOS condition variable
- */
-fdc_error_t
-rtos_k_create_condvar(
-    _IN_ const struct rtos_condvar_creation_params *params_p)
-{
-    FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
-    FDC_ASSERT_VALID_RAM_OR_ROM_POINTER(params_p, sizeof(void *));
-    FDC_ASSERT_VALID_RAM_POINTER(params_p->p_condvar_pp, sizeof(void *));
-
-    fdc_error_t fdc_error = 0;
-    bool fatal_error = false;
-
-    /*
-     * Allocate a condvar object:
-     */
-    struct rtos_condvar *new_condvar_p =
-        ATOMIC_POST_INCREMENT_POINTER(g_McRTOS_p->rts_next_free_app_condvar_p);
-
-    if (new_condvar_p >= &g_McRTOS_p->rts_app_condvars[RTOS_MAX_NUM_APP_CONDVARS])
-    {
-        fdc_error = CAPTURE_FDC_ERROR(
-                        "No more application condvars can be created",
-                        new_condvar_p,
-                        g_McRTOS_p->rts_next_free_app_condvar_p);
-
-        /*
-         * This is considered a fatal error
-         */
-        fatal_error = true;
-        goto Exit;
-    }
-
-    rtos_k_condvar_init(
-        params_p->p_name_p,
-        new_condvar_p);
-
-    *params_p->p_condvar_pp = new_condvar_p;
-
-Exit:
-    if (fatal_error)
-    {
-        fatal_error_handler(fdc_error);
-    }
-
-    return fdc_error;
 }
 
 
@@ -1607,57 +1419,6 @@ rtos_k_condvar_broadcast(
     FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(false);
 
     rtos_k_condvar_signal_internal(rtos_condvar_p, true);
-}
-
-
-/**
- * Creates a McRTOS timer
- */
-fdc_error_t
-rtos_k_create_timer(
-    _IN_ const struct rtos_timer_creation_params *params_p)
-{
-    FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
-    FDC_ASSERT_VALID_RAM_OR_ROM_POINTER(params_p, sizeof(void *));
-    FDC_ASSERT_VALID_RAM_POINTER(params_p->p_timer_pp, sizeof(void *));
-
-    fdc_error_t fdc_error = 0;
-    bool fatal_error = false;
-
-    /*
-     * Allocate a timer object:
-     */
-    struct rtos_timer *new_timer_p =
-        ATOMIC_POST_INCREMENT_POINTER(g_McRTOS_p->rts_next_free_app_timer_p);
-
-    if (new_timer_p >= &g_McRTOS_p->rts_app_timers[RTOS_MAX_NUM_APP_TIMERS])
-    {
-        fdc_error = CAPTURE_FDC_ERROR(
-                        "No more application timers can be created",
-                        new_timer_p,
-                        g_McRTOS_p->rts_next_free_app_timer_p);
-
-        /*
-         * This is considered a fatal error
-         */
-        fatal_error = true;
-        goto Exit;
-    }
-
-    rtos_k_timer_init(
-        params_p->p_name_p,
-        params_p->p_function_p,
-        new_timer_p);
-
-    *params_p->p_timer_pp = new_timer_p;
-
-Exit:
-    if (fatal_error)
-    {
-        fatal_error_handler(fdc_error);
-    }
-
-    return fdc_error;
 }
 
 
@@ -3571,6 +3332,84 @@ rtos_k_atomic_fetch_sub_uint16(volatile uint16_t *counter_p, uint16_t value)
     do {
 	old_value = __LDREXH(counter_p);
     } while (__STREXH(old_value - value, counter_p) != 0);
+
+    return old_value;
+#endif
+}
+
+
+/**
+ * Increments atomically the 8-bit value stored in *counter_p, and returns the
+ * original value.
+ *
+ * @param   counter_p: Pointer to the counter to be incremented.
+ *
+ * @param   value: Increment value.
+ *
+ * @return  value of the counter prior to the increment.
+ */
+uint8_t
+rtos_k_atomic_fetch_add_uint8(volatile uint8_t *counter_p, uint8_t value)
+{
+#if 0
+    cpu_status_register_t old_primask = __get_PRIMASK();
+
+    __disable_irq();
+
+    uint8_t old_value = *counter_p;
+
+    *counter_p += value;
+
+    if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
+        __enable_irq();
+    }
+
+    return old_value;
+#else
+    uint8_t old_value;
+
+    do {
+	old_value = __LDREXB(counter_p);
+    } while (__STREXB(old_value + value, counter_p) != 0);
+
+    return old_value;
+#endif
+}
+
+
+/**
+ * Decrements atomically the 8-bit value stored in *counter_p, and returns the
+ * original value.
+ *
+ * @param   counter_p: Pointer to the counter to be decremented.
+ *
+ * @param   value: Decrement value.
+ *
+ * @return  value of the counter prior to the decrement.
+ */
+uint8_t
+rtos_k_atomic_fetch_sub_uint8(volatile uint8_t *counter_p, uint8_t value)
+{
+#if 0
+    cpu_status_register_t old_primask = __get_PRIMASK();
+
+    __disable_irq();
+
+    uint8_t old_value = *counter_p;
+
+    *counter_p -= value;
+
+    if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
+        __enable_irq();
+    }
+
+    return old_value;
+#else
+    uint8_t old_value;
+
+    do {
+	old_value = __LDREXB(counter_p);
+    } while (__STREXB(old_value - value, counter_p) != 0);
 
     return old_value;
 #endif

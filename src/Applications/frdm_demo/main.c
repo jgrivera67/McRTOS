@@ -75,11 +75,22 @@ static const struct ipv4_address g_dest_ip_addr[] = {
 #endif
 };
 
+#define RTOS_NUM_APP_THREADS 4
 
 /**
- * Array of application threads for CPU core 0
+ * Array of execution stacks for application threads
  */
-static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
+struct rtos_thread_execution_stack g_app_thread_execution_stacks[RTOS_NUM_APP_THREADS];
+
+/**
+ * Array of application threads
+ */
+struct rtos_thread g_app_threads[RTOS_NUM_APP_THREADS];
+
+/**
+ * Array of application thread creation parameters
+ */
+static const struct rtos_thread_creation_params g_app_thread_creation_params[] =
 {
     [0] =
     {
@@ -87,7 +98,6 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
         .p_function_p = hello_world_thread_f,
         .p_function_arg_p = (void *)1,
         .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 2,
-        .p_thread_pp = NULL,
     },
 
     [1] =
@@ -96,7 +106,6 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
         .p_function_p = hello_world_thread_f,
         .p_function_arg_p = (void *)2,
         .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 2,
-        .p_thread_pp = NULL,
     },
 
     [2] =
@@ -105,7 +114,6 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
         .p_function_p = accelerometer_thread_f,
         .p_function_arg_p = NULL,
         .p_priority = ACCELEROMETER_THREAD_PRIORITY,
-        .p_thread_pp = NULL,
     },
 
 #if 0
@@ -131,8 +139,11 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
 #endif
 };
 
+C_ASSERT(ARRAY_SIZE(g_app_thread_creation_params) <=
+         ARRAY_SIZE(g_app_thread_execution_stacks));
+
 C_ASSERT(
-    ARRAY_SIZE(g_app_threads_cpu0) <= RTOS_MAX_NUM_APP_THREADS);
+    ARRAY_SIZE(g_app_thread_creation_params) <= RTOS_MAX_NUM_APP_THREADS); //???
 
 /**
  * Array of application-specific console commands
@@ -158,18 +169,6 @@ static const struct rtos_startup_app_configuration g_rtos_app_config =
     .stc_app_software_init_p = app_software_init,
     .stc_num_app_console_commands = ARRAY_SIZE(g_app_console_commands),
     .stc_app_console_commands_p = g_app_console_commands,
-    .stc_per_cpu_config =
-    {
-        /*
-         * CPU core 0
-         */
-        [0] =
-        {
-            .stc_idle_thread_hook_function_p = NULL,
-            .stc_num_autostart_threads = ARRAY_SIZE(g_app_threads_cpu0),
-            .stc_autostart_threads_p = g_app_threads_cpu0,
-        },
-    },
 };
 
 
@@ -225,14 +224,28 @@ void app_software_init(void)
     static const char g_app_build_timestamp[] = "built " __DATE__ " " __TIME__;
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
-    struct rtos_mutex_creation_params mutex_params;
-    struct rtos_condvar_creation_params condvar_params;
 
     console_printf(
         "%s\n%s\n",
         g_app_version, g_app_build_timestamp);
 
     g_app.led_color_mask = LED_COLOR_RED;
+
+    /*
+     * Create app threads for this CPU
+     */
+    for (uint8_t i = 0; i < ARRAY_SIZE(g_app_thread_creation_params); i ++)
+    {
+        rtos_thread_init(
+            &g_app_thread_creation_params[i],
+            &g_app_thread_execution_stacks[i],
+            false,
+            &g_app_threads[i]);
+
+        console_printf("CPU core %u: %s started\n", cpu_id,
+            g_app_thread_creation_params[i].p_name_p);
+    }
+
     networking_init();
 }
 
