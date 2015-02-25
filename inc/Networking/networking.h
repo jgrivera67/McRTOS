@@ -1048,11 +1048,6 @@ struct networking {
     struct local_l4_end_point local_l4_end_points[NET_MAX_LOCAL_L4_END_POINTS];
 
     /**
-     * Array of execution stacks for networking stack threads
-     */
-    struct rtos_thread_execution_stack thread_execution_stacks[NET_NUM_THREADS];
-
-    /**
      * Array of application threads
      */
     struct rtos_thread threads[NET_NUM_THREADS];

@@ -44,6 +44,14 @@ static const struct ethernet_mac_address enet_null_mac_addr = {
     .bytes = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }
 };
 
+/**
+ * Execution stacks for networking stack threads
+ */
+static struct rtos_thread_execution_stack g_thread_execution_stacks[NET_NUM_THREADS];
+
+/**
+ * Networking stack module global variables
+ */
 static struct networking g_networking = {
     .initialized = false,
     .next_udp_ephemeral_port = NET_FIRST_EPHEMERAL_PORT,
@@ -85,7 +93,6 @@ static const struct rtos_thread_creation_params g_thread_creation_params[] = {
 };
 
 C_ASSERT(ARRAY_SIZE(g_thread_creation_params) == NET_NUM_THREADS);
-
 
 static void
 arp_cache_init(struct arp_cache *arp_cache_p)
@@ -407,7 +414,7 @@ networking_init(void)
     for (unsigned int i = 0; i < NET_NUM_THREADS; i ++) {
         rtos_thread_init(
             &g_thread_creation_params[i],
-            &g_networking.thread_execution_stacks[i],
+            &g_thread_execution_stacks[i],
             false,
             &g_networking.threads[i]);
 
