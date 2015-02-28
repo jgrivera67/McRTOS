@@ -1541,16 +1541,11 @@ net_receive_ipv4_packet(struct network_packet *rx_packet_p)
     FDC_ASSERT(rx_packet_p->total_length >=
 	       sizeof(struct ethernet_header) + sizeof(struct ipv4_header),
 	       rx_packet_p->total_length, rx_packet_p);
-//???
-    static int count = 0;
-
-    count++;
-    CONSOLE_POS_PRINTF(35,1, "Received IPv4 packets: %d\n", count);
-//???
-
+        
     struct local_l3_end_point *local_l3_end_point_p = rx_packet_p->local_l3_end_point_p;
     struct ipv4_header *ipv4_header_p = GET_IPV4_HEADER(rx_packet_p);
 
+    ATOMIC_POST_INCREMENT_UINT32(&g_networking.received_ipv4_packets_count);
     switch (ipv4_header_p->protocol_type) {
     case TRANSPORT_PROTO_ICMP:
 	rx_packet_p->state_flags |= NET_PACKET_IN_ICMP_QUEUE;
@@ -1583,12 +1578,7 @@ net_receive_ipv6_packet(struct network_packet *rx_packet_p)
 	       sizeof(struct ethernet_header) + sizeof(struct ipv6_header),
 	       rx_packet_p->total_length, rx_packet_p);
 
-//???
-    static int count = 0;
-
-    count++;
-    CONSOLE_POS_PRINTF(35,60, "Received IPv6 packets: %d\n", count);
-//???
+    ATOMIC_POST_INCREMENT_UINT32(&g_networking.received_ipv6_packets_count);
 
 #if 0 //???
     struct ethernet_frame *rx_frame =
@@ -1652,6 +1642,8 @@ net_receive_thread_f(void *arg)
 	    net_recycle_rx_packet(rx_packet_p);
 	    continue;
 	}
+
+        ATOMIC_POST_INCREMENT_UINT32(&g_networking.received_packets_count);
 
 	struct ethernet_frame *rx_frame =
 	    (struct ethernet_frame *)rx_packet_p->data_buffer;

@@ -1002,6 +1002,21 @@ struct networking {
     uint16_t next_tcp_ephemeral_port;
 
     /**
+     * Total number of packets received
+     */
+    uint32_t received_packets_count;
+
+    /**
+     * Number of IPv4 packets received
+     */
+    uint32_t received_ipv4_packets_count;
+
+    /**
+     * Number of IPv6 packets received
+     */
+    uint32_t received_ipv6_packets_count;
+
+    /**
      * Queue of received IPPv4 ping replies
      */
     struct rtos_queue rx_ipv4_ping_reply_packet_queue;

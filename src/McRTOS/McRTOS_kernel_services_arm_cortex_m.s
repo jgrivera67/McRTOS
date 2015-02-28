@@ -333,30 +333,30 @@ rtos_k_synchronous_context_switch:
 .func rtos_enter_privileged_mode
 
 rtos_enter_privileged_mode:
-    push    {r4-r5}
     /*
      * Check if caller is an ISR:
      */
-    mrs	    r4, ipsr
-    mov	    r5, #CPU_REG_IPSR_EXCEPTION_NUMBER_MASK
-    tst	    r4, r5
-    beq	    L_do_enter_privileged_mode
+    mrs	    r0, ipsr
+    mov	    r1, #CPU_REG_IPSR_EXCEPTION_NUMBER_MASK
+    tst	    r0, r1
+    beq	    L_check_unprivileged_thread
 
+    mov     r0, #1
+    bx      lr
+
+L_check_unprivileged_thread:
     /*
      * Check if caller is a thread running in privileged mode:
      */
-    mrs	    r4, control
-    mov	    r5, #CPU_REG_CONTROL_nPRIV_MASK
-    tst	    r4, r5
+    mrs	    r0, control
+    mov	    r1, #CPU_REG_CONTROL_nPRIV_MASK
+    tst	    r0, r1
     bne	    L_do_enter_privileged_mode
 
-    pop     {r4-r5}
     mov     r0, #1
     bx      lr
 
 L_do_enter_privileged_mode:
-    pop     {r4-r5}
-
     /*
      * Enter privilege mode:
      */

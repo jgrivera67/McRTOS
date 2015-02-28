@@ -855,6 +855,7 @@ enet_start(const struct enet_device *enet_device_p,
 
     enet_var_p->local_l3_end_point_p = local_l3_end_point_p;
 
+    bool caller_was_privileged = rtos_enter_privileged_mode();
     cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
 
     /*
@@ -897,8 +898,10 @@ enet_start(const struct enet_device *enet_device_p,
      */
     __DSB();
     write_32bit_mmio_register(&enet_regs_p->RDAR, ENET_RDAR_RDAR_MASK);
-
     rtos_k_restore_cpu_interrupts(cpu_status_register);
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
+    }
 }
 
 
@@ -935,12 +938,16 @@ k64f_enet_transmit_interrupt_e_handler(
 
 	cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
 
-	FDC_ASSERT(enet_var_p->tx_ring_entries_filled > 0 &&
-		   enet_var_p->tx_ring_entries_filled <= NET_MAX_TX_PACKETS,
+	FDC_ASSERT(enet_var_p->tx_ring_entries_filled <= NET_MAX_TX_PACKETS,
 		   enet_var_p->tx_ring_entries_filled, enet_device_p);
 
 	FDC_ASSERT(enet_var_p->tx_ring_read_cursor != NULL,
 		   enet_device_p, 0);
+
+	if (enet_var_p->tx_ring_entries_filled == 0) {
+            rtos_k_restore_cpu_interrupts(cpu_status_register);
+            break;
+        }
 
 	volatile struct enet_tx_buffer_descriptor *buffer_desc_p =
 	    enet_var_p->tx_ring_read_cursor;
@@ -1047,12 +1054,16 @@ k64f_enet_receive_interrupt_e_handler(
 
 	cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
 
-	FDC_ASSERT(enet_var_p->rx_ring_entries_filled > 0 &&
-		   enet_var_p->rx_ring_entries_filled <= NET_MAX_RX_PACKETS,
+	FDC_ASSERT(enet_var_p->rx_ring_entries_filled <= NET_MAX_RX_PACKETS,
 		   enet_var_p->rx_ring_entries_filled, enet_device_p);
 
 	FDC_ASSERT(enet_var_p->rx_ring_read_cursor != NULL,
 		   enet_device_p, 0);
+
+	if (enet_var_p->rx_ring_entries_filled == 0) {
+            rtos_k_restore_cpu_interrupts(cpu_status_register);
+            break;
+        }
 
 	volatile struct enet_rx_buffer_descriptor *buffer_desc_p =
 	    enet_var_p->rx_ring_read_cursor;
@@ -1182,6 +1193,7 @@ enet_start_xmit(const struct enet_device *enet_device_p,
     DBG_ASSERT(tx_packet_p->signature == NET_TX_PACKET_SIGNATURE,
 	       tx_packet_p->signature, tx_packet_p);
 
+    bool caller_was_privileged = rtos_enter_privileged_mode();
     cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
 
     FDC_ASSERT(enet_var_p->tx_ring_entries_filled < NET_MAX_TX_PACKETS,
@@ -1248,6 +1260,10 @@ enet_start_xmit(const struct enet_device *enet_device_p,
 	DEBUG_PRINTF("link down for enet device %#p\n", enet_device_p);
     }
 #   endif
+
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
+    }
 }
 
 
@@ -1273,6 +1289,7 @@ enet_repost_rx_packet(const struct enet_device *enet_device_p,
 	       rx_packet_p->state_flags == NET_PACKET_RX_FAILED,
 	       rx_packet_p->state_flags, rx_packet_p);
 
+    bool caller_was_privileged = rtos_enter_privileged_mode();
     cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
 
     FDC_ASSERT(enet_var_p->rx_ring_entries_filled < NET_MAX_RX_PACKETS,
@@ -1321,6 +1338,10 @@ enet_repost_rx_packet(const struct enet_device *enet_device_p,
      */
     __DSB();
     write_32bit_mmio_register(&enet_regs_p->RDAR, ENET_RDAR_RDAR_MASK);
+
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
+    }
 }
 
 

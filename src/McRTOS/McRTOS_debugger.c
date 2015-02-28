@@ -525,8 +525,8 @@ rtos_dbg_dump_execution_context(
         }
 
         rtos_dbg_dump_memory_with_call_stack(
-            execution_context_p->ctx_execution_stack_top_end_p - 1,
-            RTOS_THREAD_STACK_NUM_ENTRIES + 2,
+            context_stack_p,
+            execution_context_p->ctx_execution_stack_bottom_end_p - context_stack_p,
             "Stack entries");
     }
 }
