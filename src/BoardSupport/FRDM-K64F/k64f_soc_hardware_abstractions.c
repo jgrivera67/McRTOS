@@ -1362,11 +1362,11 @@ micro_trace_stop(void)
 void
 micro_trace_restart(void)
 {
+#if 0 // ???
     if (! g_micro_trace_initialized) {
         return;
     }
 
-#if 0 // ???
     /*
      * Re-enable micro tracing
      */

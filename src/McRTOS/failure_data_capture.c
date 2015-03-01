@@ -262,17 +262,21 @@ capture_fdc_error(
         arg2,
         error_address);
 
+    bool caller_was_privileged = rtos_enter_privileged_mode();
+
     struct rtos_cpu_controller *cpu_controller_p =
         &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
     struct fdc_info *fdc_info_p = &cpu_controller_p->cpc_failures_info;
 
-    if (fdc_info_p->fdc_error_breakpoint_on)
-    {
+    if (fdc_info_p->fdc_error_breakpoint_on) {
         ARTIFICIAL_BREAK_POINT();
-    } else {
-        micro_trace_restart();
     }
 
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
+    }
+
+    micro_trace_restart();
     return (fdc_error_t)error_address;
 #   else
 
