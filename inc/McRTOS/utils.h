@@ -88,6 +88,8 @@
 
 #define ABS(_value)     ((_value) < 0 ? -(_value) : (_value))
 
+#define MAX(_x, _y)     ((_x) >= (_y) ? (_x) : (_y))
+
 #ifdef DEBUG
 #   define DEBUG_PRINTF(_fmt, ...) \
             capture_fdc_msg_printf("DBG %s:" STRINGIFY_LITERAL(__LINE__) " " _fmt, \

@@ -367,6 +367,11 @@ networking_init(void)
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
+    fdc_error = rtos_mpu_add_thread_data_region(&g_networking,
+                                                sizeof g_networking,
+                                                false);
+    FDC_ASSERT(fdc_error == 0, fdc_error, cpu_id);
+
     FDC_ASSERT(!g_networking.initialized, 0, 0);
 
     /*
@@ -415,12 +420,13 @@ networking_init(void)
         rtos_thread_init(
             &g_thread_creation_params[i],
             &g_thread_execution_stacks[i],
-            false,
             &g_networking.threads[i]);
 
         console_printf("CPU core %u: %s started\n", cpu_id,
             g_thread_creation_params[i].p_name_p);
     }
+
+    rtos_mpu_remove_thread_data_region();   /* g_networking */
 }
 
 
@@ -1604,7 +1610,7 @@ net_receive_thread_f(void *arg)
     struct local_l3_end_point *local_l3_end_point_p =
 	(struct local_l3_end_point *)arg;
 
-    fdc_error = rtos_mpu_add_thread_data_region(&g_networking, &g_networking + 1, false);
+    fdc_error = rtos_mpu_add_thread_data_region(&g_networking, sizeof g_networking, false);
     if (fdc_error != 0) {
 	    goto exit;
     }
@@ -1691,7 +1697,7 @@ net_icmpv4_receive_thread_f(void *arg)
     struct local_l3_end_point *local_l3_end_point_p =
 	(struct local_l3_end_point *)arg;
 
-    fdc_error = rtos_mpu_add_thread_data_region(&g_networking, &g_networking + 1, false);
+    fdc_error = rtos_mpu_add_thread_data_region(&g_networking, sizeof g_networking, false);
     if (fdc_error != 0) {
 	    goto exit;
     }
@@ -1847,7 +1853,7 @@ net_dhcpv4_client_thread_f(void *arg)
 
     struct local_l4_end_point *client_end_point_p;
 
-    fdc_error = rtos_mpu_add_thread_data_region(&g_networking, &g_networking + 1, false);
+    fdc_error = rtos_mpu_add_thread_data_region(&g_networking, sizeof g_networking, false);
     if (fdc_error != 0) {
 	    goto exit;
     }

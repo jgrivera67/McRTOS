@@ -134,6 +134,16 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
             CPU_INTERRUPTS_ARE_ENABLED(currentCpsr), currentCpsr, 0);       \
     } while (0)
 
+#   define FDC_ASSERT_UNPRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED() \
+    do {                                                                    \
+        uint32_t currentCpsr;                                               \
+        CAPTURE_ARM_CPSR_REGISTER(currentCpsr);                             \
+        FDC_ASSERT(                                                         \
+            CPU_MODE_IS_UNPRIVILEGED(currentCpsr), currentCpsr, 0);           \
+        FDC_ASSERT(                                                         \
+            CPU_INTERRUPTS_ARE_ENABLED(currentCpsr), currentCpsr, 0);       \
+    } while (0)
+
 #elif DEFINED_ARM_CORTEX_M_ARCH()
 
 #   define FDC_ASSERT_CPU_INTERRUPTS_DISABLED() \
@@ -143,6 +153,14 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
     do {                                                                    \
         FDC_ASSERT(                                                         \
             CPU_MODE_IS_PRIVILEGED(__get_CONTROL(), __get_IPSR()), 0, 0);   \
+        FDC_ASSERT(                                                         \
+            CPU_INTERRUPTS_ARE_ENABLED(__get_PRIMASK()), 0, 0);             \
+    } while (0)
+
+#   define FDC_ASSERT_UNPRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED() \
+    do {                                                                    \
+        FDC_ASSERT(                                                         \
+            CPU_MODE_IS_UNPRIVILEGED(__get_CONTROL()), 0, 0);               \
         FDC_ASSERT(                                                         \
             CPU_INTERRUPTS_ARE_ENABLED(__get_PRIMASK()), 0, 0);             \
     } while (0)
@@ -305,7 +323,7 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
 #define FDC_ASSERT(_cond, _arg1, _arg2)
 #define FDC_ASSERT_CPU_INTERRUPTS_DISABLED()
 #define FDC_ASSERT_PRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED()
-#define FDC_ASSERT_UNPRIVILEGED_CPU_MODE()
+#define FDC_ASSERT_UNPRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED()
 #define FDC_ASSERT_COMING_FROM_RESET()
 #define FDC_ASSERT_CPU_IS_LITTLE_ENDIAN()
 #define FDC_ASSERT_VALID_MMIO_ADDRESS(_io_addr)
@@ -397,6 +415,9 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
 
 #define DBG_ASSERT_PRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED() \
         FDC_ASSERT_PRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED()
+
+#define DBG_ASSERT_UNPRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED() \
+        FDC_ASSERT_UNPRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED()
 
 #define DBG_ASSERT_VALID_MMIO_ADDRESS(_io_addr) \
         FDC_ASSERT_VALID_MMIO_ADDRESS(_io_addr)

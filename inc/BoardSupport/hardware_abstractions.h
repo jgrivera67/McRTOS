@@ -280,13 +280,11 @@ void mpu_enable(void);
 
 void mpu_set_thread_data_regions(
     cpu_id_t cpu_id,
-    bool privileged,
     struct mpu_region_range regions[],
     uint8_t num_regions);
 
 void mpu_set_thread_data_region(
     cpu_id_t cpu_id,
-    bool privileged,
     mpu_thread_data_region_index_t thread_region_index,
     void *start_addr,
     void *end_addr,

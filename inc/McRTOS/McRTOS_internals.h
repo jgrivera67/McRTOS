@@ -335,7 +335,7 @@ struct rtos_cpu_controller
      */
     struct rtos_thread_execution_stack *cpc_system_threads_execution_stacks_p;
 
-} __attribute__ ((aligned(SOC_CACHE_LINE_SIZE_IN_BYTES)));
+} __attribute__ ((aligned(MAX(SOC_CACHE_LINE_SIZE_IN_BYTES, SOC_MPU_REGION_ALIGNMENT))));
 
 C_ASSERT(sizeof(struct rtos_cpu_controller) <= RTOS_MAX_McRTOS_CPU_CONTROLLER_SIZE);
 
@@ -365,13 +365,13 @@ C_ASSERT(RTOS_NUM_SYSTEM_THREAD_INDEXES <= RTOS_NUM_SYSTEM_THREADS_PER_CPU);
  */
 struct McRTOS
 {
-#   define MCRTOS_SIGNATURE  GEN_SIGNATURE('R', 'T', 'O', 'S')
-    uint32_t rts_signature;
-
     /**
      * Per-CPU execution controllers, one for each CPU core
      */
     struct rtos_cpu_controller rts_cpu_controllers[SOC_NUM_CPU_CORES];
+
+#   define MCRTOS_SIGNATURE  GEN_SIGNATURE('R', 'T', 'O', 'S')
+    uint32_t rts_signature;
 
     /**
      * Flag to to be set when CPU cores other than the first one can

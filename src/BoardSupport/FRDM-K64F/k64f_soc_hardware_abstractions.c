@@ -1067,7 +1067,6 @@ mpu_enable(void)
 void
 mpu_set_thread_data_regions(
     cpu_id_t cpu_id,
-    bool privileged,
     struct mpu_region_range regions[],
     uint8_t num_regions)
 {
@@ -1091,27 +1090,13 @@ mpu_set_thread_data_regions(
 
 	DBG_ASSERT(regions[i].start_addr != NULL, i, 0);
 
-	if (privileged) {
-	    if (regions[i].read_only) {
-		/*
-		 * NOTE: privileged permissions should be r--, but there is no
-		 * way to encode that, without also having unprivileged r--
-		 */
-		privileged_permissions = 0x1; /* r-x */
-	    } else {
-		privileged_permissions = 0x2; /* rw- */
-	    }
-
-	    unprivileged_permissions = 0x0; /* --- */
-	} else {
-	    if (regions[i].read_only) {
-		unprivileged_permissions = 0x4; /* r-- */
-		privileged_permissions = 0x3;   /* r-- */
-	    } else {
-		unprivileged_permissions = 0x6; /* rw- */
-		privileged_permissions = 0x2;   /* rw- */
-	    }
-	}
+        if (regions[i].read_only) {
+            unprivileged_permissions = 0x4; /* r-- */
+            privileged_permissions = 0x3;   /* r-- */
+        } else {
+            unprivileged_permissions = 0x6; /* rw- */
+            privileged_permissions = 0x2;   /* rw- */
+        }
 
 	k64f_set_mpu_region_for_cpu(mpu_var_p, mpu_regs_p, cpu_id, region_index,
 				    regions[i].start_addr, regions[i].end_addr,
@@ -1133,7 +1118,6 @@ mpu_set_thread_data_regions(
 void
 mpu_set_thread_data_region(
     cpu_id_t cpu_id,
-    bool privileged,
     uint8_t thread_region_index,
     void *start_addr,
     void *end_addr,
@@ -1159,13 +1143,8 @@ mpu_set_thread_data_region(
     mpu_region_index_t region_index = FIRST_MPU_THREAD_DATA_REGION +
 				      thread_region_index;
 
-    if (privileged) {
-	privileged_permissions = 0x2;	/* rw- */
-	unprivileged_permissions = 0x0; /* --- */
-    } else {
-	unprivileged_permissions = 0x6; /* rw- */
-	privileged_permissions = 0x2;	/* rw- */
-    }
+    unprivileged_permissions = 0x6; /* rw- */
+    privileged_permissions = 0x2;   /* rw- */
 
     k64f_set_mpu_region_for_cpu(mpu_var_p, mpu_regs_p, cpu_id, region_index,
 				start_addr, end_addr,

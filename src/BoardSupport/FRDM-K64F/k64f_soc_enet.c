@@ -841,6 +841,7 @@ enet_start(const struct enet_device *enet_device_p,
 	   struct local_l3_end_point *local_l3_end_point_p)
 {
     uint32_t reg_value;
+    fdc_error_t fdc_error;
 
     FDC_ASSERT(
         enet_device_p->signature == ENET_DEVICE_SIGNATURE,
@@ -849,6 +850,10 @@ enet_start(const struct enet_device *enet_device_p,
     volatile ENET_Type *enet_regs_p = enet_device_p->mmio_registers_p;
     struct enet_device_var *const enet_var_p = enet_device_p->var_p;
 
+    fdc_error = rtos_mpu_add_thread_data_region(enet_var_p,
+                                                sizeof *enet_var_p,
+                                                false);
+    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
     FDC_ASSERT(enet_var_p->initialized, enet_device_p, enet_var_p);
     FDC_ASSERT(enet_var_p->local_l3_end_point_p == NULL,
                enet_var_p->local_l3_end_point_p, enet_var_p);
@@ -902,6 +907,8 @@ enet_start(const struct enet_device *enet_device_p,
     if (!caller_was_privileged) {
         rtos_exit_privileged_mode();
     }
+
+    rtos_mpu_remove_thread_data_region();   /* enet_var_p */
 }
 
 

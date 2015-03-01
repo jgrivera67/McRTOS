@@ -10,6 +10,8 @@
 
 #include <McRTOS/compile_time_checks.h>
 #include <McRTOS/McRTOS_kernel_services.h>
+#include <McRTOS/McRTOS_kernel_services.h>
+#include <hardware_abstractions.h>
 
 #ifndef BOARD_INSTANCE
 #define BOARD_INSTANCE	1
@@ -43,9 +45,10 @@ C_ASSERT(BOARD_INSTANCE == 1 || BOARD_INSTANCE == 2);
 
 /**
  * Network packet data buffer alignment in bytes
- * (required by the ENET device)
+ * (minimum 16-byte alignment required by the ENET device)
  */
-#define NET_PACKET_DATA_BUFFER_ALIGNMENT UINT32_C(16)
+#define NET_PACKET_DATA_BUFFER_ALIGNMENT \
+        MAX(UINT32_C(16), SOC_MPU_REGION_ALIGNMENT)
 
 /**
  * Network packet data buffer size rounded-up to the required alignment
@@ -1066,7 +1069,7 @@ struct networking {
      * Array of application threads
      */
     struct rtos_thread threads[NET_NUM_THREADS];
-};
+}  __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT)));
 
 C_ASSERT(NET_MAX_IPV4_PACKET_PAYLOAD_SIZE <=
          UINT16_MAX - sizeof(struct ipv4_header));

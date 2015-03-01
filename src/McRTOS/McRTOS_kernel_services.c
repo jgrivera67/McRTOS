@@ -140,9 +140,6 @@ C_ASSERT(ARRAY_SIZE(g_rtos_system_call_dispatch_table) == RTOS_NUM_SYSTEM_CALLS)
  *
  * @param   thread_stack_p: Pointer to the thread's execution stack.
  *
- * @param   thread_is_privileged: true if thread to initialize is
- *          a system thread. False otherwise.
- *
  * @param   rtos_thread_p: Pointer to the thread object
  *
  * @return  none
@@ -151,7 +148,6 @@ void
 rtos_k_thread_init(
     _IN_ const struct rtos_thread_creation_params *params_p,    
     _IN_ struct rtos_thread_execution_stack *thread_stack_p,
-    _IN_ bool thread_is_privileged,
     _OUT_ struct rtos_thread *rtos_thread_p)
 {
     static uint8_t next_thread_context_id = 0;
@@ -185,7 +181,6 @@ rtos_k_thread_init(
     rtos_thread_p->thr_current_priority = thread_prio;
     rtos_thread_p->thr_state = RTOS_THREAD_CREATED;
     rtos_thread_p->thr_time_slice_ticks_left = RTOS_THREAD_TIME_SLICE_IN_TICKS;
-    rtos_thread_p->thr_privileged = thread_is_privileged;
     rtos_thread_p->thr_state_history = 0x0;
     rtos_thread_p->thr_priority_history = thread_prio;
     rtos_thread_p->thr_preempted_by_time_slice_count = 0;
@@ -207,26 +202,13 @@ rtos_k_thread_init(
         FDC_CST_CONTEXT_ID_SHIFT,
         thread_context_id);
 
-    if (thread_is_privileged)
-    {
-        rtos_cpu_mode = RTOS_PRIVILEGED_THREAD_MODE;
+    rtos_cpu_mode = RTOS_UNPRIVILEGED_THREAD_MODE;
 
-        SET_BIT_FIELD(
-            prefilled_trace_entry,
-            FDC_CST_CONTEXT_TYPE_MASK,
-            FDC_CST_CONTEXT_TYPE_SHIFT,
-            FDC_CST_SYSTEM_THREAD);
-    }
-    else
-    {
-        rtos_cpu_mode = RTOS_UNPRIVILEGED_THREAD_MODE;
-
-        SET_BIT_FIELD(
-            prefilled_trace_entry,
-            FDC_CST_CONTEXT_TYPE_MASK,
-            FDC_CST_CONTEXT_TYPE_SHIFT,
-            FDC_CST_APPLICATION_THREAD);
-    }
+    SET_BIT_FIELD(
+        prefilled_trace_entry,
+        FDC_CST_CONTEXT_TYPE_MASK,
+        FDC_CST_CONTEXT_TYPE_SHIFT,
+        FDC_CST_APPLICATION_THREAD);
 
     /*
      * Initialize thread's stack:
@@ -2628,13 +2610,16 @@ rtos_k_lcd_draw_tile(
 fdc_error_t
 rtos_k_mpu_add_thread_data_region(
     void *start_addr,
-    void *end_addr,
+    size_t size,
     bool read_only)
 {
     FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
 
-    FDC_ASSERT(start_addr != NULL && start_addr < end_addr,
-	       start_addr, end_addr);
+    FDC_ASSERT(start_addr != NULL && size != 0, start_addr, size);
+
+    void *end_addr = (void *)((uintptr_t)start_addr + size);
+
+    FDC_ASSERT(start_addr < end_addr, start_addr, end_addr);
 
     fdc_error_t fdc_error = 0;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
@@ -2662,7 +2647,6 @@ rtos_k_mpu_add_thread_data_region(
 	    current_thread_p->thr_mpu_data_regions[num_data_regions].start_addr = start_addr;
 	    current_thread_p->thr_mpu_data_regions[num_data_regions].end_addr = end_addr;
 	    mpu_set_thread_data_region(cpu_id,
-				       current_thread_p->thr_privileged,
 				       num_data_regions,
 				       start_addr,
 				       end_addr,
@@ -2717,7 +2701,7 @@ rtos_k_mpu_remove_thread_data_region(void)
      * for the thread's stack.
      */
     if (num_data_regions > 1) {
-	    mpu_unset_thread_data_region(num_data_regions);
+	    mpu_unset_thread_data_region(num_data_regions - 1);
 	    current_thread_p->thr_num_mpu_data_regions --;
     } else {
 	   (void)CAPTURE_FDC_ERROR(

@@ -229,6 +229,11 @@ void app_software_init(void)
         "%s\n%s\n",
         g_app_version, g_app_build_timestamp);
 
+    fdc_error = rtos_mpu_add_thread_data_region(&g_app,
+                                                sizeof g_app,
+                                                false);
+    FDC_ASSERT(fdc_error == 0, fdc_error, cpu_id);
+
     g_app.led_color_mask = LED_COLOR_RED;
 
     /*
@@ -239,12 +244,13 @@ void app_software_init(void)
         rtos_thread_init(
             &g_app_thread_creation_params[i],
             &g_app_thread_execution_stacks[i],
-            false,
             &g_app_threads[i]);
 
         console_printf("CPU core %u: %s started\n", cpu_id,
             g_app_thread_creation_params[i].p_name_p);
     }
+
+    rtos_mpu_remove_thread_data_region();   /* g_app */
 
     networking_init();
 }
@@ -314,7 +320,7 @@ hello_world_thread_f(void *arg)
 
     int thread_id = (intptr_t)arg;
 
-    fdc_error = rtos_mpu_add_thread_data_region(&g_app, &g_app + 1, false);
+    fdc_error = rtos_mpu_add_thread_data_region(&g_app, sizeof g_app, false);
     if (fdc_error != 0) {
 	    goto exit;
     }
@@ -404,7 +410,7 @@ accelerometer_thread_f(void *arg)
     FDC_ASSERT(arg == NULL, arg, cpu_id);
     console_printf("Initializing accelerometer sensing thread ...\n");
 
-    fdc_error = rtos_mpu_add_thread_data_region(&g_app, &g_app + 1, false);
+    fdc_error = rtos_mpu_add_thread_data_region(&g_app, sizeof g_app, false);
         if (fdc_error != 0) {
 	    goto exit;
     }

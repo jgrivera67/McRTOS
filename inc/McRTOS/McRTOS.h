@@ -353,7 +353,6 @@ void
 rtos_thread_init(
     _IN_ const struct rtos_thread_creation_params *params_p,    
     _IN_ struct rtos_thread_execution_stack *thread_stack_p,
-    _IN_ bool thread_is_privileged,
     _OUT_ struct rtos_thread *rtos_thread_p);
 
 _THREAD_CALLERS_ONLY_
@@ -498,7 +497,7 @@ _THREAD_CALLERS_ONLY_
 fdc_error_t
 rtos_mpu_add_thread_data_region(
     void *start_addr,
-    void *end_addr,
+    size_t size,
     bool read_only);
 
 _THREAD_CALLERS_ONLY_

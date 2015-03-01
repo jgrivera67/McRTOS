@@ -182,7 +182,7 @@ struct enet_device_var {
      * Rx buffer descriptor ring accessed by the Ethernet MAC
      */
     volatile struct enet_rx_buffer_descriptor rx_buffer_descriptors[NET_MAX_RX_PACKETS];
-};
+}  __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT)));
 
 #define ENET_PHY_ADDRESS    0x0
 

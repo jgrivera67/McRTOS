@@ -75,8 +75,15 @@ rtos_command_processor(void)
 	g_McRTOS_p->rts_command_line_buffer,
 	RTOS_COMMAND_LINE_BUFFER_SIZE);
 
+    fdc_error = rtos_mpu_add_thread_data_region(&g_tokenizer,
+                                                sizeof g_tokenizer,
+                                                false);
+    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+
     rtos_parse_command_line(
 	g_McRTOS_p->rts_command_line_buffer);
+
+    rtos_mpu_remove_thread_data_region();   /* g_tokenizer */
 }
 
 
@@ -691,8 +698,14 @@ cmd_display_msg_log(void)
     fdc_info_p->fdc_msg_buffer[RTOS_FDC_MSG_BUFFER_SIZE - 1] = '\0';
     console_printf("FDC message buffer for CPU: %u\n\n", cpu_id);
 
+    bool caller_was_privileged = rtos_enter_privileged_mode();
+
     for (char *s = fdc_info_p->fdc_msg_buffer; *s != '\0'; s ++) {
         uart_putchar(g_console_serial_port_p, *s);
+    }
+
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
     }
 }
 
@@ -719,20 +732,20 @@ static bool parse_dmesg(void)
 
 
 static void
-cmd_display_stack_trace(uintptr_t mem_addr, bool only_call_entries)
+cmd_display_stack_trace(uintptr_t execution_context_addr, bool only_call_entries)
 {
-    if (!BOARD_VALID_RAM_ADDRESS(mem_addr) || mem_addr % 4 != 0) {
-        console_printf("ERROR: Invalid address %p\n", mem_addr);
+    if (!BOARD_VALID_RAM_ADDRESS(execution_context_addr) || execution_context_addr % 4 != 0) {
+        console_printf("ERROR: Invalid address %p\n", execution_context_addr);
         return;
     }
 
     struct rtos_execution_context *execution_context_p =
-        (struct rtos_execution_context *)mem_addr;
+        (struct rtos_execution_context *)execution_context_addr;
 
     if (execution_context_p->ctx_signature !=
             RTOS_EXECUTION_CONTEXT_SIGNATURE) {
         console_printf("ERROR: Invalid execution context address %p\n",
-                       mem_addr);
+                       execution_context_addr);
         return;
     }
 
@@ -789,7 +802,14 @@ static bool parse_stack(void)
 
     case HEXADECIMAL_NUMBER:
         mem_addr = convert_string_to_hexadecimal(g_tokenizer.last_lexical_unit);
+
+        bool caller_was_privileged = rtos_enter_privileged_mode();
+
 	cmd_display_stack_trace(mem_addr, true);
+        if (!caller_was_privileged) {
+            rtos_exit_privileged_mode();
+        }
+
 	break;
 
     default:
@@ -819,9 +839,11 @@ rtos_parse_command_line(const char *cmd_line)
 
 	switch (token) {
 	case BREAK_INPUT:
+            (void)rtos_enter_privileged_mode();
 	    __disable_irq();
 	    rtos_run_debugger(NULL, NULL);
 	    __enable_irq();
+            rtos_exit_privileged_mode();
 	    break;
 
 	case CLEAR:
@@ -937,6 +959,8 @@ McRTOS_display_stats(void)
 	"address                                            count        count      usage (ms) usage (cycles) switched-out enabled history     \n"
 	"========== ============================== ======== ============ ========== ========== ============== ============ ======= ============\n");
 
+    bool caller_was_privileged = rtos_enter_privileged_mode();
+
     GLIST_FOR_EACH_NODE(
         context_node_p,
         &cpu_controller_p->cpc_execution_contexts_list_anchor)
@@ -988,6 +1012,10 @@ McRTOS_display_stats(void)
             context_p->ctx_switched_out_reason_history,
             context_p->ctx_last_switched_out_reason
         );
+    }
+
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
     }
 }
 

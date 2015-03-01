@@ -456,7 +456,7 @@
 /*
  * Offsets of struct McRTOS fields accessed from assembly code
  */
-#define RTOS_RTS_CPU_CONTROLLERS_OFFSET (ARM_CPU_WORD_SIZE_IN_BYTES * 1)
+#define RTOS_RTS_CPU_CONTROLLERS_OFFSET 0
 
 /*
  * Offsets of struct rtos_execution_context fields accessed from

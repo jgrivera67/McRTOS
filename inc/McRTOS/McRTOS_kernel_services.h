@@ -695,12 +695,6 @@ struct rtos_thread
 #   endif
 
     /**
-     * Flag that indicates if the thread is privileged (true) or unprivileged
-     * (false)
-     */
-    uint8_t thr_privileged;
-
-    /**
      * Number of MPU data regions currently defined for the thread
      */
     uint8_t thr_num_mpu_data_regions;
@@ -837,7 +831,6 @@ void
 rtos_k_thread_init(
     _IN_ const struct rtos_thread_creation_params *params_p,    
     _IN_ struct rtos_thread_execution_stack *thread_stack_p,
-    _IN_ bool thread_is_privileged,
     _OUT_ struct rtos_thread *rtos_thread_p);
 
 _THREAD_CALLERS_ONLY_
@@ -1054,7 +1047,7 @@ rtos_k_lcd_draw_tile(
 fdc_error_t
 rtos_k_mpu_add_thread_data_region(
     void *start_addr,
-    void *end_addr,
+    size_t size,
     bool read_only);
 
 void

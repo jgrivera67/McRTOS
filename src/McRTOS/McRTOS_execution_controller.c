@@ -298,7 +298,6 @@ void rtos_thread_scheduler(
      * Set MPU regions for the chosen thread:
      */
     mpu_set_thread_data_regions(SOC_GET_CURRENT_CPU_ID(),
-			        chosen_thread_p->thr_privileged,
 			        chosen_thread_p->thr_mpu_data_regions,
 			        chosen_thread_p->thr_num_mpu_data_regions);
 

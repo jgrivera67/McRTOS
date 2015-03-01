@@ -60,7 +60,7 @@ static fdc_error_t rtos_root_thread_f(void *arg);
 static fdc_error_t rtos_idle_thread_f(void *arg);
 static fdc_error_t rtos_touch_screen_reader_thread_f(void *arg);
 
-const char g_McRTOS_version[] = "McRTOS v1.1 (" RTOS_BUILD_FLAVOR ")";
+const char g_McRTOS_version[] = "McRTOS v2.0 (" RTOS_BUILD_FLAVOR ")";
 
 const char g_McRTOS_build_timestamp[] = "built "__DATE__ " " __TIME__;
 
@@ -338,7 +338,6 @@ rtos_startup(
     rtos_k_thread_init(
         &g_rtos_system_threads[RTOS_ROOT_SYSTEM_THREAD],
         &cpu_controller_p->cpc_system_threads_execution_stacks_p[RTOS_ROOT_SYSTEM_THREAD],
-        true,
         &cpu_controller_p->cpc_system_threads[RTOS_ROOT_SYSTEM_THREAD]);
 
     struct rtos_execution_context *current_context_p =
@@ -496,7 +495,7 @@ rtos_init_reset_execution_context(
 static fdc_error_t
 rtos_root_thread_f(void *arg)
 {
-    FDC_ASSERT_PRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED();
+    FDC_ASSERT_UNPRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED();
 
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
@@ -505,6 +504,11 @@ rtos_root_thread_f(void *arg)
 
     FDC_ASSERT(arg == NULL, arg, cpu_id);
     struct rtos_thread *root_thread_p = (struct rtos_thread *)rtos_thread_self();
+
+    fdc_error = rtos_mpu_add_thread_data_region(g_McRTOS_p,
+                                                sizeof *g_McRTOS_p,
+                                                true);
+    FDC_ASSERT(fdc_error == 0, fdc_error, cpu_id);
 
     /*
      * The root system thread is created with the highest priority thread, so
@@ -517,6 +521,7 @@ rtos_root_thread_f(void *arg)
 	root_thread_p->thr_current_priority == root_thread_p->thr_base_priority,
 	root_thread_p->thr_base_priority, root_thread_p->thr_current_priority);
 
+    (void)rtos_enter_privileged_mode();
     if (cpu_id == 0)
     {
         /*
@@ -538,6 +543,7 @@ rtos_root_thread_f(void *arg)
      */
     initialize_tick_timer();
 
+    rtos_exit_privileged_mode();
     console_printf("CPU core %u: McRTOS tick timer started\n", cpu_id);
 
     /*
@@ -545,10 +551,9 @@ rtos_root_thread_f(void *arg)
      */
     for (uint8_t i = RTOS_IDLE_SYSTEM_THREAD; i < ARRAY_SIZE(g_rtos_system_threads); i ++)
     {
-        rtos_k_thread_init(
+        rtos_thread_init(
             &g_rtos_system_threads[i],
             &cpu_controller_p->cpc_system_threads_execution_stacks_p[i],
-            true,
             &cpu_controller_p->cpc_system_threads[i]);
 
         console_printf("CPU core %u: %s started\n", cpu_id,
@@ -571,16 +576,18 @@ rtos_root_thread_f(void *arg)
      * Lower priority of the root system thread, so that the root system
      * thread does not interfere with more time-critical threads:
      */
+    (void)rtos_enter_privileged_mode();
     cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
     root_thread_p->thr_base_priority = RTOS_LOWEST_THREAD_PRIORITY - 1;
     root_thread_p->thr_current_priority = RTOS_LOWEST_THREAD_PRIORITY - 1;
     rtos_k_restore_cpu_interrupts(cpu_status_register);
+    rtos_exit_privileged_mode();
 
     for ( ; ; )
     {
 	while (g_McRTOS_p->rts_console_input_cpu_id != cpu_id) {
-	   rtos_k_condvar_wait(&cpu_controller_p->cpc_inter_processor_interrupt_condvar,
-			       NULL, NULL);
+	   rtos_condvar_wait(&cpu_controller_p->cpc_inter_processor_interrupt_condvar,
+			     NULL, NULL);
 	}
 
 	rtos_command_processor();
@@ -589,6 +596,7 @@ rtos_root_thread_f(void *arg)
     fdc_error = CAPTURE_FDC_ERROR(
         "McRTOS root thread should not have terminated", cpu_id, 0);
 
+    rtos_mpu_remove_thread_data_region();   /* g_McRTOS_p */
     return fdc_error;
 }
 
@@ -598,13 +606,17 @@ rtos_root_thread_f(void *arg)
 static fdc_error_t
 rtos_idle_thread_f(void *arg)
 {
-    FDC_ASSERT_PRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED();
+    FDC_ASSERT_UNPRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED();
 
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
     FDC_ASSERT(arg == NULL, arg, cpu_id);
 
+    fdc_error = rtos_mpu_add_thread_data_region(g_McRTOS_p,
+                                                sizeof *g_McRTOS_p,
+                                                true);
+    FDC_ASSERT(fdc_error == 0, fdc_error, cpu_id);
     for ( ; ; )
     {
         TODO("Implement this")
@@ -630,6 +642,7 @@ rtos_idle_thread_f(void *arg)
     fdc_error = CAPTURE_FDC_ERROR(
         "McRTOS idle thread should not have terminated", cpu_id, 0);
 
+    rtos_mpu_remove_thread_data_region();   /* g_McRTOS_p */
     return fdc_error;
 }
 
