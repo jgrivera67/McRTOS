@@ -10,6 +10,8 @@
 #ifndef _McRTOS_CMD_PROCESSOR_H
 #define _McRTOS_CMD_PROCESSOR_H
 
+struct ipv4_address;
+
 enum common_tokens {
     INVALID_TOKEN = 0,
     END_OF_INPUT,
@@ -21,6 +23,23 @@ enum common_tokens {
     SLASH_TOKEN,
     APP_COMMAND,
     FIRST_KEYWORD_TOKEN,
+};
+
+enum tokens {
+    ADDR = FIRST_KEYWORD_TOKEN,
+    CLEAR,
+    CPU,
+    DMESG,
+    GATEWAY,
+    HELP,
+    IP4,
+    IP6,
+    PING,
+    RESET,
+    SET,
+    STACK,
+    TOP,
+    VERSION,
 };
 
 struct tokenizer {
@@ -59,7 +78,10 @@ void init_tokenizer(struct tokenizer *tokenizer_p,
 
 token_t get_next_token(struct tokenizer *tokenizer_p);
 
+bool parse_ip4_address(struct ipv4_address *ip_addr_p);
+
 void rtos_command_processor(void);
 
+extern struct tokenizer g_tokenizer;
 
 #endif /* _McRTOS_CMD_PROCESSOR_H */

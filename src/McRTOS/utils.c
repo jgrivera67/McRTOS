@@ -815,6 +815,7 @@ read_command_line(
     for  ( ; ; ) {
         uint8_t c = getchar_func_p(char_io_arg_p);
 
+        FDC_ASSERT(cmd_line_cursor <= cmd_line_end, cmd_line_cursor, cmd_line_end);
         switch (c) {
         case '\r':
             putchar_func_p(char_io_arg_p, '\r');
