@@ -525,12 +525,10 @@ demo_ping_thread_f(void *arg)
     uint32_t ping_count = 0;
 
     for ( ; ; ) {
-        rtos_enter_privileged_mode();
 	if (ping_remote_ip_addr(&dest_ip_addr, ping_count)) {
 	    ping_count ++;
 	}
 
-        rtos_exit_privileged_mode();
 	rtos_thread_delay(1500);
     }
 
@@ -650,8 +648,6 @@ demo_udp_server_thread_f(void *arg)
 
     uint32_t seq_num = 0;
 
-    rtos_enter_privileged_mode();
-
     struct local_l4_end_point *server_end_point_p;
 
     fdc_error = net_create_local_l4_end_point(TRANSPORT_PROTO_UDP,
@@ -675,15 +671,29 @@ demo_udp_server_thread_f(void *arg)
 				      &client_port,
 				      &rx_packet_p);
 
+        fdc_error = rtos_mpu_add_thread_data_region(rx_packet_p,
+                                                    sizeof *rx_packet_p,
+                                                    true);
+        FDC_ASSERT(fdc_error == 0, fdc_error, rx_packet_p);
+        
 	in_msg_size = net_get_udp_data_payload_length(rx_packet_p);
 	FDC_ASSERT(in_msg_size == sizeof(uint32_t), in_msg_size, 0);
 	in_msg_p = net_get_udp_data_payload_area(rx_packet_p);
 	seq_num = *in_msg_p;
 	CONSOLE_POS_PRINTF(38, 1, "UDP server received %u", seq_num);
+
+        rtos_mpu_remove_thread_data_region(); /* rx_packet_p */
 	net_recycle_rx_packet(rx_packet_p);
+
+        fdc_error = rtos_mpu_add_thread_data_region(tx_packet_p,
+                                                    sizeof *tx_packet_p,
+                                                    false);
+        FDC_ASSERT(fdc_error == 0, fdc_error, tx_packet_p);
 
 	out_msg_p = net_get_udp_data_payload_area(tx_packet_p);
 	*out_msg_p = seq_num;
+        rtos_mpu_remove_thread_data_region(); /* tx_packet_p */
+
 	net_send_ipv4_udp_datagram(server_end_point_p, &client_ip_addr,
 				   client_port,
 		                   tx_packet_p, sizeof(uint32_t));
@@ -691,7 +701,7 @@ demo_udp_server_thread_f(void *arg)
     }
 
     net_free_tx_packet(tx_packet_p);
-    rtos_exit_privileged_mode();
+
     fdc_error = CAPTURE_FDC_ERROR(
         "thread should not have terminated",
         cpu_id, rtos_thread_self());
@@ -709,8 +719,6 @@ demo_udp_client_thread_f(void *arg)
     FDC_ASSERT(arg != NULL, arg, cpu_id);
     const struct ipv4_address dest_ip_addr = { .value = (uintptr_t)arg };
     uint32_t seq_num = 0;
-
-    rtos_enter_privileged_mode();
 
     struct local_l4_end_point *client_end_point_p;
 
@@ -730,8 +738,15 @@ demo_udp_client_thread_f(void *arg)
 
 	CONSOLE_POS_PRINTF(36, 1, "UDP client sent %u", seq_num);
 
+        fdc_error = rtos_mpu_add_thread_data_region(tx_packet_p,
+                                                    sizeof *tx_packet_p,
+                                                    false);
+        FDC_ASSERT(fdc_error == 0, fdc_error, tx_packet_p);
+
 	out_msg_p = net_get_udp_data_payload_area(tx_packet_p);
 	*out_msg_p = seq_num;
+        rtos_mpu_remove_thread_data_region(); /* tx_packet_p */
+
 	net_send_ipv4_udp_datagram(client_end_point_p, &dest_ip_addr,
 		                   MY_UDP_SERVER_PORT,
 		                   tx_packet_p, sizeof(uint32_t));
@@ -751,11 +766,18 @@ demo_udp_client_thread_f(void *arg)
 	FDC_ASSERT(server_port == MY_UDP_SERVER_PORT,
 		   server_port, 0);
 
+        fdc_error = rtos_mpu_add_thread_data_region(rx_packet_p,
+                                                    sizeof *rx_packet_p,
+                                                    true);
+        FDC_ASSERT(fdc_error == 0, fdc_error, rx_packet_p);
+
 	in_msg_size = net_get_udp_data_payload_length(rx_packet_p);
 	FDC_ASSERT(in_msg_size == sizeof(uint32_t), in_msg_size, 0);
 	in_msg_p = net_get_udp_data_payload_area(rx_packet_p);
 	FDC_ASSERT(*in_msg_p == seq_num, *in_msg_p, seq_num);
 	CONSOLE_POS_PRINTF(37, 1, "UDP client received %u      ", *in_msg_p);
+
+        rtos_mpu_remove_thread_data_region(); /* rx_packet_p */
 	net_recycle_rx_packet(rx_packet_p);
 
 	seq_num ++;
@@ -763,7 +785,6 @@ demo_udp_client_thread_f(void *arg)
     }
 
     net_free_tx_packet(tx_packet_p);
-    rtos_exit_privileged_mode();
     fdc_error = CAPTURE_FDC_ERROR(
         "thread should not have terminated",
         cpu_id, rtos_thread_self());

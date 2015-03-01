@@ -437,6 +437,13 @@ void
 net_set_local_ipv4_address(const struct ipv4_address *ip_addr_p,
 			   uint8_t subnet_prefix)
 {
+    fdc_error_t fdc_error;
+
+    fdc_error = rtos_mpu_add_thread_data_region(&g_networking,
+                                                sizeof g_networking,
+                                                false);
+    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+
     FDC_ASSERT(g_networking.initialized, 0, 0);
     FDC_ASSERT(ip_addr_p->value != IPV4_NULL_ADDR, ip_addr_p->value, 0);
     FDC_ASSERT(subnet_prefix < 32, subnet_prefix, 0);
@@ -447,6 +454,13 @@ net_set_local_ipv4_address(const struct ipv4_address *ip_addr_p,
     local_l3_end_point_p->ipv4.local_ip_addr = *ip_addr_p;
     local_l3_end_point_p->ipv4.subnet_mask = IPv4_SUBNET_MASK(subnet_prefix);
 
+    capture_fdc_msg_printf("Set local IPv4 address to %u.%u.%u.%u/%u\n",
+                           ip_addr_p->bytes[0],
+                           ip_addr_p->bytes[1],
+                           ip_addr_p->bytes[2],
+                           ip_addr_p->bytes[3],
+                           subnet_prefix);
+
     /*
      * Send gratuitous ARP request (to catch if someone else is using the same
      * IP address):
@@ -454,6 +468,8 @@ net_set_local_ipv4_address(const struct ipv4_address *ip_addr_p,
     net_send_arp_request(local_l3_end_point_p->enet_device_p,
 			 &local_l3_end_point_p->ipv4.local_ip_addr,
 			 &local_l3_end_point_p->ipv4.local_ip_addr);
+
+    rtos_mpu_remove_thread_data_region();   /* g_networking */
 }
 
 
@@ -463,7 +479,13 @@ net_set_local_ipv4_address(const struct ipv4_address *ip_addr_p,
 struct network_packet *
 net_allocate_tx_packet(bool free_after_tx_complete)
 {
+    fdc_error_t fdc_error;
     struct network_packet *tx_packet_p = NULL;
+
+    fdc_error = rtos_mpu_add_thread_data_region(&g_networking,
+                                                sizeof g_networking,
+                                                false);
+    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
 
     FDC_ASSERT(g_networking.initialized, 0, 0);
 
@@ -484,6 +506,7 @@ net_allocate_tx_packet(bool free_after_tx_complete)
 	tx_packet_p->state_flags |= NET_PACKET_FREE_AFTER_TX_COMPLETE;
     }
 
+    rtos_mpu_remove_thread_data_region(); /* g_networking */
     return tx_packet_p;
 }
 
@@ -494,6 +517,17 @@ net_allocate_tx_packet(bool free_after_tx_complete)
 void
 net_free_tx_packet(struct network_packet *tx_packet_p)
 {
+    fdc_error_t fdc_error;
+    bool region_added = false;
+   
+    if (rtos_caller_is_thread()) {
+        fdc_error = rtos_mpu_add_thread_data_region(&g_networking,
+                                                    sizeof g_networking,
+                                                    false);
+        FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+        region_added = true;
+    }
+
     FDC_ASSERT(g_networking.initialized, 0, 0);
 
     FDC_ASSERT(tx_packet_p->signature == NET_TX_PACKET_SIGNATURE,
@@ -507,6 +541,10 @@ net_free_tx_packet(struct network_packet *tx_packet_p)
 
     tx_packet_p->state_flags = NET_PACKET_IN_TX_POOL;
     rtos_queue_add(&g_networking.free_tx_packet_pool, &tx_packet_p->node);
+
+    if (region_added) {
+        rtos_mpu_remove_thread_data_region(); /* g_networking */
+    }
 }
 
 
@@ -570,6 +608,13 @@ net_enqueue_rx_packet(struct local_l3_end_point *local_l3_end_point_p,
 void
 net_recycle_rx_packet(struct network_packet *rx_packet_p)
 {
+    fdc_error_t fdc_error;
+    
+    fdc_error = rtos_mpu_add_thread_data_region(&g_networking,
+                                                sizeof g_networking,
+                                                false);
+    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+
     struct local_l3_end_point *local_l3_end_point_p = rx_packet_p->local_l3_end_point_p;
 
     FDC_ASSERT(
@@ -585,6 +630,7 @@ net_recycle_rx_packet(struct network_packet *rx_packet_p)
 	       rx_packet_p->rx_buf_desc_p, rx_packet_p);
 
     enet_repost_rx_packet(local_l3_end_point_p->enet_device_p, rx_packet_p);
+    rtos_mpu_remove_thread_data_region(); /* g_networking */
 }
 
 
@@ -970,6 +1016,11 @@ net_create_local_l4_end_point(enum l4_protocols l4_protocol,
 	return fdc_error;
     }
 
+    fdc_error = rtos_mpu_add_thread_data_region(&g_networking,
+                                                sizeof g_networking,
+                                                false);
+    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+
     rtos_mutex_acquire(&g_networking.local_l4_end_points_mutex);
     if (g_networking.next_free_l4_end_point_p ==
         &g_networking.local_l4_end_points[NET_MAX_LOCAL_L4_END_POINTS]) {
@@ -1014,10 +1065,12 @@ net_create_local_l4_end_point(enum l4_protocols l4_protocol,
 	            &l4_end_point_p->l4_rx_packet_queue);
 
     *local_l4_end_point_pp = l4_end_point_p;
+    rtos_mpu_remove_thread_data_region(); /* g_networking */
     return 0;
 
 error_release_mutex:
     rtos_mutex_release(&g_networking.local_l4_end_points_mutex);
+    rtos_mpu_remove_thread_data_region(); /* g_networking */
     return fdc_error;
 }
 
@@ -1029,6 +1082,13 @@ net_send_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
 		           struct network_packet *tx_packet_p,
 		           size_t data_payload_length)
 {
+    fdc_error_t fdc_error;
+
+    fdc_error = rtos_mpu_add_thread_data_region(&g_networking,
+                                                sizeof g_networking,
+                                                false);
+    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+
     /*
      * Populate UPD header:
      */
@@ -1055,10 +1115,13 @@ net_send_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
     /*
      * Send IP packet:
      */
-    return net_send_ipv4_packet(dest_ip_addr_p,
-			        tx_packet_p,
-			        sizeof(struct udp_header) + data_payload_length,
-			        TRANSPORT_PROTO_UDP);
+    fdc_error = net_send_ipv4_packet(dest_ip_addr_p,
+			             tx_packet_p,
+			             sizeof(struct udp_header) + data_payload_length,
+			             TRANSPORT_PROTO_UDP);
+
+    rtos_mpu_remove_thread_data_region(); /* g_networking */
+    return fdc_error;
 }
 
 
@@ -1070,6 +1133,12 @@ net_receive_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
 			      struct network_packet **rx_packet_pp)
 {
     fdc_error_t fdc_error;
+
+    fdc_error = rtos_mpu_add_thread_data_region(&g_networking,
+                                                sizeof g_networking,
+                                                false);
+    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+
     FDC_ASSERT(local_l4_end_point_p->l4_protocol == TRANSPORT_PROTO_UDP,
 	       local_l4_end_point_p->l4_protocol, local_l4_end_point_p);
 
@@ -1080,6 +1149,7 @@ net_receive_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
     if (rx_packet_node_p == NULL) {
 	*rx_packet_pp = NULL;
         fdc_error = CAPTURE_FDC_ERROR("No Rx packet available", timeout_ms, 0);
+        rtos_mpu_remove_thread_data_region(); /* g_networking */
 	return fdc_error;
     }
 
@@ -1105,6 +1175,7 @@ net_receive_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
 
     *source_port_p = udp_header_p->source_port;
     *rx_packet_pp = rx_packet_p;
+    rtos_mpu_remove_thread_data_region(); /* g_networking */
     return 0;
 }
 
@@ -1194,6 +1265,13 @@ net_send_ipv4_ping_request(const struct ipv4_address *dest_ip_addr_p,
 {
     fdc_error_t fdc_error;
 
+    fdc_error = rtos_mpu_add_thread_data_region(&g_networking,
+                                                sizeof g_networking,
+                                                false);
+    if (fdc_error != 0) {
+        return fdc_error;
+    }
+
     rtos_mutex_acquire(&g_networking.expecting_ping_reply_mutex);
     while (g_networking.expecting_ping_reply) {
 	rtos_condvar_wait(&g_networking.ping_reply_recceived_condvar,
@@ -1220,6 +1298,7 @@ net_send_ipv4_ping_request(const struct ipv4_address *dest_ip_addr_p,
 	g_networking.expecting_ping_reply = false;
     }
 
+    rtos_mpu_remove_thread_data_region();   /* g_networking */
     return fdc_error;
 }
 
@@ -1231,12 +1310,19 @@ net_receive_ipv4_ping_reply(rtos_milliseconds_t timeout_ms,
 			    uint16_t *seq_num_p)
 {
     fdc_error_t fdc_error;
+    fdc_error = rtos_mpu_add_thread_data_region(&g_networking,
+                                                sizeof g_networking,
+                                                false);
+    if (fdc_error != 0) {
+        return fdc_error;
+    }
+
     struct glist_node *rx_packet_node_p =
 	rtos_queue_remove(&g_networking.rx_ipv4_ping_reply_packet_queue, timeout_ms);
 
     if (rx_packet_node_p == NULL) {
         fdc_error = CAPTURE_FDC_ERROR("No Rx packet available", timeout_ms, 0);
-	return fdc_error;
+	goto exit_remove_region;
     }
 
     struct network_packet *rx_packet_p = GLIST_NODE_TO_NETWORK_PACKET(rx_packet_node_p);
@@ -1252,7 +1338,12 @@ net_receive_ipv4_ping_reply(rtos_milliseconds_t timeout_ms,
     *identifier_p = echo_msg_p->identifier;
     *seq_num_p = echo_msg_p->seq_num;
     net_recycle_rx_packet(rx_packet_p);
-    return 0;
+    fdc_error = 0;
+
+exit_remove_region:
+    rtos_mpu_remove_thread_data_region();   /* g_networking */
+    return fdc_error;
+
 }
 
 
