@@ -86,5 +86,11 @@ function my_update_flash
     copy-item "$env:bin_file" e:\
 }
 
+function my_update_flash2
+{
+    echo "copying $env:bin_file to $env:PLATFORM flash (drive F:\) ..."
+    copy-item "$env:bin_file" f:\
+}
+
 cd $env:src_tree_dir
 #gvim -S $env:ide_vim_session
