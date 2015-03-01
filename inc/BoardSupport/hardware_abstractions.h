@@ -292,11 +292,6 @@ void mpu_set_thread_data_region(
 
 void mpu_unset_thread_data_region(mpu_thread_data_region_index_t thread_region_index);
 
-void mpu_set_privileged_global_data_region(
-    uint8_t region_index,
-    void *start_addr,
-    void *end_addr);
-
 void mpu_register_dma_device(
     enum mpu_bus_masters mpu_bus_master);
 

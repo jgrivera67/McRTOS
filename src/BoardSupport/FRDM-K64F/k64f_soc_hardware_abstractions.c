@@ -78,6 +78,8 @@ C_ASSERT(
  */
 #define FIRST_MPU_THREAD_DATA_REGION   RTOS_NUM_GLOBAL_MPU_REGIONS
 
+C_ASSERT(RTOS_MAX_MPU_REGIONS == 12);
+
 static cpu_reset_cause_t find_reset_cause(void);
 
 #ifdef _CPU_CYCLES_MEASURE_
@@ -350,9 +352,9 @@ static struct mpu_device_var g_mpu_var = {
 };
 
 static const struct mpu_device g_mpu = {
-	 .signature = MPU_DEVICE_SIGNATURE,
-	.mmio_regs_p = (volatile MPU_Type *)MPU_BASE,
-        .var_p = &g_mpu_var,
+    .signature = MPU_DEVICE_SIGNATURE,
+    .mmio_regs_p = (volatile MPU_Type *)MPU_BASE,
+    .var_p = &g_mpu_var,
 };
 
 /**
@@ -707,6 +709,7 @@ soc_early_init(void)
 
 /**
  * Configure an MPU region (region index must be non 0, as region 0 is special)
+ * to be accessed from unprivileged mode on the given CPU
  */
 static void
 k64f_set_mpu_region_for_cpu(
@@ -716,19 +719,11 @@ k64f_set_mpu_region_for_cpu(
     uint8_t region_index,
     void *start_addr,
     void *end_addr,
-    uint32_t privileged_permissions,
     uint32_t unprivileged_permissions)
 {
     struct permissions_bit_field {
 	uint32_t mask;
 	uint32_t shift;
-    };
-
-    static const struct permissions_bit_field privileged_permissions_fields[] = {
-        [0] = {
-	    .mask = MPU_WORD_M0SM_MASK,
-	    .shift = MPU_WORD_M0SM_SHIFT
-	},
     };
 
     static const struct permissions_bit_field unprivileged_permissions_fields[] = {
@@ -738,14 +733,10 @@ k64f_set_mpu_region_for_cpu(
 	},
     };
 
-    C_ASSERT2(assert_permissions_fields_same_size,
-	      ARRAY_SIZE(privileged_permissions_fields) ==
-	      ARRAY_SIZE(unprivileged_permissions_fields));
-
     uint32_t reg_value;
 
-    DBG_ASSERT(cpu_id < ARRAY_SIZE(privileged_permissions_fields),
- 	       cpu_id, ARRAY_SIZE(privileged_permissions_fields));
+    DBG_ASSERT(cpu_id < ARRAY_SIZE(unprivileged_permissions_fields),
+ 	       cpu_id, ARRAY_SIZE(unprivileged_permissions_fields));
 
     DBG_ASSERT(region_index > 0 && region_index < mpu_var_p->num_regions,
  	       region_index, mpu_var_p->num_regions);
@@ -769,10 +760,6 @@ k64f_set_mpu_region_for_cpu(
     write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][1], reg_value);
 
     reg_value = read_32bit_mmio_register(&mpu_regs_p->WORD[region_index][2]);
-    SET_BIT_FIELD(reg_value,
-		  privileged_permissions_fields[cpu_id].mask,
-		  privileged_permissions_fields[cpu_id].shift,
-		  privileged_permissions);
 
     SET_BIT_FIELD(reg_value,
 		  unprivileged_permissions_fields[cpu_id].mask,
@@ -918,7 +905,8 @@ k64f_mpu_init(void)
     C_ASSERT2(assert_soc_sram_base_aligned, SOC_SRAM_BASE % 32 == 0);
     C_ASSERT2(assert_soc_mmio_base1_aligned, SOC_PERIPHERAL_BRIDGE_MIN_ADDR % 32 == 0);
     C_ASSERT2(assert_soc_mmio_base2_aligned, SOC_PRIVATE_PERIPHERALS_MIN_ADDR % 32 == 0);
-    C_ASSERT2(assert_enough_mpu_regions, RTOS_NUM_GLOBAL_MPU_REGIONS == 7);
+    C_ASSERT2(assert_enough_mpu_regions, RTOS_NUM_GLOBAL_MPU_REGIONS == 2);
+    
     extern uint32_t __flash_text_start[];
     extern uint32_t __flash_text_end[];
 
@@ -959,59 +947,15 @@ k64f_mpu_init(void)
      */
     write_32bit_mmio_register(&mpu_regs_p->RGDAAC[0], 0);
 
+    /* 
+     * Make code region in flash executable in unprivilege mode in all CPUs
+     */
     for (cpu_id_t cpu_id = 0; cpu_id < SOC_NUM_CPU_CORES; cpu_id ++) {
-	/*
-	 * Define global MPU regions accessible from this CPU:
-	 */
-
-	/*
-	 * region 1 is interrupt vector table in flash:
-	 *
-	 * NOTE: privileged permissions should be r--, but there is no
-	 * way to encode that, without also having unprivileged r--
-	 */
+	/* region 1 is code in flash: */
 	k64f_set_mpu_region_for_cpu(mpu_var_p, mpu_regs_p, cpu_id, 1,
-			            (void *)g_interrupt_vector_table,
-			            (void *)(g_interrupt_vector_table +
-				        ARRAY_SIZE(g_interrupt_vector_table) - 1),
-			            0x1,  /* privileged r-x */
-			            0x0); /* unprivileged --- */
-
-	/* region 2 is code in flash: */
-	k64f_set_mpu_region_for_cpu(mpu_var_p, mpu_regs_p, cpu_id, 2,
 				    (void *)__flash_text_start,
 				    (void *)__flash_text_end,
-				    0x1,  /* privileged r-x */
 				    0x5); /* unprivileged r-x */
-
-
-	/* region 3 is all SRAM accessible in privileged mode: */
-	k64f_set_mpu_region_for_cpu(mpu_var_p, mpu_regs_p, cpu_id, 3,
-				    (void *)SOC_SRAM_BASE,
-				    (void *)(SOC_SRAM_BASE + SOC_SRAM_SIZE),
-				    0x2,  /* privileged rw- */
-				    0x0); /* unprivileged --- */
-
-	/* region 4 is MMIO space: */
-	k64f_set_mpu_region_for_cpu(mpu_var_p, mpu_regs_p, cpu_id, 4,
-				    (void *)SOC_PERIPHERAL_BRIDGE_MIN_ADDR,
-				    (void *)SOC_PERIPHERAL_BRIDGE_MAX_ADDR,
-				    0x2,  /* privileged rw- */
-				    0x0); /* unprivileged --- */
-
-	/* region 5 is MMIO space: */
-	k64f_set_mpu_region_for_cpu(mpu_var_p, mpu_regs_p, cpu_id, 5,
-				    (void *)SOC_PRIVATE_PERIPHERALS_MIN_ADDR,
-				    (void *)SOC_PRIVATE_PERIPHERALS_MAX_ADDR,
-				    0x2,  /* privileged rw- */
-				    0x0); /* unprivileged --- */
-
-	/* region 6 is shared stack for interrupts and exceptions in SRAM: */
-	k64f_set_mpu_region_for_cpu(mpu_var_p, mpu_regs_p, cpu_id, 6,
-				    &g_cortex_m_exception_stack,
-				    &g_cortex_m_exception_stack + 1,
-				    0x2,  /* privileged rw- */
-				    0x0); /* unprivileged --- */
     }
 
     /*
@@ -1085,22 +1029,19 @@ mpu_set_thread_data_regions(
     uint_fast8_t region_index = FIRST_MPU_THREAD_DATA_REGION;
 
     for (uint_fast8_t i = 0; i < num_regions; i++) {
-	uint32_t privileged_permissions;
 	uint32_t unprivileged_permissions;
 
 	DBG_ASSERT(regions[i].start_addr != NULL, i, 0);
 
         if (regions[i].read_only) {
             unprivileged_permissions = 0x4; /* r-- */
-            privileged_permissions = 0x3;   /* r-- */
         } else {
             unprivileged_permissions = 0x6; /* rw- */
-            privileged_permissions = 0x2;   /* rw- */
         }
 
 	k64f_set_mpu_region_for_cpu(mpu_var_p, mpu_regs_p, cpu_id, region_index,
 				    regions[i].start_addr, regions[i].end_addr,
-				    privileged_permissions, unprivileged_permissions);
+				    unprivileged_permissions);
 
 	region_index ++;
     }
@@ -1123,7 +1064,6 @@ mpu_set_thread_data_region(
     void *end_addr,
     bool read_only)
 {
-    uint32_t privileged_permissions;
     uint32_t unprivileged_permissions;
 
     FDC_ASSERT(
@@ -1143,12 +1083,15 @@ mpu_set_thread_data_region(
     mpu_region_index_t region_index = FIRST_MPU_THREAD_DATA_REGION +
 				      thread_region_index;
 
-    unprivileged_permissions = 0x6; /* rw- */
-    privileged_permissions = 0x2;   /* rw- */
+    if (read_only) {
+        unprivileged_permissions = 0x4; /* r-- */
+    } else {
+        unprivileged_permissions = 0x6; /* rw- */
+    }
 
     k64f_set_mpu_region_for_cpu(mpu_var_p, mpu_regs_p, cpu_id, region_index,
 				start_addr, end_addr,
-				privileged_permissions, unprivileged_permissions);
+				unprivileged_permissions);
 }
 
 
@@ -1177,34 +1120,6 @@ mpu_unset_thread_data_region(mpu_thread_data_region_index_t thread_region_index)
      */
     write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][3],
 			      ~MPU_WORD_VLD_MASK);
-}
-
-
-void
-mpu_set_privileged_global_data_region(
-    uint8_t region_index,
-    void *start_addr,
-    void *end_addr)
-{
-    FDC_ASSERT(
-        g_mpu.signature == MPU_DEVICE_SIGNATURE,
-        g_mpu.signature, 0);
-
-    struct mpu_device_var *mpu_var_p = g_mpu.var_p;
-    FDC_ASSERT(mpu_var_p->initialized, mpu_var_p, 0);
-
-    volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
-
-    FDC_ASSERT(start_addr != NULL, start_addr, end_addr);
-    FDC_ASSERT(start_addr <= end_addr, start_addr, end_addr);
-
-    for (cpu_id_t cpu_id = 0; cpu_id < SOC_NUM_CPU_CORES; cpu_id ++) {
-	k64f_set_mpu_region_for_cpu(mpu_var_p, mpu_regs_p,
-				    cpu_id, region_index,
-				    start_addr, end_addr,
-				    0x2,  /* privileged rw- */
-				    0x0); /* unprivileged --- */
-    }
 }
 
 
