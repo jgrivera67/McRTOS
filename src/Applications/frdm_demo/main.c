@@ -45,12 +45,7 @@ static fdc_error_t demo_ping_thread_f(void *arg);
 static fdc_error_t demo_udp_server_thread_f(void *arg);
 static fdc_error_t demo_udp_client_thread_f(void *arg);
 
-struct app_state_vars {
-    /**
-     * Current LED color mask
-     */
-    volatile uint32_t led_color_mask;
-
+struct accelerometer_reading {
     /**
      * Latest X-axis acceleration reading
      */
@@ -65,22 +60,39 @@ struct app_state_vars {
      * Latest Z-axis acceleration reading
      */
     int16_t z_acceleration;
+};
 
+/**
+ * Application global variables
+ */
+struct app_state_vars {
+    volatile uint32_t led_color_mask;
+    struct accelerometer_reading accel_reading;
+    struct rtos_mutex accel_reading_mutex;
+    volatile bool accel_reading_ready;
+    struct rtos_condvar accel_reading_condvar;
     bool demo_ping_started;
-
     bool demo_udp_client_started;
-
     bool demo_udp_server_started;
-
     struct rtos_thread demo_ping_thread;
     struct rtos_thread demo_udp_client_thread;
     struct rtos_thread demo_udp_server_thread;
-
 } __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT)));
 
 C_ASSERT(sizeof(struct app_state_vars) % SOC_MPU_REGION_ALIGNMENT == 0);
 
-static struct app_state_vars g_app;
+/**
+ * Demo UDP message
+ */
+struct accel_reading_msg {
+    uint32_t seq_num;
+    struct accelerometer_reading accel_reading;
+};
+
+static struct app_state_vars g_app = {
+    .led_color_mask = LED_COLOR_RED,
+    .accel_reading_ready = false,
+};
 
 #define RTOS_NUM_APP_THREADS 4
 
@@ -221,7 +233,8 @@ void app_software_init(void)
                                                 false);
     FDC_ASSERT(fdc_error == 0, fdc_error, cpu_id);
 
-    g_app.led_color_mask = LED_COLOR_RED;
+    rtos_mutex_init("Accelerometer reading mutex", &g_app.accel_reading_mutex);
+    rtos_condvar_init("Accelerometer reading condvar", &g_app.accel_reading_condvar);
 
     /*
      * Create app threads for this CPU
@@ -246,43 +259,49 @@ void app_software_init(void)
 static bool
 ping_remote_ip_addr(const struct ipv4_address *dest_ip_addr_p, uint16_t seq_num)
 {
+    fdc_error_t fdc_error;
     struct ipv4_address remote_ip_addr;
     uint16_t reply_seq_num;
     uint16_t reply_identifier;
-    bool reply_received_ok;
     uint16_t identifier = (uintptr_t)rtos_thread_self();
 
-    net_send_ipv4_ping_request(dest_ip_addr_p, identifier, seq_num);
-    reply_received_ok = net_receive_ipv4_ping_reply(3000,
-						    &remote_ip_addr,
-						    &reply_identifier,
-						    &reply_seq_num);
-
-    if (reply_received_ok) {
-	    FDC_ASSERT(remote_ip_addr.value == dest_ip_addr_p->value,
-		       remote_ip_addr.value, dest_ip_addr_p->value);
-	    FDC_ASSERT(reply_identifier == identifier,
-	               reply_identifier, identifier);
-	    FDC_ASSERT(reply_seq_num == seq_num,
-		       reply_seq_num, seq_num);
-
-	    CONSOLE_POS_PRINTF(34,1, "Ping %d for %u.%u.%u.%u\n",
-			       reply_seq_num,
-			       remote_ip_addr.bytes[0],
-			       remote_ip_addr.bytes[1],
-			       remote_ip_addr.bytes[2],
-			       remote_ip_addr.bytes[3]);
-
-	    return true;
-    } else {
-	    CONSOLE_POS_PRINTF(34,1, "Ping %d timedout for %u.%u.%u.%u\n",
-			       seq_num,
-			       dest_ip_addr_p->bytes[0],
-			       dest_ip_addr_p->bytes[1],
-			       dest_ip_addr_p->bytes[2],
-			       dest_ip_addr_p->bytes[3]);
-	    return false;
+    fdc_error = net_send_ipv4_ping_request(dest_ip_addr_p, identifier, seq_num);
+    if (fdc_error != 0) {
+        capture_fdc_msg_printf("net_send_ipv4_ping_request() failed with error %#x\n",
+		               fdc_error);
+        return false;
     }
+
+    fdc_error = net_receive_ipv4_ping_reply(3000,
+					    &remote_ip_addr,
+					    &reply_identifier,
+					    &reply_seq_num);
+
+    if (fdc_error != 0) {
+        CONSOLE_POS_PRINTF(39,1, "Ping %d for %u.%u.%u.%u timed-out",
+                           seq_num,
+                           dest_ip_addr_p->bytes[0],
+                           dest_ip_addr_p->bytes[1],
+                           dest_ip_addr_p->bytes[2],
+                           dest_ip_addr_p->bytes[3]);
+        return false;
+    }
+
+    FDC_ASSERT(remote_ip_addr.value == dest_ip_addr_p->value,
+               remote_ip_addr.value, dest_ip_addr_p->value);
+    FDC_ASSERT(reply_identifier == identifier,
+               reply_identifier, identifier);
+    FDC_ASSERT(reply_seq_num == seq_num,
+               reply_seq_num, seq_num);
+
+    CONSOLE_POS_PRINTF(38,1, "Ping %d replied by %u.%u.%u.%u",
+                       reply_seq_num,
+                       remote_ip_addr.bytes[0],
+                       remote_ip_addr.bytes[1],
+                       remote_ip_addr.bytes[2],
+                       remote_ip_addr.bytes[3]);
+
+    return true;
 }
 
 
@@ -339,7 +358,12 @@ demo_ping_command(void)
         &demo_ping_thread_execution_stack,
         &g_app.demo_ping_thread);
 
-    console_printf("%s started\n", thread_params.p_name_p);
+    console_printf("%s started (destination IP address: %u.%u.%u.%u)\n",
+                   thread_params.p_name_p,
+                   remote_ip_addr.bytes[0],
+                   remote_ip_addr.bytes[1],
+                   remote_ip_addr.bytes[2],
+                   remote_ip_addr.bytes[3]);
 
 exit_remove_region:
     rtos_mpu_remove_thread_data_region();   /* g_app */
@@ -403,7 +427,12 @@ demo_udp_client_command(void)
         &demo_udp_client_thread_execution_stack,
         &g_app.demo_udp_client_thread);
 
-    console_printf("%s started\n", thread_params.p_name_p);
+    console_printf("%s started (server IP address: %u.%u.%u.%u)\n",
+                   thread_params.p_name_p,
+                   remote_ip_addr.bytes[0],
+                   remote_ip_addr.bytes[1],
+                   remote_ip_addr.bytes[2],
+                   remote_ip_addr.bytes[3]);
 
 exit_remove_region:
     rtos_mpu_remove_thread_data_region();   /* g_app */
@@ -564,9 +593,9 @@ accelerometer_thread_f(void *arg)
     accelerometer_init();
     accelerometer_started = true;
 
-    g_app.x_acceleration = 0;
-    g_app.y_acceleration = 0;
-    g_app.z_acceleration = 0;
+    g_app.accel_reading.x_acceleration = 0;
+    g_app.accel_reading.y_acceleration = 0;
+    g_app.accel_reading.z_acceleration = 0;
 
     for ( ; ; )
     {
@@ -583,26 +612,31 @@ accelerometer_thread_f(void *arg)
 
         if (read_ok) {
 	    motion_detected = false;
-	    if (g_app.x_acceleration != x_acceleration) {
-	        g_app.x_acceleration = x_acceleration;
+	    if (g_app.accel_reading.x_acceleration != x_acceleration) {
+	        g_app.accel_reading.x_acceleration = x_acceleration;
 		motion_detected = true;
 	    }
 
-	    if (g_app.y_acceleration != y_acceleration) {
-	        g_app.y_acceleration = y_acceleration;
+	    if (g_app.accel_reading.y_acceleration != y_acceleration) {
+	        g_app.accel_reading.y_acceleration = y_acceleration;
 		motion_detected = true;
 	    }
 
-	    if (g_app.z_acceleration != z_acceleration) {
-	        g_app.z_acceleration = z_acceleration;
+	    if (g_app.accel_reading.z_acceleration != z_acceleration) {
+	        g_app.accel_reading.z_acceleration = z_acceleration;
 		motion_detected = true;
 	    }
 
 	    if (motion_detected) {
-		CONSOLE_POS_PRINTF(32, 1, "x_accel: %8d  y_accel: %8d  z_accel: %8d",
-		    g_app.x_acceleration,
-		    g_app.y_acceleration,
-		    g_app.z_acceleration);
+		CONSOLE_POS_PRINTF(41, 1, "Local accelerometer reading: x: %8d y: %8d z: %8d",
+		    g_app.accel_reading.x_acceleration,
+		    g_app.accel_reading.y_acceleration,
+		    g_app.accel_reading.z_acceleration);
+
+                rtos_mutex_acquire(&g_app.accel_reading_mutex);
+                g_app.accel_reading_ready = true;
+                rtos_mutex_release(&g_app.accel_reading_mutex);
+                rtos_condvar_signal(&g_app.accel_reading_condvar);
 	    }
         }
 #else
@@ -661,7 +695,7 @@ demo_udp_server_thread_f(void *arg)
 	struct network_packet *rx_packet_p = NULL;
 	struct ipv4_address client_ip_addr;
 	uint16_t client_port;
-	uint32_t *in_msg_p;
+	struct accel_reading_msg *in_msg_p;
 	uint32_t *out_msg_p;
 	size_t in_msg_size;
 
@@ -677,10 +711,15 @@ demo_udp_server_thread_f(void *arg)
         FDC_ASSERT(fdc_error == 0, fdc_error, rx_packet_p);
         
 	in_msg_size = net_get_udp_data_payload_length(rx_packet_p);
-	FDC_ASSERT(in_msg_size == sizeof(uint32_t), in_msg_size, 0);
+	FDC_ASSERT(in_msg_size == sizeof(struct accel_reading_msg), in_msg_size, 0);
 	in_msg_p = net_get_udp_data_payload_area(rx_packet_p);
-	seq_num = *in_msg_p;
-	CONSOLE_POS_PRINTF(38, 1, "UDP server received %u", seq_num);
+	seq_num = in_msg_p->seq_num;
+        CONSOLE_POS_PRINTF(41, 81, "Remote accelerometer reading: x: %8d y: %8d z: %8d",
+                           in_msg_p->accel_reading.x_acceleration,
+                           in_msg_p->accel_reading.y_acceleration,
+                           in_msg_p->accel_reading.z_acceleration);
+
+	CONSOLE_POS_PRINTF(42, 81, "UDP server received message %10u", seq_num);
 
         rtos_mpu_remove_thread_data_region(); /* rx_packet_p */
 	net_recycle_rx_packet(rx_packet_p);
@@ -697,7 +736,7 @@ demo_udp_server_thread_f(void *arg)
 	net_send_ipv4_udp_datagram(server_end_point_p, &client_ip_addr,
 				   client_port,
 		                   tx_packet_p, sizeof(uint32_t));
-	CONSOLE_POS_PRINTF(39, 1, "UDP server sent %u", seq_num);
+	CONSOLE_POS_PRINTF(43, 1, "UDP server sent ack for message %10u", seq_num);
     }
 
     net_free_tx_packet(tx_packet_p);
@@ -732,11 +771,9 @@ demo_udp_client_thread_f(void *arg)
 	struct network_packet *rx_packet_p = NULL;
 	struct ipv4_address server_ip_addr;
 	uint16_t server_port;
-	uint32_t *out_msg_p;
+	struct accel_reading_msg *out_msg_p;
 	uint32_t *in_msg_p;
 	size_t in_msg_size;
-
-	CONSOLE_POS_PRINTF(36, 1, "UDP client sent %u", seq_num);
 
         fdc_error = rtos_mpu_add_thread_data_region(tx_packet_p,
                                                     sizeof *tx_packet_p,
@@ -744,12 +781,24 @@ demo_udp_client_thread_f(void *arg)
         FDC_ASSERT(fdc_error == 0, fdc_error, tx_packet_p);
 
 	out_msg_p = net_get_udp_data_payload_area(tx_packet_p);
-	*out_msg_p = seq_num;
+	out_msg_p->seq_num = seq_num;
+
+        rtos_mutex_acquire(&g_app.accel_reading_mutex);
+        while (!g_app.accel_reading_ready) {
+            rtos_condvar_wait(&g_app.accel_reading_condvar, &g_app.accel_reading_mutex, NULL);
+        }
+
+        out_msg_p->accel_reading = g_app.accel_reading;
+        g_app.accel_reading_ready = false;
+        rtos_mutex_release(&g_app.accel_reading_mutex);
+
         rtos_mpu_remove_thread_data_region(); /* tx_packet_p */
 
 	net_send_ipv4_udp_datagram(client_end_point_p, &dest_ip_addr,
 		                   MY_UDP_SERVER_PORT,
 		                   tx_packet_p, sizeof(uint32_t));
+
+	CONSOLE_POS_PRINTF(42, 1, "UDP client sent message %10u", seq_num);
 
 	net_receive_ipv4_udp_datagram(client_end_point_p,
 		                      5000,
@@ -757,7 +806,9 @@ demo_udp_client_thread_f(void *arg)
 				      &server_port,
 				      &rx_packet_p);
 	if (rx_packet_p == NULL) {
-	    CONSOLE_POS_PRINTF(37, 1, "UDP client receive timeout", seq_num);
+	    CONSOLE_POS_PRINTF(44, 1,
+                               "UDP client receive timeout waiting for ack for message %10u",
+                               seq_num);
 	    continue;
 	}
 
@@ -775,13 +826,13 @@ demo_udp_client_thread_f(void *arg)
 	FDC_ASSERT(in_msg_size == sizeof(uint32_t), in_msg_size, 0);
 	in_msg_p = net_get_udp_data_payload_area(rx_packet_p);
 	FDC_ASSERT(*in_msg_p == seq_num, *in_msg_p, seq_num);
-	CONSOLE_POS_PRINTF(37, 1, "UDP client received %u      ", *in_msg_p);
+
+	CONSOLE_POS_PRINTF(43, 1, "UDP client received ack for message %10u", *in_msg_p);
 
         rtos_mpu_remove_thread_data_region(); /* rx_packet_p */
 	net_recycle_rx_packet(rx_packet_p);
 
 	seq_num ++;
-	rtos_thread_delay(1500);
     }
 
     net_free_tx_packet(tx_packet_p);
