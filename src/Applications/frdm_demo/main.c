@@ -10,6 +10,7 @@
 
 #include "McRTOS.h"
 #include "McRTOS_kernel_services.h"
+#include "McRTOS_command_processor.h"
 #include "failure_data_capture.h"
 #include "utils.h"
 #include "frdm_board.h"
@@ -34,12 +35,15 @@ enum app_thread_priorities
 static void app_hardware_init(void);
 static void app_hardware_stop(void);
 static void app_software_init(void);
-static void demo_command(void);
+static void demo_ping_command(void);
+static void demo_udp_client_command(void);
+static void demo_udp_server_command(void);
 
 static fdc_error_t hello_world_thread_f(void *arg);
 static fdc_error_t accelerometer_thread_f(void *arg);
-static fdc_error_t udp_server_thread_f(void *arg);
-static fdc_error_t udp_client_thread_f(void *arg);
+static fdc_error_t demo_ping_thread_f(void *arg);
+static fdc_error_t demo_udp_server_thread_f(void *arg);
+static fdc_error_t demo_udp_client_thread_f(void *arg);
 
 struct app_state_vars {
     /**
@@ -61,19 +65,22 @@ struct app_state_vars {
      * Latest Z-axis acceleration reading
      */
     int16_t z_acceleration;
+
+    bool demo_ping_started;
+
+    bool demo_udp_client_started;
+
+    bool demo_udp_server_started;
+
+    struct rtos_thread demo_ping_thread;
+    struct rtos_thread demo_udp_client_thread;
+    struct rtos_thread demo_udp_server_thread;
+
 } __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT)));
 
 C_ASSERT(sizeof(struct app_state_vars) % SOC_MPU_REGION_ALIGNMENT == 0);
 
 static struct app_state_vars g_app;
-
-static const struct ipv4_address g_dest_ip_addr[] = {
-#if BOARD_INSTANCE == 1
-    { .bytes = { 192, 168, 8, 3 } },
-#else
-    { .bytes = { 192, 168, 8, 2 } },
-#endif
-};
 
 #define RTOS_NUM_APP_THREADS 4
 
@@ -115,35 +122,13 @@ static const struct rtos_thread_creation_params g_app_thread_creation_params[] =
         .p_function_arg_p = NULL,
         .p_priority = ACCELEROMETER_THREAD_PRIORITY,
     },
-
-#if 0
-#if BOARD_INSTANCE == 1
-    [3] =
-    {
-        .p_name_p = "UDP server thread",
-        .p_function_p = udp_server_thread_f,
-        .p_function_arg_p = NULL,
-        .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 3,
-        .p_thread_pp = NULL,
-    },
-#else
-    [3] =
-    {
-        .p_name_p = "UDP client thread",
-        .p_function_p = udp_client_thread_f,
-        .p_function_arg_p = (void *)&g_dest_ip_addr[0],
-        .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 3,
-        .p_thread_pp = NULL,
-    },
-#endif
-#endif
 };
 
 C_ASSERT(ARRAY_SIZE(g_app_thread_creation_params) <=
          ARRAY_SIZE(g_app_thread_execution_stacks));
 
 C_ASSERT(
-    ARRAY_SIZE(g_app_thread_creation_params) <= RTOS_MAX_NUM_APP_THREADS); //???
+    ARRAY_SIZE(g_app_thread_creation_params) <= RTOS_MAX_NUM_APP_THREADS);
 
 /**
  * Array of application-specific console commands
@@ -152,9 +137,23 @@ static const struct rtos_console_command g_app_console_commands[] =
 {
     [0] =
     {
-        .cmd_name_p = "demo",
-        .cmd_description_p = "demo command",
-        .cmd_function_p = demo_command,
+        .cmd_name_p = "demo-ping",
+        .cmd_description_p = "Ping demo",
+        .cmd_function_p = demo_ping_command,
+    },
+
+    [1] =
+    {
+        .cmd_name_p = "demo-client",
+        .cmd_description_p = "UDP client demo",
+        .cmd_function_p = demo_udp_client_command,
+    },
+
+    [2] =
+    {
+        .cmd_name_p = "demo-server",
+        .cmd_description_p = "UDP server demo",
+        .cmd_function_p = demo_udp_server_command,
     },
 };
 
@@ -207,19 +206,7 @@ void app_hardware_stop(void)
 static
 void app_software_init(void)
 {
-#if 0 //??? Remove this
-    static struct local_l3_end_point_config local_l3_end_points[] = {
-	[0] = {
-	    .ipv4_addr = { .bytes = { 192, 168, 8, 1 + BOARD_INSTANCE } },
-	    .ipv4_subnet_mask = IPv4_SUBNET_MASK(24),
-	    .default_gateway_ipv4_addr = { .bytes = { 192, 168, 8, 1 } },
-	},
-    };
-
-    C_ASSERT(ARRAY_SIZE(local_l3_end_points) == NET_MAX_LOCAL_L3_END_POINTS);
-#endif
-
-    static const char g_app_version[] = "FRDM board ping application v0.1 "
+    static const char g_app_version[] = "FRDM K64F board demo application v2.0 "
 					"(board " STRINGIFY_LITERAL(BOARD_INSTANCE) ")";
     static const char g_app_build_timestamp[] = "built " __DATE__ " " __TIME__;
     fdc_error_t fdc_error;
@@ -256,7 +243,6 @@ void app_software_init(void)
 }
 
 
-#if 0 //???
 static bool
 ping_remote_ip_addr(const struct ipv4_address *dest_ip_addr_p, uint16_t seq_num)
 {
@@ -298,13 +284,176 @@ ping_remote_ip_addr(const struct ipv4_address *dest_ip_addr_p, uint16_t seq_num)
 	    return false;
     }
 }
-#endif
 
+
+static struct rtos_thread_execution_stack demo_ping_thread_execution_stack;
 
 static void
-demo_command(void)
+demo_ping_command(void)
 {
-    console_printf("Demo command\n");
+    fdc_error_t fdc_error;
+    struct ipv4_address remote_ip_addr;
+    struct rtos_thread_creation_params thread_params = {
+        .p_name_p = "Demo ping thread",
+        .p_function_p = demo_ping_thread_f,
+        .p_function_arg_p = NULL,
+        .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 2,
+    };
+
+    token_t token = get_next_token(&g_tokenizer);
+
+    if (token == HELP) {
+	console_printf("\tdemo-ping <remote IPv4 address>\n\n");
+        return;
+    }
+
+    if (token != DECIMAL_NUMBER) {
+        goto syntax_error;
+    }
+
+    if (!parse_ip4_address(&remote_ip_addr)) {
+        return;
+    }
+
+    fdc_error = rtos_mpu_add_thread_data_region(&g_app,
+                                                sizeof g_app,
+                                                false);
+    if (fdc_error != 0) {
+        console_printf("Error adding region (error code %#x)\n", fdc_error);
+        return;
+    }
+
+    if (g_app.demo_ping_started) {
+        console_printf("Ping demo already started\n");
+        goto exit_remove_region;
+    }
+
+    g_app.demo_ping_started = true;
+
+    /*
+     * Create ping thread:
+     */
+    thread_params.p_function_arg_p = (void *)remote_ip_addr.value; /* pass IP add by value */
+    rtos_thread_init(
+        &thread_params,
+        &demo_ping_thread_execution_stack,
+        &g_app.demo_ping_thread);
+
+    console_printf("%s started\n", thread_params.p_name_p);
+
+exit_remove_region:
+    rtos_mpu_remove_thread_data_region();   /* g_app */
+    return;
+
+syntax_error:    
+	console_printf("\'demo-ping\' command syntax error (type \'demo-ping help\')\n");
+}
+
+
+static struct rtos_thread_execution_stack demo_udp_client_thread_execution_stack;
+
+static void
+demo_udp_client_command(void)
+{
+    fdc_error_t fdc_error;
+    struct ipv4_address remote_ip_addr;
+    struct rtos_thread_creation_params thread_params = {
+        .p_name_p = "Demo UDP client thread",
+        .p_function_p = demo_udp_client_thread_f,
+        .p_function_arg_p = NULL,
+        .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 3,
+    };
+
+    token_t token = get_next_token(&g_tokenizer);
+
+    if (token == HELP) {
+	console_printf("\tdemo-client <remote IPv4 address>\n\n");
+        return;
+    }
+
+    if (token != DECIMAL_NUMBER) {
+        goto syntax_error;
+    }
+
+    if (!parse_ip4_address(&remote_ip_addr)) {
+        return;
+    }
+
+    fdc_error = rtos_mpu_add_thread_data_region(&g_app,
+                                                sizeof g_app,
+                                                false);
+    if (fdc_error != 0) {
+        console_printf("Error adding region (error code %#x)\n", fdc_error);
+        return;
+    }
+
+    if (g_app.demo_udp_client_started) {
+        console_printf("UDP client demo already started\n");
+        goto exit_remove_region;
+    }
+
+    g_app.demo_udp_client_started = true;
+
+    /*
+     * Create UDP client thread:
+     */
+    thread_params.p_function_arg_p = (void *)remote_ip_addr.value; /* pass IP add by value */
+    rtos_thread_init(
+        &thread_params,
+        &demo_udp_client_thread_execution_stack,
+        &g_app.demo_udp_client_thread);
+
+    console_printf("%s started\n", thread_params.p_name_p);
+
+exit_remove_region:
+    rtos_mpu_remove_thread_data_region();   /* g_app */
+    return;
+
+syntax_error:    
+	console_printf("\'demo-client\' command syntax error (type \'demo-client help\')\n");
+}
+
+
+static struct rtos_thread_execution_stack demo_udp_server_thread_execution_stack;
+
+static void
+demo_udp_server_command(void)
+{
+    fdc_error_t fdc_error;
+    struct rtos_thread_creation_params thread_params = {
+        .p_name_p = "Demo UDP server thread",
+        .p_function_p = demo_udp_server_thread_f,
+        .p_function_arg_p = NULL,
+        .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 3,
+    };
+
+    fdc_error = rtos_mpu_add_thread_data_region(&g_app,
+                                                sizeof g_app,
+                                                false);
+    if (fdc_error != 0) {
+        console_printf("Error adding region (error code %#x)\n", fdc_error);
+        return;
+    }
+
+    if (g_app.demo_udp_server_started) {
+        console_printf("UDP server demo already started\n");
+        goto exit_remove_region;
+    }
+
+    g_app.demo_udp_server_started = true;
+
+    /*
+     * Create UDP server thread:
+     */
+    rtos_thread_init(
+        &thread_params,
+        &demo_udp_server_thread_execution_stack,
+        &g_app.demo_udp_server_thread);
+
+    console_printf("%s started\n", thread_params.p_name_p);
+
+exit_remove_region:
+    rtos_mpu_remove_thread_data_region();   /* g_app */
 }
 
 
@@ -365,20 +514,19 @@ exit:
 }
 
 
-#if 0 //???
 static fdc_error_t
-ping_thread_f(void *arg)
+demo_ping_thread_f(void *arg)
 {
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
     FDC_ASSERT(arg != NULL, arg, cpu_id);
-    const struct ipv4_address *dest_ip_addr_p = arg;
+    const struct ipv4_address dest_ip_addr = { .value = (uintptr_t)arg };
     uint32_t ping_count = 0;
 
     for ( ; ; ) {
         rtos_enter_privileged_mode();
-	if (ping_remote_ip_addr(dest_ip_addr_p, ping_count)) {
+	if (ping_remote_ip_addr(&dest_ip_addr, ping_count)) {
 	    ping_count ++;
 	}
 
@@ -392,7 +540,6 @@ ping_thread_f(void *arg)
 
     return fdc_error;
 }
-#endif
 
 
 /**
@@ -495,9 +642,8 @@ exit:
 }
 
 
-#if BOARD_INSTANCE == 1
 static fdc_error_t
-udp_server_thread_f(void *arg)
+demo_udp_server_thread_f(void *arg)
 {
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
@@ -552,16 +698,16 @@ udp_server_thread_f(void *arg)
 
     return fdc_error;
 }
-#else
+
 
 static fdc_error_t
-udp_client_thread_f(void *arg)
+demo_udp_client_thread_f(void *arg)
 {
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
     FDC_ASSERT(arg != NULL, arg, cpu_id);
-    const struct ipv4_address *dest_ip_addr_p = arg;
+    const struct ipv4_address dest_ip_addr = { .value = (uintptr_t)arg };
     uint32_t seq_num = 0;
 
     rtos_enter_privileged_mode();
@@ -586,7 +732,7 @@ udp_client_thread_f(void *arg)
 
 	out_msg_p = net_get_udp_data_payload_area(tx_packet_p);
 	*out_msg_p = seq_num;
-	net_send_ipv4_udp_datagram(client_end_point_p, dest_ip_addr_p,
+	net_send_ipv4_udp_datagram(client_end_point_p, &dest_ip_addr,
 		                   MY_UDP_SERVER_PORT,
 		                   tx_packet_p, sizeof(uint32_t));
 
@@ -600,8 +746,8 @@ udp_client_thread_f(void *arg)
 	    continue;
 	}
 
-	FDC_ASSERT(server_ip_addr.value == dest_ip_addr_p->value,
-	           server_ip_addr.value, dest_ip_addr_p->value);
+	FDC_ASSERT(server_ip_addr.value == dest_ip_addr.value,
+	           server_ip_addr.value, dest_ip_addr.value);
 	FDC_ASSERT(server_port == MY_UDP_SERVER_PORT,
 		   server_port, 0);
 
@@ -625,4 +771,3 @@ udp_client_thread_f(void *arg)
     return fdc_error;
 }
 
-#endif
