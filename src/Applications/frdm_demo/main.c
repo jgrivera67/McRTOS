@@ -699,11 +699,12 @@ demo_udp_server_thread_f(void *arg)
 	uint32_t *out_msg_p;
 	size_t in_msg_size;
 
-	net_receive_ipv4_udp_datagram(server_end_point_p,
-				      0,
-				      &client_ip_addr,
-				      &client_port,
-				      &rx_packet_p);
+	fdc_error = net_receive_ipv4_udp_datagram(server_end_point_p,
+                                                  0,
+                                                  &client_ip_addr,
+                                                  &client_port,
+                                                  &rx_packet_p);
+        FDC_ASSERT(fdc_error == 0, fdc_error, 0);
 
         fdc_error = rtos_mpu_add_thread_data_region(rx_packet_p,
                                                     sizeof *rx_packet_p,
@@ -733,10 +734,12 @@ demo_udp_server_thread_f(void *arg)
 	*out_msg_p = seq_num;
         rtos_mpu_remove_thread_data_region(); /* tx_packet_p */
 
-	net_send_ipv4_udp_datagram(server_end_point_p, &client_ip_addr,
-				   client_port,
-		                   tx_packet_p, sizeof(uint32_t));
-	CONSOLE_POS_PRINTF(43, 1, "UDP server sent ack for message %10u", seq_num);
+	fdc_error = net_send_ipv4_udp_datagram(server_end_point_p, &client_ip_addr,
+                                               client_port,
+                                               tx_packet_p, sizeof *out_msg_p);
+        FDC_ASSERT(fdc_error == 0, fdc_error, tx_packet_p);
+
+	CONSOLE_POS_PRINTF(43, 81, "UDP server sent ack for message %10u", seq_num);
     }
 
     net_free_tx_packet(tx_packet_p);
@@ -783,6 +786,9 @@ demo_udp_client_thread_f(void *arg)
 	out_msg_p = net_get_udp_data_payload_area(tx_packet_p);
 	out_msg_p->seq_num = seq_num;
 
+        fdc_error = rtos_mpu_add_thread_data_region(&g_app, sizeof g_app, false);
+        FDC_ASSERT(fdc_error == 0, fdc_error, tx_packet_p);
+
         rtos_mutex_acquire(&g_app.accel_reading_mutex);
         while (!g_app.accel_reading_ready) {
             rtos_condvar_wait(&g_app.accel_reading_condvar, &g_app.accel_reading_mutex, NULL);
@@ -792,20 +798,27 @@ demo_udp_client_thread_f(void *arg)
         g_app.accel_reading_ready = false;
         rtos_mutex_release(&g_app.accel_reading_mutex);
 
+        rtos_mpu_remove_thread_data_region(); /* g_app */
         rtos_mpu_remove_thread_data_region(); /* tx_packet_p */
 
-	net_send_ipv4_udp_datagram(client_end_point_p, &dest_ip_addr,
+	fdc_error = net_send_ipv4_udp_datagram(client_end_point_p, &dest_ip_addr,
 		                   MY_UDP_SERVER_PORT,
-		                   tx_packet_p, sizeof(uint32_t));
+		                   tx_packet_p, sizeof *out_msg_p);
+
+        if (fdc_error != 0) {
+	    capture_fdc_msg_printf("net_send_ipv4_udp_datagram() failed with error %#x\n",
+                                   fdc_error);
+            break;
+        }
 
 	CONSOLE_POS_PRINTF(42, 1, "UDP client sent message %10u", seq_num);
 
-	net_receive_ipv4_udp_datagram(client_end_point_p,
-		                      5000,
-				      &server_ip_addr,
-				      &server_port,
-				      &rx_packet_p);
-	if (rx_packet_p == NULL) {
+	fdc_error = net_receive_ipv4_udp_datagram(client_end_point_p,
+                                                  5000,
+                                                  &server_ip_addr,
+                                                  &server_port,
+                                                  &rx_packet_p);
+	if (fdc_error != 0) {
 	    CONSOLE_POS_PRINTF(44, 1,
                                "UDP client receive timeout waiting for ack for message %10u",
                                seq_num);
