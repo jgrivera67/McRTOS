@@ -119,6 +119,20 @@ const void *const g_rtos_system_call_dispatch_table[] =
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
         RTOS_THREAD_DISABLE_FPU_SYSTEM_CALL, rtos_k_thread_disable_fpu),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_POINTER_CIRCULAR_BUFFER_INIT_SYSTEM_CALL, rtos_k_pointer_circular_buffer_init),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_POINTER_CIRCULAR_BUFFER_WRITE_SYSTEM_CALL, rtos_k_pointer_circular_buffer_write),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_POINTER_CIRCULAR_BUFFER_READ_SYSTEM_CALL, rtos_k_pointer_circular_buffer_read),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_BYTE_CIRCULAR_BUFFER_INIT_SYSTEM_CALL, rtos_k_byte_circular_buffer_init),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_BYTE_CIRCULAR_BUFFER_WRITE_SYSTEM_CALL, rtos_k_byte_circular_buffer_write),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_BYTE_CIRCULAR_BUFFER_READ_SYSTEM_CALL, rtos_k_byte_circular_buffer_read),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_CIRCULAR_BUFFER_IS_EMPTY_SYSTEM_CALL, rtos_k_circular_buffer_is_empty),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
         RTOS_QUEUE_INIT_SYSTEM_CALL, rtos_k_queue_init),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
         RTOS_QUEUE_ADD_SYSTEM_CALL, rtos_k_queue_add),

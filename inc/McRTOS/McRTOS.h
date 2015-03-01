@@ -30,6 +30,7 @@ struct rtos_mutex;
 struct rtos_condvar;
 struct rtos_msg_channel;
 struct rtos_object_pool;
+struct rtos_circular_buffer;
 struct rtos_queue;
 struct glist_node;
 
@@ -503,6 +504,45 @@ rtos_mpu_add_thread_data_region(
 _THREAD_CALLERS_ONLY_
 void
 rtos_mpu_remove_thread_data_region(void);
+
+void rtos_pointer_circular_buffer_init(
+        _IN_  const char *name_p,
+        _IN_ uint16_t num_entries,
+        _IN_ void **storage_array_p,
+        _IN_ struct rtos_mutex *cb_mutex_p,
+        _OUT_ struct rtos_circular_buffer *circ_buf_p);
+
+bool rtos_pointer_circular_buffer_write(
+        _INOUT_ struct rtos_circular_buffer *circ_buf_p,
+        _IN_ void *entry_value,
+        _IN_ bool wait_if_full);
+
+bool rtos_pointer_circular_buffer_read(
+        _INOUT_ struct rtos_circular_buffer *circ_buf_p,
+        _OUT_ void **entry_value_p,
+        _IN_ bool wait_if_empty,
+	_INOUT_ rtos_milliseconds_t *timeout_ms_p);
+
+void rtos_byte_circular_buffer_init(
+        _IN_  const char *name_p,
+        _IN_ uint16_t num_entries,
+        _IN_ uint8_t *storage_array_p,
+        _IN_ struct rtos_mutex *cb_mutex_p,
+        _OUT_ struct rtos_circular_buffer *circ_buf_p);
+
+bool rtos_byte_circular_buffer_write(
+        _INOUT_ struct rtos_circular_buffer *circ_buf_p,
+        _IN_ uint8_t entry_value,
+        _IN_ bool wait_if_full);
+
+bool rtos_byte_circular_buffer_read(
+        _INOUT_ struct rtos_circular_buffer *circ_buf_p,
+        _OUT_ uint8_t *entry_value_p,
+        _IN_ bool wait_if_empty,
+	_INOUT_ rtos_milliseconds_t *timeout_ms_p);
+
+bool rtos_circular_buffer_is_empty(
+	_IN_ struct rtos_circular_buffer *circ_buf_p);
 
 void rtos_queue_init(
 	_IN_  const char *queue_name_p,

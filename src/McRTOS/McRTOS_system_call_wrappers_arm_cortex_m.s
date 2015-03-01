@@ -279,6 +279,27 @@ GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_THREAD_ENABLE_FPU_SYSTEM_CALL, \
 GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_THREAD_DISABLE_FPU_SYSTEM_CALL, \
                                  rtos_thread_disable_fpu
 
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_POINTER_CIRCULAR_BUFFER_INIT_SYSTEM_CALL, \
+                                 rtos_pointer_circular_buffer_init
+
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_POINTER_CIRCULAR_BUFFER_WRITE_SYSTEM_CALL, \
+                                 rtos_pointer_circular_buffer_write
+
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_POINTER_CIRCULAR_BUFFER_READ_SYSTEM_CALL, \
+                                 rtos_pointer_circular_buffer_read
+
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_BYTE_CIRCULAR_BUFFER_INIT_SYSTEM_CALL, \
+                                 rtos_byte_circular_buffer_init
+
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_BYTE_CIRCULAR_BUFFER_WRITE_SYSTEM_CALL, \
+                                 rtos_byte_circular_buffer_write
+
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_BYTE_CIRCULAR_BUFFER_READ_SYSTEM_CALL, \
+                                 rtos_byte_circular_buffer_read
+
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_CIRCULAR_BUFFER_IS_EMPTY_SYSTEM_CALL, \
+                                 rtos_circular_buffer_is_empty
+
 GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_QUEUE_INIT_SYSTEM_CALL, \
                                  rtos_queue_init
 

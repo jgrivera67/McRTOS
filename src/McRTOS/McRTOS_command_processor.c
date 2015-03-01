@@ -522,7 +522,7 @@ cmd_ping_remote_ip4_addr(const struct ipv4_address *dest_ip_addr_p)
 {
     fdc_error_t fdc_error;
     struct ipv4_address remote_ip_addr;
-    static uint16_t req_seq_num = 0;
+    uint16_t req_seq_num = 0;
     uint16_t reply_seq_num;
     uint16_t reply_identifier;
     uint16_t identifier = (uintptr_t)rtos_thread_self();
@@ -542,12 +542,12 @@ cmd_ping_remote_ip4_addr(const struct ipv4_address *dest_ip_addr_p)
 						&reply_seq_num);
 
 	if (fdc_error != 0) {
-	    CONSOLE_POS_PRINTF(34,1, "Ping %d timedout for %u.%u.%u.%u\n",
-			       req_seq_num,
-			       dest_ip_addr_p->bytes[0],
-			       dest_ip_addr_p->bytes[1],
-			       dest_ip_addr_p->bytes[2],
-			       dest_ip_addr_p->bytes[3]);
+	    console_printf("Ping %d for %u.%u.%u.%u timed-out\n",
+			   req_seq_num,
+			   dest_ip_addr_p->bytes[0],
+			   dest_ip_addr_p->bytes[1],
+			   dest_ip_addr_p->bytes[2],
+			   dest_ip_addr_p->bytes[3]);
 	    return;
 	}
 
@@ -558,14 +558,15 @@ cmd_ping_remote_ip4_addr(const struct ipv4_address *dest_ip_addr_p)
 	FDC_ASSERT(reply_seq_num == req_seq_num,
 		   reply_seq_num, req_seq_num);
 
-	CONSOLE_POS_PRINTF(34,1, "Ping %d for %u.%u.%u.%u\n",
-			   reply_seq_num,
-			   remote_ip_addr.bytes[0],
-			   remote_ip_addr.bytes[1],
-			   remote_ip_addr.bytes[2],
-			   remote_ip_addr.bytes[3]);
+	console_printf("Ping %d replied by %u.%u.%u.%u\n",
+		       reply_seq_num,
+		       remote_ip_addr.bytes[0],
+		       remote_ip_addr.bytes[1],
+		       remote_ip_addr.bytes[2],
+		       remote_ip_addr.bytes[3]);
 
 	req_seq_num ++;
+        rtos_thread_delay(500);
     }
 }
 
