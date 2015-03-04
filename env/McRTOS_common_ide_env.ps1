@@ -11,7 +11,7 @@ $env:ide_shell_rc_file="$env:ide_env_dir/$env:application`_$env:platform`_$env:b
 $env:ide_vim_session = "$env:ide_env_dir/$env:application`_$env:platform.vim"
 $env:default_obj_flavor_subdir = "$env:platform`-obj-$env:build_flavor"
 $env:bin_file = "$env:default_obj_flavor_subdir/Applications/$env:application/$env:application.bin"
-$env:bin_file_prefix = "$env:default_obj_flavor_subdir\Applications\$env:application\$env:application"
+$env:bin_file_prefix = "$env:default_obj_flavor_subdir/Applications/$env:application/$env:application"
 
 $env:makefile_dir = "$env:src_tree_dir"
 
@@ -90,6 +90,16 @@ function my_update_flash2
 {
     echo "copying $env:bin_file to $env:PLATFORM flash (drive F:\) ..."
     copy-item "$env:bin_file" f:\
+}
+
+function my_stack([string]$raw_stack_trace_file)
+{
+    if ($raw_stack_trace_file -eq "") {
+        echo "Usage: my_stack <raw stack trace file>"
+        return 1
+    }
+
+    perl scripts/print_stack_trace.pl $env:bin_file_prefix`.elf $raw_stack_trace_file
 }
 
 cd $env:src_tree_dir
