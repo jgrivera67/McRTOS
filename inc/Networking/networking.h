@@ -1155,6 +1155,9 @@ void
 net_set_local_ipv4_address(const struct ipv4_address *ip_addr_p,
 			   uint8_t subnet_prefix);
 
+void
+net_get_local_ipv4_address(struct ipv4_address *ip_addr_p);
+
 struct network_packet *net_allocate_tx_packet(bool free_after_tx_complete);
 
 void net_free_tx_packet(struct network_packet *tx_packet_p);

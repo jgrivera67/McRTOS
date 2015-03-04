@@ -311,6 +311,7 @@ static void
 demo_ping_command(void)
 {
     fdc_error_t fdc_error;
+    struct ipv4_address local_ip_addr;
     struct ipv4_address remote_ip_addr;
     struct rtos_thread_creation_params thread_params = {
         .p_name_p = "Demo ping thread",
@@ -331,6 +332,17 @@ demo_ping_command(void)
     }
 
     if (!parse_ip4_address(&remote_ip_addr)) {
+        return;
+    }
+
+    net_get_local_ipv4_address(&local_ip_addr);
+    if (local_ip_addr.value == IPV4_NULL_ADDR) {
+        console_printf("Error: No local IP address defined\n");
+        return;
+    }
+
+    if (local_ip_addr.value == remote_ip_addr.value) {
+        console_printf("Error: Remote IP address must be different from local IP address\n");
         return;
     }
 
@@ -380,6 +392,7 @@ static void
 demo_udp_client_command(void)
 {
     fdc_error_t fdc_error;
+    struct ipv4_address local_ip_addr;
     struct ipv4_address remote_ip_addr;
     struct rtos_thread_creation_params thread_params = {
         .p_name_p = "Demo UDP client thread",
@@ -400,6 +413,17 @@ demo_udp_client_command(void)
     }
 
     if (!parse_ip4_address(&remote_ip_addr)) {
+        return;
+    }
+
+    net_get_local_ipv4_address(&local_ip_addr);
+    if (local_ip_addr.value == IPV4_NULL_ADDR) {
+        console_printf("Error: No local IP address defined\n");
+        return;
+    }
+
+    if (local_ip_addr.value == remote_ip_addr.value) {
+        console_printf("Error: Remote IP address must be different from local IP address\n");
         return;
     }
 

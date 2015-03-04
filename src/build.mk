@@ -90,9 +90,9 @@ ifndef CPU_ARCHITECTURE
 endif
 
 ifeq "$(CPU_ARCHITECTURE)" "arm_cortex_m"
-    EXTRA_MCFLAGS += -mtpcs-frame #-mtpcs-leaf-frame
+    EXTRA_MCFLAGS += -fomit-frame-pointer #-mtpcs-frame #-mtpcs-leaf-frame
 else
-    EXTRA_MCFLAGS += -mapcs-frame
+    EXTRA_MCFLAGS += -fomit-frame-pointer #-mapcs-frame
 endif
 
 LDSCRIPT = $(PROJECT_DIR)/$(SYSTEM_ON_CHIP)-flash.ld

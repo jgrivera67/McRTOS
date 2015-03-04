@@ -473,6 +473,26 @@ net_set_local_ipv4_address(const struct ipv4_address *ip_addr_p,
 }
 
 
+void
+net_get_local_ipv4_address(struct ipv4_address *ip_addr_p)
+{
+    fdc_error_t fdc_error;
+
+    fdc_error = rtos_mpu_add_thread_data_region(&g_networking,
+                                                sizeof g_networking,
+                                                false);
+    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+
+    FDC_ASSERT(g_networking.initialized, 0, 0);
+
+    struct local_l3_end_point *local_l3_end_point_p =
+	 &g_networking.local_l3_end_point;
+
+    *ip_addr_p = local_l3_end_point_p->ipv4.local_ip_addr;
+    rtos_mpu_remove_thread_data_region();   /* g_networking */
+}
+
+
 /**
  * Allocates a Tx packet from the global Tx packet pool
  */
