@@ -218,8 +218,7 @@ void app_hardware_stop(void)
 static
 void app_software_init(void)
 {
-    static const char g_app_version[] = "FRDM K64F board demo application v2.0 "
-					"(board " STRINGIFY_LITERAL(BOARD_INSTANCE) ")";
+    static const char g_app_version[] = "FRDM K64F board demo application v2.0";
     static const char g_app_build_timestamp[] = "built " __DATE__ " " __TIME__;
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();

@@ -1172,6 +1172,7 @@ soc_hardware_init(void)
 	k64f_mpu_init();
     }
 
+    capture_fdc_msg_printf("SoC ID: %x-%x-%x\n", SIM_UIDMH, SIM_UIDML, SIM_UIDL);
     capture_fdc_msg_printf("Cortex-M MPU %s present\n", mpu_present ? "" : "not");
     capture_fdc_msg_printf("K64F MPU present (regions: %u)\n", g_mpu.var_p->num_regions);
 

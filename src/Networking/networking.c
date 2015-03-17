@@ -129,9 +129,13 @@ net_send_arp_request(const struct enet_device *enet_device_p,
     struct ethernet_frame *enet_frame =
 	(struct ethernet_frame *)tx_packet_p->data_buffer;
 
+    struct ethernet_mac_address local_mac_address;
+
+    enet_get_mac_addr(enet_device_p, &local_mac_address);
+
 #if 0 // Hardware does this
     COPY_MAC_ADDRESS(&enet_frame->enet_header.source_mac_addr,
-		     &enet_device_p->mac_address);
+		     &local_mac_address);
 #endif
 
     COPY_MAC_ADDRESS(&enet_frame->enet_header.dest_mac_addr,
@@ -142,8 +146,8 @@ net_send_arp_request(const struct enet_device *enet_device_p,
     enet_frame->arp_packet.link_addr_size = sizeof(struct ethernet_mac_address);
     enet_frame->arp_packet.network_addr_size = sizeof(struct ipv4_address);
     enet_frame->arp_packet.operation = hton16(ARP_REQUEST);
-    COPY_MAC_ADDRESS(&enet_frame->arp_packet.source_mac_addr,
-		     &enet_device_p->mac_address);
+
+    COPY_MAC_ADDRESS(&enet_frame->arp_packet.source_mac_addr, &local_mac_address);
     COPY_UNALIGNED_IPv4_ADDRESS(&enet_frame->arp_packet.source_ip_addr,
 				source_ip_addr_p);
     COPY_MAC_ADDRESS(&enet_frame->arp_packet.dest_mac_addr,
@@ -173,9 +177,13 @@ net_send_arp_reply(const struct enet_device *enet_device_p,
     struct ethernet_frame *enet_frame =
 	(struct ethernet_frame *)tx_packet_p->data_buffer;
 
+    struct ethernet_mac_address local_mac_address;
+
+    enet_get_mac_addr(enet_device_p, &local_mac_address);
+
 #if 0 // Hardware does this
     COPY_MAC_ADDRESS(&enet_frame->enet_header.source_mac_addr,
-		     &enet_device_p->mac_address);
+		     &local_mac_address);
 #endif
 
     COPY_MAC_ADDRESS(&enet_frame->enet_header.dest_mac_addr,
@@ -187,7 +195,7 @@ net_send_arp_reply(const struct enet_device *enet_device_p,
     enet_frame->arp_packet.network_addr_size = sizeof(struct ipv4_address);
     enet_frame->arp_packet.operation = hton16(ARP_REPLY);
     COPY_MAC_ADDRESS(&enet_frame->arp_packet.source_mac_addr,
-		     &enet_device_p->mac_address);
+		     &local_mac_address);
     COPY_UNALIGNED_IPv4_ADDRESS(&enet_frame->arp_packet.source_ip_addr,
 				source_ip_addr_p);
     COPY_MAC_ADDRESS(&enet_frame->arp_packet.dest_mac_addr,
@@ -255,6 +263,10 @@ net_send_ipv4_dhcp_discovery(struct local_l3_end_point *local_l3_end_point_p,
     struct dhcp_message *dhcp_discovery_msg_p =
 	net_get_udp_data_payload_area(tx_packet_p);
 
+    struct ethernet_mac_address local_mac_address;
+
+    enet_get_mac_addr(local_l3_end_point_p->enet_device_p, &local_mac_address);
+
     dhcp_discovery_msg_p->op = 0x1;
     dhcp_discovery_msg_p->hardware_type = 0x1; /* Ethernet */
     dhcp_discovery_msg_p->hw_addr_len = 0x6;
@@ -267,7 +279,7 @@ net_send_ipv4_dhcp_discovery(struct local_l3_end_point *local_l3_end_point_p,
     dhcp_discovery_msg_p->next_server_ip_addr.value = IPV4_NULL_ADDR;
     dhcp_discovery_msg_p->relay_agent_ip_addr.value = IPV4_NULL_ADDR;
     COPY_MAC_ADDRESS(&dhcp_discovery_msg_p->client_mac_addr,
-		     &local_l3_end_point_p->enet_device_p->mac_address);
+		     &local_mac_address);
     
     bzero(dhcp_discovery_msg_p->zero_filled,
 	  sizeof dhcp_discovery_msg_p->zero_filled);
@@ -1469,11 +1481,16 @@ net_receive_arp_packet(struct network_packet *rx_packet_p)
 	    &rx_frame_p->arp_packet.dest_ip_addr,
 	    &local_l3_end_point_p->ipv4.local_ip_addr);
 
+#       ifdef _RELIABILITY_CHECKS_
+        struct ethernet_mac_address local_mac_address;
+        
+        enet_get_mac_addr(local_l3_end_point_p->enet_device_p, &local_mac_address);
+
 	FDC_ASSERT(
-	    MAC_ADDRESSES_EQUAL(&rx_frame_p->arp_packet.dest_mac_addr,
-				&local_l3_end_point_p->enet_device_p->mac_address),
-	    &rx_frame_p->arp_packet.dest_mac_addr,
-	    &local_l3_end_point_p->enet_device_p->mac_address);
+	    MAC_ADDRESSES_EQUAL(&rx_frame_p->arp_packet.dest_mac_addr, &local_mac_address),
+	    rx_frame_p->arp_packet.dest_mac_addr.hwords[0],
+	    rx_frame_p->arp_packet.dest_mac_addr.hwords[1]);
+#       endif
 
 	if (UNALIGNED_IPv4_ADDRESSES_EQUAL(&rx_frame_p->arp_packet.source_ip_addr,
 					   &local_l3_end_point_p->ipv4.local_ip_addr)) {

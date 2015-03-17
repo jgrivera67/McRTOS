@@ -125,6 +125,11 @@ struct enet_device_var {
     bool initialized;
 
     /**
+     * MAC address
+     */
+    struct ethernet_mac_address mac_address;
+
+    /**
      * Total number of Tx/Rx errors:
      */
     uint32_t tx_rx_error_count;
@@ -221,7 +226,6 @@ struct enet_device {
     struct rtos_interrupt_registration_params error_rtos_interrupt_params;
     struct rtos_interrupt **error_rtos_interrupt_pp;
     uint32_t clock_gate_mask;
-    struct ethernet_mac_address mac_address;
 };
 
 void enet_init(const struct enet_device *enet_device_p);
@@ -258,6 +262,10 @@ k64f_enet_receive_interrupt_e_handler(
 void
 k64f_enet_error_interrupt_e_handler(
     struct rtos_interrupt *rtos_interrupt_p);
+
+void
+enet_get_mac_addr(const struct enet_device *enet_device_p,
+                  struct ethernet_mac_address *mac_addr_p);
 
 extern const struct enet_device g_enet_device0;
 

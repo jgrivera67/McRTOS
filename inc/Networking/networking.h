@@ -13,18 +13,13 @@
 #include <McRTOS/McRTOS_kernel_services.h>
 #include <hardware_abstractions.h>
 
-#ifndef BOARD_INSTANCE
-#define BOARD_INSTANCE	1
-#endif
-
-C_ASSERT(BOARD_INSTANCE == 1 || BOARD_INSTANCE == 2);
-
 /*
  * Networking subsystem configuration options
  */
 #define ENET_DATA_PAYLOAD_32_BIT_ALIGNED
 #define	ENET_CHECKSUM_OFFLOAD
 #undef	NET_TRACE
+#define NET_TRACE //???
 
 /**
  * Maximum transfer unit for Ethernet (frame size without CRC)
@@ -42,6 +37,12 @@ C_ASSERT(BOARD_INSTANCE == 1 || BOARD_INSTANCE == 2);
  */
 #define ENET_MAX_FRAME_VLAN_SIZE    (ETHERNET_MAX_FRAME_DATA_SIZE + 22)
 #endif
+
+/*
+ * Bit masks for first byte of a MAC address
+ */
+#define ENET_MAC_MULTICAST_ADDRESS_MASK UINT8_C(0x1)
+#define ENET_MAC_PRIVATE_ADDRESS_MASK   UINT8_C(0x2)
 
 /**
  * Network packet data buffer alignment in bytes

@@ -148,13 +148,6 @@ const struct enet_device g_enet_device0 = {
 
     .error_rtos_interrupt_pp = &g_rtos_interrupt_enet_error_p,
     .clock_gate_mask = SIM_SCGC2_ENET_MASK,
-    .mac_address = {
-	 /*
-	  * NOTE: Bit 1 of the first byte of the MAC address must 1
-	  * for private MAC addresses (locally administered)
-	  */
-	.bytes = { 0x82, 0x88, 0x88, 0x88, 0x88, 0x80 + BOARD_INSTANCE }
-    },
 };
 
 static void
@@ -288,6 +281,7 @@ static void
 ethernet_mac_init(const struct enet_device *enet_device_p)
 {
     volatile ENET_Type *enet_regs_p = enet_device_p->mmio_registers_p;
+    struct enet_device_var *const enet_var_p = enet_device_p->var_p;
     uint32_t reg_value;
     uint16_t polling_count = MAX_POLLING_COUNT;
 
@@ -333,15 +327,44 @@ ethernet_mac_init(const struct enet_device *enet_device_p)
     write_32bit_mmio_register(&enet_regs_p->IAUR, 0x0);
 
     /*
+     * Build MAC address from SoC's unique hardware identifier:
+     */
+    reg_value = read_32bit_mmio_register(&SIM_UIDML);
+    enet_var_p->mac_address.bytes[0] = (uint8_t)((uint16_t)reg_value >> 8);
+    enet_var_p->mac_address.bytes[1] = (uint8_t)reg_value;
+    reg_value = read_32bit_mmio_register(&SIM_UIDL);
+    enet_var_p->mac_address.bytes[2] = (uint8_t)(reg_value >> 24);
+    enet_var_p->mac_address.bytes[3] = (uint8_t)(reg_value >> 16);
+    enet_var_p->mac_address.bytes[4] = (uint8_t)((uint16_t)reg_value >> 8);
+    enet_var_p->mac_address.bytes[5] = (uint8_t)reg_value;
+
+    /*
+     * Ensure special bits of first byte of the MAC address are properly
+     * set:
+     */
+    enet_var_p->mac_address.bytes[0] &= ~ENET_MAC_MULTICAST_ADDRESS_MASK;
+    enet_var_p->mac_address.bytes[0] |= ENET_MAC_PRIVATE_ADDRESS_MASK;
+
+    DEBUG_PRINTF("MAC address for Ethernet device %#p: %x:%x:%x:%x:%x:%x\n",
+            enet_device_p,
+            enet_var_p->mac_address.bytes[0],
+            enet_var_p->mac_address.bytes[1],
+            enet_var_p->mac_address.bytes[2],
+            enet_var_p->mac_address.bytes[3],
+            enet_var_p->mac_address.bytes[4],
+            enet_var_p->mac_address.bytes[5]);
+
+    /*
      * Program the MAC address:
      */
-    reg_value = enet_device_p->mac_address.bytes[0] << 24 |
-		enet_device_p->mac_address.bytes[1] << 16 |
-		enet_device_p->mac_address.bytes[2] << 8 |
-		enet_device_p->mac_address.bytes[3];
+    reg_value = enet_var_p->mac_address.bytes[0] << 24 |
+		enet_var_p->mac_address.bytes[1] << 16 |
+		enet_var_p->mac_address.bytes[2] << 8 |
+		enet_var_p->mac_address.bytes[3];
     write_32bit_mmio_register(&enet_regs_p->PALR, reg_value);
-    reg_value = enet_device_p->mac_address.bytes[4] << 24 |
-		enet_device_p->mac_address.bytes[5] << 16;
+
+    reg_value = enet_var_p->mac_address.bytes[4] << 24 |
+		enet_var_p->mac_address.bytes[5] << 16;
     write_32bit_mmio_register(&enet_regs_p->PAUR, reg_value);
 
     /*
@@ -830,6 +853,29 @@ enet_init(const struct enet_device *enet_device_p)
     ethernet_phy_init(enet_device_p);
     enet_var_p->initialized = true;
     DEBUG_PRINTF("Initialized device %s\n", enet_device_p->name);
+}
+
+
+void
+enet_get_mac_addr(const struct enet_device *enet_device_p,
+                  struct ethernet_mac_address *mac_addr_p)
+{
+    fdc_error_t fdc_error;
+
+    DBG_ASSERT(
+        enet_device_p->signature == ENET_DEVICE_SIGNATURE,
+        enet_device_p->signature, enet_device_p);
+
+    struct enet_device_var *const enet_var_p = enet_device_p->var_p;
+
+    fdc_error = rtos_mpu_add_thread_data_region(enet_var_p,
+                                                sizeof *enet_var_p,
+                                                false);
+    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+    DBG_ASSERT(enet_var_p->initialized, enet_device_p, enet_var_p);
+
+    COPY_MAC_ADDRESS(mac_addr_p, &enet_var_p->mac_address);
+    rtos_mpu_remove_thread_data_region();   /* enet_var_p */
 }
 
 
