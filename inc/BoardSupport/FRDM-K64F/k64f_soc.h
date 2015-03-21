@@ -33,6 +33,23 @@ struct mpu_device_var {
 };
 
 /**
+ * Const fields of the CRC device (to be placed in flash)
+ */
+struct crc_device {
+#   define CRC_DEVICE_SIGNATURE  GEN_SIGNATURE('C', 'R', 'C', ' ')
+    uint32_t signature;
+    volatile CRC_Type *mmio_regs_p;
+    struct crc_device_var *var_p;
+};
+
+/**
+ * Non-const fields of an CRC device (to be placed in SRAM)
+ */
+struct crc_device_var {
+    bool initialized;
+};
+
+/**
  * Const fields of a UART device (to be placed in flash)
  */
 struct uart_device {
@@ -264,6 +281,7 @@ struct i2c_device_var {
      */
     struct rtos_condvar i2c_condvar;
 };
+
 
 void k64f_ftm_init(
     const struct ftm_device *ftm_device_p);

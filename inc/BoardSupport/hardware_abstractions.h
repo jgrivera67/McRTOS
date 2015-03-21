@@ -295,6 +295,8 @@ void mpu_unset_thread_data_region(mpu_thread_data_region_index_t thread_region_i
 void mpu_register_dma_device(
     enum mpu_bus_masters mpu_bus_master);
 
+uint32_t calc_crc_32(const void *data_buf_p, size_t num_bytes);
+
 void install_isr(
     interrupt_channel_t channel,
     isr_function_t *interruptServiceRoutine,
