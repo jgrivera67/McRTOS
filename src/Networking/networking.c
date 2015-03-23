@@ -45,6 +45,63 @@ static const struct ethernet_mac_address enet_null_mac_addr = {
 };
 
 /**
+ * IPv4 loopback address: 127.0.0.1
+ */
+static const struct ipv4_address ipv4_loopback_address = {
+    .bytes = { [0] = 127, [3] = 1 }
+};
+
+/**
+ * IPv6 loopback address: ::1
+ */
+static const struct ipv6_address ipv6_loopback_address = {
+    .bytes = { [15] = 0x1 }
+};
+
+/**
+ * IPv6 unspecified address: ::
+ */
+static const struct ipv6_address ipv6_unspecified_address = {
+    .bytes = { 0x0 }
+};
+
+/**
+ * IPv6 link-local unicast address prefix: fe80::/10
+ */
+static const struct ipv6_address ipv6_link_local_unicast_prefix = {
+    .bytes = { [0] = 0xfe, [1] = 0x80 }
+};
+
+/**
+ * IPv6 site-local unicast address prefix: fec0::/10
+ */
+static const struct ipv6_address ipv6_site_local_unicast_prefix = {
+    .bytes = { [0] = 0xfe, [1] = 0xc0 }
+};
+
+/**
+ * IPv6 link-local solicited-node multicast address prefix:
+ * ff02:0:0:0:0:1:ff00::/104
+ */
+static const struct ipv6_address ipv6_link_local_solicited_node_prefix = {
+    .bytes = { [0] = 0xff, [1] = 0x02, [11] = 0x1, [12] = 0xff }
+};
+
+/**
+ * IPv6 link-local all-nodes multicast address: ff02::1
+ */
+static const struct ipv6_address ipv6_link_local_all_nodes_address = {
+    .bytes = { [0] = 0xff, [1] = 0x02, [15] = 0x1 }
+};
+
+/**
+ * IPv6 link-local all-routers multicast address: ff02::2
+ */
+static const struct ipv6_address ipv6_link_local_all_routers_address = {
+    .bytes = { [0] = 0xff, [1] = 0x02, [15] = 0x2 }
+};
+
+/**
  * Execution stacks for networking stack threads
  */
 static struct rtos_thread_execution_stack g_thread_execution_stacks[NET_NUM_THREADS];
@@ -66,6 +123,11 @@ static struct networking g_networking = {
             .default_gateway_ip_addr.value = IPV4_NULL_ADDR,
             .next_tx_ip_packet_seq_num = 0,
         },
+        .ipv6 = {
+            .link_local_ip_addr = {
+                .state = IPV6_ADDR_NOT_CONFIGURED,
+            }
+        }
     },
 };
 
@@ -315,6 +377,189 @@ net_send_ipv4_dhcp_discovery(struct local_l3_end_point *local_l3_end_point_p,
 
 
 static void
+build_ipv6_interface_id(struct local_l3_end_point *local_l3_end_point_p)
+{
+    struct ethernet_mac_address local_mac_address;
+
+    enet_get_mac_addr(local_l3_end_point_p->enet_device_p, &local_mac_address);
+
+    /*
+     * Build modified EUI-64 id from the local MAC address:
+     * (Bit 1 of first byte is inverted)
+     */
+    uint8_t *interface_id_p = (uint8_t *)&local_l3_end_point_p->ipv6.interface_id;
+
+    interface_id_p[0] = local_mac_address.bytes[0] ^ BIT(1);
+    interface_id_p[1] = local_mac_address.bytes[1];
+    interface_id_p[2] = local_mac_address.bytes[2];
+    interface_id_p[3] = 0xff;
+    interface_id_p[4] = 0xfe;
+    interface_id_p[5] = local_mac_address.bytes[3];
+    interface_id_p[6] = local_mac_address.bytes[4];
+    interface_id_p[7] = local_mac_address.bytes[5];
+   
+    DEBUG_PRINTF("IPv6 interface Id: %x:%x:%x:%x:%x:%x:%x:%x\n",
+                 interface_id_p[0],
+                 interface_id_p[1],
+                 interface_id_p[2],
+                 interface_id_p[3],
+                 interface_id_p[4],
+                 interface_id_p[5],
+                 interface_id_p[6],
+                 interface_id_p[7]);
+}
+
+
+/**
+ * Maps multicast IPv6 address to multicast Ethernet MAC address
+ */
+static inline void
+map_ipv6_multicast_addr_to_ethernet_multicast_addr(
+    const struct ipv6_address *ipv6_multicast_addr_p,
+    struct ethernet_mac_address *enet_multicast_addr_p)
+{
+    FDC_ASSERT(ipv6_multicast_addr_p->bytes[0] == 0xff,
+               ipv6_multicast_addr_p->bytes[0], 0);
+
+    enet_multicast_addr_p->hwords[0] = 0x3333;
+    enet_multicast_addr_p->hwords[1] = ipv6_multicast_addr_p->hwords[6];
+    enet_multicast_addr_p->hwords[2] = ipv6_multicast_addr_p->hwords[7];
+}
+
+
+static void
+join_ipv6_multicast_group(struct local_l3_end_point *local_l3_end_point_p,
+                          const struct ipv6_address *multicast_addr_p)
+{
+    struct ethernet_mac_address enet_multicast_addr;
+
+    map_ipv6_multicast_addr_to_ethernet_multicast_addr(multicast_addr_p,
+                                                       &enet_multicast_addr);
+
+    enet_add_multicast_mac_addr(local_l3_end_point_p->enet_device_p,
+                                &enet_multicast_addr);
+}
+
+
+/**
+ * Build solicited-node multicast address for a given unicast address
+ */ 
+static inline void
+build_ipv6_solicited_node_mulicast_addr(
+        const struct ipv6_address *unicast_addr_p,
+        struct ipv6_address *solicited_node_multicast_addr_p)
+{
+    *solicited_node_multicast_addr_p = ipv6_link_local_solicited_node_prefix;
+    solicited_node_multicast_addr_p->bytes[13] = unicast_addr_p->bytes[13];
+    solicited_node_multicast_addr_p->bytes[14] = unicast_addr_p->bytes[14];
+    solicited_node_multicast_addr_p->bytes[15] = unicast_addr_p->bytes[15];
+}
+
+
+/**
+ * Send an ARP request message
+ */
+static void
+net_send_neighbor_solicitation(struct local_l3_end_point *local_l3_end_point_p,
+                               const struct ipv6_address *source_ip_addr_p,
+		               const struct ipv6_address *dest_ip_addr_p)
+{
+    size_t data_payload_length;
+    struct network_packet *tx_packet_p = net_allocate_tx_packet(true);
+
+    DBG_ASSERT(tx_packet_p != NULL, dest_ip_addr_p, 0);
+    struct icmpv6_neighbor_solicitation *ns_msg_p =
+	(struct icmpv6_neighbor_solicitation *)GET_IPV6_DATA_PAYLOAD_AREA(tx_packet_p);
+
+    ns_msg_p->target_ip_addr = *dest_ip_addr_p;
+    if (IPV6_ADDRESSES_EQUAL(source_ip_addr_p, &ipv6_unspecified_address)) {
+        /*
+         * Sender is performing DAD as part of local IPv6 address configuration,
+         * so source layer-2 address is not to be included in the message
+         */
+        data_payload_length = sizeof(struct icmpv6_neighbor_solicitation) -
+			      sizeof(struct icmpv6_header);
+    } else {
+        enet_get_mac_addr(local_l3_end_point_p->enet_device_p, 
+                          (struct ethernet_mac_address *)ns_msg_p->options);
+
+       data_payload_length = (sizeof(struct icmpv6_neighbor_solicitation) -
+			      sizeof(struct icmpv6_header)) +
+                             sizeof(struct ethernet_mac_address);
+    }
+
+    struct ipv6_address solicited_node_multicast_addr;
+
+    /*
+     * Build solicited-node multicast address for the destination IPv6 address:
+     */
+    build_ipv6_solicited_node_mulicast_addr(
+        dest_ip_addr_p,
+        &solicited_node_multicast_addr);
+
+    (void)net_send_ipv6_icmp_message(&solicited_node_multicast_addr,
+		                     tx_packet_p,
+				     ICMPV6_TYPE_NEIGHBOR_SOLICITATION,
+				     0, /* code */
+                                     0, /* data */
+                                     data_payload_length);
+}
+
+
+static void 
+autoconfigure_ipv6_link_local_addr(struct local_l3_end_point *local_l3_end_point_p)
+{
+    FDC_ASSERT(local_l3_end_point_p->ipv6.link_local_ip_addr.state ==
+               IPV6_ADDR_NOT_CONFIGURED,
+               local_l3_end_point_p->ipv6.link_local_ip_addr.state,
+               local_l3_end_point_p);
+
+    /*
+     * Build link-local unicast address:
+     */ 
+    local_l3_end_point_p->ipv6.link_local_ip_addr.addr = 
+        ipv6_link_local_unicast_prefix;
+    local_l3_end_point_p->ipv6.link_local_ip_addr.addr.dwords[1] =
+        local_l3_end_point_p->ipv6.interface_id;
+
+    local_l3_end_point_p->ipv6.link_local_ip_addr.state = IPV6_ADDR_TENTATIVE;
+
+    /*
+     * Join solicited-node multicast group for the configured unicast address:
+     */
+    struct ipv6_address solicited_node_multicast_addr;
+
+    build_ipv6_solicited_node_mulicast_addr(
+        &local_l3_end_point_p->ipv6.link_local_ip_addr.addr,
+        &solicited_node_multicast_addr);
+
+    join_ipv6_multicast_group(local_l3_end_point_p,
+                              &solicited_node_multicast_addr);
+
+    /*
+     * Start Duplicate Address Detection (DAD) by sending neighbor-solicited message
+     * for configured local IPv6 address:
+     */
+    net_send_neighbor_solicitation(local_l3_end_point_p,
+                                   &ipv6_unspecified_address,
+		                   &local_l3_end_point_p->ipv6.link_local_ip_addr.addr);
+}
+
+
+static void 
+net_start_ip6_address_autoconfiguration(struct local_l3_end_point *local_l3_end_point_p)
+{
+    build_ipv6_interface_id(local_l3_end_point_p);
+
+    /*
+     * Join link-local all-nodes multicast group:
+     */
+    join_ipv6_multicast_group(local_l3_end_point_p, &ipv6_link_local_all_nodes_address);
+
+    autoconfigure_ipv6_link_local_addr(local_l3_end_point_p);
+}
+
+static void
 net_send_ipv4_dhcp_request(struct local_l3_end_point *local_l3_end_point_p,
                            struct local_l4_end_point *client_end_point_p,
                            struct dhcp_message *dhcp_offer_msg_p)
@@ -370,6 +615,26 @@ net_send_ipv4_dhcp_request(struct local_l3_end_point *local_l3_end_point_p,
 }
 
 
+static void
+neighbor_cache_init(struct neighbor_cache *neighbor_cache_p)
+{
+    rtos_mutex_init(
+	"IPv6 neighbor cache mutex",
+	&neighbor_cache_p->mutex);
+
+    rtos_condvar_init(
+	"IPv6 neighbor cache updated condvar",
+	&neighbor_cache_p->cache_updated_condvar);
+
+
+    for (unsigned int i = 0; i < NEIGHBOR_CACHE_NUM_ENTRIES; i++) {
+	struct neighbor_cache_entry *entry_p = &neighbor_cache_p->entries[i];
+
+	entry_p->state = NEIGHBOR_ENTRY_INVALID;
+    }
+}
+
+
 /**
  * Initialize networking subsystem
  */
@@ -392,7 +657,7 @@ networking_init(void)
     net_tx_packet_pool_init();
 
     /*
-     * Initialize local network end point:
+     * Initialize local layer-3 end point:
      */
     struct local_l3_end_point *local_l3_end_point_p =
 	    &g_networking.local_l3_end_point;
@@ -404,11 +669,20 @@ networking_init(void)
         true,
         &local_l3_end_point_p->ipv4.rx_icmpv4_packet_queue);
 
+    rtos_queue_init(
+        "ICMPv6 incoming packet queue",
+        true,
+        &local_l3_end_point_p->ipv6.rx_icmpv6_packet_queue);
+
     /*
-     * Initialize ARP cache for each local network end point
+     * Initialize IPv4 ARP cache for the layer-3 end point
      */
     arp_cache_init(&local_l3_end_point_p->ipv4.arp_cache);
-    //TODO: Init IPv6 neighbor cache
+
+    /*
+     * Initialize IPv6 neighbor cache for the layer-3 end point
+     */
+    neighbor_cache_init(&local_l3_end_point_p->ipv6.neighbor_cache);
 
     /*
      * Activate network interface (ENET device):
@@ -437,6 +711,11 @@ networking_init(void)
         console_printf("CPU core %u: %s started\n", cpu_id,
             g_thread_creation_params[i].p_name_p);
     }
+
+    /*
+     * Start IPv6 address autoconfiguration:
+     */
+    net_start_ip6_address_autoconfiguration(local_l3_end_point_p);
 
     rtos_mpu_remove_thread_data_region();   /* g_networking */
 }
@@ -506,7 +785,8 @@ net_get_local_ipv4_address(struct ipv4_address *ip_addr_p)
 
 
 /**
- * Allocates a Tx packet from the global Tx packet pool
+ * Allocates a Tx packet from the global Tx packet pool.
+ * If there are no free Tx packets, it waits until one becomes available
  */
 struct network_packet *
 net_allocate_tx_packet(bool free_after_tx_complete)
@@ -724,9 +1004,9 @@ arp_cache_lookup_or_allocate(struct arp_cache *arp_cache_p,
 
 
 static fdc_error_t
-find_dest_mac_addr(struct local_l3_end_point *local_l3_end_point_p,
-		   const struct ipv4_address *dest_ip_addr_p,
-		   struct ethernet_mac_address *dest_mac_addr_p)
+resolve_dest_ipv4_addr(struct local_l3_end_point *local_l3_end_point_p,
+		       const struct ipv4_address *dest_ip_addr_p,
+		       struct ethernet_mac_address *dest_mac_addr_p)
 {
     unsigned int arp_request_retries = 0;
     struct arp_cache_entry *matching_entry_p = NULL;
@@ -874,6 +1154,20 @@ choose_ipv4_local_l3_end_point(const struct ipv4_address *dest_ip_addr_p)
 }
 
 
+/**
+ * Chooses the local network end-point to be used for sending a packet,
+ * based on the destination IPv6 address
+ */
+static struct local_l3_end_point *
+choose_ipv6_local_l3_end_point(const struct ipv6_address *dest_ip_addr_p)
+{
+    /*
+     * There is only one local network end-point
+     */
+    return &g_networking.local_l3_end_point;
+}
+
+
 #ifndef ENET_CHECKSUM_OFFLOAD
 static uint16_t
 net_compute_checksum(void *data_p, size_t data_length)
@@ -1007,15 +1301,15 @@ net_send_ipv4_packet(const struct ipv4_address *dest_ip_addr_p,
     } else if (SAME_IPv4_SUBNET(&local_l3_end_point_p->ipv4.local_ip_addr,
 		         dest_ip_addr_p,
 			 local_l3_end_point_p->ipv4.subnet_mask)) {
-	fdc_error = find_dest_mac_addr(local_l3_end_point_p,
-				       dest_ip_addr_p,
-				       &dest_mac_addr);
+	fdc_error = resolve_dest_ipv4_addr(local_l3_end_point_p,
+				           dest_ip_addr_p,
+				           &dest_mac_addr);
     } else if (local_l3_end_point_p->ipv4.default_gateway_ip_addr.value == IPV4_NULL_ADDR) {
 	fdc_error = CAPTURE_FDC_ERROR("No default IPv4 gateway defined", 0, 0);
     } else {
-	 fdc_error = find_dest_mac_addr(local_l3_end_point_p,
-					&local_l3_end_point_p->ipv4.default_gateway_ip_addr,
-					&dest_mac_addr);
+	 fdc_error = resolve_dest_ipv4_addr(local_l3_end_point_p,
+					    &local_l3_end_point_p->ipv4.default_gateway_ip_addr,
+					    &dest_mac_addr);
     }
 
     if (fdc_error != 0) {
@@ -1269,7 +1563,7 @@ net_send_ipv4_icmp_message(const struct ipv4_address *dest_ip_addr_p,
     icmp_header_p->msg_code = msg_code;
 
     /*
-     * NOTE: icmp_header_p->msg_checksum is computed by hardware
+     * NOTE: icmp_header_p->msg_checksum is computed by hardware.
      * We just need to initialize the checksum field to 0
      */
     icmp_header_p->msg_checksum = 0;
@@ -1315,6 +1609,8 @@ net_send_ipv4_ping_request(const struct ipv4_address *dest_ip_addr_p,
     rtos_mutex_release(&g_networking.expecting_ping_reply_mutex);
 
     struct network_packet *tx_packet_p = net_allocate_tx_packet(true);
+    
+    DBG_ASSERT(tx_packet_p != NULL, dest_ip_addr_p, seq_num);
     struct icmpv4_echo_message *echo_msg_p =
 	(struct icmpv4_echo_message *)GET_IPV4_DATA_PAYLOAD_AREA(tx_packet_p);
 
@@ -1376,6 +1672,349 @@ exit_remove_region:
     rtos_mpu_remove_thread_data_region();   /* g_networking */
     return fdc_error;
 
+}
+
+
+static fdc_error_t
+select_ipv6_router(struct local_l3_end_point *local_l3_end_point_p,
+                   const struct ipv6_address *dest_ip_addr_p,
+                   struct ipv6_address *router_ip_addr_p)
+{
+    return CAPTURE_FDC_ERROR("select_ipv6_router() not implemented yet", 0, 0);
+}
+
+
+static fdc_error_t
+resolve_dest_ipv6_addr(struct local_l3_end_point *local_l3_end_point_p,
+		       const struct ipv6_address *dest_ip_addr_p,
+		       struct ethernet_mac_address *dest_mac_addr_p)
+{
+    fdc_error_t fdc_error;
+#if 0 //???
+    unsigned int arp_request_retries = 0;
+    struct arp_cache_entry *matching_entry_p = NULL;
+    struct arp_cache_entry *free_entry_p = NULL;
+    struct arp_cache *arp_cache_p = &local_l3_end_point_p->ipv4.arp_cache;
+
+    rtos_mutex_acquire(&arp_cache_p->mutex);
+    for ( ; ; ) {
+	bool send_arp_request = false;
+	matching_entry_p = arp_cache_lookup_or_allocate(arp_cache_p, dest_ip_addr_p,
+							&free_entry_p);
+	rtos_ticks_t current_ticks = rtos_get_ticks();
+
+	if (matching_entry_p == NULL) {
+	    send_arp_request = true;
+	} else if (matching_entry_p->state == ARP_ENTRY_FILLED) {
+	    if (RTOS_TICKS_DELTA(matching_entry_p->entry_filled_time_stamp,
+				 current_ticks) <
+		ARP_CACHE_ENTRY_LIFETIME_IN_TICKS) {
+		/*
+		 * ARP cache hit
+		 */
+		*dest_mac_addr_p = matching_entry_p->dest_mac_addr;
+		break;
+	    } else {
+		/*
+		 * ARP entry expired, send a new ARP request:
+		 */
+		DEBUG_PRINTF("Expired ARP cache entry for IP address %u.%u.%u.%u\n",
+			     dest_ip_addr_p->bytes[0],
+			     dest_ip_addr_p->bytes[1],
+			     dest_ip_addr_p->bytes[2],
+			     dest_ip_addr_p->bytes[3]);
+
+		matching_entry_p->state = ARP_ENTRY_INVALID;
+		send_arp_request = true;
+	    }
+	} else {
+	    FDC_ASSERT(matching_entry_p->state == ARP_ENTRY_HALF_FILLED,
+		       matching_entry_p->state, matching_entry_p);
+
+	    if (RTOS_TICKS_DELTA(matching_entry_p->arp_request_time_stamp, current_ticks) >=
+		MILLISECONDS_TO_TICKS(ARP_REPLY_WAIT_TIMEOUT_IN_MS)) {
+		/*
+		 * Re-send ARP request:
+		 */
+		capture_fdc_msg_printf("Outstanding ARP request re-sent for IP address: %u.%u.%u.%u\n",
+				       dest_ip_addr_p->bytes[0],
+				       dest_ip_addr_p->bytes[1],
+				       dest_ip_addr_p->bytes[2],
+				       dest_ip_addr_p->bytes[3]);
+
+		send_arp_request = true;
+	    }
+	}
+
+	/*
+	 * Send ARP request if necessary:
+	 */
+	if (send_arp_request) {
+	    if (arp_request_retries == ARP_REQUEST_MAX_RETRIES) {
+		fdc_error = CAPTURE_FDC_ERROR("Unreachable IP address",
+					      dest_ip_addr_p->value, 0);
+
+		capture_fdc_msg_printf("Unreachable IP address: %u.%u.%u.%u\n",
+				       dest_ip_addr_p->bytes[0],
+				       dest_ip_addr_p->bytes[1],
+				       dest_ip_addr_p->bytes[2],
+				       dest_ip_addr_p->bytes[3]);
+
+		goto common_exit;
+	    }
+
+	    arp_request_retries ++;
+	    if (matching_entry_p != NULL) {
+		matching_entry_p->arp_request_time_stamp = rtos_get_ticks();
+		matching_entry_p->state = ARP_ENTRY_HALF_FILLED;
+	    } else {
+		FDC_ASSERT(free_entry_p != NULL, dest_ip_addr_p, arp_cache_p);
+		free_entry_p->dest_ip_addr.value = dest_ip_addr_p->value;
+		free_entry_p->arp_request_time_stamp = rtos_get_ticks();
+		free_entry_p->state = ARP_ENTRY_HALF_FILLED;
+	    }
+
+	    net_send_arp_request(local_l3_end_point_p->enet_device_p,
+				 &local_l3_end_point_p->ipv4.local_ip_addr,
+				 dest_ip_addr_p);
+	}
+
+	/*
+	 * Wait for ARP cache update:
+	 */
+	rtos_milliseconds_t timeout = ARP_REPLY_WAIT_TIMEOUT_IN_MS;
+	rtos_condvar_wait(&arp_cache_p->cache_updated_condvar,
+			  &arp_cache_p->mutex,
+			  &timeout);
+    }
+
+    fdc_error = 0;
+
+common_exit:
+    rtos_mutex_release(&arp_cache_p->mutex);
+#else
+    fdc_error = CAPTURE_FDC_ERROR("Not implemented yet,", 0, 0);
+#endif
+
+    return fdc_error;
+}
+
+
+fdc_error_t
+net_send_ipv6_packet(const struct ipv6_address *dest_ip_addr_p,
+		     struct network_packet *tx_packet_p,
+		     size_t data_payload_length,
+		     enum l4_protocols l4_protocol)
+{
+    struct neighbor_cache_entry *neighbor_cache_entry_p = NULL;
+    struct ethernet_mac_address dest_mac_addr;
+    fdc_error_t fdc_error;
+
+    FDC_ASSERT(tx_packet_p->signature == NET_TX_PACKET_SIGNATURE,
+	       tx_packet_p->signature, tx_packet_p);
+    FDC_ASSERT(data_payload_length <= NET_MAX_IPV6_PACKET_PAYLOAD_SIZE,
+	       data_payload_length, tx_packet_p);
+
+    struct ethernet_frame *tx_frame_p =
+       (struct ethernet_frame *)tx_packet_p->data_buffer;
+
+    struct local_l3_end_point *local_l3_end_point_p =
+	choose_ipv6_local_l3_end_point(dest_ip_addr_p);
+
+    const struct ipv6_address *source_ip_addr_p = 
+        &local_l3_end_point_p->ipv6.link_local_ip_addr.addr;
+
+    const struct enet_device *enet_device_p = local_l3_end_point_p->enet_device_p;
+
+    FDC_ASSERT(enet_device_p->signature == ENET_DEVICE_SIGNATURE,
+	       enet_device_p->signature, enet_device_p);
+
+    FDC_ASSERT(!IPV6_ADDRESSES_EQUAL(dest_ip_addr_p, &ipv6_unspecified_address),
+               dest_ip_addr_p, tx_packet_p);
+
+    if (local_l3_end_point_p->ipv6.link_local_ip_addr.state == IPV6_ADDR_TENTATIVE &&
+        l4_protocol != TRANSPORT_PROTO_ICMPV6) {
+        fdc_error = CAPTURE_FDC_ERROR(
+                        "Packet cannot be sent, as local IPv6 address is still tentative",
+                        l4_protocol, local_l3_end_point_p);
+        return fdc_error;
+    }
+
+    /*
+     * Populate IPv6 header
+     */
+    tx_frame_p->ipv6_header.first_word = 0;
+    SET_BIT_FIELD(tx_frame_p->ipv6_header.first_word,
+		  IPv6_VERSION_MASK, IPv6_VERSION_SHIFT, 6);
+
+    tx_frame_p->ipv6_header.payload_length = hton16(data_payload_length);
+    tx_frame_p->ipv6_header.next_header = l4_protocol;
+    tx_frame_p->ipv6_header.hop_limit = 64; /* max routing hops */
+
+#   ifdef ENET_DATA_PAYLOAD_32_BIT_ALIGNED
+    COPY_IPv6_ADDRESS(&tx_frame_p->ipv6_header.source_ipv6_addr,
+				&local_l3_end_point_p->ipv6.link_local_ip_addr.addr);
+
+    COPY_IPv6_ADDRESS(&tx_frame_p->ipv6_header.dest_ipv6_addr,
+				dest_ip_addr_p);
+#   else
+    COPY_UNALIGNED_IPv6_ADDRESS(&tx_frame_p->ipv6_header.source_ipv6_addr,
+				&local_l3_end_point_p->ipv6.link_local_ip_addr.addr);
+
+    COPY_UNALIGNED_IPv6_ADDRESS(&tx_frame_p->ipv6_header.dest_ipv6_addr,
+				dest_ip_addr_p);
+#   endif
+
+    /*
+     * Populate Ethernet header
+     */
+
+#if 0 /* ENET hardware does this automatically */
+    ENET_COPY_MAC_ADDRESS(&tx_frame_p->enet_header.source_mac_addr,
+			  &enet_device_p->mac_address);
+#endif
+
+    tx_frame_p->enet_header.frame_type = hton16(ENET_IPv6_PACKET);
+
+    tx_packet_p->total_length = sizeof(struct ethernet_header) +
+				sizeof(struct ipv6_header) +
+				data_payload_length;
+
+    /*
+     * Get destination MAC address:
+     */
+    if (IPV6_ADDR_IS_MULTICAST(dest_ip_addr_p)) {
+        map_ipv6_multicast_addr_to_ethernet_multicast_addr(dest_ip_addr_p,
+                                                           &dest_mac_addr);
+        fdc_error = 0;
+    } else {
+        if (IPV6_ADDRESSES_EQUAL(&local_l3_end_point_p->ipv6.link_local_ip_addr.addr,
+                                 dest_ip_addr_p)) {
+            fdc_error = CAPTURE_FDC_ERROR("IPv6 Loopback not supported", 0, 0);
+        } else if (IPV6_ADDR_IS_LINK_LOCAL(dest_ip_addr_p)) {
+            fdc_error = resolve_dest_ipv6_addr(local_l3_end_point_p,
+                                               dest_ip_addr_p,
+                                               &dest_mac_addr);
+        } else {
+            struct ipv6_address router_ip_addr;
+
+            fdc_error = select_ipv6_router(local_l3_end_point_p, dest_ip_addr_p,
+                                           &router_ip_addr);
+            if (fdc_error != 0) {
+                return fdc_error;
+            }
+
+            fdc_error = resolve_dest_ipv6_addr(local_l3_end_point_p,
+                                               &router_ip_addr,
+                                               &dest_mac_addr);
+        }
+    }
+
+    if (fdc_error != 0) {
+	return fdc_error;
+    }
+
+    COPY_MAC_ADDRESS(&tx_frame_p->enet_header.dest_mac_addr, &dest_mac_addr);
+
+    /*
+     * Transmit packet:
+     */
+    enet_start_xmit(enet_device_p, tx_packet_p);
+    return 0;
+}
+
+
+fdc_error_t
+net_send_ipv6_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
+		           const struct ipv6_address *dest_ip_addr_p,
+			   uint16_t dest_port,
+		           struct network_packet *tx_packet_p,
+		           size_t data_payload_length)
+{
+    DEBUG_PRINTF("Not implemented yet\n");
+    return 0;
+}
+
+
+fdc_error_t
+net_receive_ipv6_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
+			      rtos_milliseconds_t timeout_ms,
+		              struct ipv6_address *source_ip_addr_p,
+			      uint16_t *source_port_p,
+			      struct network_packet **rx_packet_pp)
+{
+    DEBUG_PRINTF("Not implemented yet\n");
+    return 0;
+}
+
+
+void
+net_send_ipv6_tcp_segment(struct local_l4_end_point *local_l4_end_point_p,
+		          const struct ipv6_address *dest_ip_addr_p,
+			  uint16_t dest_port,
+		          struct network_packet *tx_packet_p,
+		          size_t data_payload_length)
+{
+    DEBUG_PRINTF("Not implemented yet\n");
+}
+
+
+fdc_error_t
+net_send_ipv6_icmp_message(const struct ipv6_address *dest_ip_addr_p,
+		           struct network_packet *tx_packet_p,
+			   uint8_t msg_type,
+		           uint8_t msg_code,
+                           uint32_t header_data,
+		           size_t data_payload_length)
+{
+    /*
+     * Populate ICMPv6 header:
+     */
+    struct icmpv6_header *icmp_header_p =
+	(struct icmpv6_header *)GET_IPV6_DATA_PAYLOAD_AREA(tx_packet_p);
+
+    icmp_header_p->msg_type = msg_type;
+    icmp_header_p->msg_code = msg_code;
+    icmp_header_p->data = header_data;
+
+    /*
+     * NOTE: icmp_header_p->msg_checksum is computed by hardware.
+     * We just need to initialize the checksum field to 0
+     */
+    icmp_header_p->msg_checksum = 0;
+
+#   ifndef ENET_CHECKSUM_OFFLOAD
+    icmp_header_p->msg_checksum =
+	net_compute_checksum(icmp_header_p,
+			     sizeof(struct icmpv6_header) + data_payload_length);
+#   endif
+
+    /*
+     * Send IPv6 packet:
+     */
+    return net_send_ipv6_packet(dest_ip_addr_p,
+				tx_packet_p,
+				sizeof(struct icmpv6_header) + data_payload_length,
+				TRANSPORT_PROTO_ICMPV6);
+}
+
+
+fdc_error_t
+net_send_ipv6_ping_request(const struct ipv6_address *dest_ip_addr_p,
+			   uint16_t identifier,
+		           uint16_t seq_num)
+{
+    return 0;
+}
+
+
+fdc_error_t
+net_receive_ipv6_ping_reply(rtos_milliseconds_t timeout_ms,
+			    struct ipv6_address *remote_ip_addr_p,
+			    uint16_t *identifier_p,
+			    uint16_t *seq_num_p)
+{
+    return 0;
 }
 
 

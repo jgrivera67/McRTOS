@@ -179,6 +179,14 @@ struct enet_device_var {
     struct rtos_mutex phy_mutex;
 
     /**
+     * Array of counters for the multicast hash table buckets. Each entry
+     * corresponds to the number of multicast addresses added to the
+     * corresponding bucket (bit in the GAUR/GALR bit hash table)
+     */
+#   define ENET_MULTICAST_HASH_TABLE_NUM_BUCKETS    64    
+    uint8_t multicast_hash_table_counts[ENET_MULTICAST_HASH_TABLE_NUM_BUCKETS];
+
+    /**
      * Tx buffer descriptor ring accessed by the Ethernet MAC (ENET device)
      */
     volatile struct enet_tx_buffer_descriptor tx_buffer_descriptors[NET_MAX_TX_PACKETS];
@@ -232,6 +240,12 @@ void enet_init(const struct enet_device *enet_device_p);
 
 void enet_start(const struct enet_device *enet_device_p,
 	        struct local_l3_end_point *local_l3_end_point_p);
+
+void enet_add_multicast_mac_addr(const struct enet_device *enet_device_p,
+                                 struct ethernet_mac_address *mac_addr_p);
+
+void enet_remove_multicast_mac_addr(const struct enet_device *enet_device_p,
+                                    struct ethernet_mac_address *mac_addr_p);
 
 void enet_start_xmit(const struct enet_device *enet_device_p,
 		     struct network_packet *tx_packet_p);

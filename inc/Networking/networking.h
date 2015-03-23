@@ -60,6 +60,10 @@
         (NET_PACKET_DATA_BUFFER_SIZE - \
          (sizeof(struct ethernet_header) + sizeof(struct ipv4_header)))
 
+#define NET_MAX_IPV6_PACKET_PAYLOAD_SIZE \
+        (NET_PACKET_DATA_BUFFER_SIZE - \
+         (sizeof(struct ethernet_header) + sizeof(struct ipv6_header)))
+
 #define NET_MAX_UDP_PACKET_PAYLOAD_SIZE \
         (NET_MAX_IPV4_PACKET_PAYLOAD_SIZE - sizeof(struct udp_header))
 
@@ -185,7 +189,7 @@
 	 ((_dest_ip_addr_p)->value & (_subnet_mask)))
 
 /**
- * Returns pointer to the data payload area of an IPv4 packet
+ * Returns pointer to the IPv4 header of an IPv4 packet
  */
 #define GET_IPV4_HEADER(_net_packet_p) \
         ((struct ipv4_header *)((_net_packet_p)->data_buffer +	\
@@ -199,6 +203,67 @@
 		  (sizeof(struct ethernet_header) + \
                    sizeof(struct ipv4_header))))
 
+/**
+ * Compares two IPv6 addresses. Their storage must be 4-byte aligned
+ */
+#define IPV6_ADDRESSES_EQUAL(_addr1_p, _addr2_p) \
+	 ((_addr1_p)->words[0] == (_addr2_p)->words[0] &&	\
+	  (_addr1_p)->words[1] == (_addr2_p)->words[1] &&       \
+	  (_addr1_p)->words[2] == (_addr2_p)->words[2] &&       \
+	  (_addr1_p)->words[3] == (_addr2_p)->words[3])
+
+/**
+ * Tell if a given IPv6 address is a multicast address
+ */
+#define IPV6_ADDR_IS_MULTICAST(_ipv6_addr_p) \
+        ((_ipv6_addr_p)->bytes[0] == 0xff)
+
+/**
+ * Tell if a given IPv6 address is a link-local unicast address
+ */
+#define IPV6_ADDR_IS_LINK_LOCAL(_ipv6_addr_p) \
+        ((_ipv6_addr_p)->bytes[0] == 0xfe && (_ipv6_addr_p)->bytes[1] == 0x80)
+
+/**
+ * Copies an IPv6 address. Storage must be 4-byte aligned
+ */
+#define COPY_IPv6_ADDRESS(_dest_p, _src_p) \
+	do {								\
+	    (_dest_p)->words[0] = (_src_p)->words[0];			\
+	    (_dest_p)->words[1] = (_src_p)->words[1];			\
+	    (_dest_p)->words[2] = (_src_p)->words[2];			\
+	    (_dest_p)->words[3] = (_src_p)->words[3];			\
+	} while (0)
+
+/**
+ * Copies an IPv6 address. Storage must be at least 2-byte aligned
+ */
+#define COPY_UNALIGNED_IPv6_ADDRESS(_dest_p, _src_p) \
+	do {								\
+	    (_dest_p)->hwords[0] = (_src_p)->hwords[0];			\
+	    (_dest_p)->hwords[1] = (_src_p)->hwords[1];			\
+	    (_dest_p)->hwords[2] = (_src_p)->hwords[2];			\
+	    (_dest_p)->hwords[3] = (_src_p)->hwords[3];			\
+	    (_dest_p)->hwords[4] = (_src_p)->hwords[4];			\
+	    (_dest_p)->hwords[5] = (_src_p)->hwords[5];			\
+	    (_dest_p)->hwords[6] = (_src_p)->hwords[6];			\
+	    (_dest_p)->hwords[7] = (_src_p)->hwords[7];			\
+	} while (0)
+
+/**
+ * Returns pointer to the IPv6 header of an IPv6 packet
+ */
+#define GET_IPV6_HEADER(_net_packet_p) \
+        ((struct ipv6_header *)((_net_packet_p)->data_buffer +	\
+				sizeof(struct ethernet_header)))
+
+/**
+ * Returns pointer to the data payload area of an IPv4 packet
+ */
+#define GET_IPV6_DATA_PAYLOAD_AREA(_net_packet_p)   \
+        ((void *)((_net_packet_p)->data_buffer +    \
+		  (sizeof(struct ethernet_header) + \
+                   sizeof(struct ipv6_header))))
 
 /**
  * Maximum number of local layer-4 end points
@@ -327,14 +392,23 @@ struct ipv6_address {
 	uint8_t bytes[16];
 
 	/**
-	 * Address seen as two 64-bit double words in big endian
+	 * Address seen as eight 16-bit half-words
+	 */
+        uint16_t hwords[8];
+
+	/**
+	 * Address seen as four 32-bit words
+	 */
+        uint32_t words[4];
+
+	/**
+	 * Address seen as two 64-bit double-words
 	 */
 	uint64_t dwords[2];
-    } __attribute__((packed));
-};
+    };
+}  __attribute__ ((aligned(sizeof(uint64_t))));
+
 C_ASSERT(sizeof(struct ipv6_address) == sizeof(uint64_t) * 2);
-
-
 
 /**
  * ARP packet layout in network byte order
@@ -404,9 +478,10 @@ C_ASSERT(offsetof(struct arp_packet, dest_ip_addr) == 24);
  * Transport protocols encapsulated in IP packets
  */
 enum l4_protocols {
-    TRANSPORT_PROTO_ICMP = 0x1,
-    TRANSPORT_PROTO_TCP =  0x6,
-    TRANSPORT_PROTO_UDP =  0x11
+    TRANSPORT_PROTO_ICMP =      0x1,
+    TRANSPORT_PROTO_TCP =       0x6,
+    TRANSPORT_PROTO_UDP =       0x11,
+    TRANSPORT_PROTO_ICMPV6 =    0x3a
 };
 
 /**
@@ -537,6 +612,8 @@ struct ipv6_header {
 };
 
 C_ASSERT(sizeof(struct ipv6_header) == 40);
+C_ASSERT(offsetof(struct ipv6_header, source_ipv6_addr) % sizeof(uint64_t) == 0);
+C_ASSERT(offsetof(struct ipv6_header, dest_ipv6_addr) % sizeof(uint64_t) == 0);
 
 /**
  * Ethernet frame layout
@@ -546,12 +623,15 @@ struct ethernet_frame {
     union {
 	struct arp_packet arp_packet;
 	struct ipv4_header ipv4_header;
+	struct ipv6_header ipv6_header;
     };
 }; // __attribute__((packed));
 
 C_ASSERT(offsetof(struct ethernet_frame, arp_packet) ==
 	 sizeof(struct ethernet_header));
 C_ASSERT(offsetof(struct ethernet_frame, ipv4_header) ==
+	 sizeof(struct ethernet_header));
+C_ASSERT(offsetof(struct ethernet_frame, ipv6_header) ==
 	 sizeof(struct ethernet_header));
 
 /**
@@ -622,6 +702,16 @@ struct icmpv6_header {
      * Message type
      */
     uint8_t msg_type;
+#   define ICMPV6_TYPE_ECHO_REQ                  128
+#   define ICMPV6_TYPE_ECHO_REPLY                129
+#   define ICMPV6_TYPE_MULTICAST_LISTENER_QUERY  130
+#   define ICMPV6_TYPE_MULTICAST_LISTENER_REPORT 131
+#   define ICMPV6_TYPE_MULTICAST_LISTENER_DONE   132
+#   define ICMPV6_TYPE_ROUTER_SOLICITATION       133
+#   define ICMPV6_TYPE_ROUTER_ADVERTISEMENT      134
+#   define ICMPV6_TYPE_NEIGHBOR_SOLICITATION     135
+#   define ICMPV6_TYPE_NEIGHBOR_ADVERTISEMENT    136
+#   define ICMPV6_TYPE_REDIRECT                  137
 
     /**
      * Message code
@@ -637,13 +727,27 @@ struct icmpv6_header {
      * Message data
      */
     union {
-	uint32_t data32[1];
+	uint32_t data;
 	uint16_t data16[2];
 	uint8_t  data8[4];
     };
 }; //  __attribute__((packed));
 
 C_ASSERT(sizeof(struct icmpv6_header) == 8);
+C_ASSERT(offsetof(struct icmpv6_header, data) == 4);
+
+/**
+ * ICMPv6 neighbor solicitation message layout
+ */
+struct icmpv6_neighbor_solicitation {
+	struct icmpv6_header header;
+        struct ipv6_address target_ip_addr;
+        uint16_t options[]; 
+};
+
+C_ASSERT(sizeof(struct icmpv6_neighbor_solicitation) == 24);
+C_ASSERT(offsetof(struct icmpv6_neighbor_solicitation, target_ip_addr) == 8);
+C_ASSERT(offsetof(struct icmpv6_neighbor_solicitation, options) == 24);
 
 /**
  * UDP header layout
@@ -758,13 +862,18 @@ struct neighbor_cache {
     struct rtos_mutex mutex;
 
     /**
+     * Condvar signaled when the neighbor cache is updated
+     */
+    struct rtos_condvar cache_updated_condvar;
+
+    /**
      * Array of cache entries
      */
     struct neighbor_cache_entry entries[NEIGHBOR_CACHE_NUM_ENTRIES];
 };
 
 /**
- * Llocal layer-3 end point configuration
+ * Local layer-3 end point configuration
  */
 struct local_l3_end_point_config {
     /**
@@ -786,11 +895,6 @@ struct local_l3_end_point_config {
      * Local IPv6 address
      */
     struct ipv6_address ipv6_addr;
-
-    /**
-     * Local IPv6 address
-     */
-    struct ipv6_address default_gateway_ipv6_addr;
 };
 
 /**
@@ -838,16 +942,32 @@ struct ipv4_end_point {
  * IPv6 network end point
  */
 
+enum ipv6_addr_state {
+    IPV6_ADDR_NOT_CONFIGURED = 0x0,
+    IPV6_ADDR_TENTATIVE,
+    IPV6_ADDR_PREFERRED,
+};
+
+struct ipv6_addr_entry {
+    struct ipv6_address addr;
+    enum ipv6_addr_state state;
+};
+
 struct ipv6_end_point {
     /**
-     * Local IPv6 address
+     * Link-local unicast IPv6 address
      */
-    struct ipv6_address local_ip_addr;
+    struct ipv6_addr_entry link_local_ip_addr;
 
     /**
-     * Local IPv6 address
+     * Inteface Id (modified EUI-64 Id)
      */
-    struct ipv6_address default_gateway_ip_addr;
+    uint64_t interface_id;
+
+    /**
+     * Queue of received ICMPv6 packets
+     */
+    struct rtos_queue rx_icmpv6_packet_queue;
 
     /**
      * Neighbor cache
@@ -1219,6 +1339,52 @@ net_send_ipv4_ping_request(const struct ipv4_address *dest_ip_addr_p,
 fdc_error_t
 net_receive_ipv4_ping_reply(rtos_milliseconds_t timeout_ms,
 			    struct ipv4_address *remote_ip_addr_p,
+			    uint16_t *identifier_p,
+			    uint16_t *seq_num_p);
+
+fdc_error_t
+net_send_ipv6_packet(const struct ipv6_address *dest_ip_addr_p,
+		     struct network_packet *tx_packet_p,
+		     size_t data_payload_length,
+		     enum l4_protocols l4_protocol);
+
+fdc_error_t
+net_send_ipv6_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
+		           const struct ipv6_address *dest_ip_addr_p,
+			   uint16_t dest_port,
+		           struct network_packet *tx_packet_p,
+		           size_t data_payload_length);
+
+fdc_error_t
+net_receive_ipv6_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
+			      rtos_milliseconds_t timeout_ms,
+		              struct ipv6_address *source_ip_addr_p,
+			      uint16_t *source_port_p,
+			      struct network_packet **rx_packet_pp);
+
+void
+net_send_ipv6_tcp_segment(struct local_l4_end_point *local_l4_end_point_p,
+		          const struct ipv6_address *dest_ip_addr_p,
+			  uint16_t dest_port,
+		          struct network_packet *tx_packet_p,
+		          size_t data_payload_length);
+
+fdc_error_t
+net_send_ipv6_icmp_message(const struct ipv6_address *dest_ip_addr_p,
+		           struct network_packet *tx_packet_p,
+			   uint8_t msg_type,
+		           uint8_t msg_code,
+                           uint32_t header_data,
+		           size_t data_payload_length);
+
+fdc_error_t
+net_send_ipv6_ping_request(const struct ipv6_address *dest_ip_addr_p,
+			   uint16_t identifier,
+		           uint16_t seq_num);
+
+fdc_error_t
+net_receive_ipv6_ping_reply(rtos_milliseconds_t timeout_ms,
+			    struct ipv6_address *remote_ip_addr_p,
 			    uint16_t *identifier_p,
 			    uint16_t *seq_num_p);
 

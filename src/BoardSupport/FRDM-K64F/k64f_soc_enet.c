@@ -959,6 +959,142 @@ enet_start(const struct enet_device *enet_device_p,
 
 
 /**
+ * Add a multicast MAC address to the given Ethernet device
+ */
+void
+enet_add_multicast_mac_addr(const struct enet_device *enet_device_p,
+                            struct ethernet_mac_address *mac_addr_p)
+{
+    uint32_t reg_value;
+    uint32_t hash_bit_index;
+    volatile uint32_t *reg_p;
+    fdc_error_t fdc_error;
+
+    FDC_ASSERT(
+        enet_device_p->signature == ENET_DEVICE_SIGNATURE,
+        enet_device_p->signature, enet_device_p);
+    FDC_ASSERT(
+        mac_addr_p->bytes[0] & ENET_MAC_MULTICAST_ADDRESS_MASK,
+        mac_addr_p->bytes[0], 0);
+
+    volatile ENET_Type *enet_regs_p = enet_device_p->mmio_registers_p;
+    struct enet_device_var *const enet_var_p = enet_device_p->var_p;
+
+    fdc_error = rtos_mpu_add_thread_data_region(enet_var_p,
+                                                sizeof *enet_var_p,
+                                                false);
+    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+    fdc_error = rtos_mpu_add_thread_data_region((void *)enet_regs_p,
+                                                sizeof *enet_regs_p,
+                                                false);
+    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+    FDC_ASSERT(enet_var_p->initialized, enet_device_p, enet_var_p);
+
+    uint32_t crc = calc_crc_32(mac_addr_p, sizeof *mac_addr_p);
+    uint32_t hash_value = crc >> 26; /* top 6 bits */
+ 
+    DBG_ASSERT(hash_value < ENET_MULTICAST_HASH_TABLE_NUM_BUCKETS,
+               hash_value, enet_device_p);
+
+    enet_var_p->multicast_hash_table_counts[hash_value] ++;
+
+    FDC_ASSERT(enet_var_p->multicast_hash_table_counts[hash_value] != 0,
+               enet_var_p, enet_device_p);
+
+    /*
+     * Select either GAUR or GARL from the top bit of the hash value:
+     */
+    if (hash_value & BIT(5)) {
+        reg_p = &enet_regs_p->GAUR;
+        hash_bit_index = hash_value & ~BIT(5);
+    } else {
+        reg_p = &enet_regs_p->GALR;
+        hash_bit_index = hash_value;
+    }
+
+    DBG_ASSERT(hash_bit_index < 32, hash_bit_index, enet_device_p);
+
+    /*
+     * Set hash bit in GAUR or GALR, if not set already:
+     */
+    reg_value = read_32bit_mmio_register(reg_p);
+    if ((reg_value & BIT(hash_bit_index)) == 0) {
+        reg_value |= BIT(hash_bit_index);
+        write_32bit_mmio_register(reg_p, reg_value);
+    }
+
+    rtos_mpu_remove_thread_data_region();   /* enet_regs_p */
+    rtos_mpu_remove_thread_data_region();   /* enet_var_p */
+}
+
+
+/**
+ * Remove a multicast MAC address from the given Ethernet device
+ */
+void
+enet_remove_multicast_mac_addr(const struct enet_device *enet_device_p,
+                               struct ethernet_mac_address *mac_addr_p)
+{
+    uint32_t reg_value;
+    volatile uint32_t *reg_p;
+    uint32_t hash_bit_index;
+    fdc_error_t fdc_error;
+
+    FDC_ASSERT(
+        enet_device_p->signature == ENET_DEVICE_SIGNATURE,
+        enet_device_p->signature, enet_device_p);
+
+    volatile ENET_Type *enet_regs_p = enet_device_p->mmio_registers_p;
+    struct enet_device_var *const enet_var_p = enet_device_p->var_p;
+
+    fdc_error = rtos_mpu_add_thread_data_region(enet_var_p,
+                                                sizeof *enet_var_p,
+                                                false);
+    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+    fdc_error = rtos_mpu_add_thread_data_region((void *)enet_regs_p,
+                                                sizeof *enet_regs_p,
+                                                false);
+    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+    FDC_ASSERT(enet_var_p->initialized, enet_device_p, enet_var_p);
+
+    uint32_t crc = calc_crc_32(mac_addr_p, sizeof *mac_addr_p);
+    uint32_t hash_value = crc >> 26; /* top 6 bits */
+ 
+    DBG_ASSERT(hash_value < ENET_MULTICAST_HASH_TABLE_NUM_BUCKETS,
+               hash_value, enet_device_p);
+    FDC_ASSERT(enet_var_p->multicast_hash_table_counts[hash_value] != 0,
+               enet_var_p, enet_device_p);
+
+    enet_var_p->multicast_hash_table_counts[hash_value] --;
+
+    /*
+     * Select either GAUR or GARL from the top bit of the hash value:
+     */
+    if (hash_value & BIT(5)) {
+        reg_p = &enet_regs_p->GAUR;
+        hash_bit_index = hash_value & ~BIT(5);
+    } else {
+        reg_p = &enet_regs_p->GALR;
+        hash_bit_index = hash_value;
+    }
+
+    DBG_ASSERT(hash_bit_index < 32, hash_bit_index, enet_device_p);
+
+    /*
+     * Clear hash bit in GAUR or GALR, if hash bucket became empty:
+     */
+    reg_value = read_32bit_mmio_register(reg_p);
+    if (enet_var_p->multicast_hash_table_counts[hash_value] == 0) {
+        reg_value &= ~BIT(hash_bit_index);
+        write_32bit_mmio_register(reg_p, reg_value);
+    }
+
+    rtos_mpu_remove_thread_data_region();   /* enet_regs_p */
+    rtos_mpu_remove_thread_data_region();   /* enet_var_p */
+}
+
+
+/**
  * Transmit completion interrupt handler
  */
 void
