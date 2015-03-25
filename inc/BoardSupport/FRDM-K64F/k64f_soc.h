@@ -15,24 +15,6 @@
 struct rtos_interrupt;  /* opaque type */
 
 /**
- * Const fields of a MPU device
- */
-struct mpu_device {
-#   define MPU_DEVICE_SIGNATURE  GEN_SIGNATURE('M', 'P', 'U', ' ')
-    uint32_t signature;
-    volatile MPU_Type *mmio_regs_p;
-    struct mpu_device_var *var_p;
-};
-
-/**
- * Non-const fields of a MPU device
- */
-struct mpu_device_var {
-    bool initialized;
-    uint8_t num_regions;
-};
-
-/**
  * Const fields of the CRC device (to be placed in flash)
  */
 struct crc_device {

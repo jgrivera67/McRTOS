@@ -844,11 +844,6 @@ enet_init(const struct enet_device *enet_device_p)
     set_pin_function(&enet_device_p->rmii_txen_pin, 0);
     set_pin_function(&enet_device_p->mii_txer_pin, 0);
 
-    /*
-     * Configure MPU access for ENET DMA engine:
-     */
-    mpu_register_dma_device(MPU_BUS_MASTER_ENET);
-
     ethernet_mac_init(enet_device_p);
     ethernet_phy_init(enet_device_p);
     enet_var_p->initialized = true;
@@ -907,6 +902,12 @@ enet_start(const struct enet_device *enet_device_p,
     enet_var_p->local_l3_end_point_p = local_l3_end_point_p;
 
     bool caller_was_privileged = rtos_enter_privileged_mode();
+    
+    /*
+     * Enable access to Rx/Tx rings memory for the ENET DMA engine:
+     */
+    mpu_register_dma_region(MPU_BUS_MASTER_ENET, enet_var_p, sizeof *enet_var_p);
+
     cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
 
     /*

@@ -105,7 +105,7 @@ C_ASSERT(__FPU_USED == 1);
 /*
  * MPU region alignment mask
  */
-#define SOC_MPU_REGION_ALIGNMENT_MASK	(~(UINT32_C(32) - 1))
+#define SOC_MPU_REGION_ALIGNMENT_MASK	(~(SOC_MPU_REGION_ALIGNMENT - 1))
 
 /**
  * Check that an mmio address is in the valid MMIO space

@@ -263,6 +263,25 @@ _NEVER_RETURN_
 void soc_reset(void);
 
 /**
+ * Const fields of a MPU device
+ */
+struct mpu_device {
+#   define MPU_DEVICE_SIGNATURE  GEN_SIGNATURE('M', 'P', 'U', ' ')
+    uint32_t signature;
+    volatile MPU_Type *mmio_regs_p;
+    struct mpu_device_var *var_p;
+};
+
+/**
+ * Non-const fields of a MPU device
+ */
+struct mpu_device_var {
+    bool initialized;
+    uint8_t num_regions;
+    uint8_t num_defined_global_regions;
+};
+
+/**
  * MPU data region range
  *
  * NOTE: If read_only is true, only read access is allowed. Otherwise,
@@ -292,8 +311,10 @@ void mpu_set_thread_data_region(
 
 void mpu_unset_thread_data_region(mpu_thread_data_region_index_t thread_region_index);
 
-void mpu_register_dma_device(
-    enum mpu_bus_masters mpu_bus_master);
+void mpu_register_dma_region(
+    enum mpu_bus_masters dma_bus_master,
+    void *start_addr,
+    size_t size);
 
 uint32_t calc_crc_32(const void *data_buf_p, size_t num_bytes);
 

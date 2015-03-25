@@ -435,9 +435,10 @@ join_ipv6_multicast_group(struct local_l3_end_point *local_l3_end_point_p,
 
     map_ipv6_multicast_addr_to_ethernet_multicast_addr(multicast_addr_p,
                                                        &enet_multicast_addr);
-
+#if 0//???
     enet_add_multicast_mac_addr(local_l3_end_point_p->enet_device_p,
                                 &enet_multicast_addr);
+#endif    
 }
 
 
@@ -683,6 +684,11 @@ networking_init(void)
      * Initialize IPv6 neighbor cache for the layer-3 end point
      */
     neighbor_cache_init(&local_l3_end_point_p->ipv6.neighbor_cache);
+
+    /*
+     * Enable access to Rx/Tx buffers memory for the ENET DMA engine:
+     */
+    mpu_register_dma_region(MPU_BUS_MASTER_ENET, &g_networking, sizeof g_networking);
 
     /*
      * Activate network interface (ENET device):

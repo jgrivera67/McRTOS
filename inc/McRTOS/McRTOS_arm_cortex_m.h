@@ -42,7 +42,8 @@ struct cortex_m_exception_stack
 C_ASSERT(sizeof(struct cortex_m_exception_stack) % SOC_MPU_REGION_ALIGNMENT == 0);
 
 void cortex_m_reset_handler(void);
-bool cortex_m_mpu_init(void);
+bool cortex_m_mpu_present(void);
+void cortex_m_mpu_init(void);
 void cortex_m_enable_fpu(void);
 void cortex_m_disable_fpu(void);
 void cortex_m_save_fpu_context(struct fpu_context *fpu_context_p);

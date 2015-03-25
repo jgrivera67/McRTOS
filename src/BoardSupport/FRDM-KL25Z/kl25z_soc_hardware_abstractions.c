@@ -447,7 +447,11 @@ soc_hardware_init(void)
     init_cpu_clock_cycles_counter();
 #   endif
 
-    bool mpu_present = cortex_m_mpu_init();
+    bool mpu_present = cortex_m_mpu_present();
+
+    if (mpu_present) {
+        cortex_m_mpu_init();
+    }
 
     capture_fdc_msg_printf("MPU %s present\n", mpu_present ? "is" : "is not");
 

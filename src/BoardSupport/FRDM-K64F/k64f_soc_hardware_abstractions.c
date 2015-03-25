@@ -349,6 +349,7 @@ static const struct pin_info *g_pins_in_use_map[NUM_PIN_PORTS][NUM_PINS_PER_PORT
 static struct mpu_device_var g_mpu_var = {
     .initialized = false,
     .num_regions = 0,
+    .num_defined_global_regions = 0,
 };
 
 static const struct mpu_device g_mpu = {
@@ -786,10 +787,11 @@ k64f_set_mpu_region_for_cpu(
 
 
 static void
-k64f_mpu_register_dma_device(
-    struct mpu_device_var *mpu_var_p,
-    volatile MPU_Type *mpu_regs_p,
-    enum mpu_bus_masters mpu_bus_master)
+k64f_mpu_set_dma_region(
+    uint8_t region_index,
+    enum mpu_bus_masters mpu_bus_master,
+    void *start_addr,
+    void *end_addr)
 {
     struct bus_master_type1_permissions_bit_field {
 	uint32_t mask;
@@ -867,25 +869,39 @@ k64f_mpu_register_dma_device(
 	      ARRAY_SIZE(rw_permissions_fields) > MPU_BUS_MASTER_SDHC);
 
     uint32_t reg_value;
+    volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
 
-    DEBUG_PRINTF("mpu_bus_master: %u\n", mpu_bus_master);
+    DEBUG_PRINTF("MPU region %u assigned to DMA bus master %u\n", region_index, 
+                 mpu_bus_master);
+    DBG_ASSERT(region_index < RTOS_NUM_GLOBAL_MPU_REGIONS,
+               region_index, 0);
     DBG_ASSERT(mpu_bus_master >= MPU_BUS_MASTER_DEBUGGER &&
 	       mpu_bus_master <= MPU_BUS_MASTER_SDHC,
  	       mpu_bus_master, 0);
+    DBG_ASSERT(start_addr < end_addr &&
+              (uintptr_t)start_addr % SOC_MPU_REGION_ALIGNMENT == 0,
+               start_addr, end_addr);
+    
+    /*
+     * The region must be currently disabled:
+     */
+    reg_value = read_32bit_mmio_register(&mpu_regs_p->WORD[region_index][3]);
+    FDC_ASSERT((reg_value & MPU_WORD_VLD_MASK) == 0, reg_value, 0);
 
     /*
-     * Update access permissions to region 0 for the corresponding
-     * bus master:
-     *
-     * NOTE: To avoid disabling region region 0, while changing its
-     * access permissions, modify register RGDAAC[0] instead of
-     * WORD[0][2]
+     * Set region address range:
      */
+    reg_value = ((uintptr_t)start_addr & SOC_MPU_REGION_ALIGNMENT_MASK);
+    write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][0], reg_value);
 
-    reg_value = read_32bit_mmio_register(&mpu_regs_p->WORD[0][3]);
-    FDC_ASSERT((reg_value & MPU_WORD_VLD_MASK) != 0, reg_value, 0);
+    reg_value = (((uintptr_t)end_addr & SOC_MPU_REGION_ALIGNMENT_MASK) |
+		 (SOC_MPU_REGION_ALIGNMENT - 1));
+    write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][1], reg_value);
 
-    reg_value = read_32bit_mmio_register(&mpu_regs_p->RGDAAC[0]);
+    /*
+     * Set region permissions:
+     */
+    reg_value = read_32bit_mmio_register(&mpu_regs_p->WORD[region_index][2]);
     if (mpu_bus_master < ARRAY_SIZE(privileged_permissions_fields)) {
 	SET_BIT_FIELD(reg_value,
 		      privileged_permissions_fields[mpu_bus_master].mask,
@@ -904,7 +920,12 @@ k64f_mpu_register_dma_device(
 		     rw_permissions_fields[mpu_bus_master].read_mask;
     }
 
-    write_32bit_mmio_register(&mpu_regs_p->RGDAAC[0], reg_value);
+    write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][2], reg_value);
+
+    /*
+     * Enable region:
+     */
+    write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][3], MPU_WORD_VLD_MASK);
 }
 
 
@@ -915,7 +936,7 @@ k64f_mpu_init(void)
     C_ASSERT2(assert_soc_sram_base_aligned, SOC_SRAM_BASE % 32 == 0);
     C_ASSERT2(assert_soc_mmio_base1_aligned, SOC_PERIPHERAL_BRIDGE_MIN_ADDR % 32 == 0);
     C_ASSERT2(assert_soc_mmio_base2_aligned, SOC_PRIVATE_PERIPHERALS_MIN_ADDR % 32 == 0);
-    C_ASSERT2(assert_enough_mpu_regions, RTOS_NUM_GLOBAL_MPU_REGIONS == 2);
+    C_ASSERT2(assert_enough_mpu_regions, RTOS_NUM_GLOBAL_MPU_REGIONS >= 2);
     
     extern uint32_t __flash_text_start[];
     extern uint32_t __flash_text_end[];
@@ -948,17 +969,20 @@ k64f_mpu_init(void)
     write_32bit_mmio_register(&mpu_regs_p->CESR, 0);
 
     /*
-     * Make region 0 non-accessible. It will be made accessible for DMA access
-     * for devices that do DMA, by the corresponding device driver, by calling
-     * mpu_register_dma_device()):
+     * Make region 0 non-accessible for CPU unprivileged mode and for DMA.
+     * Region 0 is used a background region accessible only for CPU 
+     * privileged mode.
      *
      * NOTE: Region 0 is defined by default as the whole address space.
-     * Only its permissions can be changed.
+     * Only its permissions can be changed. To avoid disabling region
+     * region 0, while changing its access permissions, modify register
+     * RGDAAC[0] instead of WORD[0][2]
      */
     write_32bit_mmio_register(&mpu_regs_p->RGDAAC[0], 0);
+    mpu_var_p->num_defined_global_regions ++;
 
     /* 
-     * Make code region in flash executable in unprivilege mode in all CPUs
+     * Make region 1, the code in flash to be executable in unprivileged mode
      */
     for (cpu_id_t cpu_id = 0; cpu_id < SOC_NUM_CPU_CORES; cpu_id ++) {
 	/* region 1 is code in flash: */
@@ -967,6 +991,12 @@ k64f_mpu_init(void)
 				    (void *)__flash_text_end,
 				    0x5); /* unprivileged r-x */
     }
+
+    mpu_var_p->num_defined_global_regions ++;
+
+    /*
+     * NOTE: Remaining global regions will be used for DMA
+     */
 
     /*
      * Enable MPU:
@@ -1134,19 +1164,44 @@ mpu_unset_thread_data_region(mpu_thread_data_region_index_t thread_region_index)
 
 
 void
-mpu_register_dma_device(
-    enum mpu_bus_masters mpu_bus_master)
+mpu_register_dma_region(
+    enum mpu_bus_masters dma_bus_master,
+    void *start_addr,
+    size_t size)
 {
     FDC_ASSERT(
         g_mpu.signature == MPU_DEVICE_SIGNATURE,
         g_mpu.signature, 0);
 
     struct mpu_device_var *mpu_var_p = g_mpu.var_p;
+
+    bool caller_was_privileged = rtos_enter_privileged_mode();
+
     FDC_ASSERT(mpu_var_p->initialized, mpu_var_p, 0);
+    FDC_ASSERT((uintptr_t)start_addr % SOC_MPU_REGION_ALIGNMENT == 0 &&
+               size != 0, start_addr, size);
 
-    volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
+    cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
+    uint8_t region_index = mpu_var_p->num_defined_global_regions;
 
-    k64f_mpu_register_dma_device(mpu_var_p, mpu_regs_p, mpu_bus_master);
+    if (region_index == RTOS_NUM_GLOBAL_MPU_REGIONS) {
+        fdc_error_t fdc_error = 
+            CAPTURE_FDC_ERROR("No global MPU regions left", 0, 0);
+
+        fatal_error_handler(fdc_error);
+    }
+
+    mpu_var_p->num_defined_global_regions ++;
+    rtos_k_restore_cpu_interrupts(cpu_status_register);
+
+    void *end_addr = (void *)((uintptr_t)start_addr + size);
+
+    k64f_mpu_set_dma_region(region_index, dma_bus_master,
+                            start_addr, end_addr);
+
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
+    }
 }
 
 
@@ -1295,9 +1350,11 @@ soc_hardware_init(void)
     init_cpu_clock_cycles_counter();
 #   endif
 
-    bool mpu_present = cortex_m_mpu_init();
+    bool mpu_present = cortex_m_mpu_present();
 
-    if (!mpu_present) {
+    if (mpu_present) {
+        cortex_m_mpu_init();
+    } else {
 	k64f_mpu_init();
     }
 

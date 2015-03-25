@@ -242,7 +242,7 @@ zero_fill_uninitialized_data_section(void)
  * It returns true if MPU is present
  */
 bool
-cortex_m_mpu_init(void)
+cortex_m_mpu_present(void)
 {
 #if __MPU_PRESENT == 1
     uint32_t reg_value =
@@ -251,14 +251,21 @@ cortex_m_mpu_init(void)
     uint32_t num_data_regions =
         GET_BIT_FIELD(reg_value, MPU_TYPE_DREGION_Msk, MPU_TYPE_DREGION_Pos);
 
-    FDC_ASSERT(
-        num_data_regions == 0x0 || num_data_regions == 0x8,
-        num_data_regions, 0);
-
     return (num_data_regions != 0x0);
 #else
     return false;
 #endif
+}
+
+
+void
+cortex_m_mpu_init(void)
+{
+#if __MPU_PRESENT == 1
+    DEBUG_PRINTF("Not implemented yet\n");
+#else
+    FDC_ASSERT(false, 0, 0);
+#endif    
 }
 
 
