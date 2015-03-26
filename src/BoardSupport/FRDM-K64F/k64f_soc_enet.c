@@ -985,12 +985,9 @@ enet_add_multicast_mac_addr(const struct enet_device *enet_device_p,
                                                 sizeof *enet_var_p,
                                                 false);
     FDC_ASSERT(fdc_error == 0, fdc_error, 0);
-    fdc_error = rtos_mpu_add_thread_data_region((void *)enet_regs_p,
-                                                sizeof *enet_regs_p,
-                                                false);
-    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
     FDC_ASSERT(enet_var_p->initialized, enet_device_p, enet_var_p);
 
+    bool caller_was_privileged = rtos_enter_privileged_mode();
     uint32_t crc = calc_crc_32(mac_addr_p, sizeof *mac_addr_p);
     uint32_t hash_value = crc >> 26; /* top 6 bits */
  
@@ -1024,7 +1021,10 @@ enet_add_multicast_mac_addr(const struct enet_device *enet_device_p,
         write_32bit_mmio_register(reg_p, reg_value);
     }
 
-    rtos_mpu_remove_thread_data_region();   /* enet_regs_p */
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
+    }
+
     rtos_mpu_remove_thread_data_region();   /* enet_var_p */
 }
 
