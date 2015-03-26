@@ -77,9 +77,10 @@ struct app_state_vars {
     struct rtos_thread demo_ping_thread;
     struct rtos_thread demo_udp_client_thread;
     struct rtos_thread demo_udp_server_thread;
-} __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT)));
+} __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT(struct app_state_vars))));
 
-C_ASSERT(sizeof(struct app_state_vars) % SOC_MPU_REGION_ALIGNMENT == 0);
+C_ASSERT(sizeof(struct app_state_vars) %
+         SOC_MPU_REGION_ALIGNMENT(struct app_state_vars) == 0);
 
 /**
  * Demo UDP message

@@ -335,7 +335,8 @@ struct rtos_cpu_controller
      */
     struct rtos_thread_execution_stack *cpc_system_threads_execution_stacks_p;
 
-} __attribute__ ((aligned(MAX(SOC_CACHE_LINE_SIZE_IN_BYTES, SOC_MPU_REGION_ALIGNMENT))));
+} __attribute__ ((aligned(MAX(SOC_CACHE_LINE_SIZE_IN_BYTES, 
+                              SOC_MPU_REGION_ALIGNMENT(struct rtos_cpu_controller)))));
 
 C_ASSERT(sizeof(struct rtos_cpu_controller) <= RTOS_MAX_McRTOS_CPU_CONTROLLER_SIZE);
 
@@ -541,9 +542,9 @@ struct McRTOS
      * Command line buffer used by the McRTOS console and the McRTOS debugger
      */
     char rts_command_line_buffer[RTOS_COMMAND_LINE_BUFFER_SIZE];
-}  __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT)));
+}  __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT(struct McRTOS))));
 
-C_ASSERT(sizeof(struct McRTOS) % SOC_MPU_REGION_ALIGNMENT == 0);
+C_ASSERT(sizeof(struct McRTOS) % SOC_MPU_REGION_ALIGNMENT(struct McRTOS) == 0);
 
 C_ASSERT(
     sizeof(struct McRTOS) - offsetof(struct McRTOS, rts_app_threads) <=

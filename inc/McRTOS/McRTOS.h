@@ -252,9 +252,10 @@ struct rtos_thread_execution_stack
     rtos_execution_stack_entry_t tes_stack_underflow_marker;
 #   define RTOS_STACK_UNDERFLOW_MARKER             UINT32_C(0xFACEBBBB)
 
-}  __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT)));
+}  __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT(struct rtos_thread_execution_stack))));
 
-C_ASSERT(sizeof(struct rtos_thread_execution_stack) % SOC_MPU_REGION_ALIGNMENT == 0);
+C_ASSERT(sizeof(struct rtos_thread_execution_stack) %
+         SOC_MPU_REGION_ALIGNMENT(struct rtos_thread_execution_stack) == 0);
 C_ASSERT(sizeof(struct rtos_thread_execution_stack) % SOC_CACHE_LINE_SIZE_IN_BYTES == 0);
 
 /**

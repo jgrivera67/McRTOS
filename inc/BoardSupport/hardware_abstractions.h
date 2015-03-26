@@ -119,6 +119,31 @@
                               (int32_t)(_begin_cycles)))
 
 /**
+ * MPU region alignment in bytes for a given data type, for the
+ * ARMv7-m generic MPU
+ */
+#if __MPU_PRESENT == 1
+#   define SOC_MPU_REGION_ALIGNMENT(_type) \
+           (sizeof(_type) < 32 ? UINT32_C(32) :                         \
+            (sizeof(_type) < 64 ? UINT32_C(64) :                        \
+             (sizeof(_type) < 128 ? UINT32_C(128) :                     \
+              (sizeof(_type) < 256 ? UINT32_C(256) :                    \
+               (sizeof(_type) < 512 ? UINT32_C(512) :                   \
+                (sizeof(_type) < 1024 ? UINT32_C(1024) :                \
+                 (sizeof(_type) < 2048 ? UINT32_C(2048) :               \
+                  (sizeof(_type) < 4096 ? UINT32_C(4096) :              \
+                   -1))))))))
+#endif
+
+/**
+ * Declare a typedef for an aligned data type suitable for an MPU region
+ */
+#define DECLARE_MPU_ALIGNED_TYPE(_original_type, _aligned_type) \
+        typedef _original_type \
+        __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT(_original_type)))) \
+        _aligned_type;
+
+/**
  * CPU identifier type
  */
 typedef _RANGE_(0, SOC_NUM_CPU_CORES - 1)

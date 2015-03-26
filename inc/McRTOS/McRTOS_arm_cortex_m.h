@@ -37,9 +37,9 @@ struct cortex_m_exception_stack
      * Stack underflow sentinel, to be initialized to RTOS_STACK_UNDERFLOW_MARKER
      */
     rtos_execution_stack_entry_t es_stack_underflow_marker;
-} __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT)));
+} __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT(struct cortex_m_exception_stack))));
 
-C_ASSERT(sizeof(struct cortex_m_exception_stack) % SOC_MPU_REGION_ALIGNMENT == 0);
+C_ASSERT(sizeof(struct cortex_m_exception_stack) % SOC_MPU_REGION_ALIGNMENT(struct cortex_m_exception_stack) == 0);
 
 void cortex_m_reset_handler(void);
 bool cortex_m_mpu_present(void);

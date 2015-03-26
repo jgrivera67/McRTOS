@@ -1024,7 +1024,7 @@ struct network_packet {
      */
     uint8_t data_buffer[NET_PACKET_DATA_BUFFER_SIZE]
 	__attribute__ ((aligned(NET_PACKET_DATA_BUFFER_ALIGNMENT)));
-}  __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT)));
+}  __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT(struct network_packet))));
 
 C_ASSERT(sizeof(bool) == sizeof(uint8_t));
 C_ASSERT(offsetof(struct network_packet, data_buffer) %
@@ -1189,7 +1189,7 @@ struct networking {
      * Array of application threads
      */
     struct rtos_thread threads[NET_NUM_THREADS];
-}  __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT)));
+}  __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT(struct networking))));
 
 C_ASSERT(NET_MAX_IPV4_PACKET_PAYLOAD_SIZE <=
          UINT16_MAX - sizeof(struct ipv4_header));

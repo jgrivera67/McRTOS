@@ -753,7 +753,7 @@ k64f_set_mpu_region_for_cpu(
  	       region_index, mpu_var_p->num_regions);
 
     DBG_ASSERT(start_addr < end_addr &&
-	       (uintptr_t)start_addr % SOC_MPU_REGION_ALIGNMENT == 0,
+	       (uintptr_t)start_addr % K64F_MPU_REGION_ALIGNMENT == 0,
 	       start_addr, end_addr);
 
     /*
@@ -763,11 +763,11 @@ k64f_set_mpu_region_for_cpu(
      * WORD[region_index][2] of the region descriptor 'region_index' will disable
      * the region (turn off bit MPU_WORD_VLD_MASK in WORD[region_index][3]):
      */
-    reg_value = ((uintptr_t)start_addr & SOC_MPU_REGION_ALIGNMENT_MASK);
+    reg_value = ((uintptr_t)start_addr & K64F_MPU_REGION_ALIGNMENT_MASK);
     write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][0], reg_value);
 
-    reg_value = (((uintptr_t)end_addr & SOC_MPU_REGION_ALIGNMENT_MASK) |
-		 (SOC_MPU_REGION_ALIGNMENT - 1));
+    reg_value = (((uintptr_t)end_addr & K64F_MPU_REGION_ALIGNMENT_MASK) |
+		 (K64F_MPU_REGION_ALIGNMENT - 1));
     write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][1], reg_value);
 
     reg_value = read_32bit_mmio_register(&mpu_regs_p->WORD[region_index][2]);
@@ -879,7 +879,7 @@ k64f_mpu_set_dma_region(
 	       mpu_bus_master <= MPU_BUS_MASTER_SDHC,
  	       mpu_bus_master, 0);
     DBG_ASSERT(start_addr < end_addr &&
-              (uintptr_t)start_addr % SOC_MPU_REGION_ALIGNMENT == 0,
+              (uintptr_t)start_addr % K64F_MPU_REGION_ALIGNMENT == 0,
                start_addr, end_addr);
     
     /*
@@ -891,11 +891,11 @@ k64f_mpu_set_dma_region(
     /*
      * Set region address range:
      */
-    reg_value = ((uintptr_t)start_addr & SOC_MPU_REGION_ALIGNMENT_MASK);
+    reg_value = ((uintptr_t)start_addr & K64F_MPU_REGION_ALIGNMENT_MASK);
     write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][0], reg_value);
 
-    reg_value = (((uintptr_t)end_addr & SOC_MPU_REGION_ALIGNMENT_MASK) |
-		 (SOC_MPU_REGION_ALIGNMENT - 1));
+    reg_value = (((uintptr_t)end_addr & K64F_MPU_REGION_ALIGNMENT_MASK) |
+		 (K64F_MPU_REGION_ALIGNMENT - 1));
     write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][1], reg_value);
 
     /*
@@ -1178,7 +1178,7 @@ mpu_register_dma_region(
     bool caller_was_privileged = rtos_enter_privileged_mode();
 
     FDC_ASSERT(mpu_var_p->initialized, mpu_var_p, 0);
-    FDC_ASSERT((uintptr_t)start_addr % SOC_MPU_REGION_ALIGNMENT == 0 &&
+    FDC_ASSERT((uintptr_t)start_addr % K64F_MPU_REGION_ALIGNMENT == 0 &&
                size != 0, start_addr, size);
 
     cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();

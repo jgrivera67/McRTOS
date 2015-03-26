@@ -67,7 +67,7 @@ struct tokenizer {
      * Buffer to hold the last lexical unit found in the command line
      */
     char last_lexical_unit[LEXICAL_UNIT_MAX_SIZE];
-}  __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT)));
+}  __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT(struct tokenizer))));
 
 typedef int token_t;
 
