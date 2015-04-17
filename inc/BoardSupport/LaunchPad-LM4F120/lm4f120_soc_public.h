@@ -150,7 +150,7 @@ enum pin_pull_modes {
 /**
  * Pin configuration parameters
  */
-struct pin_config_info {
+struct gpio_pin {
     volatile struct gpio_port *pin_gpio_port_p;
     uint32_t pin_bit_mask;
     uint8_t pin_bit_index;
@@ -158,20 +158,6 @@ struct pin_config_info {
     uint8_t pin_is_locked;
     uint8_t pin_pull_mode; /*  values from enum pin_pull_modes */
 };
-
-void micro_trace_init(void);
-
-void micro_trace_stop(void);
-
-void micro_trace_restart(void);
-
-void micro_trace_get_cursor(uint64_t **mtb_cursor_pp, bool *mtb_cursor_wrapped_p);
-
-/*
- * Variables defined in LM4F120_SOC-flash.ld
- */
-extern uint64_t __micro_trace_buffer[];
-extern uint64_t __micro_trace_buffer_end[];
 
 extern const struct i2c_device *const g_i2c0_device_p;
 

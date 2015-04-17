@@ -978,7 +978,7 @@ struct ipv6_end_point {
 /**
  * Network packet object
  */
-struct network_packet {
+struct __network_packet {
     uint32_t signature;
 #   define NET_TX_PACKET_SIGNATURE  GEN_SIGNATURE('T', 'X', 'B', 'U')
 #   define NET_RX_PACKET_SIGNATURE  GEN_SIGNATURE('R', 'X', 'B', 'U')
@@ -1024,11 +1024,18 @@ struct network_packet {
      */
     uint8_t data_buffer[NET_PACKET_DATA_BUFFER_SIZE]
 	__attribute__ ((aligned(NET_PACKET_DATA_BUFFER_ALIGNMENT)));
-}  __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT(struct network_packet))));
+};
 
 C_ASSERT(sizeof(bool) == sizeof(uint8_t));
-C_ASSERT(offsetof(struct network_packet, data_buffer) %
+C_ASSERT(offsetof(struct __network_packet, data_buffer) %
 	 NET_PACKET_DATA_BUFFER_ALIGNMENT == 0);
+
+struct network_packet {
+    struct __network_packet;
+} __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT(struct __network_packet))));
+
+C_ASSERT(sizeof(struct network_packet) %
+         SOC_MPU_REGION_ALIGNMENT(struct __network_packet) == 0);
 
 #define BUFFER_TO_NETWORK_PACKET(_data_buf) \
 	((struct network_packet *) \
@@ -1102,7 +1109,7 @@ struct local_l4_end_point {
 /**
  * Networking stack state variables
  */
-struct networking {
+struct __networking {
     /**
      * Flag indicating if the networking subsystem has been initialized
      */
@@ -1189,10 +1196,15 @@ struct networking {
      * Array of application threads
      */
     struct rtos_thread threads[NET_NUM_THREADS];
-}  __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT(struct networking))));
+};
 
-C_ASSERT(NET_MAX_IPV4_PACKET_PAYLOAD_SIZE <=
-         UINT16_MAX - sizeof(struct ipv4_header));
+struct networking {
+    struct __networking;
+} __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT(struct __networking))));
+
+C_ASSERT(sizeof(struct networking)% SOC_MPU_REGION_ALIGNMENT(struct __networking) == 0);
+
+C_ASSERT(NET_MAX_IPV4_PACKET_PAYLOAD_SIZE <= UINT16_MAX - sizeof(struct ipv4_header));
 
 /**
  * Invert byte order of a 16-bit value
@@ -1270,7 +1282,7 @@ static inline size_t net_get_udp_data_payload_length(struct network_packet *net_
 }
 
 
-void networking_init(void);
+void networking_init(const struct enet_device *enet_device_p);
 
 void
 net_set_local_ipv4_address(const struct ipv4_address *ip_addr_p,

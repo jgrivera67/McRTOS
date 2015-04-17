@@ -205,7 +205,9 @@ capture_assert_failure(
      */
     CAPTURE_ARM_LR_REGISTER(return_address);
 
+#   ifdef _BRANCH_MICRO_TRACING_
     micro_trace_stop();
+#   endif
 
     /*
      * The exact location of the assertion is the place where this
@@ -227,7 +229,9 @@ capture_assert_failure(
         if (fdc_info_p->fdc_asserts_failures_breakpoint_on) {
             ARTIFICIAL_BREAK_POINT();
         } else {
+#           ifdef _BRANCH_MICRO_TRACING_
             micro_trace_restart();
+#           endif
         }
     }
 }
@@ -252,7 +256,9 @@ capture_fdc_error(
      */
     CAPTURE_ARM_LR_REGISTER(return_address);
 
+#   ifdef _BRANCH_MICRO_TRACING_
     micro_trace_stop();
+#   endif
 
     error_address = return_address - 1;
 
@@ -276,7 +282,10 @@ capture_fdc_error(
         rtos_exit_privileged_mode();
     }
 
+#   ifdef _BRANCH_MICRO_TRACING_
     micro_trace_restart();
+#   endif
+
     return (fdc_error_t)error_address;
 #   else
 

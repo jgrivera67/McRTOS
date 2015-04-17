@@ -236,29 +236,6 @@ struct enet_device {
     uint32_t clock_gate_mask;
 };
 
-void enet_init(const struct enet_device *enet_device_p);
-
-void enet_start(const struct enet_device *enet_device_p,
-	        struct local_l3_end_point *local_l3_end_point_p);
-
-void enet_add_multicast_mac_addr(const struct enet_device *enet_device_p,
-                                 struct ethernet_mac_address *mac_addr_p);
-
-void enet_remove_multicast_mac_addr(const struct enet_device *enet_device_p,
-                                    struct ethernet_mac_address *mac_addr_p);
-
-void enet_start_xmit(const struct enet_device *enet_device_p,
-		     struct network_packet *tx_packet_p);
-
-void enet_repost_rx_packet(const struct enet_device *enet_device_p,
-			   struct network_packet *rx_packet_p);
-
-void enet_phy_write(const struct enet_device *enet_device_p, uint32_t phy_reg,
-		    uint32_t data);
-
-uint32_t enet_phy_read(const struct enet_device *enet_device_p,
-		       uint32_t phy_reg);
-
 extern isr_function_t k64f_enet_transmit_isr;
 
 extern isr_function_t k64f_enet_receive_isr;
@@ -276,10 +253,6 @@ k64f_enet_receive_interrupt_e_handler(
 void
 k64f_enet_error_interrupt_e_handler(
     struct rtos_interrupt *rtos_interrupt_p);
-
-void
-enet_get_mac_addr(const struct enet_device *enet_device_p,
-                  struct ethernet_mac_address *mac_addr_p);
 
 extern const struct enet_device g_enet_device0;
 

@@ -277,6 +277,8 @@
 #	define SOC_NUM_INTERRUPT_PRIORITIES 4
 #   elif defined(K64F_SOC)
 #	define SOC_NUM_INTERRUPT_PRIORITIES 16
+#   elif defined(LM4F120_SOC)
+#	define SOC_NUM_INTERRUPT_PRIORITIES 8 
 #   else
 #	error "SOC not supported"
 #   endif

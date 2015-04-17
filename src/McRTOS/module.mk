@@ -20,7 +20,7 @@ ifeq "$(PLATFORM)" "FRDM-K64F"
     local_src := $(subdirectory)/McRTOS_startup_arm_cortex_m.c
 endif
 
-ifeq "$(PLATFORM)" "LM4F120-LaunchPad"
+ifeq "$(PLATFORM)" "LaunchPad-LM4F120"
     local_src := $(subdirectory)/McRTOS_startup_arm_cortex_m.c
 endif
 

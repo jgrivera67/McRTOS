@@ -2,11 +2,6 @@
  * Linker script for LM4F120 SoC
  */
 
-/*
- * Hardware micro trace buffer size in bytes
- */
-MICRO_TRACE_BUFFER_SIZE_IN_BYTES = 1024;
-
 /* Entry Point */
 ENTRY(cortex_m_reset_handler)
 
@@ -57,16 +52,6 @@ SECTIONS
       *(.ARM.exidx*)
       __exidx_end = .;
   } >flash_text
-
-  /* Reserve MTB memory at the beginning of sram_data */
-  .mtb :
-  {
-    . = ALIGN(8);
-    __micro_trace_buffer = .;
-    . += MICRO_TRACE_BUFFER_SIZE_IN_BYTES;
-    . = ALIGN(8);
-    __micro_trace_buffer_end = .;
-  } >sram_data
 
   /* Initialized data sections goes into RAM, load LMA copy after code */
   .data :

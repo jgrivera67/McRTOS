@@ -11,8 +11,24 @@
 #include "hardware_abstractions.h"
 #include <stdint.h>
 
+#pragma GCC diagnostic ignored "-Wunused-local-typedefs"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
 #define SYSTICK_COUNTER_RELOAD_VALUE \
         (CPU_CLOCK_FREQ_IN_HZ / RTOS_TICK_TIMER_FREQUENCY)
+
+#if __MPU_PRESENT == 1
+/*
+ * Minimum MPU region alignment in bytes
+ */
+#define MIN_MPU_REGION_ALIGNMENT	UINT32_C(32)
+
+/**
+ * Minimum MPU region alignment mask
+ */
+#define MIN_MPU_REGION_ALIGNMENT_MASK	(~(MIN_MPU_REGION_ALIGNMENT - 1))
+
+#endif /* __MPU_PRESENT == 1 */
 
 /*
  * Coprocessor CP10 and CP11 fields in the SCB->CPACR register:
@@ -35,9 +51,21 @@ struct rtos_interrupt *g_rtos_interrupt_systick_p = NULL;
 /**
  * Exception handlers stack shared among all nested exception handlers
  */
-struct cortex_m_exception_stack
-    g_cortex_m_exception_stack __attribute__ ((section(".resetstack")));
+struct cortex_m_exception_stack g_cortex_m_exception_stack __attribute__ ((section(".resetstack")));
 
+#if __MPU_PRESENT == 1
+static struct mpu_device_var g_mpu_var = {
+    .initialized = false,
+    .num_regions = 0,
+    .num_defined_global_regions = 0,
+};
+
+static const struct mpu_device g_mpu = {
+    .signature = MPU_DEVICE_SIGNATURE,
+    .mmio_regs_p = (volatile MPU_Type *)MPU_BASE,
+    .var_p = &g_mpu_var,
+};
+#endif
 
 static void
 cortex_m_set_ccr(void)
@@ -245,8 +273,8 @@ bool
 cortex_m_mpu_present(void)
 {
 #if __MPU_PRESENT == 1
-    uint32_t reg_value =
-        read_32bit_mmio_register((volatile uint32_t *)&MPU->TYPE);
+    volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
+    uint32_t reg_value = read_32bit_mmio_register(&mpu_regs_p->TYPE);
 
     uint32_t num_data_regions =
         GET_BIT_FIELD(reg_value, MPU_TYPE_DREGION_Msk, MPU_TYPE_DREGION_Pos);
@@ -258,11 +286,282 @@ cortex_m_mpu_present(void)
 }
 
 
+#if __MPU_PRESENT == 1
+static inline uint8_t
+log_base_2(uint32_t power_of_2_value)
+{
+    DBG_ASSERT(power_of_2_value >= 32, power_of_2_value, 0);
+
+#   if __CORTEX_M >= 0x03
+    uint32_t log_value = 31 - __CLZ(power_of_2_value);
+
+    DEBUG_PRINTF("*** Log base 2 of %u is %u\n", power_of_2_value, log_value); //???
+    if (power_of_2_value == BIT(log_value)) {
+        return (uint8_t)log_value;
+    }
+#   else        
+    for (uint32_t log_value = 5; log_value <= 31; log_value ++) {
+        if (power_of_2_value == BIT(log_value)) {
+            DEBUG_PRINTF("*** Log base 2 of %u is %u\n", power_of_2_value, log_value); //???
+            return (uint8_t)log_value;
+        }
+    }
+#   endif    
+
+    fdc_error_t fdc_error =
+        CAPTURE_FDC_ERROR("Invalid power of 2 value", power_of_2_value, 0);
+
+    fatal_error_handler(fdc_error);
+    return UINT8_MAX;
+}
+
+
+static void
+cortex_m_set_mpu_region(
+    struct mpu_device_var *mpu_var_p,
+    volatile MPU_Type *mpu_regs_p,
+    uint8_t region_index,
+    void *start_addr,
+    void *end_addr,
+    uint32_t unprivileged_permissions)
+{
+    uint32_t reg_value;
+
+    DBG_ASSERT(region_index < mpu_var_p->num_regions,
+ 	       region_index, mpu_var_p->num_regions);
+
+    DBG_ASSERT(start_addr < end_addr, start_addr, end_addr);
+
+    size_t region_size = (uintptr_t)end_addr - (uintptr_t)start_addr;
+
+    DBG_ASSERT(region_size % MIN_MPU_REGION_ALIGNMENT == 0 &&
+	       (uintptr_t)start_addr % region_size == 0,
+	       start_addr, region_size);
+
+    uint8_t encoded_region_size = log_base_2(region_size) - 1;
+
+    /*
+     * Configure region:
+     */
+    write_32bit_mmio_register(&mpu_regs_p->RNR, region_index);
+    write_32bit_mmio_register(&mpu_regs_p->RBAR, (uintptr_t)start_addr);
+    reg_value = MPU_RASR_ENABLE_Msk;
+    SET_BIT_FIELD(reg_value, MPU_RASR_SIZE_Msk, MPU_RASR_SIZE_Pos, encoded_region_size);
+    SET_BIT_FIELD(reg_value, MPU_RASR_AP_Msk, MPU_RASR_AP_Pos, 
+                  unprivileged_permissions &
+                    (UNPRIVILEGED_READ_MASK | UNPRIVILEGED_WRITE_MASK));
+
+    if (!(unprivileged_permissions & UNPRIVILEGED_EXEC_MASK)) {
+        reg_value |= MPU_RASR_XN_Msk;
+    }
+    
+    write_32bit_mmio_register(&mpu_regs_p->RASR, reg_value);
+}
+
+
+/*
+ *
+ * Set all the data regions for the current thread, including the stack region.
+ *
+ * NOTE: This function is to be invoked as part of a thread context switch
+ */
+void
+mpu_set_thread_data_regions(
+    cpu_id_t cpu_id,
+    struct mpu_region_range regions[],
+    uint8_t num_regions)
+{
+    DBG_ASSERT(
+        g_mpu.signature == MPU_DEVICE_SIGNATURE,
+        g_mpu.signature, 0);
+
+    struct mpu_device_var *mpu_var_p = g_mpu.var_p;
+    DBG_ASSERT(mpu_var_p->initialized, mpu_var_p, 0);
+
+    volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
+
+    DBG_ASSERT(num_regions <= RTOS_MAX_MPU_THREAD_DATA_REGIONS,
+	num_regions, RTOS_MAX_MPU_THREAD_DATA_REGIONS);
+
+    uint_fast8_t region_index = FIRST_MPU_THREAD_DATA_REGION;
+
+    for (uint_fast8_t i = 0; i < num_regions; i++) {
+	uint32_t unprivileged_permissions;
+
+	DBG_ASSERT(regions[i].start_addr != NULL, i, 0);
+
+        if (regions[i].read_only) {
+            unprivileged_permissions = UNPRIVILEGED_READ_MASK;
+        } else {
+            unprivileged_permissions = UNPRIVILEGED_READ_MASK | UNPRIVILEGED_WRITE_MASK;
+        }
+
+	cortex_m_set_mpu_region(mpu_var_p, mpu_regs_p, region_index,
+				regions[i].start_addr, regions[i].end_addr,
+				unprivileged_permissions);
+
+	region_index ++;
+    }
+
+    /*
+     * Set remaining regions as invalid
+     */
+    for ( ; region_index < RTOS_MAX_MPU_THREAD_DATA_REGIONS; region_index ++) {
+        write_32bit_mmio_register(&mpu_regs_p->RNR, region_index);
+        write_32bit_mmio_register(&mpu_regs_p->RASR, 0x0);
+    }
+}
+
+
+void
+mpu_set_thread_data_region(
+    cpu_id_t cpu_id,
+    uint8_t thread_region_index,
+    void *start_addr,
+    void *end_addr,
+    bool read_only)
+{
+    uint32_t unprivileged_permissions;
+
+    FDC_ASSERT(
+        g_mpu.signature == MPU_DEVICE_SIGNATURE,
+        g_mpu.signature, 0);
+
+    struct mpu_device_var *mpu_var_p = g_mpu.var_p;
+    FDC_ASSERT(mpu_var_p->initialized, mpu_var_p, 0);
+
+    volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
+
+    FDC_ASSERT(start_addr != NULL, start_addr, end_addr);
+    FDC_ASSERT(start_addr <= end_addr, start_addr, end_addr);
+    FDC_ASSERT(thread_region_index < RTOS_MAX_MPU_THREAD_DATA_REGIONS,
+	       thread_region_index, RTOS_MAX_MPU_THREAD_DATA_REGIONS);
+
+    mpu_region_index_t region_index = FIRST_MPU_THREAD_DATA_REGION +
+				      thread_region_index;
+
+    if (read_only) {
+        unprivileged_permissions = UNPRIVILEGED_READ_MASK;
+    } else {
+        unprivileged_permissions = UNPRIVILEGED_READ_MASK | UNPRIVILEGED_WRITE_MASK;
+    }
+
+    cortex_m_set_mpu_region(mpu_var_p, mpu_regs_p, region_index,
+			    start_addr, end_addr, unprivileged_permissions);
+}
+
+
+void
+mpu_unset_thread_data_region(mpu_thread_data_region_index_t thread_region_index)
+{
+    FDC_ASSERT(
+        g_mpu.signature == MPU_DEVICE_SIGNATURE,
+        g_mpu.signature, 0);
+
+#   ifdef _RELIABILITY_CHECKS_
+    struct mpu_device_var *mpu_var_p = g_mpu.var_p;
+    FDC_ASSERT(mpu_var_p->initialized, mpu_var_p, 0);
+#   endif
+
+    volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
+
+    FDC_ASSERT(thread_region_index < RTOS_MAX_MPU_THREAD_DATA_REGIONS,
+	       thread_region_index, RTOS_MAX_MPU_THREAD_DATA_REGIONS);
+
+    mpu_region_index_t region_index = FIRST_MPU_THREAD_DATA_REGION +
+				      thread_region_index;
+
+    /*
+     * Set region as invalid
+     */
+    write_32bit_mmio_register(&mpu_regs_p->RNR, region_index);
+    write_32bit_mmio_register(&mpu_regs_p->RASR, 0x0);
+}
+
+
+void
+mpu_register_dma_region(
+    enum mpu_bus_masters dma_bus_master,
+    void *start_addr,
+    size_t size)
+{
+    DEBUG_PRINTF("DMA regions not supported for Cortex-M MPU "
+                 "(dma_bus_master: %u, start_add: %p, size: %u)\n",
+                 dma_bus_master, start_addr, size);
+}
+
+#endif /* __MPU_PRESENT */
+
+
 void
 cortex_m_mpu_init(void)
 {
 #if __MPU_PRESENT == 1
-    DEBUG_PRINTF("Not implemented yet\n");
+    C_ASSERT2(assert_soc_flash_base_aligned, SOC_FLASH_BASE % 32 == 0);
+    C_ASSERT2(assert_soc_sram_base_aligned, SOC_SRAM_BASE % 32 == 0);
+    C_ASSERT2(assert_enough_mpu_regions, RTOS_NUM_GLOBAL_MPU_REGIONS >= 1);
+    
+    extern uint32_t __flash_text_start[];
+    extern uint32_t __flash_text_end[];
+
+    uint32_t reg_value;
+
+    FDC_ASSERT(
+        g_mpu.signature == MPU_DEVICE_SIGNATURE,
+        g_mpu.signature, 0);
+
+    struct mpu_device_var *mpu_var_p = g_mpu.var_p;
+    FDC_ASSERT(!mpu_var_p->initialized, mpu_var_p, 0);
+
+    volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
+
+    /*
+     * Verify that the MPU has enough regions:
+     */
+    reg_value = read_32bit_mmio_register(&mpu_regs_p->TYPE);
+
+    mpu_var_p->num_regions =
+        GET_BIT_FIELD(reg_value, MPU_TYPE_DREGION_Msk, MPU_TYPE_DREGION_Pos);
+
+    FDC_ASSERT(mpu_var_p->num_regions >= RTOS_MAX_MPU_REGIONS,
+	       mpu_var_p->num_regions, RTOS_MAX_MPU_REGIONS);
+
+    /*
+     * Disable MPU to configure it:
+     */
+    reg_value = read_32bit_mmio_register(&mpu_regs_p->CTRL);
+    reg_value &= ~MPU_CTRL_ENABLE_Msk;
+    write_32bit_mmio_register(&mpu_regs_p->CTRL, reg_value);
+
+    /*
+     * Enable the default memory map as a background region for privileged
+     * access. The background region acts as region number -1
+     */ 
+    reg_value = read_32bit_mmio_register(&mpu_regs_p->CTRL);
+    reg_value |= MPU_CTRL_PRIVDEFENA_Msk;
+    write_32bit_mmio_register(&mpu_regs_p->CTRL, reg_value);
+
+    /* 
+     * Make region 0, the code in flash to be executable in unprivileged mode
+     */
+    for (cpu_id_t cpu_id = 0; cpu_id < SOC_NUM_CPU_CORES; cpu_id ++) {
+	cortex_m_set_mpu_region(mpu_var_p, mpu_regs_p, 0,
+			       (void *)__flash_text_start,
+			       (void *)__flash_text_end,
+			       UNPRIVILEGED_READ_MASK |
+                               UNPRIVILEGED_EXEC_MASK);
+    }
+
+    mpu_var_p->num_defined_global_regions ++;
+
+    /*
+     * Enable MPU:
+     */
+    reg_value = read_32bit_mmio_register(&mpu_regs_p->CTRL);
+    reg_value |= MPU_CTRL_ENABLE_Msk;
+    write_32bit_mmio_register(&mpu_regs_p->CTRL, reg_value);
+    mpu_var_p->initialized = true;
+    capture_fdc_msg_printf("Cortex-M MPU present (regions: %u)\n", g_mpu.var_p->num_regions);
 #else
     FDC_ASSERT(false, 0, 0);
 #endif    
@@ -467,6 +766,16 @@ void
 wait_for_interrupts(void)
 {
     __WFI();
+}
+
+
+/**
+ * Sends an inter-processor interrupt to the given CPU
+ */
+void
+send_inter_processor_interrupt(cpu_id_t cpu_id)
+{
+    DEBUG_PRINTF("Not implemented yet\n");
 }
 
 

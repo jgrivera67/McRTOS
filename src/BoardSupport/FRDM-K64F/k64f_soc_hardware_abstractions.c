@@ -73,11 +73,6 @@ C_ASSERT(
 #define UART_TRANSMIT_QUEUE_SIZE_IN_BYTES   UINT16_C(128)
 #define UART_RECEIVE_QUEUE_SIZE_IN_BYTES    UINT16_C(16)
 
-/**
- * MPU region index for the first data region for threads
- */
-#define FIRST_MPU_THREAD_DATA_REGION   RTOS_NUM_GLOBAL_MPU_REGIONS
-
 C_ASSERT(RTOS_MAX_MPU_REGIONS == 12);
 
 static cpu_reset_cause_t find_reset_cause(void);
@@ -753,7 +748,8 @@ k64f_set_mpu_region_for_cpu(
  	       region_index, mpu_var_p->num_regions);
 
     DBG_ASSERT(start_addr < end_addr &&
-	       (uintptr_t)start_addr % K64F_MPU_REGION_ALIGNMENT == 0,
+	       (uintptr_t)start_addr % K64F_MPU_REGION_ALIGNMENT == 0 &&
+	       (uintptr_t)end_addr % K64F_MPU_REGION_ALIGNMENT == 0,
 	       start_addr, end_addr);
 
     /*
@@ -953,6 +949,9 @@ k64f_mpu_init(void)
 
     volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
 
+    /*
+     * Verify that the MPU has enough regions:
+     */
     reg_value = read_32bit_mmio_register(&mpu_regs_p->CESR);
     uint8_t nrgd_field = GET_BIT_FIELD(reg_value, MPU_CESR_NRGD_MASK,
 				       MPU_CESR_NRGD_SHIFT);
@@ -985,7 +984,6 @@ k64f_mpu_init(void)
      * Make region 1, the code in flash to be executable in unprivileged mode
      */
     for (cpu_id_t cpu_id = 0; cpu_id < SOC_NUM_CPU_CORES; cpu_id ++) {
-	/* region 1 is code in flash: */
 	k64f_set_mpu_region_for_cpu(mpu_var_p, mpu_regs_p, cpu_id, 1,
 				    (void *)__flash_text_start,
 				    (void *)__flash_text_end,
@@ -1003,6 +1001,7 @@ k64f_mpu_init(void)
      */
     write_32bit_mmio_register(&mpu_regs_p->CESR, MPU_CESR_VLD_MASK);
     mpu_var_p->initialized = true;
+    capture_fdc_msg_printf("K64F MPU present (regions: %u)\n", g_mpu.var_p->num_regions);
 }
 
 
@@ -1350,18 +1349,14 @@ soc_hardware_init(void)
     init_cpu_clock_cycles_counter();
 #   endif
 
-    bool mpu_present = cortex_m_mpu_present();
+    capture_fdc_msg_printf("SoC model: %#x, SoC ID: %x-%x-%x\n",
+                           SIM_SDID, SIM_UIDMH, SIM_UIDML, SIM_UIDL);
 
-    if (mpu_present) {
+    if (cortex_m_mpu_present()) {
         cortex_m_mpu_init();
     } else {
 	k64f_mpu_init();
     }
-
-    capture_fdc_msg_printf("SoC model: %#x, SoC ID: %x-%x-%x\n",
-                           SIM_SDID, SIM_UIDMH, SIM_UIDML, SIM_UIDL);
-    capture_fdc_msg_printf("Cortex-M MPU %s present\n", mpu_present ? "" : "not");
-    capture_fdc_msg_printf("K64F MPU present (regions: %u)\n", g_mpu.var_p->num_regions);
 
     cortex_m_nvic_init();
 
@@ -3612,16 +3607,6 @@ notify_interrupt_controller_isr_done(interrupt_channel_t interrupt_channel)
     DBG_ASSERT(
         interrupt_channel >= -1 && interrupt_channel < SOC_NUM_INTERRUPT_CHANNELS,
         interrupt_channel, SOC_NUM_INTERRUPT_CHANNELS);
-}
-
-
-/**
- * Sends an inter-processor interrupt to the given CPU
- */
-void
-send_inter_processor_interrupt(cpu_id_t cpu_id)
-{
-    DEBUG_PRINTF("Not implemented yet\n");
 }
 
 

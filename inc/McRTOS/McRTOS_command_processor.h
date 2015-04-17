@@ -30,11 +30,13 @@ enum tokens {
     CLEAR,
     CPU,
     DMESG,
-    GATEWAY,
     HELP,
+#ifdef _NETWORKING_   
+    GATEWAY,
     IP4,
     IP6,
     PING,
+#endif    
     RESET,
     SET,
     STACK,
@@ -42,7 +44,7 @@ enum tokens {
     VERSION,
 };
 
-struct tokenizer {
+struct __tokenizer {
     /**
      * Pointer to table of keywords
      */
@@ -67,7 +69,13 @@ struct tokenizer {
      * Buffer to hold the last lexical unit found in the command line
      */
     char last_lexical_unit[LEXICAL_UNIT_MAX_SIZE];
-}  __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT(struct tokenizer))));
+};
+
+struct tokenizer {
+    struct __tokenizer;
+}  __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT(struct __tokenizer))));
+
+C_ASSERT(sizeof(struct tokenizer) % SOC_MPU_REGION_ALIGNMENT(struct __tokenizer) == 0);
 
 typedef int token_t;
 

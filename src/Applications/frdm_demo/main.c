@@ -3,7 +3,7 @@
  *
  * Application main module
  *
- * Copyright (C) 2013 German Rivera
+ * Copyright (C) 2014 German Rivera
  *
  * @author German Rivera
  */
@@ -15,6 +15,7 @@
 #include "utils.h"
 #include "frdm_board.h"
 #include <networking.h>
+#include <k64f_soc_enet.h>
 
 TODO("Remove these pragmas")
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -100,7 +101,7 @@ static struct app_state_vars g_app = {
 /**
  * Array of execution stacks for application threads
  */
-struct rtos_thread_execution_stack g_app_thread_execution_stacks[RTOS_NUM_APP_THREADS];
+static struct rtos_thread_execution_stack g_app_thread_execution_stacks[RTOS_NUM_APP_THREADS];
 
 /**
  * Array of application threads
@@ -252,7 +253,7 @@ void app_software_init(void)
 
     rtos_mpu_remove_thread_data_region();   /* g_app */
 
-    networking_init();
+    networking_init(&g_enet_device0);
 }
 
 

@@ -132,16 +132,30 @@
                 (sizeof(_type) < 1024 ? UINT32_C(1024) :                \
                  (sizeof(_type) < 2048 ? UINT32_C(2048) :               \
                   (sizeof(_type) < 4096 ? UINT32_C(4096) :              \
-                   -1))))))))
-#endif
+                   (sizeof(_type) < 8192 ? UINT32_C(8192) :             \
+                    (sizeof(_type) < 16384 ? UINT32_C(16384) :          \
+                    UINT32_MAX))))))))))
+
+/*
+ * Bit masks for unprivileged permissions
+ */
+#   define UNPRIVILEGED_WRITE_MASK  BIT(0)
+#   define UNPRIVILEGED_READ_MASK   BIT(1)
+#   define UNPRIVILEGED_EXEC_MASK   BIT(2)
 
 /**
- * Declare a typedef for an aligned data type suitable for an MPU region
+ * MPU bus masters
  */
-#define DECLARE_MPU_ALIGNED_TYPE(_original_type, _aligned_type) \
-        typedef _original_type \
-        __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT(_original_type)))) \
-        _aligned_type;
+enum mpu_bus_masters {
+    MPU_BUS_MASTER_CPU_CORE = 0,
+};
+
+#endif /* __MPU_PRESENT == 1 */
+
+/**
+ * MPU region index for the first data region for threads
+ */
+#define FIRST_MPU_THREAD_DATA_REGION   RTOS_NUM_GLOBAL_MPU_REGIONS
 
 /**
  * CPU identifier type
@@ -270,6 +284,9 @@ struct buttons_device;
 struct adc_device;
 struct i2c_device;
 struct enet_device;
+struct local_l3_end_point;
+struct network_packet;
+struct ethernet_mac_address;
 
 typedef void app_hardware_init_t(void);
 typedef void app_hardware_stop_t(void);
@@ -510,6 +527,34 @@ void i2c_write(
     const struct i2c_device *i2c_device_p,
     uint8_t i2c_slave_addr, uint8_t i2c_slave_reg_addr,
     uint8_t *buffer_p, size_t num_bytes);
+
+void enet_init(const struct enet_device *enet_device_p);
+
+void enet_start(const struct enet_device *enet_device_p,
+	        struct local_l3_end_point *local_l3_end_point_p);
+
+void enet_add_multicast_mac_addr(const struct enet_device *enet_device_p,
+                                 struct ethernet_mac_address *mac_addr_p);
+
+void enet_remove_multicast_mac_addr(const struct enet_device *enet_device_p,
+                                    struct ethernet_mac_address *mac_addr_p);
+
+void enet_start_xmit(const struct enet_device *enet_device_p,
+		     struct network_packet *tx_packet_p);
+
+void enet_repost_rx_packet(const struct enet_device *enet_device_p,
+			   struct network_packet *rx_packet_p);
+
+void enet_phy_write(const struct enet_device *enet_device_p, uint32_t phy_reg,
+		    uint32_t data);
+
+uint32_t enet_phy_read(const struct enet_device *enet_device_p,
+		       uint32_t phy_reg);
+
+void enet_get_mac_addr(const struct enet_device *enet_device_p,
+                       struct ethernet_mac_address *mac_addr_p);
+    
+void enet_register_dma_region(void *start_addr, size_t size);
 
 void wait_for_interrupts(void);
 

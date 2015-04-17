@@ -57,8 +57,10 @@ rtos_dbg_dump_context_switch_traces(void);
 static void
 rtos_dbg_dump_cpu_controller(void);
 
+#ifdef _BRANCH_MICRO_TRACING_
 static void
 debug_dump_micro_trace_buffer(void);
+#endif
 
 static void
 debug_dump_captured_registers(void);
@@ -78,7 +80,9 @@ rtos_common_fault_exception_handler(
         _IN_ const struct rtos_execution_context *current_execution_context_p,
 	_IN_ enum cpu_core_internal_interrupt_vectors exception_vector)
 {
+#   ifdef _BRANCH_MICRO_TRACING_
     micro_trace_stop();
+#   endif
 
     rtos_execution_stack_entry_t *before_exception_stack_p;
 
@@ -141,7 +145,10 @@ rtos_common_fault_exception_handler(
     fdc_info_p->fdc_handling_exception = false;
 #   endif
 
+#   ifdef _BRANCH_MICRO_TRACING_
     micro_trace_restart();
+#   endif
+
     debugger_printf("*** Exiting debugger ***\n");
 }
 
@@ -317,10 +324,9 @@ rtos_dbg_dump_exception_info(
 
     debug_dump_captured_registers();
 
-#if defined(KL25Z_SOC)
-    /* TODO: Make this generic */
+#   ifdef _BRANCH_MICRO_TRACING_
     debug_dump_micro_trace_buffer();
-#endif
+#   endif
 }
 
 
@@ -626,10 +632,12 @@ rtos_dbg_dump_context_switch_traces(void)
         struct rtos_execution_context *execution_context_p;
 
         switch (trace_context_type) {
+#if 0 //???            
         case FDC_CST_APPLICATION_THREAD:
             thread_p = &g_McRTOS_p->rts_app_threads[context_id];
             execution_context_p = &thread_p->thr_execution_context;
             break;
+#endif
 
         case FDC_CST_SYSTEM_THREAD:
             thread_p = &cpu_controller_p->cpc_system_threads[context_id];
@@ -644,6 +652,7 @@ rtos_dbg_dump_context_switch_traces(void)
         default:
             debugger_printf("*** Error: Invalid trace entry (trace context type: %u)\n",
                 trace_context_type);
+            continue;
         }
 
         debugger_printf(
@@ -701,6 +710,7 @@ rtos_dbg_dump_cpu_controller(void)
 }
 
 
+#ifdef _BRANCH_MICRO_TRACING_
 static void
 debug_dump_micro_trace_buffer(void)
 {
@@ -803,6 +813,7 @@ debug_dump_micro_trace_buffer(void)
         }
     }
 }
+#endif /* _BRANCH_MICRO_TRACING_ */
 
 
 /**

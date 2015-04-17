@@ -16,7 +16,7 @@
 APPLICATION ?=
 
 #
-# PLATFORM values: LPC2478-STK, LM4F120-LaunchPad, FRDM-KL25Z, FRDM-K20D50,
+# PLATFORM values: LPC2478-STK, LaunchPad-LM4F120, FRDM-KL25Z, FRDM-K20D50,
 # FRDM-K64F
 # This variable must be set via an environment variable
 #

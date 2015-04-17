@@ -1,4 +1,4 @@
-$base_dir = "$env:userprofile/MyProjects/EMBSYS/FRDM-K64F/projects"
+$base_dir = "$env:userprofile/MyProjects/EMBSYS/projects"
 $project = "McRTOS"
 $env:src_tree_dir = "$base_dir\$project"
 $env:src_db_dir = "$base_dir\$project`_src_database"
@@ -78,18 +78,6 @@ function run_build([string]$target)
     echo "*** Total number of errors: $num_errors ***"
     echo "*** Total number of warnings: $num_warnings ***"
     echo "*** Total number of TODOs: $num_todos ***"
-}
-
-function my_update_flash
-{
-    echo "copying $env:bin_file to $env:PLATFORM flash (drive E:\) ..."
-    copy-item "$env:bin_file" e:\
-}
-
-function my_update_flash2
-{
-    echo "copying $env:bin_file to $env:PLATFORM flash (drive F:\) ..."
-    copy-item "$env:bin_file" f:\
 }
 
 function my_stack([string]$raw_stack_trace_file)

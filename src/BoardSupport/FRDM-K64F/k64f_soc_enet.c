@@ -716,6 +716,13 @@ enet_phy_read(const struct enet_device *enet_device_p, uint32_t phy_reg)
 }
 
 
+void
+enet_register_dma_region(void *start_addr, size_t size)
+{ 
+    mpu_register_dma_region(MPU_BUS_MASTER_ENET,  start_addr, size);
+}
+
+
 /**
  * Initializes the Ethernet PHY chip (Micrel KSZ8081RNA)
  */
@@ -1379,6 +1386,9 @@ enet_start_xmit(const struct enet_device *enet_device_p,
 {
     struct enet_device_var *const enet_var_p = enet_device_p->var_p;
     volatile ENET_Type *enet_regs_p = enet_device_p->mmio_registers_p;
+
+    FDC_ASSERT(enet_device_p->signature == ENET_DEVICE_SIGNATURE,
+	       enet_device_p->signature, enet_device_p);
 
     DBG_ASSERT(tx_packet_p->signature == NET_TX_PACKET_SIGNATURE,
 	       tx_packet_p->signature, tx_packet_p);

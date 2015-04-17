@@ -296,6 +296,17 @@ uint64_t __attribute__ ((section(".mtb_buf")))
     g_micro_trace_buffer[MICRO_TRACE_BUFFER_NUM_ENTRIES];
 #endif
 
+
+/**
+ *  SoC-specific early initialization to be invoked at the beginning of
+ *  the Reset exception handler.
+ */    
+void
+soc_early_init(void)
+{
+}
+
+
 /**
  *  Initializes SoC hardware.
  *
@@ -428,42 +439,6 @@ system_clocks_init(void)
     write_32bit_mmio_register(&SYSCTL_RCGC2_R, reg_value);
 }
 
-static bool g_micro_trace_initialized = false;
-
-void
-micro_trace_init(void)
-{
-}
-
-
-void
-micro_trace_stop(void)
-{
-    if (! g_micro_trace_initialized) {
-        return;
-    }
-}
-
-
-void
-micro_trace_restart(void)
-{
-    if (! g_micro_trace_initialized) {
-        return;
-    }
-}
-
-
-void
-micro_trace_get_cursor(uint64_t **mtb_cursor_pp, bool *mtb_cursor_wrapped_p)
-{
-    if (! g_micro_trace_initialized) {
-        *mtb_cursor_pp = __micro_trace_buffer;
-        *mtb_cursor_wrapped_p = false;
-        return;
-    }
-}
-
 
 #ifdef _CPU_CYCLES_MEASURE_
 static void
@@ -542,7 +517,8 @@ get_cpu_clock_cycles(void)
  * It configures a GPIO pin of the LM4F120 SoC
  */
 void
-configure_pin(const struct pin_config_info *pin_info_p, bool is_output)
+configure_gpio_pin(const struct gpio_pin *pin_info_p, uint32_t pin_flags,
+                   bool is_output)
 {
     uint32_t reg_value;
     volatile struct gpio_port *pin_gpio_port_p = pin_info_p->pin_gpio_port_p;
@@ -659,7 +635,7 @@ configure_pin(const struct pin_config_info *pin_info_p, bool is_output)
 
 
 void
-activate_output_pin(const struct pin_config_info *pin_info_p)
+activate_output_pin(const struct gpio_pin *pin_info_p)
 {
     uint32_t reg_value;
     volatile struct gpio_port *pin_gpio_port_p = pin_info_p->pin_gpio_port_p;
@@ -690,7 +666,7 @@ activate_output_pin(const struct pin_config_info *pin_info_p)
 
 
 void
-deactivate_output_pin(const struct pin_config_info *pin_info_p)
+deactivate_output_pin(const struct gpio_pin *pin_info_p)
 {
     uint32_t reg_value;
     volatile struct gpio_port *pin_gpio_port_p = pin_info_p->pin_gpio_port_p;
@@ -721,7 +697,7 @@ deactivate_output_pin(const struct pin_config_info *pin_info_p)
 
 
 void
-toggle_output_pin(const struct pin_config_info *pin_info_p)
+toggle_output_pin(const struct gpio_pin *pin_info_p)
 {
     uint32_t reg_value;
     volatile struct gpio_port *pin_gpio_port_p = pin_info_p->pin_gpio_port_p;
@@ -749,7 +725,7 @@ toggle_output_pin(const struct pin_config_info *pin_info_p)
 
 
 bool
-read_input_pin(const struct pin_config_info *pin_info_p)
+read_input_pin(const struct gpio_pin *pin_info_p)
 {
     uint32_t reg_value;
     volatile struct gpio_port *pin_gpio_port_p = pin_info_p->pin_gpio_port_p;
@@ -904,7 +880,6 @@ uart_init(
         UART_TRANSMIT_QUEUE_SIZE_IN_BYTES,
         uart_device_p->urt_transmit_queue_storage_p,
         NULL,
-        cpu_id,
         &uart_var_p->urt_transmit_queue);
 
     /*
@@ -915,7 +890,6 @@ uart_init(
         UART_RECEIVE_QUEUE_SIZE_IN_BYTES,
         uart_device_p->urt_receive_queue_storage_p,
         NULL,
-        cpu_id,
         &uart_var_p->urt_receive_queue);
 
     /*
@@ -1021,7 +995,8 @@ lm4f120_uart_interrupt_e_handler(
 	    bool entry_read = rtos_k_byte_circular_buffer_read(
 				&uart_var_p->urt_transmit_queue,
 				&byte_to_transmit,
-				false);
+				false,
+                                NULL);
 
 	    if (!entry_read) {
 		break;
@@ -1164,7 +1139,7 @@ uart_putchar(
 	bool entry_read;
 
 	entry_read = rtos_k_byte_circular_buffer_read(
-			&uart_var_p->urt_transmit_queue, &first_c, false);
+			&uart_var_p->urt_transmit_queue, &first_c, false, NULL);
 	if (entry_read) {
 	    write_32bit_mmio_register(&uart_mmio_registers_p->reg_DR, first_c);
 	}
@@ -1228,7 +1203,8 @@ uart_getchar(
     bool entry_read = rtos_k_byte_circular_buffer_read(
 			&uart_var_p->urt_receive_queue,
 			&char_received,
-			false);
+			false,
+                        NULL);
 
     if (!entry_read) {
 	/*
@@ -1243,7 +1219,8 @@ uart_getchar(
 	entry_read = rtos_k_byte_circular_buffer_read(
 			&uart_var_p->urt_receive_queue,
 			&char_received,
-			true);
+			true,
+                        NULL);
 
 	DBG_ASSERT(entry_read, uart_device_p, 0);
     }
@@ -1350,7 +1327,7 @@ dummy_isr(void)
  */
 #define GEN_READ_MMIO_REGISTER_FUNCTION(_func_name, _reg_type, _value_type) \
     _value_type                                                         \
-    _func_name(volatile _reg_type *io_reg_p)                            \
+    _func_name(const volatile _reg_type *io_reg_p)                      \
     {                                                                   \
         FDC_ASSERT_VALID_MMIO_ADDRESS(io_reg_p);                        \
         return *io_reg_p;                                               \

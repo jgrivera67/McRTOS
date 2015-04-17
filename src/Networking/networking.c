@@ -9,7 +9,6 @@
  */
 
 #include <Networking/networking.h>
-#include <k64f_soc_enet.h>
 #include <McRTOS/McRTOS.h>
 #include <McRTOS/failure_data_capture.h>
 #include <McRTOS/utils.h>
@@ -109,14 +108,14 @@ static struct rtos_thread_execution_stack g_thread_execution_stacks[NET_NUM_THRE
 /**
  * Networking stack module global variables
  */
-static struct networking g_networking = {
+static struct networking g_networking = {{
     .initialized = false,
     .next_udp_ephemeral_port = NET_FIRST_EPHEMERAL_PORT,
     .next_tcp_ephemeral_port = NET_FIRST_EPHEMERAL_PORT,
     .next_free_l4_end_point_p = &g_networking.local_l4_end_points[0],
     .local_l3_end_point = {
         .signature = LOCAL_L3_END_POINT_SIGNATURE,
-        .enet_device_p = &g_enet_device0,
+        .enet_device_p = NULL,
         .ipv4 = {
             .local_ip_addr.value = IPV4_NULL_ADDR,
             .subnet_mask = 0x0,
@@ -129,7 +128,8 @@ static struct networking g_networking = {
             }
         }
     },
-};
+}};
+
 
 static const struct rtos_thread_creation_params g_thread_creation_params[] = {
     [0] = {
@@ -639,7 +639,7 @@ neighbor_cache_init(struct neighbor_cache *neighbor_cache_p)
  * Initialize networking subsystem
  */
 void
-networking_init(void)
+networking_init(const struct enet_device *enet_device_p)
 {
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
@@ -662,6 +662,7 @@ networking_init(void)
     struct local_l3_end_point *local_l3_end_point_p =
 	    &g_networking.local_l3_end_point;
 
+    local_l3_end_point_p->enet_device_p = enet_device_p;
     net_rx_packet_queue_init(local_l3_end_point_p);
 
     rtos_queue_init(
@@ -687,7 +688,7 @@ networking_init(void)
     /*
      * Enable access to Rx/Tx buffers memory for the ENET DMA engine:
      */
-    mpu_register_dma_region(MPU_BUS_MASTER_ENET, &g_networking, sizeof g_networking);
+    enet_register_dma_region(&g_networking, sizeof g_networking);
 
     /*
      * Activate network interface (ENET device):
@@ -1226,9 +1227,6 @@ net_send_ipv4_packet(const struct ipv4_address *dest_ip_addr_p,
 	choose_ipv4_local_l3_end_point(dest_ip_addr_p);
 
     const struct enet_device *enet_device_p = local_l3_end_point_p->enet_device_p;
-
-    FDC_ASSERT(enet_device_p->signature == ENET_DEVICE_SIGNATURE,
-	       enet_device_p->signature, enet_device_p);
 
     /*
      * Populate IP header
@@ -1831,9 +1829,6 @@ net_send_ipv6_packet(const struct ipv6_address *dest_ip_addr_p,
 
     const struct enet_device *enet_device_p = local_l3_end_point_p->enet_device_p;
 
-    FDC_ASSERT(enet_device_p->signature == ENET_DEVICE_SIGNATURE,
-	       enet_device_p->signature, enet_device_p);
-
     FDC_ASSERT(!IPV6_ADDRESSES_EQUAL(dest_ip_addr_p, &ipv6_unspecified_address),
                dest_ip_addr_p, tx_packet_p);
 
@@ -2394,9 +2389,6 @@ net_receive_thread_f(void *arg)
 
     const struct enet_device *enet_device_p = local_l3_end_point_p->enet_device_p;
 
-    FDC_ASSERT(enet_device_p->signature == ENET_DEVICE_SIGNATURE,
-	       enet_device_p->signature, enet_device_p);
-
     /*
      * Send gratuitous ARP request (to catch if someone else is using the same
      * IP address):
@@ -2480,9 +2472,6 @@ net_icmpv4_receive_thread_f(void *arg)
 	       local_l3_end_point_p->signature, local_l3_end_point_p);
 
     const struct enet_device *enet_device_p = local_l3_end_point_p->enet_device_p;
-
-    FDC_ASSERT(enet_device_p->signature == ENET_DEVICE_SIGNATURE,
-	       enet_device_p->signature, enet_device_p);
 
     for ( ; ; ) {
 	struct network_packet *rx_packet_p = NULL;

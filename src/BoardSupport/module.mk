@@ -35,7 +35,7 @@ ifeq "$(PLATFORM)" "FRDM-K64F"
                  $(subdirectory)/$(PLATFORM)/frdm_board_hardware_abstractions.c
 endif
 
-ifeq "$(PLATFORM)" "LM4F120-LaunchPad"
+ifeq "$(PLATFORM)" "LaunchPad-LM4F120"
     local_src := \
                  $(subdirectory)/$(PLATFORM)/lm4f120_soc_hardware_abstractions.c \
                  $(subdirectory)/$(PLATFORM)/lm4f120_interrupt_service_routines.s \

@@ -1,4 +1,4 @@
-export PLATFORM="LM4F120-LaunchPad"
+export PLATFORM="LaunchPad-LM4F120"
 export APPLICATION="McRTOS-launchpad"
 export BUILD_FLAVOR=debug
 

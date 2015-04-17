@@ -335,8 +335,7 @@ struct rtos_cpu_controller
      */
     struct rtos_thread_execution_stack *cpc_system_threads_execution_stacks_p;
 
-} __attribute__ ((aligned(MAX(SOC_CACHE_LINE_SIZE_IN_BYTES, 
-                              SOC_MPU_REGION_ALIGNMENT(struct rtos_cpu_controller)))));
+} __attribute__ ((aligned(SOC_CACHE_LINE_SIZE_IN_BYTES)));
 
 C_ASSERT(sizeof(struct rtos_cpu_controller) <= RTOS_MAX_McRTOS_CPU_CONTROLLER_SIZE);
 
@@ -364,7 +363,7 @@ C_ASSERT(RTOS_NUM_SYSTEM_THREAD_INDEXES <= RTOS_NUM_SYSTEM_THREADS_PER_CPU);
 /**
  * McRTOS global state variables
  */
-struct McRTOS
+struct __McRTOS
 {
     /**
      * Per-CPU execution controllers, one for each CPU core
@@ -503,6 +502,7 @@ struct McRTOS
      */
     struct rtos_interrupt rts_interrupts[RTOS_MAX_NUM_INTERRUPTS];
 
+#ifdef MCRTOS_PRIVATE_OBJECTS
     /**
      * Array of application thread objects (thread control blocks) that can
      * exist in the system
@@ -537,18 +537,28 @@ struct McRTOS
      */
     struct rtos_object_pool rts_app_object_pools[RTOS_MAX_NUM_APP_OBJECT_POOLS];
 #endif
+#endif /* MCRTOS_PRIVATE_OBJECTS */
 
     /**
      * Command line buffer used by the McRTOS console and the McRTOS debugger
      */
     char rts_command_line_buffer[RTOS_COMMAND_LINE_BUFFER_SIZE];
-}  __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT(struct McRTOS))));
+};
 
-C_ASSERT(sizeof(struct McRTOS) % SOC_MPU_REGION_ALIGNMENT(struct McRTOS) == 0);
+struct McRTOS
+{
+    struct __McRTOS;
+} __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT(struct __McRTOS))));
 
+C_ASSERT(sizeof(struct McRTOS) % SOC_MPU_REGION_ALIGNMENT(struct __McRTOS) == 0);
+
+#ifdef MCRTOS_PRIVATE_OBJECTS
 C_ASSERT(
-    sizeof(struct McRTOS) - offsetof(struct McRTOS, rts_app_threads) <=
+    sizeof(struct McRTOS) - offsetof(struct __McRTOS, rts_app_threads) <=
     RTOS_MAX_McRTOS_DATA_SIZE);
+#else
+C_ASSERT(sizeof(struct McRTOS) <= RTOS_MAX_McRTOS_DATA_SIZE);
+#endif
 
 C_ASSERT(
     offsetof(struct McRTOS, rts_cpu_controllers) == RTOS_RTS_CPU_CONTROLLERS_OFFSET);

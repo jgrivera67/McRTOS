@@ -225,7 +225,7 @@ C_ASSERT(
 /**
  * Execution stack area for a McRTOS thread
  */
-struct rtos_thread_execution_stack
+struct __rtos_thread_execution_stack
 {
     /**
      * Stack overflow buffer, to be initialized to RTOS_STACK_OVERFLOW_BUFFER_SIGNATURE
@@ -251,12 +251,16 @@ struct rtos_thread_execution_stack
      */
     rtos_execution_stack_entry_t tes_stack_underflow_marker;
 #   define RTOS_STACK_UNDERFLOW_MARKER             UINT32_C(0xFACEBBBB)
+};
 
-}  __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT(struct rtos_thread_execution_stack))));
+struct rtos_thread_execution_stack {
+    struct __rtos_thread_execution_stack;
+} __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT(struct __rtos_thread_execution_stack))));
+
+C_ASSERT(sizeof(struct __rtos_thread_execution_stack) % SOC_CACHE_LINE_SIZE_IN_BYTES == 0);
 
 C_ASSERT(sizeof(struct rtos_thread_execution_stack) %
-         SOC_MPU_REGION_ALIGNMENT(struct rtos_thread_execution_stack) == 0);
-C_ASSERT(sizeof(struct rtos_thread_execution_stack) % SOC_CACHE_LINE_SIZE_IN_BYTES == 0);
+         SOC_MPU_REGION_ALIGNMENT(struct __rtos_thread_execution_stack) == 0);
 
 /**
  * Block of parameters for creating a thread

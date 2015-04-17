@@ -91,14 +91,14 @@ C_ASSERT(ARRAY_SIZE(g_rtos_system_threads) <= RTOS_NUM_SYSTEM_THREADS_PER_CPU);
 /**
  * Array of execution stacks for system threads for each CPU core
  */
-struct rtos_thread_execution_stack g_rtos_system_threads_execution_stacks
-				    [SOC_NUM_CPU_CORES][RTOS_NUM_SYSTEM_THREADS_PER_CPU];
+static struct rtos_thread_execution_stack
+    g_rtos_system_threads_execution_stacks[SOC_NUM_CPU_CORES][RTOS_NUM_SYSTEM_THREADS_PER_CPU];
 
 /**
  * McRTOS global state variables
  */
 static struct McRTOS g_McRTOS =
-{
+{{
     .rts_signature = MCRTOS_SIGNATURE,
 
     .rts_release_secondary_cores = false,
@@ -107,6 +107,7 @@ static struct McRTOS g_McRTOS =
 
     .rts_next_free_interrupt_p = &g_McRTOS.rts_interrupts[0],
 
+#ifdef MCRTOS_PRIVATE_OBJECTS
     .rts_next_free_app_thread_p = &g_McRTOS.rts_app_threads[0],
 
     .rts_next_free_app_timer_p = &g_McRTOS.rts_app_timers[0],
@@ -126,6 +127,7 @@ static struct McRTOS g_McRTOS =
 #else
     .rts_next_free_app_object_pool_p = NULL,
 #endif
+#endif /* MCRTOS_PRIVATE_OBJECTS */
 
 #ifdef LCD_SUPPORTED
     .rts_current_lcd_channel = RTOS_COMMAND_LINE_LCD_CHANNEL,
@@ -140,7 +142,7 @@ static struct McRTOS g_McRTOS =
     .rts_app_hardware_init_called = false,
 
     RTOS_CPU_CONTROLLER_INITIALIZER(0),
-};
+}};
 
 /**
  * Access to the McRTOS global structure should be done through this pointer,

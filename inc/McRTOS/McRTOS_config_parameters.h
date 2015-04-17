@@ -150,16 +150,33 @@ C_ASSERT(RTOS_MAX_NUM_INTERRUPTS < SOC_NUM_INTERRUPT_CHANNELS);
 #   define RTOS_NUM_LCD_CHANNELS UINT8_C(3)
 #endif
 
-/**
- * Number of global MPU regions
- */
-#define RTOS_NUM_GLOBAL_MPU_REGIONS UINT8_C(4)
+#if __MPU_PRESENT == 1
+    /**
+     * Number of global MPU regions (besides the background region)
+     */
+#   define RTOS_NUM_GLOBAL_MPU_REGIONS UINT8_C(1)
 
-/**
- * Maximum number of MPU data regions used by the current
- * thread, including the thread's stack region.
- */
-#define RTOS_MAX_MPU_THREAD_DATA_REGIONS   UINT8_C(8)
+    /**
+     * Maximum number of MPU data regions used by the current
+     * thread, including the thread's stack region.
+     */
+#   define RTOS_MAX_MPU_THREAD_DATA_REGIONS   UINT8_C(7)
+
+#elif defined(K64F_SOC)
+    /**
+     * Number of global MPU regions
+     */
+#   define RTOS_NUM_GLOBAL_MPU_REGIONS UINT8_C(4)
+
+    /**
+     * Maximum number of MPU data regions used by the current
+     * thread, including the thread's stack region.
+     */
+#   define RTOS_MAX_MPU_THREAD_DATA_REGIONS   UINT8_C(8)
+
+#else
+#   error "No MPU supported"
+#endif /* __MPU_PRESENT == 1 */
 
 /**
  * Number of MPU regions required by McRTOS, including one

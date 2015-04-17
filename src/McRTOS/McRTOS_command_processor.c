@@ -13,7 +13,9 @@
 #include "failure_data_capture.h"
 #include "utils.h"
 #include "McRTOS_command_processor.h"
+#ifdef _NETWORKING_   
 #include <networking.h>
+#endif
 
 TODO("Remove these pragmas")
 #pragma GCC diagnostic ignored "-Wunused-function"
@@ -29,11 +31,13 @@ static const char *const keyword_table[] = {
     "clear",
     "cpu",
     "dmesg",
-    "gateway",
     "help",
+#ifdef _NETWORKING_   
+    "gateway",
     "ip4",
     "ip6",
     "ping",
+#endif    
     "reset",
     "set",
     "stack",
@@ -203,6 +207,7 @@ out:
 }
 
 
+#ifdef _NETWORKING_   
 bool
 parse_ip4_address(struct ipv4_address *ip_addr_p)
 {
@@ -485,39 +490,6 @@ parse_set_ip6_command(void)
 
 
 static void
-parse_set(void)
-{
-    token_t token = get_next_token(&g_tokenizer);
-
-    switch (token) {
-    case INVALID_TOKEN:
-	break;
-
-    case HELP:
-	console_printf(
-	    "\tset ip4 addr <IP addr>/<subnet prefix size>\n"
-	    "\tset ip6 addr <IP addr>/<subnet prefix size>\n"
-	    "\tset ip4 gateway <IP addr>\n"
-	    "\n");
-
-	break;
-
-    case IP4:
-	parse_set_ip4_command();
-        break;
-
-    case IP6:
-	parse_set_ip6_command();
-        break;
-
-    case END_OF_INPUT:
-    default:
-	console_printf("\'set\' command syntax error (type \'set help\')\n");
-	break;
-    }
-}
-
-static void
 cmd_ping_remote_ip4_addr(const struct ipv4_address *dest_ip_addr_p)
 {
     fdc_error_t fdc_error;
@@ -599,6 +571,44 @@ parse_ping(void)
     }
 }
 
+#endif /* _NETWORKING_ */  
+
+
+static void
+parse_set(void)
+{
+    token_t token = get_next_token(&g_tokenizer);
+
+    switch (token) {
+    case INVALID_TOKEN:
+	break;
+
+    case HELP:
+	console_printf(
+	    "\tset ip4 addr <IP addr>/<subnet prefix size>\n"
+	    "\tset ip6 addr <IP addr>/<subnet prefix size>\n"
+	    "\tset ip4 gateway <IP addr>\n"
+	    "\n");
+
+	break;
+
+#ifdef _NETWORKING_   
+    case IP4:
+	parse_set_ip4_command();
+        break;
+
+    case IP6:
+	parse_set_ip6_command();
+        break;
+#endif
+
+    case END_OF_INPUT:
+    default:
+	console_printf("\'set\' command syntax error (type \'set help\')\n");
+	break;
+    }
+}
+
 
 static void
 cmd_display_help(void)
@@ -609,7 +619,9 @@ cmd_display_help(void)
         "\tcpu - Switch to the given CPU\n"
         "\tdmesg - Display message log\n"
         "\thelp - display this message\n"
+#ifdef _NETWORKING_   
 	"\tping - send ping to a given IP address\n"
+#endif /* _NETWORKING_ */   
         "\treset - reset CPU\n"
         "\tset - Set config option\n"
         "\tstack - display stack trace of a given thread/ISR\n"
@@ -800,9 +812,11 @@ rtos_parse_command_line(const char *cmd_line)
         console_printf("%s\n%s\n", g_McRTOS_version, g_McRTOS_build_timestamp);
         break;
 
+#ifdef _NETWORKING_   
     case PING:
         parse_ping();
         break;
+#endif /* _NETWORKING_ */   
 
     case APP_COMMAND:
         for (i = 0; i < g_McRTOS_p->rts_num_app_console_commands; i++) {
@@ -901,6 +915,7 @@ McRTOS_display_stats(void)
             FDC_ASSERT(false, context_p->ctx_context_type, context_p);
         }
 
+#ifdef _CPU_CYCLES_MEASURE_
         console_printf(
 	    "%#8p %30s %c%7u %12u %10u %10u %14u %12u %7s %#x%x\n",
             context_p,
@@ -916,6 +931,21 @@ McRTOS_display_stats(void)
             context_p->ctx_switched_out_reason_history,
             context_p->ctx_last_switched_out_reason
         );
+#else
+        console_printf(
+	    "%#8p %30s %c%7u %12u %10u %12u %7s %#x%x\n",
+            context_p,
+            context_p->ctx_name_p,
+            context_type_symbol,
+            priority,
+            context_p->ctx_switched_out_counter,
+            context_p->ctx_preempted_counter,
+            context_p->ctx_last_switched_out_time_stamp_in_ticks,
+	    fpu_enabled,
+            context_p->ctx_switched_out_reason_history,
+            context_p->ctx_last_switched_out_reason
+        );
+#endif
     }
 
     if (!caller_was_privileged) {

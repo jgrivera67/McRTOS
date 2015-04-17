@@ -49,14 +49,14 @@ ifeq "$(PLATFORM)" "LPC2478-STK"
     CODETYPE = arm
 endif
 
-ifeq "$(PLATFORM)" "LM4F120-LaunchPad"
+ifeq "$(PLATFORM)" "LaunchPad-LM4F120"
     SYSTEM_ON_CHIP = LM4F120_SOC
     CPU_ARCHITECTURE = arm_cortex_m
     ARM_ARCH = armv7e-m
     ARM_CORE  = cortex-m4
     CODETYPE = thumb
-    # To enable code generation for hard FP:
-    #EXTRA_MCFLAGS = -mfloat-abi=hard -mfpu=fpv4-sp-d16
+    # See https://gcc.gnu.org/onlinedocs/gcc/ARM-Options.html
+    EXTRA_MCFLAGS = -mfloat-abi=softfp -mfpu=fpv4-sp-d16
 endif
 
 ifeq "$(PLATFORM)" "FRDM-KL25Z"
@@ -116,11 +116,14 @@ define make-library
 	$(AR) $(ARFLAGS) $$@ $$^
 endef
 
-modules      := \
-		McRTOS \
-		BoardSupport \
-		Networking \
-		Applications/$(APPLICATION)
+modules      :=	McRTOS \
+		BoardSupport
+
+ifeq "$(PLATFORM)" "FRDM-K64F"
+    modules +=	Networking
+endif
+
+modules +=	Applications/$(APPLICATION)
 
 #
 # NOTE: 'programs' is populated by included
@@ -158,13 +161,18 @@ ifeq "$(CPU_ARCHITECTURE)" "arm_cortex_m"
 endif
 
 CPPFLAGS     += $(addprefix -I ,$(include_dirs)) \
-		-D$(SYSTEM_ON_CHIP)
+		-D$(SYSTEM_ON_CHIP) \
+		-D_NETWORKING_   
 
 ifeq "$(BUILD_FLAVOR)" "debug"
     CPPFLAGS += -DDEBUG \
 		-D_RELIABILITY_CHECKS_ \
-		-D_BRANCH_MICRO_TRACING_ \
 		-D_CPU_CYCLES_MEASURE_
+
+    ifeq "$(PLATFORM)" "FRDM-KL25Z"
+	CPPFLAGS += -D_BRANCH_MICRO_TRACING_ 
+    endif
+
     OPT = -O0
 endif
 
@@ -179,6 +187,12 @@ ifeq "$(BUILD_FLAVOR)" "performance"
     #OPT can be -O1, -O2, -Os or -O3
     OPT = -O2
 endif
+
+ifeq "$(PLATFORM)" "LaunchPad-LM4F120"
+    # FIXME: Implement cycle measurement for LM4F120
+    CPPFLAGS += -U_CPU_CYCLES_MEASURE_ \
+		-U_NETWORKING_   
+endif    
 
 # optimisation level here -O0, -O1, -O2, -Os, or -03
 #MCFLAGS = 	-march=$(ARM_ARCH) -mtune=$(ARM_CORE) -m$(CODETYPE) $(EXTRA_MCFLAGS)

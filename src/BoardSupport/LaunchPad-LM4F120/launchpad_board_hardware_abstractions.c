@@ -23,7 +23,7 @@ static void push_buttons_init(void);
 /**
  * Launchpad board RGB LED pins
  */
-static struct pin_config_info g_lpad_rgb_led_pins[] = {
+static struct gpio_pin g_lpad_rgb_led_pins[] = {
     [LPAD_RED_LED] = PIN_COFIG_INFO_INITIALIZER(
 	    GPIO_PORTF_BASE,
             LPAD_RGB_LED_RED_PIN_INDEX,
@@ -51,7 +51,7 @@ C_ASSERT(ARRAY_SIZE(g_lpad_rgb_led_pins) == LPAD_NUM_RGB_LED_PINS);
 /**
  * Launchpad board button pins
  */
-static struct pin_config_info g_lpad_push_button_pins[] = {
+static struct gpio_pin g_lpad_push_button_pins[] = {
     [LPAD_SW1_BUTTON] = PIN_COFIG_INFO_INITIALIZER(
 	    GPIO_PORTF_BASE,
             LPAD_SW1_PIN_INDEX,
@@ -193,7 +193,7 @@ static void
 rgb_led_init(void)
 {
     for (int i = 0; i < LPAD_NUM_RGB_LED_PINS; i++) {
-        configure_pin(&g_lpad_rgb_led_pins[i], true);
+        configure_gpio_pin(&g_lpad_rgb_led_pins[i], 0, true);
         deactivate_output_pin(&g_lpad_rgb_led_pins[i]);
     }
 }
@@ -261,7 +261,7 @@ static void
 push_buttons_init(void)
 {
     for (int i = 0; i < LPAD_NUM_PUSH_BUTTONS; i++) {
-        configure_pin(&g_lpad_push_button_pins[i], false);
+        configure_gpio_pin(&g_lpad_push_button_pins[i], 0, false);
     }
 }
 
