@@ -265,28 +265,9 @@ zero_fill_uninitialized_data_section(void)
         } while (word_p != __uninitialized_data_end);
 }
 
-/**
- * Initializes the Cortex-M Memory Protection Unit (MPU) if available.
- * It returns true if MPU is present
- */
-bool
-cortex_m_mpu_present(void)
-{
-#if __MPU_PRESENT == 1
-    volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
-    uint32_t reg_value = read_32bit_mmio_register(&mpu_regs_p->TYPE);
-
-    uint32_t num_data_regions =
-        GET_BIT_FIELD(reg_value, MPU_TYPE_DREGION_Msk, MPU_TYPE_DREGION_Pos);
-
-    return (num_data_regions != 0x0);
-#else
-    return false;
-#endif
-}
-
 
 #if __MPU_PRESENT == 1
+
 static inline uint8_t
 log_base_2(uint32_t power_of_2_value)
 {
@@ -490,13 +471,10 @@ mpu_register_dma_region(
                  dma_bus_master, start_addr, size);
 }
 
-#endif /* __MPU_PRESENT */
-
 
 void
 cortex_m_mpu_init(void)
 {
-#if __MPU_PRESENT == 1
     C_ASSERT2(assert_soc_flash_base_aligned, SOC_FLASH_BASE % 32 == 0);
     C_ASSERT2(assert_soc_sram_base_aligned, SOC_SRAM_BASE % 32 == 0);
     C_ASSERT2(assert_enough_mpu_regions, RTOS_NUM_GLOBAL_MPU_REGIONS >= 1);
@@ -561,12 +539,10 @@ cortex_m_mpu_init(void)
     reg_value |= MPU_CTRL_ENABLE_Msk;
     write_32bit_mmio_register(&mpu_regs_p->CTRL, reg_value);
     mpu_var_p->initialized = true;
-    capture_fdc_msg_printf("Cortex-M MPU present (regions: %u)\n", g_mpu.var_p->num_regions);
-#else
-    FDC_ASSERT(false, 0, 0);
-#endif    
+    capture_fdc_msg_printf("Cortex-M MPU initialized (regions: %u)\n", g_mpu.var_p->num_regions);
 }
 
+#endif /* __MPU_PRESENT == 1 */
 
 /**
  * Initialize NVIC

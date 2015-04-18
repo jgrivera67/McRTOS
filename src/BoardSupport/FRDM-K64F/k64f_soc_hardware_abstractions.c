@@ -993,7 +993,7 @@ k64f_mpu_init(void)
      */
     write_32bit_mmio_register(&mpu_regs_p->CESR, MPU_CESR_VLD_MASK);
     mpu_var_p->initialized = true;
-    capture_fdc_msg_printf("K64F MPU present (regions: %u)\n", g_mpu.var_p->num_regions);
+    capture_fdc_msg_printf("K64F MPU initialized (regions: %u)\n", g_mpu.var_p->num_regions);
 }
 
 
@@ -1344,12 +1344,7 @@ soc_hardware_init(void)
     capture_fdc_msg_printf("SoC model: %#x, SoC ID: %x-%x-%x\n",
                            SIM_SDID, SIM_UIDMH, SIM_UIDML, SIM_UIDL);
 
-    if (cortex_m_mpu_present()) {
-        cortex_m_mpu_init();
-    } else {
-	k64f_mpu_init();
-    }
-
+    k64f_mpu_init();
     cortex_m_nvic_init();
 
     uart_init(

@@ -331,20 +331,14 @@ soc_hardware_init(void)
     init_cpu_clock_cycles_counter();
 #   endif
 
-    bool mpu_present = cortex_m_mpu_present();
-
-    if (mpu_present) {
-        cortex_m_mpu_init();
-    }
-
-    capture_fdc_msg_printf("MPU %s present\n", mpu_present ? "" : "not");
-
     cortex_m_nvic_init();
 
     uart_init(
         g_console_serial_port_p,
         CONSOLE_SERIAL_PORT_BAUD_RATE,
         CONSOLE_SERIAL_PORT_MODE);
+
+    cortex_m_mpu_init();
 
 #if 0
     i2c_init(g_i2c0_device_p);

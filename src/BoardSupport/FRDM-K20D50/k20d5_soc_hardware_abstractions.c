@@ -430,12 +430,6 @@ soc_hardware_init(void)
     init_cpu_clock_cycles_counter();
 #   endif
 
-    bool mpu_present = cortex_m_mpu_present();
-
-    if (mpu_present) {
-        cortex_m_mpu_init();
-    }
-
     cortex_m_nvic_init();
 
     uart_init(
@@ -446,7 +440,6 @@ soc_hardware_init(void)
     uart_putchar_with_polling(g_console_serial_port_p, '\r');
     uart_putchar_with_polling(g_console_serial_port_p, '\n');
     capture_fdc_msg_printf("Last reset cause: %#x\n", reset_cause);
-    capture_fdc_msg_printf("MPU %s present\n", mpu_present ? "" : "not");
 
     i2c_init(g_i2c0_device_p);
     return reset_cause;
