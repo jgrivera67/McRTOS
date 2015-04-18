@@ -3,6 +3,11 @@
  *  Default linker command file for Flash targets
  */
 
+/*
+ * MPU region alignment in bytes
+ */
+MPU_REGION_ALIGNMENT = 32;
+
 /* Entry Point */
 ENTRY(cortex_m_reset_handler)
 
@@ -37,7 +42,7 @@ SECTIONS
   /* The program code and other data goes into Flash */
   .text :
   {
-    . = ALIGN(4);
+    . = ALIGN(MPU_REGION_ALIGNMENT);
     __flash_text_start = .;
     *(.text)           /* .text sections (code) */
     *(.text*)          /* .text* sections (code) */
@@ -50,7 +55,7 @@ SECTIONS
     KEEP (*(.init))
     KEEP (*(.fini))
 
-    . = ALIGN(4);
+    . = ALIGN(MPU_REGION_ALIGNMENT);
     __flash_text_end = .;
     __flash_initialized_data_start = .;
   } >flash_text

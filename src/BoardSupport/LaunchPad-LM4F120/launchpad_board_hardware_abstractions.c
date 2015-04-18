@@ -201,6 +201,8 @@ rgb_led_init(void)
 void
 toggle_rgb_led(uint32_t led_color_mask)
 {
+    bool caller_was_privileged = rtos_enter_privileged_mode();
+
     g_rgb_led_current_mask ^= led_color_mask;
 
     for (int i = 0; i < LPAD_NUM_RGB_LED_PINS; i++) {
@@ -208,12 +210,18 @@ toggle_rgb_led(uint32_t led_color_mask)
             toggle_output_pin(&g_lpad_rgb_led_pins[i]);
         }
     }
+
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
+    }
 }
 
 
 void
 turn_on_rgb_led(uint32_t led_color_mask)
 {
+    bool caller_was_privileged = rtos_enter_privileged_mode();
+
     g_rgb_led_current_mask |= led_color_mask;
 
     for (int i = 0; i < LPAD_NUM_RGB_LED_PINS; i++) {
@@ -221,18 +229,28 @@ turn_on_rgb_led(uint32_t led_color_mask)
             activate_output_pin(&g_lpad_rgb_led_pins[i]);
         }
     }
+
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
+    }
 }
 
 
 void
 turn_off_rgb_led(uint32_t led_color_mask)
 {
+    bool caller_was_privileged = rtos_enter_privileged_mode();
+
     g_rgb_led_current_mask &= ~led_color_mask;
 
     for (int i = 0; i < LPAD_NUM_RGB_LED_PINS; i++) {
         if (g_lpad_rgb_led_pins[i].pin_bit_mask & led_color_mask) {
             deactivate_output_pin(&g_lpad_rgb_led_pins[i]);
         }
+    }
+
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
     }
 }
 
@@ -269,12 +287,18 @@ void
 launchpad_push_buttons_read(
         _OUT_ bool push_buttons[])
 {
+    bool caller_was_privileged = rtos_enter_privileged_mode();
+
     /*
      * In the Launchpad board, a button is pressed when the
      * corresponding input pin reads as 0.
      */
     for (int i = 0; i < LPAD_NUM_PUSH_BUTTONS; i++) {
         push_buttons[i] = !read_input_pin(&g_lpad_push_button_pins[i]);
+    }
+
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
     }
 }
 

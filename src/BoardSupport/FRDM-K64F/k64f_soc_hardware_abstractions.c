@@ -1344,7 +1344,6 @@ soc_hardware_init(void)
     capture_fdc_msg_printf("SoC model: %#x, SoC ID: %x-%x-%x\n",
                            SIM_SDID, SIM_UIDMH, SIM_UIDML, SIM_UIDL);
 
-    k64f_mpu_init();
     cortex_m_nvic_init();
 
     uart_init(
@@ -1357,6 +1356,7 @@ soc_hardware_init(void)
 		 g_console_serial_port_p->urt_var_p->urt_tx_fifo_size,
 		 g_console_serial_port_p->urt_var_p->urt_rx_fifo_size);
 
+    k64f_mpu_init();
     i2c_init(&g_i2c_devices[0]);
     crc_init();
     enet_init(&g_enet_device0);

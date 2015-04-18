@@ -104,7 +104,7 @@ static const struct rtos_startup_app_configuration g_rtos_app_config =
 /**
  * Application state variables
  */
-struct app_state_vars {
+struct __app_state_vars {
     /**
      * Push buttons state
      */
@@ -115,6 +115,12 @@ struct app_state_vars {
      */
     volatile uint32_t led_color_mask;
 };
+
+struct app_state_vars {
+    struct __app_state_vars;
+} __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT(struct __app_state_vars))));
+
+C_ASSERT(sizeof(struct app_state_vars) % SOC_MPU_REGION_ALIGNMENT(struct __app_state_vars) == 0);
 
 static struct app_state_vars g_app;
 

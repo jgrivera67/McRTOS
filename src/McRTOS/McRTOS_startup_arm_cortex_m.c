@@ -268,6 +268,25 @@ zero_fill_uninitialized_data_section(void)
 
 #if __MPU_PRESENT == 1
 
+static bool
+is_power_of_2(uint32_t value)
+{
+#   if __CORTEX_M >= 0x03
+    uint32_t log_value = 31 - __CLZ(value);
+
+    return (value == BIT(log_value));
+#   else        
+    for (uint32_t log_value = 31; log_value != 0; log_value ++) {
+        if (value == BIT(log_value)) {
+            return true;
+        }
+    }
+
+    return (value == 1);
+#   endif    
+}
+
+
 static inline uint8_t
 log_base_2(uint32_t power_of_2_value)
 {
@@ -276,14 +295,12 @@ log_base_2(uint32_t power_of_2_value)
 #   if __CORTEX_M >= 0x03
     uint32_t log_value = 31 - __CLZ(power_of_2_value);
 
-    DEBUG_PRINTF("*** Log base 2 of %u is %u\n", power_of_2_value, log_value); //???
     if (power_of_2_value == BIT(log_value)) {
         return (uint8_t)log_value;
     }
 #   else        
     for (uint32_t log_value = 5; log_value <= 31; log_value ++) {
         if (power_of_2_value == BIT(log_value)) {
-            DEBUG_PRINTF("*** Log base 2 of %u is %u\n", power_of_2_value, log_value); //???
             return (uint8_t)log_value;
         }
     }
@@ -315,9 +332,11 @@ cortex_m_set_mpu_region(
 
     size_t region_size = (uintptr_t)end_addr - (uintptr_t)start_addr;
 
-    DBG_ASSERT(region_size % MIN_MPU_REGION_ALIGNMENT == 0 &&
-	       (uintptr_t)start_addr % region_size == 0,
-	       start_addr, region_size);
+    DBG_ASSERT((uintptr_t)start_addr % MIN_MPU_REGION_ALIGNMENT == 0 &&
+               (uintptr_t)end_addr % MIN_MPU_REGION_ALIGNMENT == 0,
+	       start_addr, end_addr);
+
+    DBG_ASSERT(is_power_of_2(region_size), region_size, 0);
 
     uint8_t encoded_region_size = log_base_2(region_size) - 1;
 
@@ -483,6 +502,7 @@ cortex_m_mpu_init(void)
     extern uint32_t __flash_text_end[];
 
     uint32_t reg_value;
+    void *start_addr;
 
     FDC_ASSERT(
         g_mpu.signature == MPU_DEVICE_SIGNATURE,
@@ -522,9 +542,15 @@ cortex_m_mpu_init(void)
     /* 
      * Make region 0, the code in flash to be executable in unprivileged mode
      */
+    if (is_power_of_2((uintptr_t)__flash_text_end - (uintptr_t)__flash_text_start)) {
+        start_addr = __flash_text_start;
+    } else {
+        start_addr = (void *)0x0;
+    }
+
     for (cpu_id_t cpu_id = 0; cpu_id < SOC_NUM_CPU_CORES; cpu_id ++) {
 	cortex_m_set_mpu_region(mpu_var_p, mpu_regs_p, 0,
-			       (void *)__flash_text_start,
+			       start_addr,
 			       (void *)__flash_text_end,
 			       UNPRIVILEGED_READ_MASK |
                                UNPRIVILEGED_EXEC_MASK);

@@ -1202,7 +1202,7 @@ struct networking {
     struct __networking;
 } __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT(struct __networking))));
 
-C_ASSERT(sizeof(struct networking)% SOC_MPU_REGION_ALIGNMENT(struct __networking) == 0);
+C_ASSERT(sizeof(struct networking) % SOC_MPU_REGION_ALIGNMENT(struct __networking) == 0);
 
 C_ASSERT(NET_MAX_IPV4_PACKET_PAYLOAD_SIZE <= UINT16_MAX - sizeof(struct ipv4_header));
 
