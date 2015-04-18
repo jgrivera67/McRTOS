@@ -10,8 +10,9 @@ $env:ide_env_dir = "$base_dir/$project/env"
 $env:ide_shell_rc_file="$env:ide_env_dir/$env:application`_$env:platform`_$env:build_flavor`_ide_env.ps1"
 $env:ide_vim_session = "$env:ide_env_dir/$env:application`_$env:platform.vim"
 $env:default_obj_flavor_subdir = "$env:platform`-obj-$env:build_flavor"
-$env:bin_file = "$env:default_obj_flavor_subdir/Applications/$env:application/$env:application.bin"
 $env:bin_file_prefix = "$env:default_obj_flavor_subdir/Applications/$env:application/$env:application"
+$env:bin_file = "$env:bin_file_prefix.bin"
+$env:elf_file = "$env:bin_file_prefix.elf"
 
 $env:makefile_dir = "$env:src_tree_dir"
 
