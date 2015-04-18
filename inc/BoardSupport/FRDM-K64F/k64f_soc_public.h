@@ -376,18 +376,4 @@ struct gpio_pin {
     uint8_t pin_is_active_high; /*  false - low, true - high */
 };
 
-void micro_trace_init(void);
-
-void micro_trace_stop(void);
-
-void micro_trace_restart(void);
-
-void micro_trace_get_cursor(uint64_t **mtb_cursor_pp, bool *mtb_cursor_wrapped_p);
-
-/*
- * Variables defined in K64F_SOC-flash.ld
- */
-extern uint64_t __micro_trace_buffer[];
-extern uint64_t __micro_trace_buffer_end[];
-
 #endif /* __K64F_SOC_PUBLIC_H */
