@@ -22,7 +22,7 @@ badd +134 src\McRTOS\McRTOS_kernel_services.c
 badd +15 src\McRTOS\McRTOS_crt_armv4.s
 badd +508 src\McRTOS\McRTOS_kernel_services_armv4.s
 badd +415 inc\McRTOS\McRTOS_kernel_services.h
-badd +1 src\McRTOS\McRTOS_execution_controller.c
+badd +335 src\McRTOS\McRTOS_execution_controller.c
 badd +318 src\BoardSupport\LPC2478-STK\lpc2478_interrupt_handlers.s
 badd +4 src\McRTOS\McRTOS_interrupt_handlers_armv4.s
 badd +137 src\McRTOS\McRTOS_interrupt_service_routines_armv4.s
@@ -60,7 +60,7 @@ badd +340 inc\BoardSupport\CMSIS\core_cmFunc.h
 badd +1559 inc\BoardSupport\FRDM-KL25Z\MKL25Z4.h
 badd +31 prj\temp.ld
 badd +1 src\McRTOS\McRTOS_crt_armv6-m.S
-badd +435 src\McRTOS\McRTOS_startup_arm_cortex_m.c
+badd +476 src\McRTOS\McRTOS_startup_arm_cortex_m.c
 badd +513 src\BoardSupport\FRDM-KL25Z\frdm_kl25z_hardware_abstractions.c
 badd +87 inc\McRTOS\McRTOS_startup_arm_cortex_m.h
 badd +101 inc\McRTOS\McRTOS_arm_cortex_m.h
@@ -100,12 +100,12 @@ badd +20 inc\BoardSupport\FRDM-K64F\MK64F12.h
 badd +48 inc\BoardSupport\CMSIS\core_cm4.h
 badd +115 \Users\b46482\embsys\projects\McRTOS\inc\BoardSupport\FRDM-K20D50\k20d5_soc_public.h
 badd +12 prj\K64F_SOC-flash.ld
-badd +203 src\BoardSupport\FRDM-K64F\frdm_board_hardware_abstractions.c
+badd +8 src\BoardSupport\FRDM-K64F\frdm_board_hardware_abstractions.c
 badd +51 src\Applications\frdm_demo\main.c
 badd +611 src\BoardSupport\LPC2478-STK\lpc2478_ethernet.c
 badd +259 \Users\b46482\ide\vimrc.vim
 badd +498 \Users\b46482\embsys\projects\McRTOS\inc\BoardSupport\LPC2478-STK\lpc2478_ethernet.h
-badd +806 src\BoardSupport\FRDM-K64F\k64f_soc_enet.c
+badd +780 src\BoardSupport\FRDM-K64F\k64f_soc_enet.c
 badd +1 src\Applications\frdm_demo\module.mk
 badd +1 src\McRTOS_tcpip\module.mk
 badd +18 src\McRTOS_tcpip\McRTOS_tcpip.c
@@ -127,10 +127,10 @@ badd +1 inc\BoardSupport\FRDM-K64F\k64f_soc_enet.h
 badd +1 src\McRTOS\McRTOS_command_processor.c
 badd +1 inc\McRTOS\McRTOS_command_processor.h
 badd +1 inc\BoardSupport\FRDM-K64F\k64f_soc_public.h
-badd +760 src\BoardSupport\LaunchPad-LM4F120\lm4f120_soc_hardware_abstractions.c
-badd +90 ~\MyProjects\EMBSYS\projects\McRTOS\src\BoardSupport\LaunchPad-LM4F120\launchpad_board_hardware_abstractions.c
+badd +778 src\BoardSupport\LaunchPad-LM4F120\lm4f120_soc_hardware_abstractions.c
+badd +90 src\BoardSupport\LaunchPad-LM4F120\launchpad_board_hardware_abstractions.c
 badd +1 prj\LM4F120_SOC-flash.ld
-badd +0 src\Applications\launchpad_demo\main.c
+badd +221 src\Applications\launchpad_demo\main.c
 silent! argdel *
 set lines=54 columns=207
 winpos 0 0
@@ -152,7 +152,10 @@ wincmd _ | wincmd |
 split
 wincmd _ | wincmd |
 split
-4wincmd k
+wincmd _ | wincmd |
+split
+5wincmd k
+wincmd w
 wincmd w
 wincmd w
 wincmd w
@@ -171,10 +174,12 @@ exe '4resize ' . ((&lines * 21 + 27) / 54)
 exe 'vert 4resize ' . ((&columns * 80 + 103) / 207)
 exe '5resize ' . ((&lines * 1 + 27) / 54)
 exe 'vert 5resize ' . ((&columns * 80 + 103) / 207)
-exe '6resize ' . ((&lines * 14 + 27) / 54)
+exe '6resize ' . ((&lines * 6 + 27) / 54)
 exe 'vert 6resize ' . ((&columns * 80 + 103) / 207)
-exe '7resize ' . ((&lines * 4 + 27) / 54)
+exe '7resize ' . ((&lines * 1 + 27) / 54)
 exe 'vert 7resize ' . ((&columns * 80 + 103) / 207)
+exe '8resize ' . ((&lines * 10 + 27) / 54)
+exe 'vert 8resize ' . ((&columns * 80 + 103) / 207)
 argglobal
 setlocal fdm=manual
 setlocal fde=0
@@ -185,12 +190,12 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 silent! normal! zE
-let s:l = 221 - ((11 * winheight(0) + 12) / 24)
+let s:l = 282 - ((12 * winheight(0) + 12) / 24)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-221
-normal! 045|
+282
+normal! 020|
 wincmd w
 argglobal
 edit prj\LM4F120_SOC-flash.ld
@@ -275,7 +280,7 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 silent! normal! zE
-let s:l = 19 - ((0 * winheight(0) + 7) / 14)
+let s:l = 19 - ((0 * winheight(0) + 3) / 6)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
@@ -293,12 +298,23 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 silent! normal! zE
-let s:l = 33 - ((0 * winheight(0) + 2) / 4)
+let s:l = 33 - ((0 * winheight(0) + 0) / 1)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
 33
 normal! 062|
+wincmd w
+argglobal
+enew
+setlocal fdm=manual
+setlocal fde=0
+setlocal fmr={{{,}}}
+setlocal fdi=#
+setlocal fdl=0
+setlocal fml=1
+setlocal fdn=20
+setlocal fen
 wincmd w
 exe '1resize ' . ((&lines * 24 + 27) / 54)
 exe 'vert 1resize ' . ((&columns * 126 + 103) / 207)
@@ -310,10 +326,12 @@ exe '4resize ' . ((&lines * 21 + 27) / 54)
 exe 'vert 4resize ' . ((&columns * 80 + 103) / 207)
 exe '5resize ' . ((&lines * 1 + 27) / 54)
 exe 'vert 5resize ' . ((&columns * 80 + 103) / 207)
-exe '6resize ' . ((&lines * 14 + 27) / 54)
+exe '6resize ' . ((&lines * 6 + 27) / 54)
 exe 'vert 6resize ' . ((&columns * 80 + 103) / 207)
-exe '7resize ' . ((&lines * 4 + 27) / 54)
+exe '7resize ' . ((&lines * 1 + 27) / 54)
 exe 'vert 7resize ' . ((&columns * 80 + 103) / 207)
+exe '8resize ' . ((&lines * 10 + 27) / 54)
+exe 'vert 8resize ' . ((&columns * 80 + 103) / 207)
 tabedit src\McRTOS\McRTOS_startup_arm_cortex_m.c
 set splitbelow splitright
 wincmd _ | wincmd |
@@ -985,10 +1003,7 @@ vsplit
 1wincmd h
 wincmd _ | wincmd |
 split
-wincmd _ | wincmd |
-split
-2wincmd k
-wincmd w
+1wincmd k
 wincmd w
 wincmd w
 wincmd _ | wincmd |
@@ -1011,24 +1026,22 @@ set nosplitbelow
 set nosplitright
 wincmd t
 set winheight=1 winwidth=1
-exe '1resize ' . ((&lines * 28 + 27) / 54)
+exe '1resize ' . ((&lines * 25 + 27) / 54)
 exe 'vert 1resize ' . ((&columns * 134 + 103) / 207)
-exe '2resize ' . ((&lines * 18 + 27) / 54)
+exe '2resize ' . ((&lines * 25 + 27) / 54)
 exe 'vert 2resize ' . ((&columns * 134 + 103) / 207)
-exe '3resize ' . ((&lines * 3 + 27) / 54)
-exe 'vert 3resize ' . ((&columns * 134 + 103) / 207)
-exe '4resize ' . ((&lines * 9 + 27) / 54)
+exe '3resize ' . ((&lines * 9 + 27) / 54)
+exe 'vert 3resize ' . ((&columns * 72 + 103) / 207)
+exe '4resize ' . ((&lines * 10 + 27) / 54)
 exe 'vert 4resize ' . ((&columns * 72 + 103) / 207)
-exe '5resize ' . ((&lines * 10 + 27) / 54)
+exe '5resize ' . ((&lines * 7 + 27) / 54)
 exe 'vert 5resize ' . ((&columns * 72 + 103) / 207)
-exe '6resize ' . ((&lines * 7 + 27) / 54)
+exe '6resize ' . ((&lines * 9 + 27) / 54)
 exe 'vert 6resize ' . ((&columns * 72 + 103) / 207)
-exe '7resize ' . ((&lines * 9 + 27) / 54)
+exe '7resize ' . ((&lines * 1 + 27) / 54)
 exe 'vert 7resize ' . ((&columns * 72 + 103) / 207)
-exe '8resize ' . ((&lines * 1 + 27) / 54)
+exe '8resize ' . ((&lines * 10 + 27) / 54)
 exe 'vert 8resize ' . ((&columns * 72 + 103) / 207)
-exe '9resize ' . ((&lines * 10 + 27) / 54)
-exe 'vert 9resize ' . ((&columns * 72 + 103) / 207)
 argglobal
 setlocal fdm=manual
 setlocal fde=0
@@ -1039,7 +1052,7 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 silent! normal! zE
-let s:l = 758 - ((9 * winheight(0) + 14) / 28)
+let s:l = 758 - ((8 * winheight(0) + 12) / 25)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
@@ -1047,7 +1060,7 @@ normal! zt
 normal! 0
 wincmd w
 argglobal
-edit src\BoardSupport\FRDM-K64F\k64f_soc_enet.c
+edit src\BoardSupport\LaunchPad-LM4F120\launchpad_board_hardware_abstractions.c
 setlocal fdm=manual
 setlocal fde=0
 setlocal fmr={{{,}}}
@@ -1057,29 +1070,11 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 silent! normal! zE
-let s:l = 772 - ((7 * winheight(0) + 9) / 18)
+let s:l = 120 - ((12 * winheight(0) + 12) / 25)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-772
-normal! 0
-wincmd w
-argglobal
-edit src\BoardSupport\FRDM-K64F\frdm_board_hardware_abstractions.c
-setlocal fdm=manual
-setlocal fde=0
-setlocal fmr={{{,}}}
-setlocal fdi=#
-setlocal fdl=0
-setlocal fml=1
-setlocal fdn=20
-setlocal fen
-silent! normal! zE
-let s:l = 8 - ((1 * winheight(0) + 1) / 3)
-if s:l < 1 | let s:l = 1 | endif
-exe s:l
-normal! zt
-8
+120
 normal! 0
 wincmd w
 argglobal
@@ -1176,24 +1171,23 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 wincmd w
-exe '1resize ' . ((&lines * 28 + 27) / 54)
+2wincmd w
+exe '1resize ' . ((&lines * 25 + 27) / 54)
 exe 'vert 1resize ' . ((&columns * 134 + 103) / 207)
-exe '2resize ' . ((&lines * 18 + 27) / 54)
+exe '2resize ' . ((&lines * 25 + 27) / 54)
 exe 'vert 2resize ' . ((&columns * 134 + 103) / 207)
-exe '3resize ' . ((&lines * 3 + 27) / 54)
-exe 'vert 3resize ' . ((&columns * 134 + 103) / 207)
-exe '4resize ' . ((&lines * 9 + 27) / 54)
+exe '3resize ' . ((&lines * 9 + 27) / 54)
+exe 'vert 3resize ' . ((&columns * 72 + 103) / 207)
+exe '4resize ' . ((&lines * 10 + 27) / 54)
 exe 'vert 4resize ' . ((&columns * 72 + 103) / 207)
-exe '5resize ' . ((&lines * 10 + 27) / 54)
+exe '5resize ' . ((&lines * 7 + 27) / 54)
 exe 'vert 5resize ' . ((&columns * 72 + 103) / 207)
-exe '6resize ' . ((&lines * 7 + 27) / 54)
+exe '6resize ' . ((&lines * 9 + 27) / 54)
 exe 'vert 6resize ' . ((&columns * 72 + 103) / 207)
-exe '7resize ' . ((&lines * 9 + 27) / 54)
+exe '7resize ' . ((&lines * 1 + 27) / 54)
 exe 'vert 7resize ' . ((&columns * 72 + 103) / 207)
-exe '8resize ' . ((&lines * 1 + 27) / 54)
+exe '8resize ' . ((&lines * 10 + 27) / 54)
 exe 'vert 8resize ' . ((&columns * 72 + 103) / 207)
-exe '9resize ' . ((&lines * 10 + 27) / 54)
-exe 'vert 9resize ' . ((&columns * 72 + 103) / 207)
 tabedit inc\BoardSupport\FRDM-K64F\MK64F12.h
 set splitbelow splitright
 wincmd _ | wincmd |
@@ -1314,6 +1308,7 @@ normal! zt
 367
 normal! 059|
 wincmd w
+2wincmd w
 exe '1resize ' . ((&lines * 15 + 27) / 54)
 exe 'vert 1resize ' . ((&columns * 135 + 103) / 207)
 exe '2resize ' . ((&lines * 26 + 27) / 54)
@@ -1421,6 +1416,7 @@ normal! zt
 8
 normal! 0
 wincmd w
+2wincmd w
 exe '1resize ' . ((&lines * 47 + 27) / 54)
 exe 'vert 1resize ' . ((&columns * 117 + 103) / 207)
 exe '2resize ' . ((&lines * 3 + 27) / 54)
@@ -1429,7 +1425,7 @@ exe '3resize ' . ((&lines * 35 + 27) / 54)
 exe 'vert 3resize ' . ((&columns * 89 + 103) / 207)
 exe '4resize ' . ((&lines * 15 + 27) / 54)
 exe 'vert 4resize ' . ((&columns * 89 + 103) / 207)
-tabnext 1
+tabnext 8
 if exists('s:wipebuf')
   silent exe 'bwipe ' . s:wipebuf
 endif

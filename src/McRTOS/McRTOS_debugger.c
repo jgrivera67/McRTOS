@@ -153,6 +153,22 @@ rtos_common_fault_exception_handler(
 }
 
 
+static uint32_t g_before_debugger_led_color = LED_COLOR_BLACK;
+
+static void
+turn_on_debugger_led(void)
+{
+    g_before_debugger_led_color = set_rgb_led_color(LED_COLOR_RED);
+}
+
+
+static void
+turn_off_debugger_led(void)
+{
+    set_rgb_led_color(g_before_debugger_led_color);
+}
+
+
 /**
  * Runs a command-line low-level debugger on the console serial port
  *

@@ -1431,7 +1431,15 @@ find_reset_cause(void)
 bool
 software_reset_happened(void)
 {
-    return ((RCM_SRS1 & RCM_SRS1_SW_MASK) != 0);
+    bool caller_was_privileged = rtos_enter_privileged_mode();
+    
+    bool result = ((RCM_SRS1 & RCM_SRS1_SW_MASK) != 0);
+
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
+    }
+
+    return result;
 }
 
 
@@ -1521,6 +1529,10 @@ configure_gpio_pin(const struct gpio_pin *gpio_pin_p, uint32_t pin_flags,
 {
     uint32_t reg_value;
 
+    bool caller_was_privileged = rtos_enter_privileged_mode();
+
+    cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
+
     set_pin_function(&gpio_pin_p->pin_info, pin_flags);
 
     volatile GPIO_Type *gpio_regs_p =
@@ -1535,6 +1547,12 @@ configure_gpio_pin(const struct gpio_pin *gpio_pin_p, uint32_t pin_flags,
         reg_value &= ~gpio_pin_p->pin_bit_mask;
         write_32bit_mmio_register(&gpio_regs_p->PDDR, reg_value);
     }
+
+    rtos_k_restore_cpu_interrupts(cpu_status_register);
+
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
+    }
 }
 
 
@@ -1543,6 +1561,8 @@ activate_output_pin(const struct gpio_pin *gpio_pin_p)
 {
     volatile GPIO_Type *gpio_regs_p =
 	g_pin_config_registers[gpio_pin_p->pin_info.pin_port].pin_gpio_regs_p;
+
+    bool caller_was_privileged = rtos_enter_privileged_mode();
 
 #   ifdef DEBUG
     uint32_t reg_value = read_32bit_mmio_register(&gpio_regs_p->PDDR);
@@ -1558,6 +1578,10 @@ activate_output_pin(const struct gpio_pin *gpio_pin_p)
         write_32bit_mmio_register(
             &gpio_regs_p->PCOR, gpio_pin_p->pin_bit_mask);
     }
+
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
+    }
 }
 
 
@@ -1566,6 +1590,8 @@ deactivate_output_pin(const struct gpio_pin *gpio_pin_p)
 {
     volatile GPIO_Type *gpio_regs_p =
 	g_pin_config_registers[gpio_pin_p->pin_info.pin_port].pin_gpio_regs_p;
+
+    bool caller_was_privileged = rtos_enter_privileged_mode();
 
 #   ifdef DEBUG
     uint32_t reg_value = read_32bit_mmio_register(&gpio_regs_p->PDDR);
@@ -1580,6 +1606,10 @@ deactivate_output_pin(const struct gpio_pin *gpio_pin_p)
     } else {
         write_32bit_mmio_register(&gpio_regs_p->PSOR, gpio_pin_p->pin_bit_mask);
     }
+
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
+    }
 }
 
 
@@ -1588,6 +1618,8 @@ toggle_output_pin(const struct gpio_pin *gpio_pin_p)
 {
     volatile GPIO_Type *gpio_regs_p =
 	g_pin_config_registers[gpio_pin_p->pin_info.pin_port].pin_gpio_regs_p;
+
+    bool caller_was_privileged = rtos_enter_privileged_mode();
 
 #   ifdef DEBUG
     uint32_t reg_value = read_32bit_mmio_register(&gpio_regs_p->PDDR);
@@ -1599,6 +1631,10 @@ toggle_output_pin(const struct gpio_pin *gpio_pin_p)
 
     write_32bit_mmio_register(
         &gpio_regs_p->PTOR, gpio_pin_p->pin_bit_mask);
+
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
+    }
 }
 
 
@@ -1608,32 +1644,17 @@ read_input_pin(const struct gpio_pin *gpio_pin_p)
     volatile GPIO_Type *gpio_regs_p =
 	g_pin_config_registers[gpio_pin_p->pin_info.pin_port].pin_gpio_regs_p;
 
+    bool caller_was_privileged = rtos_enter_privileged_mode();
+
     uint32_t reg_value = read_32bit_mmio_register(&gpio_regs_p->PDIR);
 
-    return (reg_value & gpio_pin_p->pin_bit_mask) != 0;
-}
+    bool result = ((reg_value & gpio_pin_p->pin_bit_mask) != 0);
 
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
+    }
 
-void
-toggle_heartbeat_led(void)
-{
-    toggle_rgb_led(LED_COLOR_BLUE);
-}
-
-
-static uint32_t g_before_debugger_led_color = LED_COLOR_BLACK;
-
-void
-turn_on_debugger_led(void)
-{
-    g_before_debugger_led_color = set_rgb_led_color(LED_COLOR_RED);
-}
-
-
-void
-turn_off_debugger_led(void)
-{
-    set_rgb_led_color(g_before_debugger_led_color);
+    return result;
 }
 
 

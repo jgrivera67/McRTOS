@@ -332,6 +332,13 @@ void rtos_thread_scheduler(
 }
 
 
+static inline void
+toggle_heartbeat_led(void)
+{
+    toggle_rgb_led(LED_COLOR_BLUE);
+}
+
+
 /**
  * Per-CPU tick timer handler. This function is invoked from the
  * tick timer ISR.

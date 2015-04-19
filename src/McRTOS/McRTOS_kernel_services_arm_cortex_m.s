@@ -15,6 +15,7 @@
 .global rtos_k_enter_debugger_saving_current_context
 .global rtos_enter_privileged_mode
 .global rtos_exit_privileged_mode
+.global rtos_in_privileged_mode
 
 .extern fdc_trace_rtos_context_switch
 .extern rtos_start_interrupts_disabled_time_measure
@@ -415,6 +416,42 @@ rtos_exit_privileged_mode:
     isb
 
     bx	    lr
+.endfunc
+
+/**
+ * Tell if caller is privileged. It returns true if the CPU is 
+ * in privileged mode, and false otherwise.
+ *
+ * bool
+ * rtos_in_privileged_mode(void)
+ */
+.thumb_func
+.func rtos_in_privileged_mode
+
+rtos_in_privileged_mode:
+    /*
+     * Check if caller is an ISR:
+     */
+    mrs	    r0, ipsr
+    mov	    r1, #CPU_REG_IPSR_EXCEPTION_NUMBER_MASK
+    tst	    r0, r1
+    beq	    1f  /* check for unprivileged thread */
+
+    mov     r0, #1
+    bx      lr
+
+1:  /* check for unprivileged thread */ 
+    mrs	    r0, control
+    mov	    r1, #CPU_REG_CONTROL_nPRIV_MASK
+    tst	    r0, r1
+    bne	    2f  /* caller is unprivileged */
+
+    mov     r0, #1
+    bx      lr
+
+2: /* caller is unprivileged */
+    mov     r0, #0
+    bx      lr
 .endfunc
 
 .end

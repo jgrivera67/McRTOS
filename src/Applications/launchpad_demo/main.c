@@ -278,11 +278,12 @@ led_flashing_thread_f(void *arg)
 
     for ( ; ; ) {
 	if (led_color_mask != g_app.led_color_mask) {
-	    turn_off_rgb_led(led_color_mask);
 	    led_color_mask = g_app.led_color_mask;
-	}
+	    (void)set_rgb_led_color(led_color_mask);
+	} else {
+            toggle_rgb_led(led_color_mask);
+        }
 
-	toggle_rgb_led(led_color_mask);
         rtos_thread_delay(100);
 	toggle_rgb_led(led_color_mask);
         rtos_thread_delay(500);

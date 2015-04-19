@@ -273,10 +273,6 @@ rtos_startup(
     {
         g_McRTOS_p->rts_soc_reset_cause = soc_hardware_init();
 
-        g_McRTOS_p->rts_app_hardware_init_p();
-
-        g_McRTOS_p->rts_app_hardware_init_called = true;
-
 #       ifdef _BRANCH_MICRO_TRACING_
         micro_trace_init();
 #       endif
@@ -535,6 +531,10 @@ rtos_root_thread_f(void *arg)
         }
 
         console_printf("%s\n%s\n", g_McRTOS_version, g_McRTOS_build_timestamp);
+
+#       ifdef LCD_SUPPORTED
+            lcd_display_greetings();
+#       endif
     }
 
     console_printf("CPU core %u: %s started\n", cpu_id,
@@ -562,17 +562,20 @@ rtos_root_thread_f(void *arg)
             g_rtos_system_threads[i].p_name_p);
     }
 
-    /*
-     * Do application-specific initialization:
-     */
-    g_McRTOS_p->rts_app_software_init_p();
-
     if (cpu_id == 0)
     {
-#       ifdef LCD_SUPPORTED
-            lcd_display_greetings();
-#       endif
+        /*
+         * Do application-specific hardware initialization:
+         */
+        g_McRTOS_p->rts_app_hardware_init_p();
+
+        g_McRTOS_p->rts_app_hardware_init_called = true;
     }
+
+    /*
+     * Do application-specific software initialization:
+     */
+    g_McRTOS_p->rts_app_software_init_p();
 
     /*
      * Lower priority of the root system thread, so that the root system

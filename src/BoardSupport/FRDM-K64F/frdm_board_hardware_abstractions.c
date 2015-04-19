@@ -68,7 +68,25 @@ static const struct gpio_pin g_frdm_rgb_led_pins[] = {
 
 C_ASSERT(ARRAY_SIZE(g_frdm_rgb_led_pins) == FRDM_NUM_RGB_LED_PINS);
 
-static uint32_t g_rgb_led_current_mask = 0x0;
+/**
+ * Board state variables:
+ */
+struct __frdm_board {
+    bool rgb_led_initialized;
+    uint32_t rgb_led_current_mask;
+};
+
+struct frdm_board {
+    struct __frdm_board;
+} __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT(struct __frdm_board))));
+
+C_ASSERT(sizeof(struct frdm_board) % SOC_MPU_REGION_ALIGNMENT(struct __frdm_board) == 0);
+
+static struct frdm_board g_frdm_board = {{
+    .rgb_led_initialized = false,
+    .rgb_led_current_mask = 0x0,
+}};
+
 
 /**
  * Global non-const structure for accelerometer device
@@ -122,6 +140,8 @@ static const struct accelerometer_device g_accelerometer = {
 void
 frdm_board_init(void)
 {
+    bool caller_was_privileged = rtos_enter_privileged_mode();
+
     rgb_led_init();
 
     #ifdef DEBUG
@@ -137,6 +157,10 @@ frdm_board_init(void)
         (void)set_rgb_led_color(LED_COLOR_BLACK);
     }
 #   endif
+
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
+    }
 }
 
 
@@ -150,48 +174,45 @@ frdm_board_stop(void)
 static void
 rgb_led_init(void)
 {
+    FDC_ASSERT(!g_frdm_board.rgb_led_initialized, 0, 0);
+
     for (int i = 0; i < FRDM_NUM_RGB_LED_PINS; i++) {
         configure_gpio_pin(&g_frdm_rgb_led_pins[i], 0, true);
         deactivate_output_pin(&g_frdm_rgb_led_pins[i]);
     }
+
+    g_frdm_board.rgb_led_initialized = true;
 }
 
 
 void
 toggle_rgb_led(uint32_t led_color_mask)
 {
-    g_rgb_led_current_mask ^= led_color_mask;
+    fdc_error_t fdc_error;
+    bool region_added = false;
+    
+    if (!rtos_in_privileged_mode()) {
+        fdc_error = rtos_mpu_add_thread_data_region(&g_frdm_board,
+                                                    sizeof g_frdm_board,
+                                                    false);
+        FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+        region_added = true;
+    }
+
+    if (!g_frdm_board.rgb_led_initialized) {
+        return;
+    }
+
+    g_frdm_board.rgb_led_current_mask ^= led_color_mask;
 
     for (int i = 0; i < FRDM_NUM_RGB_LED_PINS; i++) {
         if (g_frdm_rgb_led_pins[i].pin_bit_mask & led_color_mask) {
             toggle_output_pin(&g_frdm_rgb_led_pins[i]);
         }
     }
-}
 
-
-void
-turn_on_rgb_led(uint32_t led_color_mask)
-{
-    g_rgb_led_current_mask |= led_color_mask;
-
-    for (int i = 0; i < FRDM_NUM_RGB_LED_PINS; i++) {
-        if (g_frdm_rgb_led_pins[i].pin_bit_mask & led_color_mask) {
-            activate_output_pin(&g_frdm_rgb_led_pins[i]);
-        }
-    }
-}
-
-
-void
-turn_off_rgb_led(uint32_t led_color_mask)
-{
-    g_rgb_led_current_mask &= ~led_color_mask;
-
-    for (int i = 0; i < FRDM_NUM_RGB_LED_PINS; i++) {
-        if (g_frdm_rgb_led_pins[i].pin_bit_mask & led_color_mask) {
-            deactivate_output_pin(&g_frdm_rgb_led_pins[i]);
-        }
+    if (region_added) {
+        rtos_mpu_remove_thread_data_region();   /* g_launchpad_board */
     }
 }
 
@@ -202,9 +223,24 @@ turn_off_rgb_led(uint32_t led_color_mask)
 uint32_t
 set_rgb_led_color(uint32_t led_color_mask)
 {
-    uint32_t old_rgb_led_mask = g_rgb_led_current_mask;
+    fdc_error_t fdc_error;
+    bool region_added = false;
+    
+    if (!rtos_in_privileged_mode()) {
+        fdc_error = rtos_mpu_add_thread_data_region(&g_frdm_board,
+                                                    sizeof g_frdm_board,
+                                                    false);
+        FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+        region_added = true;
+    }
 
-    g_rgb_led_current_mask = led_color_mask;
+    uint32_t old_rgb_led_mask = g_frdm_board.rgb_led_current_mask;
+
+    if (!g_frdm_board.rgb_led_initialized) {
+        goto common_exit;
+    }
+
+    g_frdm_board.rgb_led_current_mask = led_color_mask;
 
     for (int i = 0; i < FRDM_NUM_RGB_LED_PINS; i++) {
         if (g_frdm_rgb_led_pins[i].pin_bit_mask & led_color_mask) {
@@ -212,6 +248,11 @@ set_rgb_led_color(uint32_t led_color_mask)
         } else {
             deactivate_output_pin(&g_frdm_rgb_led_pins[i]);
         }
+    }
+
+common_exit:
+    if (region_added) {
+        rtos_mpu_remove_thread_data_region();   /* g_launchpad_board */
     }
 
     return old_rgb_led_mask;

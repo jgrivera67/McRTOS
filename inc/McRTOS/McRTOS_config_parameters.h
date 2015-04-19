@@ -123,7 +123,7 @@ C_ASSERT(RTOS_MAX_NUM_INTERRUPTS < SOC_NUM_INTERRUPT_CHANNELS);
 #elif defined(K64F_SOC)
 #   define RTOS_FDC_MSG_BUFFER_SIZE  UINT16_C(2048)
 #elif defined(LM4F120_SOC)
-#   define RTOS_FDC_MSG_BUFFER_SIZE  UINT16_C(1024)
+#   define RTOS_FDC_MSG_BUFFER_SIZE  UINT16_C(2048)
 #else
 #   error "No system on chip specified"
 #endif

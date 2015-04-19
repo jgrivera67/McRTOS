@@ -40,10 +40,12 @@
 #elif defined(K64F_SOC)
 
 #   include "k64f_soc_public.h"
+#   include "frdm_board.h"
 
 #elif defined(LM4F120_SOC)
 
 #   include "lm4f120_soc_public.h"
+#   include "launchpad_board.h"
 
 #else
 
@@ -472,12 +474,6 @@ uint32_t read_adc_channel(
 void toggle_rgb_led(
 	_IN_ uint32_t led_color_mask);
 
-void turn_on_rgb_led(
-	_IN_ uint32_t led_color_mask);
-
-void turn_off_rgb_led(
-	_IN_ uint32_t led_color_mask);
-
 uint32_t set_rgb_led_color(
 	_IN_ uint32_t led_color_mask);
 
@@ -487,12 +483,6 @@ void init_buttons(
 void init_trimpot(void);
 
 uint32_t read_trimpot(void);
-
-void toggle_heartbeat_led(void);
-
-void turn_on_debugger_led(void);
-
-void turn_off_debugger_led(void);
 
 uint32_t read_buttons(
             _IN_ const struct buttons_device *buttons_device_p);

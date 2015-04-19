@@ -872,10 +872,17 @@ McRTOS_display_stats(void)
 
     struct glist_node *context_node_p;
 
+#   ifdef _CPU_CYCLES_MEASURE_
     console_printf(
 	"Context    Name                           Priority Switched-out Preempted  CPU        CPU under 1ms  Tstamp last  FPU     Switched-out\n"
 	"address                                            count        count      usage (ms) usage (cycles) switched-out enabled history     \n"
 	"========== ============================== ======== ============ ========== ========== ============== ============ ======= ============\n");
+#   else
+    console_printf(
+	"Context    Name                           Priority Switched-out Preempted  Tstamp last  FPU     Switched-out\n"
+	"address                                            count        count      switched-out enabled history     \n"
+	"========== ============================== ======== ============ ========== ============ ======= ============\n");
+#   endif
 
     bool caller_was_privileged = rtos_enter_privileged_mode();
 
@@ -915,7 +922,7 @@ McRTOS_display_stats(void)
             FDC_ASSERT(false, context_p->ctx_context_type, context_p);
         }
 
-#ifdef _CPU_CYCLES_MEASURE_
+#   ifdef _CPU_CYCLES_MEASURE_
         console_printf(
 	    "%#8p %30s %c%7u %12u %10u %10u %14u %12u %7s %#x%x\n",
             context_p,
@@ -931,7 +938,7 @@ McRTOS_display_stats(void)
             context_p->ctx_switched_out_reason_history,
             context_p->ctx_last_switched_out_reason
         );
-#else
+#   else
         console_printf(
 	    "%#8p %30s %c%7u %12u %10u %12u %7s %#x%x\n",
             context_p,
@@ -945,7 +952,7 @@ McRTOS_display_stats(void)
             context_p->ctx_switched_out_reason_history,
             context_p->ctx_last_switched_out_reason
         );
-#endif
+#   endif
     }
 
     if (!caller_was_privileged) {

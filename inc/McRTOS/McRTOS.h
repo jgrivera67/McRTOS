@@ -576,6 +576,9 @@ _THREAD_CALLERS_ONLY_
 void
 rtos_exit_privileged_mode(void);
 
+bool
+rtos_in_privileged_mode(void);
+
 _THREAD_CALLERS_ONLY_
 void
 rtos_thread_enable_fpu(void);
