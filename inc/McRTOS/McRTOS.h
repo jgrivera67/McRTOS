@@ -263,6 +263,18 @@ C_ASSERT(sizeof(struct rtos_thread_execution_stack) %
          SOC_MPU_REGION_ALIGNMENT(struct __rtos_thread_execution_stack) == 0);
 
 /**
+ * MPU data region
+ *
+ * NOTE: If read_only is true, only read access is allowed. Otherwise,
+ * read/write access is allowed.
+ */
+struct rtos_mpu_data_region {
+    void *start_addr;
+    void *end_addr;
+    bool read_only;
+};
+
+/**
  * Block of parameters for creating a thread
  */
 struct rtos_thread_creation_params {
@@ -422,7 +434,7 @@ rtos_condvar_init(
     _OUT_ struct rtos_condvar *rtos_condvar_p);
 
 _THREAD_CALLERS_ONLY_
-fdc_error_t
+void
 rtos_condvar_wait(
     _IN_ struct rtos_condvar *rtos_condvar_p,
     _IN_  struct rtos_mutex *rtos_mutex_p,
@@ -501,14 +513,27 @@ rtos_lcd_draw_tile(
 
 _THREAD_CALLERS_ONLY_
 fdc_error_t
-rtos_mpu_add_thread_data_region(
-    void *start_addr,
-    size_t size,
-    bool read_only);
+rtos_thread_add_mpu_data_region(
+    _IN_ void *start_addr,
+    _IN_ size_t size,
+    _IN_ bool read_only);
 
 _THREAD_CALLERS_ONLY_
 void
-rtos_mpu_remove_thread_data_region(void);
+rtos_thread_remove_top_mpu_data_region(void);
+
+_THREAD_CALLERS_ONLY_
+void
+rtos_thread_set_top_mpu_data_region(
+    _IN_ void *start_addr,
+    _IN_ size_t size,
+    _IN_ bool read_only,
+    _OUT_ struct rtos_mpu_data_region *old_mpu_region);
+
+_THREAD_CALLERS_ONLY_
+void
+rtos_thread_restore_top_mpu_data_region(
+    _IN_ const struct rtos_mpu_data_region *old_mpu_region);
 
 void rtos_pointer_circular_buffer_init(
         _IN_  const char *name_p,

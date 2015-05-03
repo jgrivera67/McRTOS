@@ -870,14 +870,14 @@ enet_get_mac_addr(const struct enet_device *enet_device_p,
 
     struct enet_device_var *const enet_var_p = enet_device_p->var_p;
 
-    fdc_error = rtos_mpu_add_thread_data_region(enet_var_p,
+    fdc_error = rtos_thread_add_mpu_data_region(enet_var_p,
                                                 sizeof *enet_var_p,
                                                 false);
     FDC_ASSERT(fdc_error == 0, fdc_error, 0);
     DBG_ASSERT(enet_var_p->initialized, enet_device_p, enet_var_p);
 
     COPY_MAC_ADDRESS(mac_addr_p, &enet_var_p->mac_address);
-    rtos_mpu_remove_thread_data_region();   /* enet_var_p */
+    rtos_thread_remove_top_mpu_data_region();   /* enet_var_p */
 }
 
 
@@ -898,7 +898,7 @@ enet_start(const struct enet_device *enet_device_p,
     volatile ENET_Type *enet_regs_p = enet_device_p->mmio_registers_p;
     struct enet_device_var *const enet_var_p = enet_device_p->var_p;
 
-    fdc_error = rtos_mpu_add_thread_data_region(enet_var_p,
+    fdc_error = rtos_thread_add_mpu_data_region(enet_var_p,
                                                 sizeof *enet_var_p,
                                                 false);
     FDC_ASSERT(fdc_error == 0, fdc_error, 0);
@@ -962,7 +962,7 @@ enet_start(const struct enet_device *enet_device_p,
         rtos_exit_privileged_mode();
     }
 
-    rtos_mpu_remove_thread_data_region();   /* enet_var_p */
+    rtos_thread_remove_top_mpu_data_region();   /* enet_var_p */
 }
 
 
@@ -988,7 +988,7 @@ enet_add_multicast_mac_addr(const struct enet_device *enet_device_p,
     volatile ENET_Type *enet_regs_p = enet_device_p->mmio_registers_p;
     struct enet_device_var *const enet_var_p = enet_device_p->var_p;
 
-    fdc_error = rtos_mpu_add_thread_data_region(enet_var_p,
+    fdc_error = rtos_thread_add_mpu_data_region(enet_var_p,
                                                 sizeof *enet_var_p,
                                                 false);
     FDC_ASSERT(fdc_error == 0, fdc_error, 0);
@@ -1032,7 +1032,7 @@ enet_add_multicast_mac_addr(const struct enet_device *enet_device_p,
         rtos_exit_privileged_mode();
     }
 
-    rtos_mpu_remove_thread_data_region();   /* enet_var_p */
+    rtos_thread_remove_top_mpu_data_region();   /* enet_var_p */
 }
 
 
@@ -1055,11 +1055,11 @@ enet_remove_multicast_mac_addr(const struct enet_device *enet_device_p,
     volatile ENET_Type *enet_regs_p = enet_device_p->mmio_registers_p;
     struct enet_device_var *const enet_var_p = enet_device_p->var_p;
 
-    fdc_error = rtos_mpu_add_thread_data_region(enet_var_p,
+    fdc_error = rtos_thread_add_mpu_data_region(enet_var_p,
                                                 sizeof *enet_var_p,
                                                 false);
     FDC_ASSERT(fdc_error == 0, fdc_error, 0);
-    fdc_error = rtos_mpu_add_thread_data_region((void *)enet_regs_p,
+    fdc_error = rtos_thread_add_mpu_data_region((void *)enet_regs_p,
                                                 sizeof *enet_regs_p,
                                                 false);
     FDC_ASSERT(fdc_error == 0, fdc_error, 0);
@@ -1097,8 +1097,8 @@ enet_remove_multicast_mac_addr(const struct enet_device *enet_device_p,
         write_32bit_mmio_register(reg_p, reg_value);
     }
 
-    rtos_mpu_remove_thread_data_region();   /* enet_regs_p */
-    rtos_mpu_remove_thread_data_region();   /* enet_var_p */
+    rtos_thread_remove_top_mpu_data_region();   /* enet_regs_p */
+    rtos_thread_remove_top_mpu_data_region();   /* enet_var_p */
 }
 
 

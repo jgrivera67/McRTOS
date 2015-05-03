@@ -192,7 +192,7 @@ toggle_rgb_led(uint32_t led_color_mask)
     bool region_added = false;
     
     if (!rtos_in_privileged_mode()) {
-        fdc_error = rtos_mpu_add_thread_data_region(&g_frdm_board,
+        fdc_error = rtos_thread_add_mpu_data_region(&g_frdm_board,
                                                     sizeof g_frdm_board,
                                                     false);
         FDC_ASSERT(fdc_error == 0, fdc_error, 0);
@@ -212,7 +212,7 @@ toggle_rgb_led(uint32_t led_color_mask)
     }
 
     if (region_added) {
-        rtos_mpu_remove_thread_data_region();   /* g_launchpad_board */
+        rtos_thread_remove_top_mpu_data_region();   /* g_launchpad_board */
     }
 }
 
@@ -227,7 +227,7 @@ set_rgb_led_color(uint32_t led_color_mask)
     bool region_added = false;
     
     if (!rtos_in_privileged_mode()) {
-        fdc_error = rtos_mpu_add_thread_data_region(&g_frdm_board,
+        fdc_error = rtos_thread_add_mpu_data_region(&g_frdm_board,
                                                     sizeof g_frdm_board,
                                                     false);
         FDC_ASSERT(fdc_error == 0, fdc_error, 0);
@@ -252,7 +252,7 @@ set_rgb_led_color(uint32_t led_color_mask)
 
 common_exit:
     if (region_added) {
-        rtos_mpu_remove_thread_data_region();   /* g_launchpad_board */
+        rtos_thread_remove_top_mpu_data_region();   /* g_launchpad_board */
     }
 
     return old_rgb_led_mask;

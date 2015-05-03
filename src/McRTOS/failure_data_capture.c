@@ -191,7 +191,7 @@ rtos_k_set_fdc_params(
 /**
  * Captures failure data for an assertion failure
  */
-void
+fdc_error_t
 capture_assert_failure(
     const char *cond_str,
     uintptr_t arg1,
@@ -234,6 +234,8 @@ capture_assert_failure(
 #           endif
         }
     }
+
+    return (fdc_error_t)assert_address;
 }
 #endif /* _RELIABILITY_CHECKS_ */
 

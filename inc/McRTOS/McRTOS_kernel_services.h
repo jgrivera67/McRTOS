@@ -1045,13 +1045,24 @@ rtos_k_lcd_draw_tile(
     _IN_ lcd_color_t fill_color);
 
 fdc_error_t
-rtos_k_mpu_add_thread_data_region(
-    void *start_addr,
-    size_t size,
-    bool read_only);
+rtos_k_thread_add_mpu_data_region(
+    _IN_ void *start_addr,
+    _IN_ size_t size,
+    _IN_ bool read_only);
 
 void
-rtos_k_mpu_remove_thread_data_region(void);
+rtos_k_thread_remove_top_mpu_data_region(void);
+
+void
+rtos_k_thread_set_top_mpu_data_region(
+    _IN_ void *start_addr,
+    _IN_ size_t size,
+    _IN_ bool read_only,
+    _OUT_ struct rtos_mpu_data_region *old_mpu_region);
+
+void
+rtos_k_thread_restore_top_mpu_data_region(
+    _IN_ const struct rtos_mpu_data_region *old_mpu_region);
 
 fdc_error_t
 rtos_k_app_system_call(

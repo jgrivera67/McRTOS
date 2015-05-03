@@ -229,7 +229,7 @@ void app_software_init(void)
         "%s\n%s\n",
         g_app_version, g_app_build_timestamp);
 
-    fdc_error = rtos_mpu_add_thread_data_region(&g_app,
+    fdc_error = rtos_thread_add_mpu_data_region(&g_app,
                                                 sizeof g_app,
                                                 false);
     FDC_ASSERT(fdc_error == 0, fdc_error, cpu_id);
@@ -251,7 +251,7 @@ void app_software_init(void)
             g_app_thread_creation_params[i].p_name_p);
     }
 
-    rtos_mpu_remove_thread_data_region();   /* g_app */
+    rtos_thread_remove_top_mpu_data_region();   /* g_app */
 
     networking_init(&g_enet_device0);
 }
@@ -347,7 +347,7 @@ demo_ping_command(void)
         return;
     }
 
-    fdc_error = rtos_mpu_add_thread_data_region(&g_app,
+    fdc_error = rtos_thread_add_mpu_data_region(&g_app,
                                                 sizeof g_app,
                                                 false);
     if (fdc_error != 0) {
@@ -379,7 +379,7 @@ demo_ping_command(void)
                    remote_ip_addr.bytes[3]);
 
 exit_remove_region:
-    rtos_mpu_remove_thread_data_region();   /* g_app */
+    rtos_thread_remove_top_mpu_data_region();   /* g_app */
     return;
 
 syntax_error:    
@@ -428,7 +428,7 @@ demo_udp_client_command(void)
         return;
     }
 
-    fdc_error = rtos_mpu_add_thread_data_region(&g_app,
+    fdc_error = rtos_thread_add_mpu_data_region(&g_app,
                                                 sizeof g_app,
                                                 false);
     if (fdc_error != 0) {
@@ -460,7 +460,7 @@ demo_udp_client_command(void)
                    remote_ip_addr.bytes[3]);
 
 exit_remove_region:
-    rtos_mpu_remove_thread_data_region();   /* g_app */
+    rtos_thread_remove_top_mpu_data_region();   /* g_app */
     return;
 
 syntax_error:    
@@ -481,7 +481,7 @@ demo_udp_server_command(void)
         .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 3,
     };
 
-    fdc_error = rtos_mpu_add_thread_data_region(&g_app,
+    fdc_error = rtos_thread_add_mpu_data_region(&g_app,
                                                 sizeof g_app,
                                                 false);
     if (fdc_error != 0) {
@@ -507,7 +507,7 @@ demo_udp_server_command(void)
     console_printf("%s started\n", thread_params.p_name_p);
 
 exit_remove_region:
-    rtos_mpu_remove_thread_data_region();   /* g_app */
+    rtos_thread_remove_top_mpu_data_region();   /* g_app */
 }
 
 
@@ -523,7 +523,7 @@ hello_world_thread_f(void *arg)
 
     int thread_id = (intptr_t)arg;
 
-    fdc_error = rtos_mpu_add_thread_data_region(&g_app, sizeof g_app, false);
+    fdc_error = rtos_thread_add_mpu_data_region(&g_app, sizeof g_app, false);
     if (fdc_error != 0) {
 	    goto exit;
     }
@@ -561,7 +561,7 @@ exit:
     }
 
     if (mpu_region_added) {
-	rtos_mpu_remove_thread_data_region();
+	rtos_thread_remove_top_mpu_data_region();
     }
 
     return fdc_error;
@@ -609,7 +609,7 @@ accelerometer_thread_f(void *arg)
     FDC_ASSERT(arg == NULL, arg, cpu_id);
     console_printf("Initializing accelerometer sensing thread ...\n");
 
-    fdc_error = rtos_mpu_add_thread_data_region(&g_app, sizeof g_app, false);
+    fdc_error = rtos_thread_add_mpu_data_region(&g_app, sizeof g_app, false);
         if (fdc_error != 0) {
 	    goto exit;
     }
@@ -692,7 +692,7 @@ exit:
     }
 
     if (mpu_region_added) {
-	rtos_mpu_remove_thread_data_region();
+	rtos_thread_remove_top_mpu_data_region();
     }
 
     return fdc_error;
@@ -731,7 +731,7 @@ demo_udp_server_thread_f(void *arg)
                                                   &rx_packet_p);
         FDC_ASSERT(fdc_error == 0, fdc_error, 0);
 
-        fdc_error = rtos_mpu_add_thread_data_region(rx_packet_p,
+        fdc_error = rtos_thread_add_mpu_data_region(rx_packet_p,
                                                     sizeof *rx_packet_p,
                                                     true);
         FDC_ASSERT(fdc_error == 0, fdc_error, rx_packet_p);
@@ -747,17 +747,17 @@ demo_udp_server_thread_f(void *arg)
 
 	CONSOLE_POS_PRINTF(42, 81, "UDP server received message %10u", seq_num);
 
-        rtos_mpu_remove_thread_data_region(); /* rx_packet_p */
+        rtos_thread_remove_top_mpu_data_region(); /* rx_packet_p */
 	net_recycle_rx_packet(rx_packet_p);
 
-        fdc_error = rtos_mpu_add_thread_data_region(tx_packet_p,
+        fdc_error = rtos_thread_add_mpu_data_region(tx_packet_p,
                                                     sizeof *tx_packet_p,
                                                     false);
         FDC_ASSERT(fdc_error == 0, fdc_error, tx_packet_p);
 
 	out_msg_p = net_get_udp_data_payload_area(tx_packet_p);
 	*out_msg_p = seq_num;
-        rtos_mpu_remove_thread_data_region(); /* tx_packet_p */
+        rtos_thread_remove_top_mpu_data_region(); /* tx_packet_p */
 
 	fdc_error = net_send_ipv4_udp_datagram(server_end_point_p, &client_ip_addr,
                                                client_port,
@@ -803,7 +803,7 @@ demo_udp_client_thread_f(void *arg)
 	uint32_t *in_msg_p;
 	size_t in_msg_size;
 
-        fdc_error = rtos_mpu_add_thread_data_region(tx_packet_p,
+        fdc_error = rtos_thread_add_mpu_data_region(tx_packet_p,
                                                     sizeof *tx_packet_p,
                                                     false);
         FDC_ASSERT(fdc_error == 0, fdc_error, tx_packet_p);
@@ -811,7 +811,7 @@ demo_udp_client_thread_f(void *arg)
 	out_msg_p = net_get_udp_data_payload_area(tx_packet_p);
 	out_msg_p->seq_num = seq_num;
 
-        fdc_error = rtos_mpu_add_thread_data_region(&g_app, sizeof g_app, false);
+        fdc_error = rtos_thread_add_mpu_data_region(&g_app, sizeof g_app, false);
         FDC_ASSERT(fdc_error == 0, fdc_error, tx_packet_p);
 
         rtos_mutex_acquire(&g_app.accel_reading_mutex);
@@ -823,8 +823,8 @@ demo_udp_client_thread_f(void *arg)
         g_app.accel_reading_ready = false;
         rtos_mutex_release(&g_app.accel_reading_mutex);
 
-        rtos_mpu_remove_thread_data_region(); /* g_app */
-        rtos_mpu_remove_thread_data_region(); /* tx_packet_p */
+        rtos_thread_remove_top_mpu_data_region(); /* g_app */
+        rtos_thread_remove_top_mpu_data_region(); /* tx_packet_p */
 
 	fdc_error = net_send_ipv4_udp_datagram(client_end_point_p, &dest_ip_addr,
 		                   MY_UDP_SERVER_PORT,
@@ -855,7 +855,7 @@ demo_udp_client_thread_f(void *arg)
 	FDC_ASSERT(server_port == MY_UDP_SERVER_PORT,
 		   server_port, 0);
 
-        fdc_error = rtos_mpu_add_thread_data_region(rx_packet_p,
+        fdc_error = rtos_thread_add_mpu_data_region(rx_packet_p,
                                                     sizeof *rx_packet_p,
                                                     true);
         FDC_ASSERT(fdc_error == 0, fdc_error, rx_packet_p);
@@ -867,7 +867,7 @@ demo_udp_client_thread_f(void *arg)
 
 	CONSOLE_POS_PRINTF(43, 1, "UDP client received ack for message %10u", *in_msg_p);
 
-        rtos_mpu_remove_thread_data_region(); /* rx_packet_p */
+        rtos_thread_remove_top_mpu_data_region(); /* rx_packet_p */
 	net_recycle_rx_packet(rx_packet_p);
 
 	seq_num ++;

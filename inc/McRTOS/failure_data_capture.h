@@ -97,12 +97,31 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
 #   define FDC_ASSERT(_cond, _arg1, _arg2) \
     do {					                \
         if (_INFREQUENTLY_TRUE_(!(_cond))) {                    \
-            capture_assert_failure(                             \
+            (void)capture_assert_failure(                       \
                 "Assert: " #_cond,                              \
                 (uintptr_t)(_arg1),                             \
                 (uintptr_t)(_arg2));                            \
         }						        \
     } while (0)
+
+/**
+ * Assert macro that returns true if the assertion is false. It
+ * is to be used like this:
+ * if (FDC_ASSERT_FALSE(cond, arg1, arg2, &fdc_error))
+ *     return fdc_error;
+ */
+#   define FDC_ASSERT_FALSE(_cond, _arg1, _arg2, _fdc_error_p) \
+    {{					                        \
+        if (_INFREQUENTLY_TRUE_(!(_cond))) {                    \
+            *(_fdc_error_p) = capture_assert_failure(           \
+                "Assert: " #_cond,                              \
+                (uintptr_t)(_arg1),                             \
+                (uintptr_t)(_arg2));                            \
+            return true;                                        \
+        } else {                                                \
+            return false;                                       \
+        }                                                       \
+    }}
 
 #endif
 
@@ -793,7 +812,7 @@ C_ASSERT(RTOS_NUM_CONTEXT_SWITCH_TRACE_BUFFER_ENTRIES <= UINT16_MAX);
 
 bool is_cpu_little_endian(void);
 
-void capture_assert_failure(
+fdc_error_t capture_assert_failure(
         const char *cond_str,
         uintptr_t arg1,
         uintptr_t arg2);

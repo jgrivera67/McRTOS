@@ -111,9 +111,13 @@ const void *const g_rtos_system_call_dispatch_table[] =
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
         RTOS_CALLER_IS_THREAD_SYSTEM_CALL, rtos_k_caller_is_thread),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
-        RTOS_MPU_ADD_THREAD_DATA_REGION_SYSTEM_CALL, rtos_k_mpu_add_thread_data_region),
+        RTOS_THREAD_ADD_MPU_DATA_REGION_SYSTEM_CALL, rtos_k_thread_add_mpu_data_region),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
-        RTOS_MPU_REMOVE_THREAD_DATA_REGION_SYSTEM_CALL, rtos_k_mpu_remove_thread_data_region),
+        RTOS_THREAD_REMOVE_TOP_MPU_DATA_REGION_SYSTEM_CALL, rtos_k_thread_remove_top_mpu_data_region),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_THREAD_SET_TOP_MPU_DATA_REGION_SYSTEM_CALL, rtos_k_thread_set_top_mpu_data_region),
+    GEN_SYSTEM_CALL_DISPATCH_ENTRY(
+        RTOS_THREAD_RESTORE_TOP_MPU_DATA_REGION_SYSTEM_CALL, rtos_k_thread_restore_top_mpu_data_region),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
         RTOS_THREAD_ENABLE_FPU_SYSTEM_CALL, rtos_k_thread_enable_fpu),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
@@ -2622,7 +2626,7 @@ rtos_k_lcd_draw_tile(
  * Add a new MPU data region to the calling thread
  */
 fdc_error_t
-rtos_k_mpu_add_thread_data_region(
+rtos_k_thread_add_mpu_data_region(
     void *start_addr,
     size_t size,
     bool read_only)
@@ -2683,10 +2687,10 @@ rtos_k_mpu_add_thread_data_region(
 
 /**
  * Remove the last MPU data region that was added to the calling thread
- * by a previous call to rtos_k_thread_mpu_region_push().
+ * by a previous call to rtos_k_thread_add_mpu_region().
  */
 void
-rtos_k_mpu_remove_thread_data_region(void)
+rtos_k_thread_remove_top_mpu_data_region(void)
 {
     FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
 
@@ -2727,6 +2731,32 @@ rtos_k_mpu_remove_thread_data_region(void)
      * Restore previous interrupt masking in the ARM core
      */
     rtos_k_restore_cpu_interrupts(cpu_status_register);
+}
+
+
+/**
+ * Set the top MPU data region to the given range for the calling thread
+ */
+void
+rtos_k_thread_set_top_mpu_data_region(
+    _IN_ void *start_addr,
+    _IN_ size_t size,
+    _IN_ bool read_only,
+    _OUT_ struct rtos_mpu_data_region *old_mpu_region)
+{
+    DEBUG_PRINTF("Not implemented yet\n");
+}
+
+
+/**
+ * Restore the top MPU data region for the calling thread with the region
+ * descriptor saved by a previous call to rtos_k_thread_set_top_mpu_data_region()
+ */
+void
+rtos_k_thread_restore_top_mpu_data_region(
+    _IN_ const struct rtos_mpu_data_region *old_mpu_region)
+{
+    DEBUG_PRINTF("Not implemented yet\n");
 }
 
 

@@ -31,6 +31,7 @@ static const char *const keyword_table[] = {
     "clear",
     "cpu",
     "dmesg",
+    "get",
     "help",
 #ifdef _NETWORKING_   
     "gateway",
@@ -62,7 +63,7 @@ rtos_command_processor(void)
 	g_McRTOS_p->rts_command_line_buffer,
 	RTOS_COMMAND_LINE_BUFFER_SIZE);
 
-    fdc_error = rtos_mpu_add_thread_data_region(&g_tokenizer,
+    fdc_error = rtos_thread_add_mpu_data_region(&g_tokenizer,
                                                 sizeof g_tokenizer,
                                                 false);
     FDC_ASSERT(fdc_error == 0, fdc_error, 0);
@@ -70,7 +71,7 @@ rtos_command_processor(void)
     rtos_parse_command_line(
 	g_McRTOS_p->rts_command_line_buffer);
 
-    rtos_mpu_remove_thread_data_region();   /* g_tokenizer */
+    rtos_thread_remove_top_mpu_data_region();   /* g_tokenizer */
 }
 
 
@@ -418,6 +419,41 @@ parse_set_ip4_command(void)
 }
 
 
+static void
+cmd_get_local_ip4_addr(void)
+{
+    struct ipv4_address ip_addr;
+
+    net_get_local_ipv4_address(&ip_addr);
+
+    console_printf("Local IPv4 address: %u.%u.%u.%u\n",
+                  ip_addr.bytes[0],
+                  ip_addr.bytes[1],
+                  ip_addr.bytes[2],
+                  ip_addr.bytes[3]);
+}
+
+
+static void
+parse_get_ip4_command(void)
+{
+    token_t token = get_next_token(&g_tokenizer);
+
+    switch (token) {
+    case INVALID_TOKEN:
+	break;
+
+    case ADDR:
+        cmd_get_local_ip4_addr();
+        break;
+
+    case END_OF_INPUT:
+    default:
+	console_printf("\'get ip4\' command syntax error (type \'get help\')\n");
+    }
+}
+
+
 static bool
 parse_ip6_address(struct ipv6_address *ip_addr_p)
 {
@@ -485,6 +521,45 @@ parse_set_ip6_command(void)
     case END_OF_INPUT:
     default:
 	console_printf("\'set ip6\' command syntax error (type \'set help\')\n");
+    }
+}
+
+
+static void
+cmd_get_local_ip6_addr(void)
+{
+    struct ipv6_address ip_addr;
+
+    net_get_local_ipv6_address(&ip_addr);
+
+    console_printf("Local IPv6 address: %x:%x:%x:%x:%x:%x:%x:%x\n",
+                   ntoh16(ip_addr.hwords[0]),
+                   ntoh16(ip_addr.hwords[1]),
+                   ntoh16(ip_addr.hwords[2]),
+                   ntoh16(ip_addr.hwords[3]),
+                   ntoh16(ip_addr.hwords[4]),
+                   ntoh16(ip_addr.hwords[5]),
+                   ntoh16(ip_addr.hwords[6]),
+                   ntoh16(ip_addr.hwords[7]));
+}
+
+
+static void
+parse_get_ip6_command(void)
+{
+    token_t token = get_next_token(&g_tokenizer);
+
+    switch (token) {
+    case INVALID_TOKEN:
+	break;
+
+    case ADDR:
+        cmd_get_local_ip6_addr();
+        break;
+
+    case END_OF_INPUT:
+    default:
+	console_printf("\'get ip6\' command syntax error (type \'get help\')\n");
     }
 }
 
@@ -611,6 +686,40 @@ parse_set(void)
 
 
 static void
+parse_get(void)
+{
+    token_t token = get_next_token(&g_tokenizer);
+
+    switch (token) {
+    case INVALID_TOKEN:
+	break;
+
+    case HELP:
+	console_printf(
+	    "\tget ip4 addr\n"
+	    "\tget ip6 addr\n"
+	    "\n");
+	break;
+
+#ifdef _NETWORKING_   
+    case IP4:
+	parse_get_ip4_command();
+        break;
+
+    case IP6:
+	parse_get_ip6_command();
+        break;
+#endif
+
+    case END_OF_INPUT:
+    default:
+	console_printf("\'get\' command syntax error (type \'get help\')\n");
+	break;
+    }
+}
+
+
+static void
 cmd_display_help(void)
 {
     console_printf(
@@ -618,6 +727,7 @@ cmd_display_help(void)
         "\tclear - clear screen\n"
         "\tcpu - Switch to the given CPU\n"
         "\tdmesg - Display message log\n"
+        "\tget - Get config option\n"
         "\thelp - display this message\n"
 #ifdef _NETWORKING_   
 	"\tping - send ping to a given IP address\n"
@@ -782,6 +892,10 @@ rtos_parse_command_line(const char *cmd_line)
 
     case DMESG:
         cmd_display_msg_log();
+        break;
+
+    case GET:
+        parse_get();
         break;
 
     case HELP:

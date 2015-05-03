@@ -503,7 +503,7 @@ rtos_root_thread_f(void *arg)
     FDC_ASSERT(arg == NULL, arg, cpu_id);
     struct rtos_thread *root_thread_p = (struct rtos_thread *)rtos_thread_self();
 
-    fdc_error = rtos_mpu_add_thread_data_region(g_McRTOS_p,
+    fdc_error = rtos_thread_add_mpu_data_region(g_McRTOS_p,
                                                 sizeof *g_McRTOS_p,
                                                 true);
     FDC_ASSERT(fdc_error == 0, fdc_error, cpu_id);
@@ -601,7 +601,7 @@ rtos_root_thread_f(void *arg)
     fdc_error = CAPTURE_FDC_ERROR(
         "McRTOS root thread should not have terminated", cpu_id, 0);
 
-    rtos_mpu_remove_thread_data_region();   /* g_McRTOS_p */
+    rtos_thread_remove_top_mpu_data_region();   /* g_McRTOS_p */
     return fdc_error;
 }
 
@@ -618,7 +618,7 @@ rtos_idle_thread_f(void *arg)
 
     FDC_ASSERT(arg == NULL, arg, cpu_id);
 
-    fdc_error = rtos_mpu_add_thread_data_region(g_McRTOS_p,
+    fdc_error = rtos_thread_add_mpu_data_region(g_McRTOS_p,
                                                 sizeof *g_McRTOS_p,
                                                 true);
     FDC_ASSERT(fdc_error == 0, fdc_error, cpu_id);
@@ -647,7 +647,7 @@ rtos_idle_thread_f(void *arg)
     fdc_error = CAPTURE_FDC_ERROR(
         "McRTOS idle thread should not have terminated", cpu_id, 0);
 
-    rtos_mpu_remove_thread_data_region();   /* g_McRTOS_p */
+    rtos_thread_remove_top_mpu_data_region();   /* g_McRTOS_p */
     return fdc_error;
 }
 

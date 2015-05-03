@@ -328,6 +328,8 @@ struct mpu_device_var {
 /**
  * MPU data region range
  *
+ * FIXME: Remove this and use struct rtos_mpu_data_region
+ *
  * NOTE: If read_only is true, only read access is allowed. Otherwise,
  * read/write access is allowed.
  */

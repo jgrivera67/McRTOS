@@ -30,6 +30,7 @@ enum tokens {
     CLEAR,
     CPU,
     DMESG,
+    GET,
     HELP,
 #ifdef _NETWORKING_   
     GATEWAY,
