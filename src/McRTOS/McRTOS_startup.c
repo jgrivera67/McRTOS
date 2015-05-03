@@ -144,6 +144,12 @@ static struct McRTOS g_McRTOS =
     RTOS_CPU_CONTROLLER_INITIALIZER(0),
 }};
 
+static const struct rtos_mpu_data_region g_McRTOS_region = {
+    .start_addr = &g_McRTOS,
+    .size = sizeof g_McRTOS,
+    .read_only = false
+};
+
 /**
  * Access to the McRTOS global structure should be done through this pointer,
  * in case we want to move the global structure to SDRAM
@@ -336,6 +342,7 @@ rtos_startup(
     rtos_k_thread_init(
         &g_rtos_system_threads[RTOS_ROOT_SYSTEM_THREAD],
         &cpu_controller_p->cpc_system_threads_execution_stacks_p[RTOS_ROOT_SYSTEM_THREAD],
+        &g_McRTOS_region,
         &cpu_controller_p->cpc_system_threads[RTOS_ROOT_SYSTEM_THREAD]);
 
     struct rtos_execution_context *current_context_p =
@@ -503,11 +510,6 @@ rtos_root_thread_f(void *arg)
     FDC_ASSERT(arg == NULL, arg, cpu_id);
     struct rtos_thread *root_thread_p = (struct rtos_thread *)rtos_thread_self();
 
-    fdc_error = rtos_thread_add_mpu_data_region(g_McRTOS_p,
-                                                sizeof *g_McRTOS_p,
-                                                true);
-    FDC_ASSERT(fdc_error == 0, fdc_error, cpu_id);
-
     /*
      * The root system thread is created with the highest priority thread, so
      * that it is not preempted by any other thread, while completing the
@@ -556,6 +558,7 @@ rtos_root_thread_f(void *arg)
         rtos_thread_init(
             &g_rtos_system_threads[i],
             &cpu_controller_p->cpc_system_threads_execution_stacks_p[i],
+            &g_McRTOS_region,
             &cpu_controller_p->cpc_system_threads[i]);
 
         console_printf("CPU core %u: %s started\n", cpu_id,
@@ -601,9 +604,9 @@ rtos_root_thread_f(void *arg)
     fdc_error = CAPTURE_FDC_ERROR(
         "McRTOS root thread should not have terminated", cpu_id, 0);
 
-    rtos_thread_remove_top_mpu_data_region();   /* g_McRTOS_p */
     return fdc_error;
 }
+
 
 /**
  * McRTOS idle thread function
@@ -618,10 +621,6 @@ rtos_idle_thread_f(void *arg)
 
     FDC_ASSERT(arg == NULL, arg, cpu_id);
 
-    fdc_error = rtos_thread_add_mpu_data_region(g_McRTOS_p,
-                                                sizeof *g_McRTOS_p,
-                                                true);
-    FDC_ASSERT(fdc_error == 0, fdc_error, cpu_id);
     for ( ; ; )
     {
         TODO("Implement this")
@@ -647,7 +646,6 @@ rtos_idle_thread_f(void *arg)
     fdc_error = CAPTURE_FDC_ERROR(
         "McRTOS idle thread should not have terminated", cpu_id, 0);
 
-    rtos_thread_remove_top_mpu_data_region();   /* g_McRTOS_p */
     return fdc_error;
 }
 

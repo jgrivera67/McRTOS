@@ -97,7 +97,7 @@ C_ASSERT(__FPU_USED == 1);
 #define SOC_MTB_MIN_ADDR                    UINT32_C(0xF0000000)
 #define SOC_MTB_MAX_ADDR                    UINT32_C(0xF0000FFF)
 
-/*
+/**
  * MPU region alignment in bytes
  */
 #define K64F_MPU_REGION_ALIGNMENT	UINT32_C(32)
@@ -108,6 +108,7 @@ C_ASSERT(__FPU_USED == 1);
 #define K64F_MPU_REGION_ALIGNMENT_MASK	(~(K64F_MPU_REGION_ALIGNMENT - 1))
 
 #if __MPU_PRESENT == 0
+#   define MIN_MPU_REGION_ALIGNMENT     K64F_MPU_REGION_ALIGNMENT
     /*
      * For the K64F MPU, the MPU region alignment for a given data type
      * does not depend on the size of the data type

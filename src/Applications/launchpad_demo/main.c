@@ -159,17 +159,23 @@ app_software_init(void)
 {
     static const char g_app_version[] = "Launchpad application v0.1";
     static const char g_app_build_timestamp[] = "built " __DATE__ " " __TIME__;
-    fdc_error_t fdc_error;
+    static const struct rtos_mpu_data_region g_app_region = {
+        .start_addr = &g_app,
+        .size = sizeof g_app,
+        .read_only = false,
+    };
+
+    struct rtos_mpu_data_region old_data_region;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
     console_printf(
         "%s\n%s\n",
         g_app_version, g_app_build_timestamp);
 
-    fdc_error = rtos_mpu_add_thread_data_region(&g_app,
-                                                sizeof g_app,
-                                                false);
-    FDC_ASSERT(fdc_error == 0, fdc_error, cpu_id);
+    rtos_thread_replace_top_mpu_data_region(&g_app,
+                                            sizeof g_app,
+                                            false,
+                                            &old_data_region);
 
     g_app.led_color_mask = LED_COLOR_RED;
 
@@ -181,13 +187,14 @@ app_software_init(void)
         rtos_thread_init(
             &g_app_thread_creation_params[i],
             &g_app_thread_execution_stacks[i],
+            &g_app_region,
             &g_app_threads[i]);
 
         console_printf("CPU core %u: %s started\n", cpu_id,
             g_app_thread_creation_params[i].p_name_p);
     }
 
-    rtos_mpu_remove_thread_data_region();   /* g_app */
+    rtos_thread_restore_top_mpu_data_region(&old_data_region);
 }
 
 
@@ -203,20 +210,12 @@ buttons_reader_thread_f(void *arg)
 #   define BUTTONS_READER_THREAD_PERIOD_MS 250
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
-    bool mpu_region_added = false;
 
     FDC_ASSERT(arg == NULL, arg, cpu_id);
 
     console_printf("Initializing buttons reader thread ...\n");
 
     bool push_buttons[LPAD_NUM_PUSH_BUTTONS];
-
-    fdc_error = rtos_mpu_add_thread_data_region(&g_app, sizeof g_app, false);
-    if (fdc_error != 0) {
-	    goto exit;
-    }
-
-    mpu_region_added = true;
 
     for ( ; ; ) {
         /*
@@ -248,11 +247,6 @@ buttons_reader_thread_f(void *arg)
         "thread should not have terminated",
         cpu_id, rtos_thread_self());
 
-exit:
-    if (mpu_region_added) {
-	rtos_mpu_remove_thread_data_region();
-    }
-
     return fdc_error;
 }
 
@@ -261,18 +255,10 @@ led_flashing_thread_f(void *arg)
 {
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
-    bool mpu_region_added = false;
 
     FDC_ASSERT(arg == NULL, arg, cpu_id);
 
     console_printf("Initializing led flashing thread ...\n");
-
-    fdc_error = rtos_mpu_add_thread_data_region(&g_app, sizeof g_app, false);
-    if (fdc_error != 0) {
-	    goto exit;
-    }
-
-    mpu_region_added = true;
 
     uint32_t led_color_mask = g_app.led_color_mask;
 
@@ -292,11 +278,6 @@ led_flashing_thread_f(void *arg)
     fdc_error = CAPTURE_FDC_ERROR(
         "thread should not have terminated",
         cpu_id, rtos_thread_self());
-
-exit:
-    if (mpu_region_added) {
-	rtos_mpu_remove_thread_data_region();
-    }
 
     return fdc_error;
 }

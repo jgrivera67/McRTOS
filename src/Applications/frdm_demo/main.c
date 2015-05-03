@@ -96,6 +96,12 @@ static struct app_state_vars g_app = {
     .accel_reading_ready = false,
 };
 
+static const struct rtos_mpu_data_region g_app_region = {
+    .start_addr = &g_app,
+    .size = sizeof g_app,
+    .read_only = false,
+};
+
 #define RTOS_NUM_APP_THREADS 4
 
 /**
@@ -222,17 +228,19 @@ void app_software_init(void)
 {
     static const char g_app_version[] = "FRDM K64F board demo application v2.0";
     static const char g_app_build_timestamp[] = "built " __DATE__ " " __TIME__;
+
     fdc_error_t fdc_error;
+    struct rtos_mpu_data_region old_data_region;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
     console_printf(
         "%s\n%s\n",
         g_app_version, g_app_build_timestamp);
 
-    fdc_error = rtos_thread_add_mpu_data_region(&g_app,
-                                                sizeof g_app,
-                                                false);
-    FDC_ASSERT(fdc_error == 0, fdc_error, cpu_id);
+    rtos_thread_replace_top_mpu_data_region(&g_app,
+                                            sizeof g_app,
+                                            false,
+                                            &old_data_region);
 
     rtos_mutex_init("Accelerometer reading mutex", &g_app.accel_reading_mutex);
     rtos_condvar_init("Accelerometer reading condvar", &g_app.accel_reading_condvar);
@@ -245,13 +253,14 @@ void app_software_init(void)
         rtos_thread_init(
             &g_app_thread_creation_params[i],
             &g_app_thread_execution_stacks[i],
+            &g_app_region,
             &g_app_threads[i]);
 
         console_printf("CPU core %u: %s started\n", cpu_id,
             g_app_thread_creation_params[i].p_name_p);
     }
 
-    rtos_thread_remove_top_mpu_data_region();   /* g_app */
+    rtos_thread_restore_top_mpu_data_region(&old_data_region);
 
     networking_init(&g_enet_device0);
 }
@@ -311,9 +320,6 @@ static struct rtos_thread_execution_stack demo_ping_thread_execution_stack;
 static void
 demo_ping_command(void)
 {
-    fdc_error_t fdc_error;
-    struct ipv4_address local_ip_addr;
-    struct ipv4_address remote_ip_addr;
     struct rtos_thread_creation_params thread_params = {
         .p_name_p = "Demo ping thread",
         .p_function_p = demo_ping_thread_f,
@@ -321,6 +327,10 @@ demo_ping_command(void)
         .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 2,
     };
 
+    fdc_error_t fdc_error;
+    struct rtos_mpu_data_region old_data_region;
+    struct ipv4_address local_ip_addr;
+    struct ipv4_address remote_ip_addr;
     token_t token = get_next_token(&g_tokenizer);
 
     if (token == HELP) {
@@ -347,17 +357,14 @@ demo_ping_command(void)
         return;
     }
 
-    fdc_error = rtos_thread_add_mpu_data_region(&g_app,
-                                                sizeof g_app,
-                                                false);
-    if (fdc_error != 0) {
-        console_printf("Error adding region (error code %#x)\n", fdc_error);
-        return;
-    }
+    rtos_thread_replace_top_mpu_data_region(&g_app,
+                                            sizeof g_app,
+                                            false,
+                                            &old_data_region);
 
     if (g_app.demo_ping_started) {
         console_printf("Ping demo already started\n");
-        goto exit_remove_region;
+        goto exit_restore_region;
     }
 
     g_app.demo_ping_started = true;
@@ -369,6 +376,7 @@ demo_ping_command(void)
     rtos_thread_init(
         &thread_params,
         &demo_ping_thread_execution_stack,
+        NULL,
         &g_app.demo_ping_thread);
 
     console_printf("%s started (destination IP address: %u.%u.%u.%u)\n",
@@ -378,12 +386,12 @@ demo_ping_command(void)
                    remote_ip_addr.bytes[2],
                    remote_ip_addr.bytes[3]);
 
-exit_remove_region:
-    rtos_thread_remove_top_mpu_data_region();   /* g_app */
+exit_restore_region:
+    rtos_thread_restore_top_mpu_data_region(&old_data_region);
     return;
 
 syntax_error:    
-	console_printf("\'demo-ping\' command syntax error (type \'demo-ping help\')\n");
+    console_printf("\'demo-ping\' command syntax error (type \'demo-ping help\')\n");
 }
 
 
@@ -392,9 +400,6 @@ static struct rtos_thread_execution_stack demo_udp_client_thread_execution_stack
 static void
 demo_udp_client_command(void)
 {
-    fdc_error_t fdc_error;
-    struct ipv4_address local_ip_addr;
-    struct ipv4_address remote_ip_addr;
     struct rtos_thread_creation_params thread_params = {
         .p_name_p = "Demo UDP client thread",
         .p_function_p = demo_udp_client_thread_f,
@@ -402,6 +407,10 @@ demo_udp_client_command(void)
         .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 3,
     };
 
+    fdc_error_t fdc_error;
+    struct rtos_mpu_data_region old_data_region;
+    struct ipv4_address local_ip_addr;
+    struct ipv4_address remote_ip_addr;
     token_t token = get_next_token(&g_tokenizer);
 
     if (token == HELP) {
@@ -428,17 +437,14 @@ demo_udp_client_command(void)
         return;
     }
 
-    fdc_error = rtos_thread_add_mpu_data_region(&g_app,
-                                                sizeof g_app,
-                                                false);
-    if (fdc_error != 0) {
-        console_printf("Error adding region (error code %#x)\n", fdc_error);
-        return;
-    }
+    rtos_thread_replace_top_mpu_data_region(&g_app,
+                                            sizeof g_app,
+                                            false,
+                                            &old_data_region);
 
     if (g_app.demo_udp_client_started) {
         console_printf("UDP client demo already started\n");
-        goto exit_remove_region;
+        goto exit_restore_region;
     }
 
     g_app.demo_udp_client_started = true;
@@ -450,6 +456,7 @@ demo_udp_client_command(void)
     rtos_thread_init(
         &thread_params,
         &demo_udp_client_thread_execution_stack,
+        &g_app_region,
         &g_app.demo_udp_client_thread);
 
     console_printf("%s started (server IP address: %u.%u.%u.%u)\n",
@@ -459,8 +466,8 @@ demo_udp_client_command(void)
                    remote_ip_addr.bytes[2],
                    remote_ip_addr.bytes[3]);
 
-exit_remove_region:
-    rtos_thread_remove_top_mpu_data_region();   /* g_app */
+exit_restore_region:
+    rtos_thread_restore_top_mpu_data_region(&old_data_region);
     return;
 
 syntax_error:    
@@ -473,25 +480,23 @@ static struct rtos_thread_execution_stack demo_udp_server_thread_execution_stack
 static void
 demo_udp_server_command(void)
 {
-    fdc_error_t fdc_error;
-    struct rtos_thread_creation_params thread_params = {
+    static const struct rtos_thread_creation_params thread_params = {
         .p_name_p = "Demo UDP server thread",
         .p_function_p = demo_udp_server_thread_f,
         .p_function_arg_p = NULL,
         .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 3,
     };
 
-    fdc_error = rtos_thread_add_mpu_data_region(&g_app,
-                                                sizeof g_app,
-                                                false);
-    if (fdc_error != 0) {
-        console_printf("Error adding region (error code %#x)\n", fdc_error);
-        return;
-    }
+    struct rtos_mpu_data_region old_data_region;
+
+    rtos_thread_replace_top_mpu_data_region(&g_app,
+                                            sizeof g_app,
+                                            false,
+                                            &old_data_region);
 
     if (g_app.demo_udp_server_started) {
         console_printf("UDP server demo already started\n");
-        goto exit_remove_region;
+        goto exit_restore_region;
     }
 
     g_app.demo_udp_server_started = true;
@@ -502,12 +507,13 @@ demo_udp_server_command(void)
     rtos_thread_init(
         &thread_params,
         &demo_udp_server_thread_execution_stack,
+        &g_app_region,
         &g_app.demo_udp_server_thread);
 
     console_printf("%s started\n", thread_params.p_name_p);
 
-exit_remove_region:
-    rtos_thread_remove_top_mpu_data_region();   /* g_app */
+exit_restore_region:
+    rtos_thread_restore_top_mpu_data_region(&old_data_region);
 }
 
 
@@ -516,19 +522,11 @@ hello_world_thread_f(void *arg)
 {
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
-    bool mpu_region_added = false;
     bool fpu_enabled = false;
 
     FDC_ASSERT(arg != NULL, arg, cpu_id);
 
     int thread_id = (intptr_t)arg;
-
-    fdc_error = rtos_thread_add_mpu_data_region(&g_app, sizeof g_app, false);
-    if (fdc_error != 0) {
-	    goto exit;
-    }
-
-    mpu_region_added = true;
 
     if (thread_id == 1) {
 	rtos_thread_enable_fpu();
@@ -555,13 +553,8 @@ hello_world_thread_f(void *arg)
         "thread should not have terminated",
         cpu_id, rtos_thread_self());
 
-exit:
     if (fpu_enabled) {
 	rtos_thread_disable_fpu();
-    }
-
-    if (mpu_region_added) {
-	rtos_thread_remove_top_mpu_data_region();
     }
 
     return fdc_error;
@@ -603,18 +596,11 @@ accelerometer_thread_f(void *arg)
 #   define ACCELEROMETER_SAMPLING_PERIOD_MS  50
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
-    bool mpu_region_added = false;
     bool accelerometer_started = false;
 
     FDC_ASSERT(arg == NULL, arg, cpu_id);
     console_printf("Initializing accelerometer sensing thread ...\n");
 
-    fdc_error = rtos_thread_add_mpu_data_region(&g_app, sizeof g_app, false);
-        if (fdc_error != 0) {
-	    goto exit;
-    }
-
-    mpu_region_added = true;
     accelerometer_init();
     accelerometer_started = true;
 
@@ -686,13 +672,8 @@ accelerometer_thread_f(void *arg)
         "thread should not have terminated",
         cpu_id, rtos_thread_self());
 
-exit:
     if (accelerometer_started) {
 	accelerometer_stop();
-    }
-
-    if (mpu_region_added) {
-	rtos_thread_remove_top_mpu_data_region();
     }
 
     return fdc_error;
@@ -811,9 +792,6 @@ demo_udp_client_thread_f(void *arg)
 	out_msg_p = net_get_udp_data_payload_area(tx_packet_p);
 	out_msg_p->seq_num = seq_num;
 
-        fdc_error = rtos_thread_add_mpu_data_region(&g_app, sizeof g_app, false);
-        FDC_ASSERT(fdc_error == 0, fdc_error, tx_packet_p);
-
         rtos_mutex_acquire(&g_app.accel_reading_mutex);
         while (!g_app.accel_reading_ready) {
             rtos_condvar_wait(&g_app.accel_reading_condvar, &g_app.accel_reading_mutex, NULL);
@@ -823,7 +801,6 @@ demo_udp_client_thread_f(void *arg)
         g_app.accel_reading_ready = false;
         rtos_mutex_release(&g_app.accel_reading_mutex);
 
-        rtos_thread_remove_top_mpu_data_region(); /* g_app */
         rtos_thread_remove_top_mpu_data_region(); /* tx_packet_p */
 
 	fdc_error = net_send_ipv4_udp_datagram(client_end_point_p, &dest_ip_addr,

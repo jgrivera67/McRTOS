@@ -269,8 +269,20 @@ C_ASSERT(sizeof(struct rtos_thread_execution_stack) %
  * read/write access is allowed.
  */
 struct rtos_mpu_data_region {
+    /**
+     * Start RAM address of the data region properly aligned
+     */
     void *start_addr;
-    void *end_addr;
+
+    /**
+     * Size of the data region in bytes, properly aligned
+     */
+    size_t size;
+
+    /**
+     * Flag indicating if the region has read-only access (true) or 
+     * read-write access (false)
+     */
     bool read_only;
 };
 
@@ -371,6 +383,7 @@ void
 rtos_thread_init(
     _IN_ const struct rtos_thread_creation_params *params_p,    
     _IN_ struct rtos_thread_execution_stack *thread_stack_p,
+    _IN_ const struct rtos_mpu_data_region *global_data_region_p,
     _OUT_ struct rtos_thread *rtos_thread_p);
 
 _THREAD_CALLERS_ONLY_
@@ -524,16 +537,16 @@ rtos_thread_remove_top_mpu_data_region(void);
 
 _THREAD_CALLERS_ONLY_
 void
-rtos_thread_set_top_mpu_data_region(
+rtos_thread_replace_top_mpu_data_region(
     _IN_ void *start_addr,
     _IN_ size_t size,
     _IN_ bool read_only,
-    _OUT_ struct rtos_mpu_data_region *old_mpu_region);
+    _OUT_ struct rtos_mpu_data_region *old_mpu_region_p);
 
 _THREAD_CALLERS_ONLY_
 void
 rtos_thread_restore_top_mpu_data_region(
-    _IN_ const struct rtos_mpu_data_region *old_mpu_region);
+    _IN_ const struct rtos_mpu_data_region *old_mpu_region_p);
 
 void rtos_pointer_circular_buffer_init(
         _IN_  const char *name_p,

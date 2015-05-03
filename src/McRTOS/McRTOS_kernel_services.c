@@ -115,7 +115,7 @@ const void *const g_rtos_system_call_dispatch_table[] =
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
         RTOS_THREAD_REMOVE_TOP_MPU_DATA_REGION_SYSTEM_CALL, rtos_k_thread_remove_top_mpu_data_region),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
-        RTOS_THREAD_SET_TOP_MPU_DATA_REGION_SYSTEM_CALL, rtos_k_thread_set_top_mpu_data_region),
+        RTOS_THREAD_REPLACE_TOP_MPU_DATA_REGION_SYSTEM_CALL, rtos_k_thread_replace_top_mpu_data_region),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
         RTOS_THREAD_RESTORE_TOP_MPU_DATA_REGION_SYSTEM_CALL, rtos_k_thread_restore_top_mpu_data_region),
     GEN_SYSTEM_CALL_DISPATCH_ENTRY(
@@ -158,6 +158,9 @@ C_ASSERT(ARRAY_SIZE(g_rtos_system_call_dispatch_table) == RTOS_NUM_SYSTEM_CALLS)
  *
  * @param   thread_stack_p: Pointer to the thread's execution stack.
  *
+ * @param   global_data_region_p: Pointer to the thread's default
+ *          global data region or NULL.
+ *
  * @param   rtos_thread_p: Pointer to the thread object
  *
  * @return  none
@@ -166,6 +169,7 @@ void
 rtos_k_thread_init(
     _IN_ const struct rtos_thread_creation_params *params_p,    
     _IN_ struct rtos_thread_execution_stack *thread_stack_p,
+    _IN_ const struct rtos_mpu_data_region *global_data_region_p,
     _OUT_ struct rtos_thread *rtos_thread_p)
 {
     static uint8_t next_thread_context_id = 0;
@@ -181,6 +185,13 @@ rtos_k_thread_init(
         thread_prio, RTOS_NUM_THREAD_PRIORITIES);
 
     FDC_ASSERT_VALID_FUNCTION_POINTER(params_p->p_function_p);
+    if (global_data_region_p != NULL) {
+        FDC_ASSERT_VALID_RAM_POINTER(global_data_region_p->start_addr,
+                                     MIN_MPU_REGION_ALIGNMENT);
+        FDC_ASSERT(global_data_region_p->size != 0 &&
+                   global_data_region_p->size % MIN_MPU_REGION_ALIGNMENT == 0,
+                   global_data_region_p->size, MIN_MPU_REGION_ALIGNMENT);
+    }
 
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
     struct rtos_cpu_controller *cpu_controller_p =
@@ -249,12 +260,39 @@ rtos_k_thread_init(
     rtos_thread_p->thr_execution_stack_p = thread_stack_p;
 
     /*
-     * Initialize thread's MPU regions, with the stack region:
+     * Initialize thread's MPU data regions:
+     * - thread's stack region
+     * - default top data region
      */
+
     rtos_thread_p->thr_mpu_data_regions[0].start_addr = thread_stack_p;
     rtos_thread_p->thr_mpu_data_regions[0].end_addr = thread_stack_p + 1;
     rtos_thread_p->thr_mpu_data_regions[0].read_only = false;
-    rtos_thread_p->thr_num_mpu_data_regions = 1;
+
+    if (global_data_region_p != NULL) {
+        rtos_thread_p->thr_mpu_data_regions[1].start_addr =
+            global_data_region_p->start_addr;
+        rtos_thread_p->thr_mpu_data_regions[1].end_addr =
+            (void *)((uintptr_t)global_data_region_p->start_addr +
+                     global_data_region_p->size);
+        rtos_thread_p->thr_mpu_data_regions[1].read_only =
+            global_data_region_p->read_only;
+
+    } else {
+        /* 
+         * Duplicate the stack region as the default top data region:
+         *
+         * NOTE: Although this seems redundant, it is needed for 
+         * rtos_thread_replace_top_mpu_data_region()/
+         * rtos_thread_restore_top_mpu_data_region() to work correctly.
+         * Otherwise, a thread will not be able to access its stack region,
+         * after a call to rtos_thread_replace_top_mpu_data_region():
+         */
+        rtos_thread_p->thr_mpu_data_regions[1] =
+            rtos_thread_p->thr_mpu_data_regions[0];
+    }
+
+    rtos_thread_p->thr_num_mpu_data_regions = 2;
 
     /*
      * Initialize the thread's execution context:
@@ -2633,10 +2671,14 @@ rtos_k_thread_add_mpu_data_region(
 {
     FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
 
-    FDC_ASSERT(start_addr != NULL && size != 0, start_addr, size);
+    FDC_ASSERT(start_addr != NULL &&
+               (uintptr_t)start_addr % MIN_MPU_REGION_ALIGNMENT == 0 &&
+               size != 0 && size % MIN_MPU_REGION_ALIGNMENT == 0,
+               start_addr, size);
 
     void *end_addr = (void *)((uintptr_t)start_addr + size);
 
+    /* check for wrap-around */
     FDC_ASSERT(start_addr < end_addr, start_addr, end_addr);
 
     fdc_error_t fdc_error = 0;
@@ -2664,6 +2706,7 @@ rtos_k_thread_add_mpu_data_region(
     if (num_data_regions < RTOS_MAX_MPU_THREAD_DATA_REGIONS) {
 	    current_thread_p->thr_mpu_data_regions[num_data_regions].start_addr = start_addr;
 	    current_thread_p->thr_mpu_data_regions[num_data_regions].end_addr = end_addr;
+	    current_thread_p->thr_mpu_data_regions[num_data_regions].read_only = read_only;
 	    mpu_set_thread_data_region(cpu_id,
 				       num_data_regions,
 				       start_addr,
@@ -2735,28 +2778,142 @@ rtos_k_thread_remove_top_mpu_data_region(void)
 
 
 /**
- * Set the top MPU data region to the given range for the calling thread
+ * Replace the top MPU data region to the given range for the calling thread
  */
 void
-rtos_k_thread_set_top_mpu_data_region(
+rtos_k_thread_replace_top_mpu_data_region(
     _IN_ void *start_addr,
     _IN_ size_t size,
     _IN_ bool read_only,
-    _OUT_ struct rtos_mpu_data_region *old_mpu_region)
+    _OUT_ struct rtos_mpu_data_region *old_mpu_region_p)
 {
-    DEBUG_PRINTF("Not implemented yet\n");
+    FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
+
+    FDC_ASSERT(start_addr != NULL &&            
+               (uintptr_t)start_addr % MIN_MPU_REGION_ALIGNMENT == 0 &&
+               size != 0 && size % MIN_MPU_REGION_ALIGNMENT == 0,
+               start_addr, size);
+
+    void *end_addr = (void *)((uintptr_t)start_addr + size);
+
+    /* check for wrap-around */
+    FDC_ASSERT(start_addr < end_addr, start_addr, end_addr);
+
+    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
+    struct rtos_cpu_controller *cpu_controller_p =
+        &g_McRTOS_p->rts_cpu_controllers[cpu_id];
+
+    struct rtos_execution_context *current_execution_context_p =
+        cpu_controller_p->cpc_current_execution_context_p;
+
+    FDC_ASSERT(
+        current_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
+        current_execution_context_p->ctx_context_type,
+        current_execution_context_p);
+
+    struct rtos_thread *current_thread_p =
+        RTOS_EXECUTION_CONTEXT_GET_THREAD(current_execution_context_p);
+
+    /*
+     * Disable interrupts in the ARM core
+     */
+    cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
+    uint_fast8_t num_data_regions = current_thread_p->thr_num_mpu_data_regions;
+
+    FDC_ASSERT(num_data_regions >= 2 &&
+               num_data_regions < RTOS_MAX_MPU_THREAD_DATA_REGIONS,
+               num_data_regions, start_addr);
+
+    struct mpu_region_range *top_data_region_p =
+        &current_thread_p->thr_mpu_data_regions[num_data_regions - 1];
+
+    old_mpu_region_p->start_addr = top_data_region_p->start_addr;
+    old_mpu_region_p->size = (uintptr_t)top_data_region_p->end_addr -
+                              (uintptr_t)top_data_region_p->start_addr;
+    old_mpu_region_p->read_only = top_data_region_p->read_only;
+
+    top_data_region_p->start_addr = start_addr;
+    top_data_region_p->end_addr = end_addr;
+    top_data_region_p->read_only = read_only;
+
+    mpu_set_thread_data_region(cpu_id,
+                               num_data_regions - 1,
+                               start_addr,
+                               end_addr,
+                               read_only);
+
+    /*
+     * Restore previous interrupt masking in the ARM core
+     */
+    rtos_k_restore_cpu_interrupts(cpu_status_register);
 }
 
 
 /**
  * Restore the top MPU data region for the calling thread with the region
- * descriptor saved by a previous call to rtos_k_thread_set_top_mpu_data_region()
+ * descriptor saved by a previous call to rtos_k_thread_replace_top_mpu_data_region()
  */
 void
 rtos_k_thread_restore_top_mpu_data_region(
-    _IN_ const struct rtos_mpu_data_region *old_mpu_region)
+    _IN_ const struct rtos_mpu_data_region *old_mpu_region_p)
 {
-    DEBUG_PRINTF("Not implemented yet\n");
+    FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
+
+    DBG_ASSERT(old_mpu_region_p->start_addr != NULL &&
+               (uintptr_t)old_mpu_region_p->start_addr % MIN_MPU_REGION_ALIGNMENT == 0 &&
+               old_mpu_region_p->size != 0 &&
+               old_mpu_region_p->size % MIN_MPU_REGION_ALIGNMENT == 0,
+               old_mpu_region_p->start_addr, old_mpu_region_p->size);
+
+    void *end_addr = (void *)((uintptr_t)old_mpu_region_p->start_addr +
+                              old_mpu_region_p->size);
+
+    /* check for wrap-around */
+    DBG_ASSERT(old_mpu_region_p->start_addr < end_addr,
+               old_mpu_region_p->start_addr, end_addr);
+
+    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
+    struct rtos_cpu_controller *cpu_controller_p =
+        &g_McRTOS_p->rts_cpu_controllers[cpu_id];
+
+    struct rtos_execution_context *current_execution_context_p =
+        cpu_controller_p->cpc_current_execution_context_p;
+
+    FDC_ASSERT(
+        current_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT,
+        current_execution_context_p->ctx_context_type,
+        current_execution_context_p);
+
+    struct rtos_thread *current_thread_p =
+        RTOS_EXECUTION_CONTEXT_GET_THREAD(current_execution_context_p);
+
+    /*
+     * Disable interrupts in the ARM core
+     */
+    cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
+    uint_fast8_t num_data_regions = current_thread_p->thr_num_mpu_data_regions;
+
+    DBG_ASSERT(num_data_regions >= 2 &&
+               num_data_regions < RTOS_MAX_MPU_THREAD_DATA_REGIONS,
+               num_data_regions, old_mpu_region_p->start_addr);
+
+    struct mpu_region_range *top_data_region_p =
+        &current_thread_p->thr_mpu_data_regions[num_data_regions - 1];
+
+    top_data_region_p->start_addr = old_mpu_region_p->start_addr;
+    top_data_region_p->end_addr = end_addr;
+    top_data_region_p->read_only = old_mpu_region_p->read_only;
+
+    mpu_set_thread_data_region(cpu_id,
+                               num_data_regions - 1,
+                               old_mpu_region_p->start_addr,
+                               end_addr,
+                               old_mpu_region_p->read_only);
+
+    /*
+     * Restore previous interrupt masking in the ARM core
+     */
+    rtos_k_restore_cpu_interrupts(cpu_status_register);
 }
 
 

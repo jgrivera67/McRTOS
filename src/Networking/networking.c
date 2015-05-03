@@ -159,7 +159,6 @@ static struct networking g_networking = {{
     },
 }};
 
-
 static const struct rtos_thread_creation_params g_thread_creation_params[] = {
     [0] = {
         .p_name_p = "Network Packet Receive thread",
@@ -584,12 +583,12 @@ autoconfigure_ipv6_link_local_addr(struct local_l3_end_point *local_l3_end_point
 void
 net_get_local_ipv6_address(struct ipv6_address *ip_addr_p)
 {
-    fdc_error_t fdc_error;
+    struct rtos_mpu_data_region old_data_region;
 
-    fdc_error = rtos_thread_add_mpu_data_region(&g_networking,
-                                                sizeof g_networking,
-                                                false);
-    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+    rtos_thread_replace_top_mpu_data_region(&g_networking,
+                                            sizeof g_networking,
+                                            false,
+                                            &old_data_region);
 
     FDC_ASSERT(g_networking.initialized, 0, 0);
 
@@ -597,7 +596,7 @@ net_get_local_ipv6_address(struct ipv6_address *ip_addr_p)
 	 &g_networking.local_l3_end_point;
 
     *ip_addr_p = local_l3_end_point_p->ipv6.link_local_ip_addr;
-    rtos_thread_remove_top_mpu_data_region();   /* g_networking */
+    rtos_thread_restore_top_mpu_data_region(&old_data_region);
 }
 
 
@@ -683,13 +682,19 @@ neighbor_cache_init(struct neighbor_cache *neighbor_cache_p)
 void
 networking_init(const struct enet_device *enet_device_p)
 {
-    fdc_error_t fdc_error;
+    static const struct rtos_mpu_data_region g_networking_region = {
+        .start_addr = &g_networking,
+        .size = sizeof g_networking,
+        .read_only = false
+    };
+     
+    struct rtos_mpu_data_region old_data_region;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
-    fdc_error = rtos_thread_add_mpu_data_region(&g_networking,
-                                                sizeof g_networking,
-                                                false);
-    FDC_ASSERT(fdc_error == 0, fdc_error, cpu_id);
+    rtos_thread_replace_top_mpu_data_region(&g_networking,
+                                            sizeof g_networking,
+                                            false,
+                                            &old_data_region);
 
     FDC_ASSERT(!g_networking.initialized, 0, 0);
 
@@ -763,13 +768,14 @@ networking_init(const struct enet_device *enet_device_p)
         rtos_thread_init(
             &g_thread_creation_params[i],
             &g_thread_execution_stacks[i],
+            &g_networking_region,
             &g_networking.threads[i]);
 
         console_printf("CPU core %u: %s started\n", cpu_id,
             g_thread_creation_params[i].p_name_p);
     }
 
-    rtos_thread_remove_top_mpu_data_region();   /* g_networking */
+    rtos_thread_restore_top_mpu_data_region(&old_data_region);
 }
 
 
@@ -780,12 +786,12 @@ void
 net_set_local_ipv4_address(const struct ipv4_address *ip_addr_p,
 			   uint8_t subnet_prefix)
 {
-    fdc_error_t fdc_error;
+    struct rtos_mpu_data_region old_data_region;
 
-    fdc_error = rtos_thread_add_mpu_data_region(&g_networking,
-                                                sizeof g_networking,
-                                                false);
-    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+    rtos_thread_replace_top_mpu_data_region(&g_networking,
+                                            sizeof g_networking,
+                                            false,
+                                            &old_data_region);
 
     FDC_ASSERT(g_networking.initialized, 0, 0);
     FDC_ASSERT(ip_addr_p->value != IPV4_NULL_ADDR, ip_addr_p->value, 0);
@@ -812,19 +818,19 @@ net_set_local_ipv4_address(const struct ipv4_address *ip_addr_p,
 			 &local_l3_end_point_p->ipv4.local_ip_addr,
 			 &local_l3_end_point_p->ipv4.local_ip_addr);
 
-    rtos_thread_remove_top_mpu_data_region();   /* g_networking */
+    rtos_thread_restore_top_mpu_data_region(&old_data_region);
 }
 
 
 void
 net_get_local_ipv4_address(struct ipv4_address *ip_addr_p)
 {
-    fdc_error_t fdc_error;
+    struct rtos_mpu_data_region old_data_region;
 
-    fdc_error = rtos_thread_add_mpu_data_region(&g_networking,
-                                                sizeof g_networking,
-                                                false);
-    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+    rtos_thread_replace_top_mpu_data_region(&g_networking,
+                                            sizeof g_networking,
+                                            false,
+                                            &old_data_region);
 
     FDC_ASSERT(g_networking.initialized, 0, 0);
 
@@ -832,7 +838,7 @@ net_get_local_ipv4_address(struct ipv4_address *ip_addr_p)
 	 &g_networking.local_l3_end_point;
 
     *ip_addr_p = local_l3_end_point_p->ipv4.local_ip_addr;
-    rtos_thread_remove_top_mpu_data_region();   /* g_networking */
+    rtos_thread_restore_top_mpu_data_region(&old_data_region);
 }
 
 
@@ -843,13 +849,13 @@ net_get_local_ipv4_address(struct ipv4_address *ip_addr_p)
 struct network_packet *
 net_allocate_tx_packet(bool free_after_tx_complete)
 {
-    fdc_error_t fdc_error;
     struct network_packet *tx_packet_p = NULL;
+    struct rtos_mpu_data_region old_data_region;
 
-    fdc_error = rtos_thread_add_mpu_data_region(&g_networking,
-                                                sizeof g_networking,
-                                                false);
-    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+    rtos_thread_replace_top_mpu_data_region(&g_networking,
+                                            sizeof g_networking,
+                                            false,
+                                            &old_data_region);
 
     FDC_ASSERT(g_networking.initialized, 0, 0);
 
@@ -870,7 +876,7 @@ net_allocate_tx_packet(bool free_after_tx_complete)
 	tx_packet_p->state_flags |= NET_PACKET_FREE_AFTER_TX_COMPLETE;
     }
 
-    rtos_thread_remove_top_mpu_data_region(); /* g_networking */
+    rtos_thread_restore_top_mpu_data_region(&old_data_region);
     return tx_packet_p;
 }
 
@@ -881,15 +887,15 @@ net_allocate_tx_packet(bool free_after_tx_complete)
 void
 net_free_tx_packet(struct network_packet *tx_packet_p)
 {
-    fdc_error_t fdc_error;
-    bool region_added = false;
+    bool region_replaced = false;
+    struct rtos_mpu_data_region old_data_region;
    
     if (rtos_caller_is_thread()) {
-        fdc_error = rtos_thread_add_mpu_data_region(&g_networking,
-                                                    sizeof g_networking,
-                                                    false);
-        FDC_ASSERT(fdc_error == 0, fdc_error, 0);
-        region_added = true;
+        rtos_thread_replace_top_mpu_data_region(&g_networking,
+                                                sizeof g_networking,
+                                                false,
+                                                &old_data_region);
+        region_replaced = true;
     }
 
     FDC_ASSERT(g_networking.initialized, 0, 0);
@@ -906,8 +912,8 @@ net_free_tx_packet(struct network_packet *tx_packet_p)
     tx_packet_p->state_flags = NET_PACKET_IN_TX_POOL;
     rtos_queue_add(&g_networking.free_tx_packet_pool, &tx_packet_p->node);
 
-    if (region_added) {
-        rtos_thread_remove_top_mpu_data_region(); /* g_networking */
+    if (region_replaced) {
+        rtos_thread_restore_top_mpu_data_region(&old_data_region);
     }
 }
 
@@ -972,12 +978,12 @@ net_enqueue_rx_packet(struct local_l3_end_point *local_l3_end_point_p,
 void
 net_recycle_rx_packet(struct network_packet *rx_packet_p)
 {
-    fdc_error_t fdc_error;
+    struct rtos_mpu_data_region old_data_region;
     
-    fdc_error = rtos_thread_add_mpu_data_region(&g_networking,
-                                                sizeof g_networking,
-                                                false);
-    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+    rtos_thread_replace_top_mpu_data_region(&g_networking,
+                                            sizeof g_networking,
+                                            false,
+                                            &old_data_region);
 
     struct local_l3_end_point *local_l3_end_point_p = rx_packet_p->local_l3_end_point_p;
 
@@ -994,7 +1000,7 @@ net_recycle_rx_packet(struct network_packet *rx_packet_p)
 	       rx_packet_p->rx_buf_desc_p, rx_packet_p);
 
     enet_repost_rx_packet(local_l3_end_point_p->enet_device_p, rx_packet_p);
-    rtos_thread_remove_top_mpu_data_region(); /* g_networking */
+    rtos_thread_restore_top_mpu_data_region(&old_data_region);
 }
 
 
@@ -1383,6 +1389,7 @@ net_create_local_l4_end_point(enum l4_protocols l4_protocol,
 {
     fdc_error_t fdc_error;
     struct local_l4_end_point *l4_end_point_p;
+    struct rtos_mpu_data_region old_data_region;
 
     if (l4_protocol != TRANSPORT_PROTO_UDP &&
 	l4_protocol != TRANSPORT_PROTO_TCP) {
@@ -1392,10 +1399,10 @@ net_create_local_l4_end_point(enum l4_protocols l4_protocol,
 	return fdc_error;
     }
 
-    fdc_error = rtos_thread_add_mpu_data_region(&g_networking,
-                                                sizeof g_networking,
-                                                false);
-    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+    rtos_thread_replace_top_mpu_data_region(&g_networking,
+                                            sizeof g_networking,
+                                            false,
+                                            &old_data_region);
 
     rtos_mutex_acquire(&g_networking.local_l4_end_points_mutex);
     if (g_networking.next_free_l4_end_point_p ==
@@ -1441,12 +1448,12 @@ net_create_local_l4_end_point(enum l4_protocols l4_protocol,
 	            &l4_end_point_p->l4_rx_packet_queue);
 
     *local_l4_end_point_pp = l4_end_point_p;
-    rtos_thread_remove_top_mpu_data_region(); /* g_networking */
+    rtos_thread_restore_top_mpu_data_region(&old_data_region);
     return 0;
 
 error_release_mutex:
     rtos_mutex_release(&g_networking.local_l4_end_points_mutex);
-    rtos_thread_remove_top_mpu_data_region(); /* g_networking */
+    rtos_thread_restore_top_mpu_data_region(&old_data_region);
     return fdc_error;
 }
 
@@ -1459,11 +1466,12 @@ net_send_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
 		           size_t data_payload_length)
 {
     fdc_error_t fdc_error;
+    struct rtos_mpu_data_region old_data_region;
 
-    fdc_error = rtos_thread_add_mpu_data_region(&g_networking,
-                                                sizeof g_networking,
-                                                false);
-    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+    rtos_thread_replace_top_mpu_data_region(&g_networking,
+                                            sizeof g_networking,
+                                            false,
+                                            &old_data_region);
 
     /*
      * Populate UPD header:
@@ -1496,7 +1504,7 @@ net_send_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
 			             sizeof(struct udp_header) + data_payload_length,
 			             TRANSPORT_PROTO_UDP);
 
-    rtos_thread_remove_top_mpu_data_region(); /* g_networking */
+    rtos_thread_restore_top_mpu_data_region(&old_data_region);
     return fdc_error;
 }
 
@@ -1509,11 +1517,12 @@ net_receive_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
 			      struct network_packet **rx_packet_pp)
 {
     fdc_error_t fdc_error;
+    struct rtos_mpu_data_region old_data_region;
 
-    fdc_error = rtos_thread_add_mpu_data_region(&g_networking,
-                                                sizeof g_networking,
-                                                false);
-    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+    rtos_thread_replace_top_mpu_data_region(&g_networking,
+                                            sizeof g_networking,
+                                            false,
+                                            &old_data_region);
 
     FDC_ASSERT(local_l4_end_point_p->l4_protocol == TRANSPORT_PROTO_UDP,
 	       local_l4_end_point_p->l4_protocol, local_l4_end_point_p);
@@ -1525,7 +1534,7 @@ net_receive_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
     if (rx_packet_node_p == NULL) {
 	*rx_packet_pp = NULL;
         fdc_error = CAPTURE_FDC_ERROR("No Rx packet available", timeout_ms, 0);
-        rtos_thread_remove_top_mpu_data_region(); /* g_networking */
+        rtos_thread_restore_top_mpu_data_region(&old_data_region);
 	return fdc_error;
     }
 
@@ -1551,7 +1560,7 @@ net_receive_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
 
     *source_port_p = udp_header_p->source_port;
     *rx_packet_pp = rx_packet_p;
-    rtos_thread_remove_top_mpu_data_region(); /* g_networking */
+    rtos_thread_restore_top_mpu_data_region(&old_data_region);
     return 0;
 }
 
@@ -1640,13 +1649,12 @@ net_send_ipv4_ping_request(const struct ipv4_address *dest_ip_addr_p,
 	                   uint16_t seq_num)
 {
     fdc_error_t fdc_error;
+    struct rtos_mpu_data_region old_data_region;
 
-    fdc_error = rtos_thread_add_mpu_data_region(&g_networking,
-                                                sizeof g_networking,
-                                                false);
-    if (fdc_error != 0) {
-        return fdc_error;
-    }
+    rtos_thread_replace_top_mpu_data_region(&g_networking,
+                                            sizeof g_networking,
+                                            false,
+                                            &old_data_region);
 
     rtos_mutex_acquire(&g_networking.expecting_ping_reply_mutex);
     while (g_networking.expecting_ping_reply) {
@@ -1676,7 +1684,7 @@ net_send_ipv4_ping_request(const struct ipv4_address *dest_ip_addr_p,
 	g_networking.expecting_ping_reply = false;
     }
 
-    rtos_thread_remove_top_mpu_data_region();   /* g_networking */
+    rtos_thread_restore_top_mpu_data_region(&old_data_region);
     return fdc_error;
 }
 
@@ -1688,19 +1696,19 @@ net_receive_ipv4_ping_reply(rtos_milliseconds_t timeout_ms,
 			    uint16_t *seq_num_p)
 {
     fdc_error_t fdc_error;
-    fdc_error = rtos_thread_add_mpu_data_region(&g_networking,
-                                                sizeof g_networking,
-                                                false);
-    if (fdc_error != 0) {
-        return fdc_error;
-    }
+    struct rtos_mpu_data_region old_data_region;
+    
+    rtos_thread_replace_top_mpu_data_region(&g_networking,
+                                            sizeof g_networking,
+                                            false,
+                                            &old_data_region);
 
     struct glist_node *rx_packet_node_p =
 	rtos_queue_remove(&g_networking.rx_ipv4_ping_reply_packet_queue, timeout_ms);
 
     if (rx_packet_node_p == NULL) {
         fdc_error = CAPTURE_FDC_ERROR("No Rx packet available", timeout_ms, 0);
-	goto exit_remove_region;
+	goto exit;
     }
 
     struct network_packet *rx_packet_p = GLIST_NODE_TO_NETWORK_PACKET(rx_packet_node_p);
@@ -1718,10 +1726,9 @@ net_receive_ipv4_ping_reply(rtos_milliseconds_t timeout_ms,
     net_recycle_rx_packet(rx_packet_p);
     fdc_error = 0;
 
-exit_remove_region:
-    rtos_thread_remove_top_mpu_data_region();   /* g_networking */
+exit:
+    rtos_thread_restore_top_mpu_data_region(&old_data_region);
     return fdc_error;
-
 }
 
 
@@ -2740,17 +2747,9 @@ static fdc_error_t
 net_receive_thread_f(void *arg)
 {
     fdc_error_t fdc_error;
-    bool mpu_region_added = false;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
     struct local_l3_end_point *local_l3_end_point_p =
 	(struct local_l3_end_point *)arg;
-
-    fdc_error = rtos_thread_add_mpu_data_region(&g_networking, sizeof g_networking, false);
-    if (fdc_error != 0) {
-	    goto exit;
-    }
-
-    mpu_region_added = true;
 
     FDC_ASSERT(local_l3_end_point_p->signature == LOCAL_L3_END_POINT_SIGNATURE,
 	       local_l3_end_point_p->signature, local_l3_end_point_p);
@@ -2804,14 +2803,9 @@ net_receive_thread_f(void *arg)
 	}
     }
 
-exit:
     fdc_error = CAPTURE_FDC_ERROR(
         "thread should not have terminated",
         cpu_id, rtos_thread_self());
-
-    if (mpu_region_added) {
-	rtos_thread_remove_top_mpu_data_region();
-    }
 
     return fdc_error;
 }
@@ -2824,17 +2818,9 @@ static fdc_error_t
 net_icmpv4_receive_thread_f(void *arg)
 {
     fdc_error_t fdc_error;
-    bool mpu_region_added = false;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
     struct local_l3_end_point *local_l3_end_point_p =
 	(struct local_l3_end_point *)arg;
-
-    fdc_error = rtos_thread_add_mpu_data_region(&g_networking, sizeof g_networking, false);
-    if (fdc_error != 0) {
-	    goto exit;
-    }
-
-    mpu_region_added = true;
 
     FDC_ASSERT(local_l3_end_point_p->signature == LOCAL_L3_END_POINT_SIGNATURE,
 	       local_l3_end_point_p->signature, local_l3_end_point_p);
@@ -2855,14 +2841,9 @@ net_icmpv4_receive_thread_f(void *arg)
 	net_process_incoming_icmpv4_message(rx_packet_p);
     }
 
-exit:
     fdc_error = CAPTURE_FDC_ERROR(
         "thread should not have terminated",
         cpu_id, rtos_thread_self());
-
-    if (mpu_region_added) {
-	rtos_thread_remove_top_mpu_data_region();
-    }
 
     return fdc_error;
 }
@@ -2875,17 +2856,9 @@ static fdc_error_t
 net_icmpv6_receive_thread_f(void *arg)
 {
     fdc_error_t fdc_error;
-    bool mpu_region_added = false;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
     struct local_l3_end_point *local_l3_end_point_p =
 	(struct local_l3_end_point *)arg;
-
-    fdc_error = rtos_thread_add_mpu_data_region(&g_networking, sizeof g_networking, false);
-    if (fdc_error != 0) {
-	    goto exit;
-    }
-
-    mpu_region_added = true;
 
     FDC_ASSERT(local_l3_end_point_p->signature == LOCAL_L3_END_POINT_SIGNATURE,
 	       local_l3_end_point_p->signature, local_l3_end_point_p);
@@ -2906,14 +2879,9 @@ net_icmpv6_receive_thread_f(void *arg)
 	net_process_incoming_icmpv6_message(rx_packet_p);
     }
 
-exit:
     fdc_error = CAPTURE_FDC_ERROR(
         "thread should not have terminated",
         cpu_id, rtos_thread_self());
-
-    if (mpu_region_added) {
-	rtos_thread_remove_top_mpu_data_region();
-    }
 
     return fdc_error;
 }
@@ -3027,18 +2995,11 @@ net_dhcpv4_client_thread_f(void *arg)
     size_t dhcp_msg_size;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
     rtos_milliseconds_t timeout_ms = 0;
-    bool mpu_region_added = false;
     struct local_l3_end_point *local_l3_end_point_p =
 	(struct local_l3_end_point *)arg;
 
     struct local_l4_end_point *client_end_point_p;
 
-    fdc_error = rtos_thread_add_mpu_data_region(&g_networking, sizeof g_networking, false);
-    if (fdc_error != 0) {
-	    goto exit;
-    }
-
-    mpu_region_added = true;
     fdc_error = net_create_local_l4_end_point(TRANSPORT_PROTO_UDP,
 					      DHCP_UDP_CLIENT_PORT,
 					      &client_end_point_p);
@@ -3099,14 +3060,9 @@ net_dhcpv4_client_thread_f(void *arg)
         net_recycle_rx_packet(rx_packet_p);
     }
 
-exit:
     fdc_error = CAPTURE_FDC_ERROR(
         "thread should not have terminated",
         cpu_id, rtos_thread_self());
-
-    if (mpu_region_added) {
-	rtos_thread_remove_top_mpu_data_region();
-    }
 
     return fdc_error;
 }
@@ -3122,16 +3078,8 @@ net_ip6_address_autoconfiguration_thread_f(void *arg)
     struct network_packet *rx_packet_p = NULL;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
     rtos_milliseconds_t timeout_ms = 0;
-    bool mpu_region_added = false;
     struct local_l3_end_point *local_l3_end_point_p =
 	(struct local_l3_end_point *)arg;
-
-    fdc_error = rtos_thread_add_mpu_data_region(&g_networking, sizeof g_networking, false);
-    if (fdc_error != 0) {
-	    goto exit;
-    }
-
-    mpu_region_added = true;
 
     /*
      * Build IPv6 interface Id for L3 end point:
@@ -3206,14 +3154,9 @@ net_ip6_address_autoconfiguration_thread_f(void *arg)
         }
     }
 
-exit:
     fdc_error = CAPTURE_FDC_ERROR(
         "thread should not have terminated",
         cpu_id, rtos_thread_self());
-
-    if (mpu_region_added) {
-	rtos_thread_remove_top_mpu_data_region();
-    }
 
     return fdc_error;
 }

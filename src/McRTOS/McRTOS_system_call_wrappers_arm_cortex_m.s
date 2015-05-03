@@ -273,8 +273,8 @@ GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_THREAD_ADD_MPU_DATA_REGION_SYSTEM_CALL, \
 GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_THREAD_REMOVE_TOP_MPU_DATA_REGION_SYSTEM_CALL, \
                                  rtos_thread_remove_top_mpu_data_region
 
-GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_THREAD_SET_TOP_MPU_DATA_REGION_SYSTEM_CALL, \
-                                 rtos_thread_set_top_mpu_data_region
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_THREAD_REPLACE_TOP_MPU_DATA_REGION_SYSTEM_CALL, \
+                                 rtos_thread_replace_top_mpu_data_region
 
 GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_THREAD_RESTORE_TOP_MPU_DATA_REGION_SYSTEM_CALL, \
                                  rtos_thread_restore_top_mpu_data_region

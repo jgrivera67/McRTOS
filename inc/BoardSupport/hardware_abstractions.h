@@ -120,11 +120,16 @@
         ((cpu_clock_cycles_t)((int32_t)(_end_cycles) - \
                               (int32_t)(_begin_cycles)))
 
+#if __MPU_PRESENT == 1
+/**
+ * Minimum MPU region alignment in bytes
+ */
+#   define MIN_MPU_REGION_ALIGNMENT	UINT32_C(32)
+
 /**
  * MPU region alignment in bytes for a given data type, for the
  * ARMv7-m generic MPU
  */
-#if __MPU_PRESENT == 1
 #   define SOC_MPU_REGION_ALIGNMENT(_type) \
            (sizeof(_type) < 32 ? UINT32_C(32) :                         \
             (sizeof(_type) < 64 ? UINT32_C(64) :                        \
@@ -327,8 +332,6 @@ struct mpu_device_var {
 
 /**
  * MPU data region range
- *
- * FIXME: Remove this and use struct rtos_mpu_data_region
  *
  * NOTE: If read_only is true, only read access is allowed. Otherwise,
  * read/write access is allowed.
