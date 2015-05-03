@@ -106,6 +106,18 @@
 #define ARP_REQUEST_MAX_RETRIES	64
 
 /**
+ * Timeout in milliseconds to wait for a neighbor advertisement after sending a
+ * non-gratuitous neighbor solicitation (3 minutes)
+ */
+#define NEIGHBOR_ADVERTISEMENT_WAIT_TIMEOUT_IN_MS	(3u * 60 * 1000)
+
+/**
+ * Maximum number of neighbor solicitations to be sent for a given destination
+ * IPv6 address, before failing with "unreachable destination".
+ */
+#define NEIGHBOR_SOLICITATION_MAX_RETRIES	64
+
+/**
  * Convert a 16-bit value from host byte order to network byte order
  * (Do byte swap since Cortex-M is little endian)
  */
@@ -722,32 +734,47 @@ struct icmpv6_header {
      * Message checksum
      */
     uint16_t msg_checksum;
-
-    /**
-     * Message data
-     */
-    union {
-	uint32_t data;
-	uint16_t data16[2];
-	uint8_t  data8[4];
-    };
 }; //  __attribute__((packed));
 
-C_ASSERT(sizeof(struct icmpv6_header) == 8);
-C_ASSERT(offsetof(struct icmpv6_header, data) == 4);
+C_ASSERT(sizeof(struct icmpv6_header) == 4);
 
 /**
  * ICMPv6 neighbor solicitation message layout
  */
 struct icmpv6_neighbor_solicitation {
-	struct icmpv6_header header;
-        struct ipv6_address target_ip_addr;
-        uint16_t options[]; 
+    struct icmpv6_header header;
+    uint32_t reserved; /* = 0 */
+    struct ipv6_address target_ip_addr;
+    uint16_t options[]; 
 };
 
 C_ASSERT(sizeof(struct icmpv6_neighbor_solicitation) == 24);
 C_ASSERT(offsetof(struct icmpv6_neighbor_solicitation, target_ip_addr) == 8);
 C_ASSERT(offsetof(struct icmpv6_neighbor_solicitation, options) == 24);
+
+/**
+ * ICMPv6 neighbor advertisement message layout
+ */
+struct icmpv6_neighbor_advertisement {
+    struct icmpv6_header header;
+    union {
+        uint32_t reserved_and_flags;
+        struct {
+            uint8_t reserved[3];
+            uint8_t flags;
+#           define NEIGHBOR_ADVERT_FLAG_R   BIT(0)
+#           define NEIGHBOR_ADVERT_FLAG_S   BIT(1)
+#           define NEIGHBOR_ADVERT_FLAG_O   BIT(2)
+        };
+    };
+
+    struct ipv6_address target_ip_addr;
+    uint16_t options[]; 
+};
+
+C_ASSERT(sizeof(struct icmpv6_neighbor_advertisement) == 24);
+C_ASSERT(offsetof(struct icmpv6_neighbor_advertisement, target_ip_addr) == 8);
+C_ASSERT(offsetof(struct icmpv6_neighbor_advertisement, options) == 24);
 
 /**
  * UDP header layout
@@ -841,6 +868,11 @@ struct arp_cache {
 
 enum neighbor_cache_entry_states {
     NEIGHBOR_ENTRY_INVALID = 0,
+    NEIGHBOR_ENTRY_INCOMPLETE,
+    NEIGHBOR_ENTRY_REACHABLE,
+    NEIGHBOR_ENTRY_STALE,
+    NEIGHBOR_ENTRY_DELAY,
+    NEIGHBOR_ENTRY_PROBE,
 };
 
 /**
@@ -850,6 +882,20 @@ struct neighbor_cache_entry {
     struct ipv6_address dest_ipv6_addr;
     struct ethernet_mac_address dest_mac_addr;
     enum neighbor_cache_entry_states state;
+
+    /**
+     * Timestamp in ticks when the last neighbor solicitation for this entry was sent.
+     * It is used to determine if we have waited too long for the neighbor advertisement,
+     * and need to send another neighbor solicitation.
+     */
+    rtos_ticks_t neighbor_solicitation_time_stamp;
+
+    /**
+     * Timestamp in ticks when the last lookup was done for this entry. It is
+     * used to determine the least recently used entry, for cache entry
+     * replacement.
+     */
+    rtos_ticks_t last_lookup_time_stamp;
 };
 
 /**
@@ -942,27 +988,34 @@ struct ipv4_end_point {
  * IPv6 network end point
  */
 
-enum ipv6_addr_state {
-    IPV6_ADDR_NOT_CONFIGURED = 0x0,
-    IPV6_ADDR_TENTATIVE,
-    IPV6_ADDR_PREFERRED,
-};
-
-struct ipv6_addr_entry {
-    struct ipv6_address addr;
-    enum ipv6_addr_state state;
-};
-
 struct ipv6_end_point {
     /**
      * Link-local unicast IPv6 address
      */
-    struct ipv6_addr_entry link_local_ip_addr;
+    struct ipv6_address link_local_ip_addr;
 
     /**
      * Inteface Id (modified EUI-64 Id)
      */
     uint64_t interface_id;
+
+    /**
+     * Flags
+     */
+    volatile uint32_t flags;
+#   define IPV6_DETECT_DUP_ADDR             BIT(0)
+#   define IPV6_DUP_ADDR_DETECTED           BIT(1)
+#   define IPV6_LINK_LOCAL_ADDR_READY       BIT(2)
+
+    /**
+     * Mutex to serialize access to this object
+     */
+    struct rtos_mutex mutex;
+
+    /**
+     * Condvar signaled when 'flags' get changed
+     */
+    struct rtos_condvar flags_changed_condvar;
 
     /**
      * Queue of received ICMPv6 packets
@@ -1007,6 +1060,7 @@ struct __network_packet {
 #   define NET_PACKET_RX_FAILED			BIT(6)
 #   define NET_PACKET_IN_TX_POOL		BIT(7)
 #   define NET_PACKET_IN_ICMP_QUEUE		BIT(8)
+#   define NET_PACKET_IN_ICMPV6_QUEUE		BIT(9)
 
     /**
      * Total packet length, including L2 L3 and L4 headers
@@ -1104,7 +1158,7 @@ struct local_l4_end_point {
 /**
  * Number of threads for the networking stack
  */
-#define NET_NUM_THREADS 3
+#define NET_NUM_THREADS 5
 
 /**
  * Networking stack state variables
@@ -1291,6 +1345,9 @@ net_set_local_ipv4_address(const struct ipv4_address *ip_addr_p,
 void
 net_get_local_ipv4_address(struct ipv4_address *ip_addr_p);
 
+void
+net_get_local_ipv6_address(struct ipv6_address *ip_addr_p);
+
 struct network_packet *net_allocate_tx_packet(bool free_after_tx_complete);
 
 void net_free_tx_packet(struct network_packet *tx_packet_p);
@@ -1386,7 +1443,6 @@ net_send_ipv6_icmp_message(const struct ipv6_address *dest_ip_addr_p,
 		           struct network_packet *tx_packet_p,
 			   uint8_t msg_type,
 		           uint8_t msg_code,
-                           uint32_t header_data,
 		           size_t data_payload_length);
 
 fdc_error_t
