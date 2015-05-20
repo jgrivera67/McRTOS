@@ -12,16 +12,27 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <assert.h>
 
 /*
  * Compile-time assertion macros
  */
 
+#if __STDC_VERSION__ == 201112L
+#define C_ASSERT(_cond) \
+	static_assert(_cond, #_cond)
+
+#define C_ASSERT2(_assertName, _cond) \
+	static_assert(_cond, #_cond)
+
+#else
 #define C_ASSERT(_cond) \
         extern const char c_assert_dummy_decl[(_cond) ? 1 : -1]
 
 #define C_ASSERT2(_assertName, _cond) \
         typedef char c_assert__ ## _assertName[(_cond) ? 1 : -1]
+
+#endif /* __STDC_VERSION__ == 201112L */
 
 C_ASSERT(sizeof(uintptr_t) == sizeof(uint32_t));
 

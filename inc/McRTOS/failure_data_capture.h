@@ -17,16 +17,6 @@
 #include "hardware_abstractions.h"
 #include "McRTOS_config_parameters.h"
 
-/**
- * Compile-time assertion macros
- */
-
-#define C_ASSERT(_cond) \
-        extern const char c_assert_dummy_decl[(_cond) ? 1 : -1]
-
-#define C_ASSERT2(_assertName, _cond) \
-        typedef char c_assert__ ## _assertName[(_cond) ? 1 : -1]
-
 /*
  * Run-time assertion macros
  */

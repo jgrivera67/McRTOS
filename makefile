@@ -47,7 +47,7 @@ RUN_TESTS_MAKEFILE := $(MAKE) --directory=$(UNIT_TESTS_DIR)
 RUN_DOC_MAKEFILE := $(MAKE) --directory=$(DOC_DIR)
 
 COMMON_CFLAGS = -Wall -Wstrict-prototypes -fms-extensions -Wextra -Wformat \
-	        -std=gnu99 -g3
+	        -std=gnu11 -g3
 
 .PHONY: build create_object_dir run_tests doc \
 	clean

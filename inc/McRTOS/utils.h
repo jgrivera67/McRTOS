@@ -13,6 +13,7 @@
 #include <stdbool.h>    // bool
 #include <stddef.h>     // offsetof()
 #include <stdarg.h>
+#include <stdalign.h>
 #include "hardware_abstractions.h"
 #include "compile_time_checks.h"
 #include "failure_data_capture.h"

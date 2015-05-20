@@ -12,7 +12,8 @@ export IDE_VIM_SESSION="$IDE_ENV_DIR/${APPLICATION}_${PLATFORM}.vim"
 export DEFAULT_OBJ_FLAVOR_SUBDIR="${PLATFORM}-obj-${BUILD_FLAVOR}"
 export BIN_FILE="$DEFAULT_OBJ_FLAVOR_SUBDIR/Applications/$APPLICATION/$APPLICATION.bin"
 #export CROSS_COMPILE=$HOME/embsys/tools/gcc-arm-none-eabi-4_8-2013q4
-export CROSS_COMPILE=$HOME/embsys/tools/gcc-arm-none-eabi-4_8-2014q2
+#export CROSS_COMPILE=$HOME/embsys/tools/gcc-arm-none-eabi-4_8-2014q2
+export CROSS_COMPILE=$HOME/embsys/tools/gcc-arm-none-eabi-4_9-2015q1
 export GCC_VERSION=4.8.4
 export TOOLCHAIN=$CROSS_COMPILE/bin/arm-none-eabi
 export EXTERNAL_INCLUDE_DIRS="$CROSS_COMPILE/arm-none-eabi/include
@@ -127,7 +128,7 @@ function my_gdb
     echo "$FUNCNAME: Generating $init_script ..."
     echo "
 target remote localhost:3333
-symbol-file $bin_file_prefix.elf
+#symbol-file $bin_file_prefix.elf
 set print pretty on
 set print array on
 set print array-indexes on
@@ -140,15 +141,14 @@ set history expansion on
 set history file $gdb_history_file
 set history save on
 show history
-#load
+load
 continue
 " > $init_script
 
     #sudo python ~/embsys/tools/pyOCD/test/gdb_server.py &
 
-    #ddd --gdb --trace --debugger "gdb --command=$init_script $bin_file_prefix.elf"
-    gdb --command=$init_script #$bin_file_prefix.elf
-
+    ddd --gdb --trace --debugger "${CROSS_COMPILE}/bin/arm-none-eabi-gdb --command=$init_script $bin_file_prefix.elf"
+    #${CROSS_COMPILE}/bin/arm-none-eabi-gdb --command=$init_script $bin_file_prefix.elf
 }
 
 function my_gdb_old
@@ -200,8 +200,8 @@ show history
     #~/embsys/tools/openocd/bin/openocd -f $openocd_cfg_file &
     ~/linux_apps/open_ocd/bin/openocd -f $openocd_cfg_file &
 
-    #ddd --gdb --trace --debugger "gdb --command=$init_script"
-    gdb --command=$init_script
+    ddd --gdb --trace --debugger "${CROSS_COMPILE}/bin/arm-none-eabi-gdb --command=$init_script"
+    #${CROSS_COMPILE}/bin/arm-none-eabi-gdb --command=$init_script
 }
 
 cd $SRC_TREE_DIR

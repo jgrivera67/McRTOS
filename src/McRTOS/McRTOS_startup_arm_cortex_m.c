@@ -275,7 +275,7 @@ is_power_of_2(uint32_t value)
     uint32_t log_value = 31 - __CLZ(value);
 
     return (value == BIT(log_value));
-#   else        
+#   else
     for (uint32_t log_value = 31; log_value != 0; log_value ++) {
         if (value == BIT(log_value)) {
             return true;
@@ -283,7 +283,7 @@ is_power_of_2(uint32_t value)
     }
 
     return (value == 1);
-#   endif    
+#   endif
 }
 
 
@@ -298,13 +298,13 @@ log_base_2(uint32_t power_of_2_value)
     if (power_of_2_value == BIT(log_value)) {
         return (uint8_t)log_value;
     }
-#   else        
+#   else
     for (uint32_t log_value = 5; log_value <= 31; log_value ++) {
         if (power_of_2_value == BIT(log_value)) {
             return (uint8_t)log_value;
         }
     }
-#   endif    
+#   endif
 
     fdc_error_t fdc_error =
         CAPTURE_FDC_ERROR("Invalid power of 2 value", power_of_2_value, 0);
@@ -347,14 +347,14 @@ cortex_m_set_mpu_region(
     write_32bit_mmio_register(&mpu_regs_p->RBAR, (uintptr_t)start_addr);
     reg_value = MPU_RASR_ENABLE_Msk;
     SET_BIT_FIELD(reg_value, MPU_RASR_SIZE_Msk, MPU_RASR_SIZE_Pos, encoded_region_size);
-    SET_BIT_FIELD(reg_value, MPU_RASR_AP_Msk, MPU_RASR_AP_Pos, 
+    SET_BIT_FIELD(reg_value, MPU_RASR_AP_Msk, MPU_RASR_AP_Pos,
                   unprivileged_permissions &
                     (UNPRIVILEGED_READ_MASK | UNPRIVILEGED_WRITE_MASK));
 
     if (!(unprivileged_permissions & UNPRIVILEGED_EXEC_MASK)) {
         reg_value |= MPU_RASR_XN_Msk;
     }
-    
+
     write_32bit_mmio_register(&mpu_regs_p->RASR, reg_value);
 }
 
@@ -497,7 +497,7 @@ cortex_m_mpu_init(void)
     C_ASSERT2(assert_soc_flash_base_aligned, SOC_FLASH_BASE % 32 == 0);
     C_ASSERT2(assert_soc_sram_base_aligned, SOC_SRAM_BASE % 32 == 0);
     C_ASSERT2(assert_enough_mpu_regions, RTOS_NUM_GLOBAL_MPU_REGIONS >= 1);
-    
+
     extern uint32_t __flash_text_start[];
     extern uint32_t __flash_text_end[];
 
@@ -534,12 +534,12 @@ cortex_m_mpu_init(void)
     /*
      * Enable the default memory map as a background region for privileged
      * access. The background region acts as region number -1
-     */ 
+     */
     reg_value = read_32bit_mmio_register(&mpu_regs_p->CTRL);
     reg_value |= MPU_CTRL_PRIVDEFENA_Msk;
     write_32bit_mmio_register(&mpu_regs_p->CTRL, reg_value);
 
-    /* 
+    /*
      * Make region 0, the code in flash to be executable in unprivileged mode
      */
     if (is_power_of_2((uintptr_t)__flash_text_end - (uintptr_t)__flash_text_start)) {
