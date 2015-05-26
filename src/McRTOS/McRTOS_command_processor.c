@@ -13,7 +13,7 @@
 #include "failure_data_capture.h"
 #include "utils.h"
 #include "McRTOS_command_processor.h"
-#ifdef _NETWORKING_   
+#ifdef _NETWORKING_
 #include <networking.h>
 #endif
 
@@ -33,12 +33,13 @@ static const char *const keyword_table[] = {
     "dmesg",
     "get",
     "help",
-#ifdef _NETWORKING_   
+#ifdef _NETWORKING_
     "gateway",
     "ip4",
     "ip6",
     "ping",
-#endif    
+    "ping6",
+#endif
     "reset",
     "set",
     "stack",
@@ -99,7 +100,16 @@ lookup_keyword_token(struct tokenizer *tokenizer_p)
 	}
     }
 
-    return APP_COMMAND;
+    /*
+     * Check if token is a hexadecimal numeric string:
+     */
+    for (unsigned int i = 0; keyword[i] != '\0'; i ++) {
+	if (!is_xdigit(keyword[i])) {
+		return APP_COMMAND;
+	}
+    }
+
+    return HEXADECIMAL_NUMBER;
 }
 
 
@@ -120,6 +130,7 @@ get_next_token(struct tokenizer *tokenizer_p)
 	c = *tokenizer_p->cmd_line_cursor ++;
     }
 
+restart_parsing:
     if (c == '\0') {
 	token = END_OF_INPUT;
     } else if (is_alpha(c)) {
@@ -160,14 +171,15 @@ get_next_token(struct tokenizer *tokenizer_p)
 	    *lex_cursor = '\0';
 	    token = HEXADECIMAL_NUMBER;
 	    tokenizer_p->cmd_line_cursor --;
-	} else if (is_space(c)) {
+	} else if (is_xdigit(c)) {
+	    goto restart_parsing;
+	} else {
 	    *lex_cursor = '\0';
 	    token = DECIMAL_NUMBER; /* 0 */
-	} else {
-	    console_printf("lexical error at %s\n", tokenizer_p->cmd_line_cursor - 1);
+	    tokenizer_p->cmd_line_cursor --;
 	}
     } else if (is_xdigit(c)) {
-	bool non_decimal_digits_count = 0;
+	int non_decimal_digits_count = 0;
 
 	do {
 	    if (!is_digit(c)) {
@@ -208,7 +220,7 @@ out:
 }
 
 
-#ifdef _NETWORKING_   
+#ifdef _NETWORKING_
 bool
 parse_ip4_address(struct ipv4_address *ip_addr_p)
 {
@@ -454,11 +466,182 @@ parse_get_ip4_command(void)
 }
 
 
-static bool
-parse_ip6_address(struct ipv6_address *ip_addr_p)
+bool
+parse_ip6_address(struct ipv6_address *ipv6_addr_p)
 {
-    console_printf("ERROR: %s not implemented yet\n", __func__);
-    return false;
+    token_t token;
+    uint32_t value;
+
+    value = convert_string_to_hexadecimal(g_tokenizer.last_lexical_unit);
+    if (value > UINT16_MAX) {
+	console_printf("IPv6 address parsing error: Invalid value \'%u\'\n", value);
+	return false;
+    }
+
+    ipv6_addr_p->hwords[0] = hton16(value);
+    token = get_next_token(&g_tokenizer);
+    if (token != COLON_TOKEN) {
+	console_printf("IPv6 address parsing error: Invalid token \'%s\'\n",
+                       g_tokenizer.last_lexical_unit);
+	return false;
+    }
+
+    token = get_next_token(&g_tokenizer);
+    if (token != HEXADECIMAL_NUMBER && token != DECIMAL_NUMBER) {
+	console_printf("IPv6 address parsing error: Invalid token \'%s\'\n",
+                       g_tokenizer.last_lexical_unit);
+	return false;
+    }
+
+    value = convert_string_to_hexadecimal(g_tokenizer.last_lexical_unit);
+    if (value > UINT16_MAX) {
+	console_printf("IPv6 address parsing error: Invalid value \'%u\'\n", value);
+	return false;
+    }
+
+    ipv6_addr_p->hwords[1] = hton16(value);
+    token = get_next_token(&g_tokenizer);
+    if (token != COLON_TOKEN) {
+	console_printf("IPv6 address parsing error: Invalid token \'%s\'\n",
+                       g_tokenizer.last_lexical_unit);
+
+	return false;
+    }
+
+    token = get_next_token(&g_tokenizer);
+    if (token != HEXADECIMAL_NUMBER && token != DECIMAL_NUMBER) {
+	console_printf("IPv6 address parsing error: Invalid token \'%s\'\n",
+                       g_tokenizer.last_lexical_unit);
+	return false;
+    }
+
+    value = convert_string_to_hexadecimal(g_tokenizer.last_lexical_unit);
+    if (value > UINT16_MAX) {
+	console_printf("IPv6 address parsing error: Invalid value \'%u\'\n", value);
+	return false;
+    }
+
+    ipv6_addr_p->hwords[2] = hton16(value);
+    token = get_next_token(&g_tokenizer);
+    if (token != COLON_TOKEN) {
+	console_printf("IPv6 address parsing error: Invalid token \'%s\'\n",
+                       g_tokenizer.last_lexical_unit);
+	return false;
+    }
+
+    token = get_next_token(&g_tokenizer);
+    if (token != HEXADECIMAL_NUMBER && token != DECIMAL_NUMBER) {
+	console_printf("IPv6 address parsing error: Invalid token \'%s\'\n",
+                       g_tokenizer.last_lexical_unit);
+	return false;
+    }
+
+    value = convert_string_to_hexadecimal(g_tokenizer.last_lexical_unit);
+    if (value > UINT16_MAX) {
+	console_printf("IPv6 address parsing error: Invalid value \'%u\'\n", value);
+	return false;
+    }
+
+    ipv6_addr_p->hwords[3] = hton16(value);
+    token = get_next_token(&g_tokenizer);
+    if (token != COLON_TOKEN) {
+	console_printf("IPv6 address parsing error: Invalid token \'%s\'\n",
+                       g_tokenizer.last_lexical_unit);
+	return false;
+    }
+
+    token = get_next_token(&g_tokenizer);
+    if (token != HEXADECIMAL_NUMBER && token != DECIMAL_NUMBER) {
+	console_printf("IPv6 address parsing error: Invalid token \'%s\'\n",
+                       g_tokenizer.last_lexical_unit);
+	return false;
+    }
+
+    value = convert_string_to_hexadecimal(g_tokenizer.last_lexical_unit);
+    if (value > UINT16_MAX) {
+	console_printf("IPv6 address parsing error: Invalid value \'%u\'\n", value);
+	return false;
+    }
+
+    ipv6_addr_p->hwords[4] = hton16(value);
+    token = get_next_token(&g_tokenizer);
+    if (token != COLON_TOKEN) {
+	console_printf("IPv6 address parsing error: Invalid token \'%s\'\n",
+                       g_tokenizer.last_lexical_unit);
+	return false;
+    }
+
+    token = get_next_token(&g_tokenizer);
+    if (token != HEXADECIMAL_NUMBER && token != DECIMAL_NUMBER) {
+	console_printf("IPv6 address parsing error: Invalid token \'%s\'\n",
+                       g_tokenizer.last_lexical_unit);
+	return false;
+    }
+
+    value = convert_string_to_hexadecimal(g_tokenizer.last_lexical_unit);
+    if (value > UINT16_MAX) {
+	console_printf("IPv6 address parsing error: Invalid value \'%u\'\n", value);
+	return false;
+    }
+
+    ipv6_addr_p->hwords[5] = hton16(value);
+    token = get_next_token(&g_tokenizer);
+    if (token != COLON_TOKEN) {
+	console_printf("IPv6 address parsing error: Invalid token \'%s\'\n",
+                       g_tokenizer.last_lexical_unit);
+	return false;
+    }
+
+    token = get_next_token(&g_tokenizer);
+    if (token != HEXADECIMAL_NUMBER && token != DECIMAL_NUMBER) {
+	console_printf("IPv6 address parsing error: Invalid token \'%s\'\n",
+                       g_tokenizer.last_lexical_unit);
+	return false;
+    }
+
+    value = convert_string_to_hexadecimal(g_tokenizer.last_lexical_unit);
+    if (value > UINT16_MAX) {
+	console_printf("IPv6 address parsing error: Invalid value \'%u\'\n", value);
+	return false;
+    }
+
+    ipv6_addr_p->hwords[6] = hton16(value);
+    token = get_next_token(&g_tokenizer);
+    if (token != COLON_TOKEN) {
+	console_printf("IPv6 address parsing error: Invalid token \'%s\'\n",
+                       g_tokenizer.last_lexical_unit);
+	return false;
+    }
+
+    token = get_next_token(&g_tokenizer);
+    if (token != HEXADECIMAL_NUMBER && token != DECIMAL_NUMBER) {
+	console_printf("IPv6 address parsing error: Invalid token \'%s\'\n",
+                       g_tokenizer.last_lexical_unit);
+	return false;
+    }
+
+    value = convert_string_to_hexadecimal(g_tokenizer.last_lexical_unit);
+    if (value > UINT16_MAX) {
+	console_printf("IPv6 address parsing error: Invalid value \'%u\'\n", value);
+	return false;
+    }
+
+    ipv6_addr_p->hwords[7] = hton16(value);
+
+    if (IPV6_ADDRESSES_EQUAL(ipv6_addr_p, &ipv6_unspecified_address)) {
+	console_printf("Invalid IPv6 address %x:%x:%x:%x:%x:%x:%x:%x",
+                       ntoh16(ipv6_addr_p->hwords[0]),
+                       ntoh16(ipv6_addr_p->hwords[1]),
+                       ntoh16(ipv6_addr_p->hwords[2]),
+                       ntoh16(ipv6_addr_p->hwords[3]),
+                       ntoh16(ipv6_addr_p->hwords[4]),
+                       ntoh16(ipv6_addr_p->hwords[5]),
+                       ntoh16(ipv6_addr_p->hwords[6]),
+                       ntoh16(ipv6_addr_p->hwords[7]));
+	return false;
+    }
+
+    return true;
 }
 
 
@@ -481,8 +664,8 @@ parse_set_ip6_address_and_subnet_prefix(void)
     case INVALID_TOKEN:
 	break;
 
-    case DECIMAL_NUMBER:
     case HEXADECIMAL_NUMBER:
+    case DECIMAL_NUMBER:
 	/*
 	 * NOTE: here we interpret string of decimal digits as a hexadecimal
 	 * number
@@ -646,7 +829,124 @@ parse_ping(void)
     }
 }
 
-#endif /* _NETWORKING_ */  
+
+static void
+cmd_ping_remote_ip6_addr(const struct ipv6_address *dest_ipv6_addr_p)
+{
+    fdc_error_t fdc_error;
+    struct ipv6_address remote_ipv6_addr;
+    uint16_t req_seq_num = 0;
+    uint16_t reply_seq_num;
+    uint16_t reply_identifier;
+    uint16_t identifier = (uintptr_t)rtos_thread_self();
+
+    for (int i = 0; i < 8; i ++) {
+	fdc_error = net_send_ipv6_ping_request(dest_ipv6_addr_p, identifier,
+					       req_seq_num);
+	if (fdc_error != 0) {
+	    console_printf("net_send_ipv6_ping_request() failed with error %#x\n",
+		           fdc_error);
+	    return;
+	}
+
+	fdc_error = net_receive_ipv6_ping_reply(3000,
+						&remote_ipv6_addr,
+						&reply_identifier,
+						&reply_seq_num);
+
+	if (fdc_error != 0) {
+	    console_printf("Ping IPv6 %d for %x:%x:%x:%x:%x:%x:%x:%x timed-out\n",
+			   req_seq_num,
+			   ntoh16(dest_ipv6_addr_p->hwords[0]),
+			   ntoh16(dest_ipv6_addr_p->hwords[1]),
+			   ntoh16(dest_ipv6_addr_p->hwords[2]),
+			   ntoh16(dest_ipv6_addr_p->hwords[3]),
+			   ntoh16(dest_ipv6_addr_p->hwords[4]),
+			   ntoh16(dest_ipv6_addr_p->hwords[5]),
+			   ntoh16(dest_ipv6_addr_p->hwords[6]),
+			   ntoh16(dest_ipv6_addr_p->hwords[7]));
+	    return;
+	}
+
+//???
+console_printf("*** remote addr %x:%x:%x:%x:%x:%x:%x:%x\n",
+		       ntoh16(remote_ipv6_addr.hwords[0]),
+		       ntoh16(remote_ipv6_addr.hwords[1]),
+		       ntoh16(remote_ipv6_addr.hwords[2]),
+		       ntoh16(remote_ipv6_addr.hwords[3]),
+		       ntoh16(remote_ipv6_addr.hwords[4]),
+		       ntoh16(remote_ipv6_addr.hwords[5]),
+		       ntoh16(remote_ipv6_addr.hwords[6]),
+		       ntoh16(remote_ipv6_addr.hwords[7]));
+
+console_printf("*** dest_ipv6_addr %x:%x:%x:%x:%x:%x:%x:%x\n",
+		       ntoh16(dest_ipv6_addr_p->hwords[0]),
+		       ntoh16(dest_ipv6_addr_p->hwords[1]),
+		       ntoh16(dest_ipv6_addr_p->hwords[2]),
+		       ntoh16(dest_ipv6_addr_p->hwords[3]),
+		       ntoh16(dest_ipv6_addr_p->hwords[4]),
+		       ntoh16(dest_ipv6_addr_p->hwords[5]),
+		       ntoh16(dest_ipv6_addr_p->hwords[6]),
+		       ntoh16(dest_ipv6_addr_p->hwords[7]));
+
+//???
+	FDC_ASSERT(IPV6_ADDRESSES_EQUAL(&remote_ipv6_addr, dest_ipv6_addr_p),
+		   remote_ipv6_addr.words[2], remote_ipv6_addr.words[3]);
+	FDC_ASSERT(reply_identifier == identifier,
+		   reply_identifier, identifier);
+	FDC_ASSERT(reply_seq_num == req_seq_num,
+		   reply_seq_num, req_seq_num);
+
+	console_printf("Ping IPv6 %d replied by %x:%x:%x:%x:%x:%x:%x:%x\n",
+		       reply_seq_num,
+		       ntoh16(remote_ipv6_addr.hwords[0]),
+		       ntoh16(remote_ipv6_addr.hwords[1]),
+		       ntoh16(remote_ipv6_addr.hwords[2]),
+		       ntoh16(remote_ipv6_addr.hwords[3]),
+		       ntoh16(remote_ipv6_addr.hwords[4]),
+		       ntoh16(remote_ipv6_addr.hwords[5]),
+		       ntoh16(remote_ipv6_addr.hwords[6]),
+		       ntoh16(remote_ipv6_addr.hwords[7]));
+
+	req_seq_num ++;
+        rtos_thread_delay(500);
+    }
+}
+
+
+static void
+parse_ping6(void)
+{
+    struct ipv6_address ipv6_addr;
+    token_t token = get_next_token(&g_tokenizer);
+
+    switch (token) {
+    case INVALID_TOKEN:
+	break;
+
+    case HELP:
+	console_printf("\tping6 <IPv6 address>\n\n");
+	break;
+
+    case HEXADECIMAL_NUMBER:
+    case DECIMAL_NUMBER:
+	/*
+	 * NOTE: here we interpret string of decimal digits as a hexadecimal
+	 * number
+	 */
+	if (!parse_ip6_address(&ipv6_addr)) {
+	    break;
+	}
+
+	cmd_ping_remote_ip6_addr(&ipv6_addr);
+	break;
+
+    case END_OF_INPUT:
+    default:
+	console_printf("\'ping6\' command syntax error (type \'ping6 help\')\n");
+    }
+}
+#endif /* _NETWORKING_ */
 
 
 static void
@@ -667,7 +967,7 @@ parse_set(void)
 
 	break;
 
-#ifdef _NETWORKING_   
+#ifdef _NETWORKING_
     case IP4:
 	parse_set_ip4_command();
         break;
@@ -701,7 +1001,7 @@ parse_get(void)
 	    "\n");
 	break;
 
-#ifdef _NETWORKING_   
+#ifdef _NETWORKING_
     case IP4:
 	parse_get_ip4_command();
         break;
@@ -729,9 +1029,10 @@ cmd_display_help(void)
         "\tdmesg - Display message log\n"
         "\tget - Get config option\n"
         "\thelp - display this message\n"
-#ifdef _NETWORKING_   
+#ifdef _NETWORKING_
 	"\tping - send ping to a given IP address\n"
-#endif /* _NETWORKING_ */   
+	"\tping6 - send ping to a given IPv6 address\n"
+#endif /* _NETWORKING_ */
         "\treset - reset CPU\n"
         "\tset - Set config option\n"
         "\tstack - display stack trace of a given thread/ISR\n"
@@ -803,7 +1104,7 @@ cmd_display_stack_trace(uintptr_t execution_context_addr, bool only_call_entries
         (rtos_execution_stack_entry_t *)execution_context_p->ctx_cpu_saved_registers.cpu_reg_psp;
 #   else
         #error "unsupported CPU architecture"
-#   endif    
+#   endif
 
     console_printf("Stack trace for %s:\n",
                    execution_context_p->ctx_name_p);
@@ -926,11 +1227,15 @@ rtos_parse_command_line(const char *cmd_line)
         console_printf("%s\n%s\n", g_McRTOS_version, g_McRTOS_build_timestamp);
         break;
 
-#ifdef _NETWORKING_   
+#ifdef _NETWORKING_
     case PING:
         parse_ping();
         break;
-#endif /* _NETWORKING_ */   
+
+    case PING6:
+        parse_ping6();
+        break;
+#endif /* _NETWORKING_ */
 
     case APP_COMMAND:
         for (i = 0; i < g_McRTOS_p->rts_num_app_console_commands; i++) {
@@ -949,7 +1254,8 @@ rtos_parse_command_line(const char *cmd_line)
         break;
 
     default:
-        FDC_ASSERT(false, token, 0);
+	console_printf("Invalid command: \'%s\' (type help)\n",
+		       g_tokenizer.last_lexical_unit);
     }
 }
 

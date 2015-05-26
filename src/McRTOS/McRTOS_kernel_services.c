@@ -167,7 +167,7 @@ C_ASSERT(ARRAY_SIZE(g_rtos_system_call_dispatch_table) == RTOS_NUM_SYSTEM_CALLS)
  */
 void
 rtos_k_thread_init(
-    _IN_ const struct rtos_thread_creation_params *params_p,    
+    _IN_ const struct rtos_thread_creation_params *params_p,
     _IN_ struct rtos_thread_execution_stack *thread_stack_p,
     _IN_ const struct rtos_mpu_data_region *global_data_region_p,
     _OUT_ struct rtos_thread *rtos_thread_p)
@@ -279,10 +279,10 @@ rtos_k_thread_init(
             global_data_region_p->read_only;
 
     } else {
-        /* 
+        /*
          * Duplicate the stack region as the default top data region:
          *
-         * NOTE: Although this seems redundant, it is needed for 
+         * NOTE: Although this seems redundant, it is needed for
          * rtos_thread_replace_top_mpu_data_region()/
          * rtos_thread_restore_top_mpu_data_region() to work correctly.
          * Otherwise, a thread will not be able to access its stack region,
@@ -760,10 +760,8 @@ rtos_k_thread_disable_fpu(void)
  	       current_thread_p->thr_fpu_enable_count,
  	       current_thread_p);
 
-#   ifdef _RELIABILITY_CHECKS_
     struct rtos_cpu_controller *cpu_controller_p =
 	&g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
-#   endif
 
     FDC_ASSERT(cpu_controller_p->cpc_last_fpu_thread_p == current_thread_p,
                cpu_controller_p->cpc_last_fpu_thread_p,
@@ -772,8 +770,6 @@ rtos_k_thread_disable_fpu(void)
     current_thread_p->thr_fpu_enable_count --;
     if (current_thread_p->thr_fpu_enable_count == 0) {
         cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
-        struct rtos_cpu_controller *cpu_controller_p =
-            &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
 
 	cortex_m_disable_fpu();
 	cpu_controller_p->cpc_last_fpu_thread_p = NULL;
@@ -2789,7 +2785,7 @@ rtos_k_thread_replace_top_mpu_data_region(
 {
     FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
 
-    FDC_ASSERT(start_addr != NULL &&            
+    FDC_ASSERT(start_addr != NULL &&
                (uintptr_t)start_addr % MIN_MPU_REGION_ALIGNMENT == 0 &&
                size != 0 && size % MIN_MPU_REGION_ALIGNMENT == 0,
                start_addr, size);

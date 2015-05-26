@@ -109,11 +109,12 @@ C_ASSERT(__FPU_USED == 1);
 
 #if __MPU_PRESENT == 0
 #   define MIN_MPU_REGION_ALIGNMENT     K64F_MPU_REGION_ALIGNMENT
+
     /*
      * For the K64F MPU, the MPU region alignment for a given data type
      * does not depend on the size of the data type
      */
-#   define SOC_MPU_REGION_ALIGNMENT(_type)  K64F_MPU_REGION_ALIGNMENT
+#   define SOC_MPU_REGION_ALIGNMENT(_type)  MIN_MPU_REGION_ALIGNMENT
 #endif
 
 /**

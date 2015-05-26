@@ -83,7 +83,7 @@ static const struct ipv6_address ipv6_loopback_address = {
 /**
  * IPv6 unspecified address: ::/128
  */
-static const struct ipv6_address ipv6_unspecified_address = {
+const struct ipv6_address ipv6_unspecified_address = {
     .bytes = { 0x0 }
 };
 
@@ -111,7 +111,7 @@ static const struct ipv6_address ipv6_link_local_solicited_node_prefix = {
 
 /**
  * IPv4-mapped IPv6 unicast address prefix:
- * ::ffff::/96 (0:0:0:0:0:ffff::/96) 
+ * ::ffff::/96 (0:0:0:0:0:ffff::/96)
  */
 static const struct ipv6_address ipv6_ipv4_mapped_addr_prefix = {
     .bytes = { [10] = 0xff, [11] = 0xff }
@@ -384,7 +384,7 @@ net_send_ipv4_dhcp_discovery(struct local_l3_end_point *local_l3_end_point_p,
     dhcp_discovery_msg_p->relay_agent_ip_addr.value = IPV4_NULL_ADDR;
     COPY_MAC_ADDRESS(&dhcp_discovery_msg_p->client_mac_addr,
 		     &local_mac_address);
-    
+
     bzero(dhcp_discovery_msg_p->zero_filled,
 	  sizeof dhcp_discovery_msg_p->zero_filled);
 
@@ -439,7 +439,7 @@ build_ipv6_interface_id(struct local_l3_end_point *local_l3_end_point_p)
     interface_id_p[5] = local_mac_address.bytes[3];
     interface_id_p[6] = local_mac_address.bytes[4];
     interface_id_p[7] = local_mac_address.bytes[5];
-   
+
     DEBUG_PRINTF("IPv6 interface Id: %x:%x:%x:%x:%x:%x:%x:%x\n",
                  interface_id_p[0],
                  interface_id_p[1],
@@ -485,7 +485,7 @@ join_ipv6_multicast_group(struct local_l3_end_point *local_l3_end_point_p,
 
 /**
  * Build solicited-node multicast address for a given unicast address
- */ 
+ */
 static inline void
 build_ipv6_solicited_node_mulicast_addr(
         const struct ipv6_address *unicast_addr_p,
@@ -527,7 +527,7 @@ net_send_ipv6_neighbor_solicitation(struct local_l3_end_point *local_l3_end_poin
         data_payload_length = sizeof(struct icmpv6_neighbor_solicitation) -
 			      sizeof(struct icmpv6_header);
     } else {
-        enet_get_mac_addr(local_l3_end_point_p->enet_device_p, 
+        enet_get_mac_addr(local_l3_end_point_p->enet_device_p,
                           (struct ethernet_mac_address *)ns_msg_p->options);
 
        data_payload_length = (sizeof(struct icmpv6_neighbor_solicitation) -
@@ -552,7 +552,7 @@ net_send_ipv6_neighbor_solicitation(struct local_l3_end_point *local_l3_end_poin
 }
 
 
-static void 
+static void
 autoconfigure_ipv6_link_local_addr(struct local_l3_end_point *local_l3_end_point_p)
 {
     FDC_ASSERT((local_l3_end_point_p->ipv6.flags & IPV6_LINK_LOCAL_ADDR_READY) == 0,
@@ -560,8 +560,8 @@ autoconfigure_ipv6_link_local_addr(struct local_l3_end_point *local_l3_end_point
 
     /*
      * Build link-local unicast address:
-     */ 
-    local_l3_end_point_p->ipv6.link_local_ip_addr = 
+     */
+    local_l3_end_point_p->ipv6.link_local_ip_addr =
         ipv6_link_local_unicast_prefix;
     local_l3_end_point_p->ipv6.link_local_ip_addr.dwords[1] =
         local_l3_end_point_p->ipv6.interface_id;
@@ -687,7 +687,7 @@ networking_init(const struct enet_device *enet_device_p)
         .size = sizeof g_networking,
         .read_only = false
     };
-     
+
     struct rtos_mpu_data_region old_data_region;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
@@ -756,9 +756,16 @@ networking_init(const struct enet_device *enet_device_p)
 	true,
 	&g_networking.rx_ipv4_ping_reply_packet_queue);
 
+    rtos_queue_init(
+	"Incoming IPv6 ping reply packet queue",
+	true,
+	&g_networking.rx_ipv6_ping_reply_packet_queue);
+
     rtos_mutex_init("local_l4_end_points mutex", &g_networking.local_l4_end_points_mutex);
     rtos_mutex_init("expecting_ping_reply mutex", &g_networking.expecting_ping_reply_mutex);
-    rtos_condvar_init("ping_reply_received condvar", &g_networking.ping_reply_recceived_condvar);
+    rtos_condvar_init("ping_reply_received condvar", &g_networking.ping_reply_received_condvar);
+    rtos_mutex_init("expecting_ping_ipv6_reply mutex", &g_networking.expecting_ping_ipv6_reply_mutex);
+    rtos_condvar_init("ping_ipv6_reply_received condvar", &g_networking.ping_ipv6_reply_received_condvar);
     g_networking.initialized = true;
 
     /*
@@ -889,7 +896,7 @@ net_free_tx_packet(struct network_packet *tx_packet_p)
 {
     bool region_replaced = false;
     struct rtos_mpu_data_region old_data_region;
-   
+
     if (rtos_caller_is_thread()) {
         rtos_thread_replace_top_mpu_data_region(&g_networking,
                                                 sizeof g_networking,
@@ -979,7 +986,7 @@ void
 net_recycle_rx_packet(struct network_packet *rx_packet_p)
 {
     struct rtos_mpu_data_region old_data_region;
-    
+
     rtos_thread_replace_top_mpu_data_region(&g_networking,
                                             sizeof g_networking,
                                             false,
@@ -1474,7 +1481,7 @@ net_send_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
                                             &old_data_region);
 
     /*
-     * Populate UPD header:
+     * Populate UDP header:
      */
     struct udp_header *udp_header_p =
 	(struct udp_header *)GET_IPV4_DATA_PAYLOAD_AREA(tx_packet_p);
@@ -1658,7 +1665,7 @@ net_send_ipv4_ping_request(const struct ipv4_address *dest_ip_addr_p,
 
     rtos_mutex_acquire(&g_networking.expecting_ping_reply_mutex);
     while (g_networking.expecting_ping_reply) {
-	rtos_condvar_wait(&g_networking.ping_reply_recceived_condvar,
+	rtos_condvar_wait(&g_networking.ping_reply_received_condvar,
 			  &g_networking.expecting_ping_reply_mutex,
 			  NULL);
     }
@@ -1667,7 +1674,7 @@ net_send_ipv4_ping_request(const struct ipv4_address *dest_ip_addr_p,
     rtos_mutex_release(&g_networking.expecting_ping_reply_mutex);
 
     struct network_packet *tx_packet_p = net_allocate_tx_packet(true);
-    
+
     DBG_ASSERT(tx_packet_p != NULL, dest_ip_addr_p, seq_num);
     struct icmpv4_echo_message *echo_msg_p =
 	(struct icmpv4_echo_message *)GET_IPV4_DATA_PAYLOAD_AREA(tx_packet_p);
@@ -1697,7 +1704,7 @@ net_receive_ipv4_ping_reply(rtos_milliseconds_t timeout_ms,
 {
     fdc_error_t fdc_error;
     struct rtos_mpu_data_region old_data_region;
-    
+
     rtos_thread_replace_top_mpu_data_region(&g_networking,
                                             sizeof g_networking,
                                             false,
@@ -1932,7 +1939,7 @@ net_send_ipv6_packet(const struct ipv6_address *dest_ip_addr_p,
 
     rtos_mutex_release(&local_l3_end_point_p->ipv6.mutex);
 
-    const struct ipv6_address *source_ip_addr_p = 
+    const struct ipv6_address *source_ip_addr_p =
         &local_l3_end_point_p->ipv6.link_local_ip_addr;
 
     const struct enet_device *enet_device_p = local_l3_end_point_p->enet_device_p;
@@ -2031,8 +2038,47 @@ net_send_ipv6_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
 		           struct network_packet *tx_packet_p,
 		           size_t data_payload_length)
 {
-    DEBUG_PRINTF("Not implemented yet\n");
-    return 0;
+    fdc_error_t fdc_error;
+    struct rtos_mpu_data_region old_data_region;
+
+    rtos_thread_replace_top_mpu_data_region(&g_networking,
+                                            sizeof g_networking,
+                                            false,
+                                            &old_data_region);
+
+    /*
+     * Populate UPD header:
+     */
+    struct udp_header *udp_header_p =
+	(struct udp_header *)GET_IPV6_DATA_PAYLOAD_AREA(tx_packet_p);
+
+    FDC_ASSERT(local_l4_end_point_p->l4_protocol == TRANSPORT_PROTO_UDP,
+	       local_l4_end_point_p->l4_protocol, local_l4_end_point_p);
+
+    FDC_ASSERT(data_payload_length <= NET_MAX_UDP_PACKET_PAYLOAD_SIZE,
+               data_payload_length, tx_packet_p);
+
+    udp_header_p->source_port = local_l4_end_point_p->l4_port;
+    udp_header_p->dest_port = dest_port;
+    udp_header_p->datagram_length = hton16(sizeof(struct udp_header) +
+	                                   data_payload_length);
+
+    /*
+     * NOTE: udp_header_p->datagram_checksum is filled by hardware
+     * We just need to initialize it to 0
+     */
+    udp_header_p->datagram_checksum = 0;
+
+    /*
+     * Send IPv6 packet:
+     */
+    fdc_error = net_send_ipv6_packet(dest_ip_addr_p,
+			             tx_packet_p,
+			             sizeof(struct udp_header) + data_payload_length,
+			             TRANSPORT_PROTO_UDP);
+
+    rtos_thread_restore_top_mpu_data_region(&old_data_region);
+    return fdc_error;
 }
 
 
@@ -2043,7 +2089,54 @@ net_receive_ipv6_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
 			      uint16_t *source_port_p,
 			      struct network_packet **rx_packet_pp)
 {
-    DEBUG_PRINTF("Not implemented yet\n");
+    fdc_error_t fdc_error;
+    struct rtos_mpu_data_region old_data_region;
+
+    rtos_thread_replace_top_mpu_data_region(&g_networking,
+                                            sizeof g_networking,
+                                            false,
+                                            &old_data_region);
+
+    FDC_ASSERT(local_l4_end_point_p->l4_protocol == TRANSPORT_PROTO_UDP,
+	       local_l4_end_point_p->l4_protocol, local_l4_end_point_p);
+
+    struct glist_node *rx_packet_node_p =
+	    rtos_queue_remove(&local_l4_end_point_p->l4_rx_packet_queue,
+			      timeout_ms);
+
+    if (rx_packet_node_p == NULL) {
+	*rx_packet_pp = NULL;
+        fdc_error = CAPTURE_FDC_ERROR("No Rx packet available", timeout_ms, 0);
+        rtos_thread_restore_top_mpu_data_region(&old_data_region);
+	return fdc_error;
+    }
+
+    struct network_packet *rx_packet_p =
+	GLIST_NODE_TO_NETWORK_PACKET(rx_packet_node_p);
+
+    struct ipv6_header *ipv6_header_p = GET_IPV6_HEADER(rx_packet_p);
+    uint8_t ip_version = GET_BIT_FIELD(ipv6_header_p->first_word, IPv6_VERSION_MASK,
+	                               IPv6_VERSION_SHIFT);
+
+    FDC_ASSERT(ip_version == 6, ip_version, rx_packet_p);
+    FDC_ASSERT(ipv6_header_p->next_header == TRANSPORT_PROTO_UDP,
+	       ipv6_header_p->next_header, rx_packet_p);
+
+    struct udp_header *udp_header_p =
+	(struct udp_header *)GET_IPV6_DATA_PAYLOAD_AREA(rx_packet_p);
+
+    FDC_ASSERT(udp_header_p->dest_port == local_l4_end_point_p->l4_port,
+               udp_header_p->dest_port, local_l4_end_point_p->l4_port);
+
+#   ifdef ENET_DATA_PAYLOAD_32_BIT_ALIGNED
+    COPY_IPv6_ADDRESS(source_ip_addr_p, &ipv6_header_p->source_ipv6_addr);
+#   else
+    COPY_UNALIGNED_IPv6_ADDRESS(source_ip_addr_p, &ipv6_header_p->source_ipv6_addr);
+#   endif
+
+    *source_port_p = udp_header_p->source_port;
+    *rx_packet_pp = rx_packet_p;
+    rtos_thread_restore_top_mpu_data_region(&old_data_region);
     return 0;
 }
 
@@ -2102,7 +2195,44 @@ net_send_ipv6_ping_request(const struct ipv6_address *dest_ip_addr_p,
 			   uint16_t identifier,
 		           uint16_t seq_num)
 {
-    return 0;
+    fdc_error_t fdc_error;
+    struct rtos_mpu_data_region old_data_region;
+
+    rtos_thread_replace_top_mpu_data_region(&g_networking,
+                                            sizeof g_networking,
+                                            false,
+                                            &old_data_region);
+
+    rtos_mutex_acquire(&g_networking.expecting_ping_ipv6_reply_mutex);
+    while (g_networking.expecting_ping_ipv6_reply) {
+	rtos_condvar_wait(&g_networking.ping_ipv6_reply_received_condvar,
+			  &g_networking.expecting_ping_ipv6_reply_mutex,
+			  NULL);
+    }
+
+    g_networking.expecting_ping_ipv6_reply = true;
+    rtos_mutex_release(&g_networking.expecting_ping_ipv6_reply_mutex);
+
+    struct network_packet *tx_packet_p = net_allocate_tx_packet(true);
+
+    DBG_ASSERT(tx_packet_p != NULL, dest_ip_addr_p, seq_num);
+    struct icmpv6_echo_message *echo_msg_p =
+	(struct icmpv6_echo_message *)GET_IPV6_DATA_PAYLOAD_AREA(tx_packet_p);
+
+    echo_msg_p->identifier = identifier;
+    echo_msg_p->seq_num = seq_num;
+    fdc_error = net_send_ipv6_icmp_message(dest_ip_addr_p,
+					   tx_packet_p,
+					   ICMPV6_TYPE_ECHO_REQ,
+					   0,
+					   sizeof(struct icmpv6_echo_message) -
+					   sizeof(struct icmpv6_header));
+    if (fdc_error != 0) {
+	g_networking.expecting_ping_reply = false;
+    }
+
+    rtos_thread_restore_top_mpu_data_region(&old_data_region);
+    return fdc_error;
 }
 
 
@@ -2112,7 +2242,47 @@ net_receive_ipv6_ping_reply(rtos_milliseconds_t timeout_ms,
 			    uint16_t *identifier_p,
 			    uint16_t *seq_num_p)
 {
-    return 0;
+    fdc_error_t fdc_error;
+    struct rtos_mpu_data_region old_data_region;
+
+    rtos_thread_replace_top_mpu_data_region(&g_networking,
+                                            sizeof g_networking,
+                                            false,
+                                            &old_data_region);
+
+    struct glist_node *rx_packet_node_p =
+	rtos_queue_remove(&g_networking.rx_ipv6_ping_reply_packet_queue, timeout_ms);
+
+    if (rx_packet_node_p == NULL) {
+        fdc_error = CAPTURE_FDC_ERROR("No Rx packet available", timeout_ms, 0);
+	goto exit;
+    }
+
+    struct network_packet *rx_packet_p = GLIST_NODE_TO_NETWORK_PACKET(rx_packet_node_p);
+
+    DBG_ASSERT(rx_packet_p->signature == NET_RX_PACKET_SIGNATURE,
+	       rx_packet_p, 0);
+
+    struct ipv6_header *ipv6_header_p = GET_IPV6_HEADER(rx_packet_p);
+    uint8_t ip_version = GET_BIT_FIELD(ipv6_header_p->first_word, IPv6_VERSION_MASK,
+	                               IPv6_VERSION_SHIFT);
+
+    FDC_ASSERT(ip_version == 6, ip_version, rx_packet_p);
+    FDC_ASSERT(ipv6_header_p->next_header == TRANSPORT_PROTO_ICMPV6,
+	       ipv6_header_p->next_header, rx_packet_p);
+
+    struct icmpv6_header *icmpv6_header_p = GET_IPV6_DATA_PAYLOAD_AREA(rx_packet_p);
+    struct icmpv6_echo_message *echo_msg_p = (struct icmpv6_echo_message *)(icmpv6_header_p);
+
+    COPY_IPv6_ADDRESS(remote_ip_addr_p, &ipv6_header_p->source_ipv6_addr);
+    *identifier_p = echo_msg_p->identifier;
+    *seq_num_p = echo_msg_p->seq_num;
+    net_recycle_rx_packet(rx_packet_p);
+    fdc_error = 0;
+
+exit:
+    rtos_thread_restore_top_mpu_data_region(&old_data_region);
+    return fdc_error;
 }
 
 
@@ -2231,8 +2401,6 @@ net_receive_arp_packet(struct network_packet *rx_packet_p)
 	    /*
 	     * Update ARP cache with (source IP addr, source MAC addr)
 	     */
-	    COPY_UNALIGNED_IPv4_ADDRESS(&source_ip_addr,
-					&rx_frame_p->arp_packet.source_ip_addr);
 	    arp_cache_update(&local_l3_end_point_p->ipv4.arp_cache,
 			     &source_ip_addr,
 			     &rx_frame_p->arp_packet.source_mac_addr);
@@ -2249,7 +2417,7 @@ net_receive_arp_packet(struct network_packet *rx_packet_p)
 
 #       ifdef _RELIABILITY_CHECKS_
         struct ethernet_mac_address local_mac_address;
-        
+
         enet_get_mac_addr(local_l3_end_point_p->enet_device_p, &local_mac_address);
 
 	FDC_ASSERT(
@@ -2281,8 +2449,6 @@ net_receive_arp_packet(struct network_packet *rx_packet_p)
 	    /*
 	     * Update ARP cache with (source IP addr, source MAC addr)
 	     */
-	    COPY_UNALIGNED_IPv4_ADDRESS(&source_ip_addr,
-					&rx_frame_p->arp_packet.source_ip_addr);
 	    arp_cache_update(&local_l3_end_point_p->ipv4.arp_cache,
 			     &source_ip_addr,
 			     &rx_frame_p->arp_packet.source_mac_addr);
@@ -2350,7 +2516,7 @@ net_process_incoming_icmpv4_message(struct network_packet *rx_packet_p)
 
 	rtos_mutex_release(&g_networking.expecting_ping_reply_mutex);
 	if (signal_ping_reply_received) {
-	    rtos_condvar_signal(&g_networking.ping_reply_recceived_condvar);
+	    rtos_condvar_signal(&g_networking.ping_reply_received_condvar);
 	}
 
 	break;
@@ -2370,7 +2536,7 @@ net_process_incoming_icmpv4_message(struct network_packet *rx_packet_p)
 
 	net_send_ipv4_ping_reply(
 	    &dest_ip_addr,
-	    (struct icmpv4_echo_message *)(icmpv4_header_p));
+	    (struct icmpv4_echo_message *)icmpv4_header_p);
 
 	net_recycle_rx_packet(rx_packet_p);
 	break;
@@ -2402,7 +2568,7 @@ net_send_ipv6_neighbor_advertisement(struct local_l3_end_point *local_l3_end_poi
     na_msg_p->flags = flags;
     na_msg_p->target_ip_addr = *dest_ip_addr_p;
 
-    enet_get_mac_addr(local_l3_end_point_p->enet_device_p, 
+    enet_get_mac_addr(local_l3_end_point_p->enet_device_p,
                       (struct ethernet_mac_address *)na_msg_p->options);
 
     data_payload_length = (sizeof(struct icmpv6_neighbor_advertisement) -
@@ -2416,6 +2582,30 @@ net_send_ipv6_neighbor_advertisement(struct local_l3_end_point *local_l3_end_poi
 				     ICMPV6_TYPE_NEIGHBOR_ADVERTISEMENT,
 				     0, /* code */
                                      data_payload_length);
+}
+
+static void
+neighbor_cache_update(struct neighbor_cache *neighbor_cache_p,
+		      const struct ipv6_address *dest_ip_addr_p,
+		      struct ethernet_mac_address *dest_mac_addr_p)
+{
+    struct neighbor_cache_entry *chosen_entry_p = NULL;
+    struct neighbor_cache_entry *free_entry_p = NULL;
+
+    rtos_mutex_acquire(&neighbor_cache_p->mutex);
+    chosen_entry_p = neighbor_cache_lookup_or_allocate(neighbor_cache_p, dest_ip_addr_p,
+						       &free_entry_p);
+
+    if (chosen_entry_p == NULL) {
+	FDC_ASSERT(free_entry_p != NULL, dest_ip_addr_p, neighbor_cache_p);
+	chosen_entry_p = free_entry_p;
+	COPY_IPv6_ADDRESS(&chosen_entry_p->dest_ipv6_addr, dest_ip_addr_p);
+    }
+
+    COPY_MAC_ADDRESS(&chosen_entry_p->dest_mac_addr, dest_mac_addr_p);
+    chosen_entry_p->state = NEIGHBOR_ENTRY_REACHABLE;
+    rtos_mutex_release(&neighbor_cache_p->mutex);
+    rtos_condvar_signal(&neighbor_cache_p->cache_updated_condvar);
 }
 
 
@@ -2455,9 +2645,9 @@ net_receive_ipv6_neighbor_solicitation(struct network_packet *rx_packet_p)
                  ntoh16(neighbor_sol_p->target_ip_addr.hwords[5]),
                  ntoh16(neighbor_sol_p->target_ip_addr.hwords[6]),
                  ntoh16(neighbor_sol_p->target_ip_addr.hwords[7]));
-#   endif    
+#   endif
 
-    if (IPV6_ADDRESSES_EQUAL(&neighbor_sol_p->target_ip_addr, 
+    if (IPV6_ADDRESSES_EQUAL(&neighbor_sol_p->target_ip_addr,
                              &local_l3_end_point_p->ipv6.link_local_ip_addr)) {
         if (IPV6_ADDRESSES_EQUAL(
                 &ipv6_header_p->source_ipv6_addr, &ipv6_unspecified_address)) {
@@ -2477,7 +2667,7 @@ net_receive_ipv6_neighbor_solicitation(struct network_packet *rx_packet_p)
                 ntoh16(neighbor_sol_p->target_ip_addr.hwords[4]),
                 ntoh16(neighbor_sol_p->target_ip_addr.hwords[5]),
                 ntoh16(neighbor_sol_p->target_ip_addr.hwords[6]),
-                ntoh16(neighbor_sol_p->target_ip_addr.hwords[7]),    
+                ntoh16(neighbor_sol_p->target_ip_addr.hwords[7]),
 		rx_frame_p->enet_header.source_mac_addr.bytes[0],
 		rx_frame_p->enet_header.source_mac_addr.bytes[1],
 		rx_frame_p->enet_header.source_mac_addr.bytes[2],
@@ -2500,7 +2690,9 @@ net_receive_ipv6_neighbor_solicitation(struct network_packet *rx_packet_p)
         /*
          * Update neighbor cache with (source IPv6 addr, source MAC addr)
          */
-        DEBUG_PRINTF("TODO: Need to update neighbor cache\n");
+	neighbor_cache_update(&local_l3_end_point_p->ipv6.neighbor_cache,
+			      &ipv6_header_p->source_ipv6_addr,
+			      &rx_frame_p->enet_header.source_mac_addr);
     }
 }
 
@@ -2540,7 +2732,7 @@ net_receive_ipv6_neighbor_advertisement(struct network_packet *rx_packet_p)
                  ntoh16(neighbor_sol_p->target_ip_addr.hwords[5]),
                  ntoh16(neighbor_sol_p->target_ip_addr.hwords[6]),
                  ntoh16(neighbor_sol_p->target_ip_addr.hwords[7]));
-#   endif   
+#   endif
 
     if (IPV6_ADDRESSES_EQUAL(
             &ipv6_header_p->source_ipv6_addr,
@@ -2571,7 +2763,83 @@ net_receive_ipv6_neighbor_advertisement(struct network_packet *rx_packet_p)
         /*
          * Update neighbor cache with (source IPv6 addr, source MAC addr)
          */
-        DEBUG_PRINTF("TODO: Need to update neighbor cache\n");
+	neighbor_cache_update(&local_l3_end_point_p->ipv6.neighbor_cache,
+			      &ipv6_header_p->source_ipv6_addr,
+			      &rx_frame_p->enet_header.source_mac_addr);
+    }
+}
+
+
+static void
+net_send_ipv6_ping_reply(const struct ipv6_address *dest_ip_addr_p,
+			 const struct icmpv6_echo_message *ping_request_msg_p)
+{
+    struct network_packet *tx_packet_p = net_allocate_tx_packet(true);
+    struct icmpv6_echo_message *echo_msg_p =
+	(struct icmpv6_echo_message *)GET_IPV6_DATA_PAYLOAD_AREA(tx_packet_p);
+
+    echo_msg_p->identifier = ping_request_msg_p->identifier;
+    echo_msg_p->seq_num = ping_request_msg_p->seq_num;
+    net_send_ipv6_icmp_message(dest_ip_addr_p,
+			       tx_packet_p,
+			       ICMPV6_TYPE_ECHO_REPLY,
+		               0,
+		               sizeof(struct icmpv6_echo_message) -
+			       sizeof(struct icmpv6_header));
+}
+
+
+static void
+net_receive_ipv6_ping_request(struct network_packet *rx_packet_p)
+{
+    struct ipv6_header *ipv6_header_p = GET_IPV6_HEADER(rx_packet_p);
+    struct icmpv6_header *icmpv6_header_p = GET_IPV6_DATA_PAYLOAD_AREA(rx_packet_p);
+
+    FDC_ASSERT(icmpv6_header_p->msg_code == 0,
+	       icmpv6_header_p->msg_code, rx_packet_p);
+
+    struct ipv6_address dest_ip_addr;
+
+#   ifdef ENET_DATA_PAYLOAD_32_BIT_ALIGNED
+    COPY_IPv6_ADDRESS(&dest_ip_addr, &ipv6_header_p->source_ipv6_addr);
+#   else
+    COPY_UNALIGNED_IPv6_ADDRESS(&dest_ip_addr,
+				&ipv6_header_p->source_ipv6_addr);
+#   endif
+
+    net_send_ipv6_ping_reply(
+	&dest_ip_addr,
+	(struct icmpv6_echo_message *)icmpv6_header_p);
+
+    net_recycle_rx_packet(rx_packet_p);
+}
+
+
+static void
+net_receive_ipv6_ping_reply_internal(struct network_packet *rx_packet_p)
+{
+    bool signal_ping_reply_received = false;
+    struct icmpv6_header *icmpv6_header_p = GET_IPV6_DATA_PAYLOAD_AREA(rx_packet_p);
+
+    FDC_ASSERT(icmpv6_header_p->msg_code == 0,
+	       icmpv6_header_p->msg_code, rx_packet_p);
+
+    rtos_mutex_acquire(&g_networking.expecting_ping_ipv6_reply_mutex);
+    if (g_networking.expecting_ping_ipv6_reply) {
+	rtos_queue_add(&g_networking.rx_ipv6_ping_reply_packet_queue,
+		       &rx_packet_p->node);
+	g_networking.expecting_ping_ipv6_reply = false;
+	signal_ping_reply_received = true;
+    } else {
+	/*
+	 * Drop unmatched ping reply
+	 */
+	net_recycle_rx_packet(rx_packet_p);
+    }
+
+    rtos_mutex_release(&g_networking.expecting_ping_ipv6_reply_mutex);
+    if (signal_ping_reply_received) {
+	rtos_condvar_signal(&g_networking.ping_ipv6_reply_received_condvar);
     }
 }
 
@@ -2584,7 +2852,6 @@ net_process_incoming_icmpv6_message(struct network_packet *rx_packet_p)
 	       sizeof(struct icmpv6_header),
 	       rx_packet_p->total_length, rx_packet_p);
 
-    struct ipv6_header *ipv6_header_p = GET_IPV6_HEADER(rx_packet_p);
     struct icmpv6_header *icmpv6_header_p = GET_IPV6_DATA_PAYLOAD_AREA(rx_packet_p);
 
     switch (icmpv6_header_p->msg_type) {
@@ -2597,7 +2864,13 @@ net_process_incoming_icmpv6_message(struct network_packet *rx_packet_p)
         break;
 
     case ICMPV6_TYPE_ECHO_REQ:
+	net_receive_ipv6_ping_request(rx_packet_p);
+	break;
+
     case ICMPV6_TYPE_ECHO_REPLY:
+	net_receive_ipv6_ping_reply_internal(rx_packet_p);
+	break;
+
     case ICMPV6_TYPE_MULTICAST_LISTENER_QUERY:
     case ICMPV6_TYPE_MULTICAST_LISTENER_REPORT:
     case ICMPV6_TYPE_MULTICAST_LISTENER_DONE:
@@ -2675,7 +2948,7 @@ net_receive_ipv4_packet(struct network_packet *rx_packet_p)
     FDC_ASSERT(rx_packet_p->total_length >=
 	       sizeof(struct ethernet_header) + sizeof(struct ipv4_header),
 	       rx_packet_p->total_length, rx_packet_p);
-        
+
     struct local_l3_end_point *local_l3_end_point_p = rx_packet_p->local_l3_end_point_p;
     struct ipv4_header *ipv4_header_p = GET_IPV4_HEADER(rx_packet_p);
 
@@ -2944,7 +3217,7 @@ net_set_local_ipv4_addr_from_dhcp(struct local_l3_end_point *local_l3_end_point_
 
             lease_time = ntoh32(lease_time);
             expected_options_found ++;
-        } 
+        }
 
         /*
          * Skip to next option:
@@ -3077,7 +3350,6 @@ net_ip6_address_autoconfiguration_thread_f(void *arg)
     fdc_error_t fdc_error;
     struct network_packet *rx_packet_p = NULL;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
-    rtos_milliseconds_t timeout_ms = 0;
     struct local_l3_end_point *local_l3_end_point_p =
 	(struct local_l3_end_point *)arg;
 
@@ -3129,7 +3401,7 @@ net_ip6_address_autoconfiguration_thread_f(void *arg)
         while (!(local_l3_end_point_p->ipv6.flags & IPV6_DUP_ADDR_DETECTED)) {
             rtos_milliseconds_t timeout_ms =
                 IPV6_DUP_ADDR_DETECT_RETRANS_DELAY_MS;
-        
+
             rtos_condvar_wait(
                 &local_l3_end_point_p->ipv6.flags_changed_condvar,
                 &local_l3_end_point_p->ipv6.mutex,

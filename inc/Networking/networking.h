@@ -270,7 +270,7 @@
 				sizeof(struct ethernet_header)))
 
 /**
- * Returns pointer to the data payload area of an IPv4 packet
+ * Returns pointer to the data payload area of an IPv6 packet
  */
 #define GET_IPV6_DATA_PAYLOAD_AREA(_net_packet_p)   \
         ((void *)((_net_packet_p)->data_buffer +    \
@@ -745,7 +745,7 @@ struct icmpv6_neighbor_solicitation {
     struct icmpv6_header header;
     uint32_t reserved; /* = 0 */
     struct ipv6_address target_ip_addr;
-    uint16_t options[]; 
+    uint16_t options[];
 };
 
 C_ASSERT(sizeof(struct icmpv6_neighbor_solicitation) == 24);
@@ -769,12 +769,21 @@ struct icmpv6_neighbor_advertisement {
     };
 
     struct ipv6_address target_ip_addr;
-    uint16_t options[]; 
+    uint16_t options[];
 };
 
 C_ASSERT(sizeof(struct icmpv6_neighbor_advertisement) == 24);
 C_ASSERT(offsetof(struct icmpv6_neighbor_advertisement, target_ip_addr) == 8);
 C_ASSERT(offsetof(struct icmpv6_neighbor_advertisement, options) == 24);
+
+/**
+ * ICMPv6 echo request/reply message layout
+ */
+struct icmpv6_echo_message {
+	struct icmpv6_header header;
+	uint16_t identifier;
+	uint16_t seq_num;
+};
 
 /**
  * UDP header layout
@@ -1170,10 +1179,16 @@ struct __networking {
     bool initialized;
 
     /**
-     * Flag indicating if there is an outstanding ping request for which no reply
+     * Flag indicating if there is an outstanding IPv4 ping request for which no reply
      * has been received yet
      */
-    bool expecting_ping_reply;
+    volatile bool expecting_ping_reply;
+
+    /**
+     * Flag indicating if there is an outstanding IPv6 ping request for which no reply
+     * has been received yet
+     */
+    volatile bool expecting_ping_ipv6_reply;
 
     /**
      * Next ephemeral port to assign to local UDP end point.
@@ -1206,6 +1221,11 @@ struct __networking {
     struct rtos_queue rx_ipv4_ping_reply_packet_queue;
 
     /**
+     * Queue of received IPPv6 ping replies
+     */
+    struct rtos_queue rx_ipv6_ping_reply_packet_queue;
+
+    /**
      * Pointer to the next free entry in local_l4_end_points[]
      */
     struct local_l4_end_point *next_free_l4_end_point_p;
@@ -1219,7 +1239,18 @@ struct __networking {
      * Condvar to be signal when the ping reply for an outstanding ping request
      * has been received.
      */
-    struct rtos_condvar ping_reply_recceived_condvar;
+    struct rtos_condvar ping_reply_received_condvar;
+
+    /**
+     * Mutex to serialize access to expecting_ping_ipv6_reply
+     */
+    struct rtos_mutex expecting_ping_ipv6_reply_mutex;
+
+    /**
+     * Condvar to be signal when the ping IPv6 reply for an outstanding ping request
+     * has been received.
+     */
+    struct rtos_condvar ping_ipv6_reply_received_condvar;
 
     /**
      * Mutex to serialize access calls to table of local layer-4 end points
@@ -1455,5 +1486,7 @@ net_receive_ipv6_ping_reply(rtos_milliseconds_t timeout_ms,
 			    struct ipv6_address *remote_ip_addr_p,
 			    uint16_t *identifier_p,
 			    uint16_t *seq_num_p);
+
+extern const struct ipv6_address ipv6_unspecified_address;
 
 #endif /* _NETWORKING_H */

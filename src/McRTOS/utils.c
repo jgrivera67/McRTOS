@@ -877,12 +877,12 @@ convert_string_to_hexadecimal(_IN_ const char *str)
     uint32_t value = 0;
     uint32_t multiplier = 1;
 
-    FDC_ASSERT(str[0] == '0' && to_lower(str[1]) == 'x', str[0], str[1]);
-
     for (const char *p = str + strlen(str) - 1; p >= str; p --) {
 	int c = *p;
 
 	if (!is_xdigit(c)) {
+	    FDC_ASSERT(p == str + 1 && c == 'x' && str[0] == '0',
+		       str[0], str[1]);
 	    break;
 	}
 

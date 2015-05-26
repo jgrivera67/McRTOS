@@ -11,6 +11,7 @@
 #define _McRTOS_CMD_PROCESSOR_H
 
 struct ipv4_address;
+struct ipv6_address;
 
 enum common_tokens {
     INVALID_TOKEN = 0,
@@ -32,12 +33,13 @@ enum tokens {
     DMESG,
     GET,
     HELP,
-#ifdef _NETWORKING_   
+#ifdef _NETWORKING_
     GATEWAY,
     IP4,
     IP6,
     PING,
-#endif    
+    PING6,
+#endif
     RESET,
     SET,
     STACK,
@@ -88,6 +90,8 @@ void init_tokenizer(struct tokenizer *tokenizer_p,
 token_t get_next_token(struct tokenizer *tokenizer_p);
 
 bool parse_ip4_address(struct ipv4_address *ip_addr_p);
+
+bool parse_ip6_address(struct ipv6_address *ip_addr_p);
 
 void rtos_command_processor(void);
 

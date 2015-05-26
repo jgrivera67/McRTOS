@@ -39,7 +39,7 @@ my $USAGE_STR = "Usage: $PROG_NAME <ELF file> <raw stack trace file>";
         my $num_args = @ARGV;
         die "*** Error: Invalid number of arguments: $num_args (@ARGV)\n$USAGE_STR\n";
     }
-  
+
     ($elf_file, $raw_stack_trace_file) = @ARGV;
 
     open IN_FILE_HANDLE, "<$raw_stack_trace_file" ||

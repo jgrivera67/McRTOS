@@ -17,7 +17,7 @@ export CROSS_COMPILE=$HOME/embsys/tools/gcc-arm-none-eabi-4_9-2015q1
 export GCC_VERSION=4.8.4
 export TOOLCHAIN=$CROSS_COMPILE/bin/arm-none-eabi
 export EXTERNAL_INCLUDE_DIRS="$CROSS_COMPILE/arm-none-eabi/include
-			      $CROSS_COMPILE/lib/gcc/arm-none-eabi/$GCC_VERSION/include"
+			      $CROSS_COMPILE/lib/gcc/arm-none-eabi/*/include"
 export MAKEFILE_DIR="$SRC_TREE_DIR"
 
 function my_build_all
