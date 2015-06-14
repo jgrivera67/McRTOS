@@ -157,25 +157,20 @@ app_hardware_stop(void)
 static void
 app_software_init(void)
 {
-    static const char g_app_version[] = "Launchpad application v0.1";
+    static const char g_app_version[] = "Launchpad application v0.2";
     static const char g_app_build_timestamp[] = "built " __DATE__ " " __TIME__;
-    static const struct rtos_mpu_data_region g_app_region = {
-        .start_addr = &g_app,
-        .size = sizeof g_app,
-        .read_only = false,
-    };
 
-    struct rtos_mpu_data_region old_data_region;
+    struct mpu_region_range old_comp_region;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
     console_printf(
         "%s\n%s\n",
         g_app_version, g_app_build_timestamp);
 
-    rtos_thread_replace_top_mpu_data_region(&g_app,
-                                            sizeof g_app,
-                                            false,
-                                            &old_data_region);
+    rtos_thread_set_comp_region(&g_app,
+                                sizeof g_app,
+                                0,
+                                &old_comp_region);
 
     g_app.led_color_mask = LED_COLOR_RED;
 
@@ -187,14 +182,13 @@ app_software_init(void)
         rtos_thread_init(
             &g_app_thread_creation_params[i],
             &g_app_thread_execution_stacks[i],
-            &g_app_region,
             &g_app_threads[i]);
 
         console_printf("CPU core %u: %s started\n", cpu_id,
             g_app_thread_creation_params[i].p_name_p);
     }
 
-    rtos_thread_restore_top_mpu_data_region(&old_data_region);
+    rtos_thread_restore_comp_region(&old_comp_region);
 }
 
 
@@ -216,6 +210,11 @@ buttons_reader_thread_f(void *arg)
     console_printf("Initializing buttons reader thread ...\n");
 
     bool push_buttons[LPAD_NUM_PUSH_BUTTONS];
+
+    rtos_thread_set_comp_region(&g_app,
+                                sizeof g_app,
+                                0,
+                                NULL);
 
     for ( ; ; ) {
         /*
@@ -259,6 +258,11 @@ led_flashing_thread_f(void *arg)
     FDC_ASSERT(arg == NULL, arg, cpu_id);
 
     console_printf("Initializing led flashing thread ...\n");
+
+    rtos_thread_set_comp_region(&g_app,
+                                sizeof g_app,
+                                0,
+                                NULL);
 
     uint32_t led_color_mask = g_app.led_color_mask;
 

@@ -90,9 +90,11 @@ ifndef CPU_ARCHITECTURE
 endif
 
 ifeq "$(CPU_ARCHITECTURE)" "arm_cortex_m"
-    EXTRA_MCFLAGS += -fomit-frame-pointer #-mtpcs-frame #-mtpcs-leaf-frame
+    #EXTRA_MCFLAGS += -fno-omit-frame-pointer #-mtpcs-frame #-mtpcs-leaf-frame
+    EXTRA_MCFLAGS += -fomit-frame-pointer
 else
-    EXTRA_MCFLAGS += -fomit-frame-pointer #-mapcs-frame
+    #EXTRA_MCFLAGS += -fno-omit-frame-pointer #-mapcs-frame
+    EXTRA_MCFLAGS += -fomit-frame-pointer
 endif
 
 LDSCRIPT = $(PROJECT_DIR)/$(SYSTEM_ON_CHIP)-flash.ld
@@ -162,7 +164,7 @@ endif
 
 CPPFLAGS     += $(addprefix -I ,$(include_dirs)) \
 		-D$(SYSTEM_ON_CHIP) \
-		-D_NETWORKING_   
+		-D_NETWORKING_
 
 ifeq "$(BUILD_FLAVOR)" "debug"
     CPPFLAGS += -DDEBUG \
@@ -170,7 +172,7 @@ ifeq "$(BUILD_FLAVOR)" "debug"
 		-D_CPU_CYCLES_MEASURE_
 
     ifeq "$(PLATFORM)" "FRDM-KL25Z"
-	CPPFLAGS += -D_BRANCH_MICRO_TRACING_ 
+	CPPFLAGS += -D_BRANCH_MICRO_TRACING_
     endif
 
     OPT = -O0
@@ -191,8 +193,8 @@ endif
 ifeq "$(PLATFORM)" "LaunchPad-LM4F120"
     # FIXME: Implement cycle measurement for LM4F120
     CPPFLAGS += -U_CPU_CYCLES_MEASURE_ \
-		-U_NETWORKING_   
-endif    
+		-U_NETWORKING_
+endif
 
 # optimisation level here -O0, -O1, -O2, -Os, or -03
 #MCFLAGS = 	-march=$(ARM_ARCH) -mtune=$(ARM_CORE) -m$(CODETYPE) $(EXTRA_MCFLAGS)

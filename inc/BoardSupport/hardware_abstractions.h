@@ -121,6 +121,7 @@
                               (int32_t)(_begin_cycles)))
 
 #if __MPU_PRESENT == 1
+
 /**
  * Minimum MPU region alignment in bytes
  */
@@ -157,12 +158,61 @@ enum mpu_bus_masters {
     MPU_BUS_MASTER_CPU_CORE = 0,
 };
 
+/**
+ * Number of global MPU regions (besides the background region)
+ */
+#   define RTOS_NUM_GLOBAL_MPU_REGIONS UINT8_C(1)
+
+#elif defined(K64F_SOC)
+
+/**
+ * Number of global MPU regions
+ */
+#   define RTOS_NUM_GLOBAL_MPU_REGIONS UINT8_C(4)
+
+#else
+#   error "No MPU supported"
 #endif /* __MPU_PRESENT == 1 */
 
 /**
- * MPU region index for the first data region for threads
+ * Number of thread-specific MPU data regions.
  */
-#define FIRST_MPU_THREAD_DATA_REGION   RTOS_NUM_GLOBAL_MPU_REGIONS
+#define RTOS_NUM_THREAD_MPU_REGIONS   UINT8_C(3)
+
+/**
+ * Number of MPU regions required by McRTOS, including one
+ * region for the stack of the current thread
+  */
+#define RTOS_MAX_MPU_REGIONS \
+	(RTOS_NUM_GLOBAL_MPU_REGIONS + RTOS_NUM_THREAD_MPU_REGIONS)
+
+/**
+ * index for the first thread-specific MPU region
+ */
+#define FIRST_THREAD_MPU_REGION_INDEX   RTOS_NUM_GLOBAL_MPU_REGIONS
+
+/**
+ * Indices of thread-specific MPU regions
+ */
+enum rtos_thread_mpu_region_indices {
+    /**
+     * Thread's execution stack region
+     */
+    RTOS_THREAD_STACK_MPU_REGION_INDEX = FIRST_THREAD_MPU_REGION_INDEX,
+
+    /**
+     * Thread's current component data region
+     * (for global data of current component called by the thread)
+     */
+    RTOS_THREAD_COMP_MPU_REGION_INDEX,
+
+    /**
+     * Thread's current temporary data region
+     * (for temporary use, to be able to dereference input or output
+     *  arguments of functions)
+     */
+    RTOS_THREAD_TMP_MPU_REGION_INDEX
+};
 
 /**
  * CPU identifier type
@@ -269,9 +319,6 @@ C_ASSERT(sizeof(isr_function_t *) == sizeof(uint32_t));
 typedef _RANGE_(0, RTOS_MAX_MPU_REGIONS - 1)
         uint8_t mpu_region_index_t;
 
-typedef _RANGE_(0, RTOS_MAX_MPU_THREAD_DATA_REGIONS - 1)
-        uint8_t mpu_thread_data_region_index_t;
-
 /*
  * I2C transaction header fields
  */
@@ -333,37 +380,53 @@ struct mpu_device_var {
 /**
  * MPU data region range
  *
- * NOTE: If read_only is true, only read access is allowed. Otherwise,
- * read/write access is allowed.
+ * NOTE: If MPU_READ_ONLY_REGION is set in flags, only read access is allowed.
+ * Otherwise, read/write access is allowed.
  */
 struct mpu_region_range {
+    /**
+     * Address of the first byte of the region
+     */
     void *start_addr;
+
+    /**
+     * Address of the first byte after the region
+     */
     void *end_addr;
-    bool read_only;
+
+    /**
+     * Access flags for the region
+     */
+    uint32_t flags;
+#   define  MPU_REGION_INACTIVE     UINT32_C(0x1)
+#   define  MPU_REGION_READ_ONLY    UINT32_C(0x2)
 };
 
 void mpu_disable(void);
 
 void mpu_enable(void);
 
-void mpu_set_thread_data_regions(
+void mpu_set_all_thread_data_regions(
     cpu_id_t cpu_id,
-    struct mpu_region_range regions[],
-    uint8_t num_regions);
+    struct mpu_region_range regions[RTOS_NUM_THREAD_MPU_REGIONS]);
 
 void mpu_set_thread_data_region(
     cpu_id_t cpu_id,
-    mpu_thread_data_region_index_t thread_region_index,
+    mpu_region_index_t region_index,
     void *start_addr,
     void *end_addr,
-    bool read_only);
+    uint32_t flags);
 
-void mpu_unset_thread_data_region(mpu_thread_data_region_index_t thread_region_index);
+void mpu_unset_thread_data_region(mpu_region_index_t region_index);
 
 void mpu_register_dma_region(
     enum mpu_bus_masters dma_bus_master,
     void *start_addr,
     size_t size);
+
+void mpu_get_enclosing_region_boundaries(
+        void *start_addr, void *end_addr,
+        void **region_start_addr, void **region_end_addr);
 
 uint32_t calc_crc_32(const void *data_buf_p, size_t num_bytes);
 
@@ -548,7 +611,7 @@ uint32_t enet_phy_read(const struct enet_device *enet_device_p,
 
 void enet_get_mac_addr(const struct enet_device *enet_device_p,
                        struct ethernet_mac_address *mac_addr_p);
-    
+
 void enet_register_dma_region(void *start_addr, size_t size);
 
 void wait_for_interrupts(void);

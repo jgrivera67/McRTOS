@@ -267,17 +267,17 @@ GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_THREAD_YIELD_SYSTEM_CALL, \
 GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_CALLER_IS_THREAD_SYSTEM_CALL, \
                                  rtos_caller_is_thread
 
-GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_THREAD_ADD_MPU_DATA_REGION_SYSTEM_CALL, \
-                                 rtos_thread_add_mpu_data_region
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_THREAD_SET_COMP_REGION_SYSTEM_CALL, \
+                                 rtos_thread_set_comp_region
 
-GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_THREAD_REMOVE_TOP_MPU_DATA_REGION_SYSTEM_CALL, \
-                                 rtos_thread_remove_top_mpu_data_region
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_THREAD_RESTORE_COMP_REGION_SYSTEM_CALL, \
+                                 rtos_thread_restore_comp_region
 
-GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_THREAD_REPLACE_TOP_MPU_DATA_REGION_SYSTEM_CALL, \
-                                 rtos_thread_replace_top_mpu_data_region
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_THREAD_SET_TMP_REGION_SYSTEM_CALL, \
+                                 rtos_thread_set_tmp_region
 
-GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_THREAD_RESTORE_TOP_MPU_DATA_REGION_SYSTEM_CALL, \
-                                 rtos_thread_restore_top_mpu_data_region
+GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_THREAD_UNSET_TMP_REGION_SYSTEM_CALL, \
+                                 rtos_thread_unset_tmp_region
 
 GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_THREAD_ENABLE_FPU_SYSTEM_CALL, \
                                  rtos_thread_enable_fpu
@@ -310,10 +310,10 @@ GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_QUEUE_INIT_SYSTEM_CALL, \
                                  rtos_queue_init
 
 GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_QUEUE_ADD_SYSTEM_CALL, \
-                                 rtos_queue_add 
+                                 rtos_queue_add
 
 GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_QUEUE_REMOVE_SYSTEM_CALL, \
-                                 rtos_queue_remove 
+                                 rtos_queue_remove
 
 GEN_SYSTEM_CALL_WRAPPER_FUNCTION RTOS_GET_TICKS_SYSTEM_CALL, \
                                  rtos_get_ticks

@@ -73,8 +73,6 @@ C_ASSERT(
 #define UART_TRANSMIT_QUEUE_SIZE_IN_BYTES   UINT16_C(128)
 #define UART_RECEIVE_QUEUE_SIZE_IN_BYTES    UINT16_C(16)
 
-C_ASSERT(RTOS_MAX_MPU_REGIONS == 12);
-
 static cpu_reset_cause_t find_reset_cause(void);
 
 #ifdef _CPU_CYCLES_MEASURE_
@@ -859,7 +857,7 @@ k64f_mpu_set_dma_region(
     uint32_t reg_value;
     volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
 
-    DEBUG_PRINTF("MPU region %u assigned to DMA bus master %u\n", region_index, 
+    DEBUG_PRINTF("MPU region %u assigned to DMA bus master %u\n", region_index,
                  mpu_bus_master);
     DBG_ASSERT(region_index < RTOS_NUM_GLOBAL_MPU_REGIONS,
                region_index, 0);
@@ -869,7 +867,7 @@ k64f_mpu_set_dma_region(
     DBG_ASSERT(start_addr < end_addr &&
               (uintptr_t)start_addr % K64F_MPU_REGION_ALIGNMENT == 0,
                start_addr, end_addr);
-    
+
     /*
      * The region must be currently disabled:
      */
@@ -925,7 +923,7 @@ k64f_mpu_init(void)
     C_ASSERT2(assert_soc_mmio_base1_aligned, SOC_PERIPHERAL_BRIDGE_MIN_ADDR % 32 == 0);
     C_ASSERT2(assert_soc_mmio_base2_aligned, SOC_PRIVATE_PERIPHERALS_MIN_ADDR % 32 == 0);
     C_ASSERT2(assert_enough_mpu_regions, RTOS_NUM_GLOBAL_MPU_REGIONS >= 2);
-    
+
     extern uint32_t __flash_text_start[];
     extern uint32_t __flash_text_end[];
 
@@ -961,7 +959,7 @@ k64f_mpu_init(void)
 
     /*
      * Make region 0 non-accessible for CPU unprivileged mode and for DMA.
-     * Region 0 is used a background region accessible only for CPU 
+     * Region 0 is used a background region accessible only for CPU
      * privileged mode.
      *
      * NOTE: Region 0 is defined by default as the whole address space.
@@ -972,7 +970,7 @@ k64f_mpu_init(void)
     write_32bit_mmio_register(&mpu_regs_p->RGDAAC[0], 0);
     mpu_var_p->num_defined_global_regions ++;
 
-    /* 
+    /*
      * Make region 1, the code in flash to be executable in unprivileged mode
      */
     for (cpu_id_t cpu_id = 0; cpu_id < SOC_NUM_CPU_CORES; cpu_id ++) {
@@ -985,8 +983,13 @@ k64f_mpu_init(void)
     mpu_var_p->num_defined_global_regions ++;
 
     /*
-     * NOTE: Remaining global regions will be used for DMA
+     * Set remaining regions as invalid to save power
      */
+    for (uint_fast8_t region_index = 2; region_index < mpu_var_p->num_regions;
+         region_index ++) {
+	write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][3],
+				  ~MPU_WORD_VLD_MASK);
+    }
 
     /*
      * Enable MPU:
@@ -1035,15 +1038,15 @@ mpu_enable(void)
 
 /*
  *
- * Set all the data regions for the current thread, including the stack region.
+ * Set all the thread-specific data regions for the current thread, including
+ * the stack region.
  *
  * NOTE: This function is to be invoked as part of a thread context switch
  */
 void
-mpu_set_thread_data_regions(
+mpu_set_all_thread_data_regions(
     cpu_id_t cpu_id,
-    struct mpu_region_range regions[],
-    uint8_t num_regions)
+    struct mpu_region_range regions[RTOS_NUM_THREAD_MPU_REGIONS])
 {
     DBG_ASSERT(
         g_mpu.signature == MPU_DEVICE_SIGNATURE,
@@ -1053,36 +1056,30 @@ mpu_set_thread_data_regions(
     DBG_ASSERT(mpu_var_p->initialized, mpu_var_p, 0);
 
     volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
+    uint_fast8_t region_index = FIRST_THREAD_MPU_REGION_INDEX;
 
-    DBG_ASSERT(num_regions <= RTOS_MAX_MPU_THREAD_DATA_REGIONS,
-	num_regions, RTOS_MAX_MPU_THREAD_DATA_REGIONS);
+    for (uint_fast8_t i = 0; i < RTOS_NUM_THREAD_MPU_REGIONS; i++) {
+        struct mpu_region_range *region_p = &regions[i];
 
-    uint_fast8_t region_index = FIRST_MPU_THREAD_DATA_REGION;
-
-    for (uint_fast8_t i = 0; i < num_regions; i++) {
-	uint32_t unprivileged_permissions;
-
-	DBG_ASSERT(regions[i].start_addr != NULL, i, 0);
-
-        if (regions[i].read_only) {
-            unprivileged_permissions = 0x4; /* r-- */
+        if (region_p->flags & MPU_REGION_INACTIVE) {
+            write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][3],
+                                      ~MPU_WORD_VLD_MASK);
         } else {
-            unprivileged_permissions = 0x6; /* rw- */
+            uint32_t unprivileged_permissions;
+
+            DBG_ASSERT(region_p->start_addr != NULL, i, 0);
+            if (region_p->flags & MPU_REGION_READ_ONLY) {
+                unprivileged_permissions = 0x4; /* r-- */
+            } else {
+                unprivileged_permissions = 0x6; /* rw- */
+            }
+
+            k64f_set_mpu_region_for_cpu(mpu_var_p, mpu_regs_p, cpu_id, region_index,
+                                        region_p->start_addr, region_p->end_addr,
+                                        unprivileged_permissions);
         }
 
-	k64f_set_mpu_region_for_cpu(mpu_var_p, mpu_regs_p, cpu_id, region_index,
-				    regions[i].start_addr, regions[i].end_addr,
-				    unprivileged_permissions);
-
 	region_index ++;
-    }
-
-    /*
-     * Set remaining regions as invalid
-     */
-    for ( ; region_index < RTOS_MAX_MPU_THREAD_DATA_REGIONS; region_index ++) {
-	write_32bit_mmio_register(&mpu_regs_p->WORD[region_index][3],
-				  ~MPU_WORD_VLD_MASK);
     }
 }
 
@@ -1090,10 +1087,10 @@ mpu_set_thread_data_regions(
 void
 mpu_set_thread_data_region(
     cpu_id_t cpu_id,
-    uint8_t thread_region_index,
+    mpu_region_index_t region_index,
     void *start_addr,
     void *end_addr,
-    bool read_only)
+    uint32_t flags)
 {
     uint32_t unprivileged_permissions;
 
@@ -1107,14 +1104,12 @@ mpu_set_thread_data_region(
     volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
 
     FDC_ASSERT(start_addr != NULL, start_addr, end_addr);
-    FDC_ASSERT(start_addr <= end_addr, start_addr, end_addr);
-    FDC_ASSERT(thread_region_index < RTOS_MAX_MPU_THREAD_DATA_REGIONS,
-	       thread_region_index, RTOS_MAX_MPU_THREAD_DATA_REGIONS);
+    FDC_ASSERT(start_addr < end_addr, start_addr, end_addr);
+    FDC_ASSERT(region_index >= FIRST_THREAD_MPU_REGION_INDEX &&
+               region_index < RTOS_MAX_MPU_REGIONS,
+	       region_index, FIRST_THREAD_MPU_REGION_INDEX);
 
-    mpu_region_index_t region_index = FIRST_MPU_THREAD_DATA_REGION +
-				      thread_region_index;
-
-    if (read_only) {
+    if (flags & MPU_REGION_READ_ONLY) {
         unprivileged_permissions = 0x4; /* r-- */
     } else {
         unprivileged_permissions = 0x6; /* rw- */
@@ -1127,7 +1122,7 @@ mpu_set_thread_data_region(
 
 
 void
-mpu_unset_thread_data_region(mpu_thread_data_region_index_t thread_region_index)
+mpu_unset_thread_data_region(mpu_region_index_t region_index)
 {
     FDC_ASSERT(
         g_mpu.signature == MPU_DEVICE_SIGNATURE,
@@ -1140,11 +1135,9 @@ mpu_unset_thread_data_region(mpu_thread_data_region_index_t thread_region_index)
 
     volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
 
-    FDC_ASSERT(thread_region_index < RTOS_MAX_MPU_THREAD_DATA_REGIONS,
-	       thread_region_index, RTOS_MAX_MPU_THREAD_DATA_REGIONS);
-
-    mpu_region_index_t region_index = FIRST_MPU_THREAD_DATA_REGION +
-				      thread_region_index;
+    FDC_ASSERT(region_index >= FIRST_THREAD_MPU_REGION_INDEX &&
+               region_index < RTOS_MAX_MPU_REGIONS,
+	       region_index, FIRST_THREAD_MPU_REGION_INDEX);
 
     /*
      * Set region as invalid
@@ -1176,7 +1169,7 @@ mpu_register_dma_region(
     uint8_t region_index = mpu_var_p->num_defined_global_regions;
 
     if (region_index == RTOS_NUM_GLOBAL_MPU_REGIONS) {
-        fdc_error_t fdc_error = 
+        fdc_error_t fdc_error =
             CAPTURE_FDC_ERROR("No global MPU regions left", 0, 0);
 
         fatal_error_handler(fdc_error);
@@ -1193,6 +1186,17 @@ mpu_register_dma_region(
     if (!caller_was_privileged) {
         rtos_exit_privileged_mode();
     }
+}
+
+
+void
+mpu_get_enclosing_region_boundaries(void *start_addr, void *end_addr,
+                                    void **region_start_addr, void **region_end_addr)
+{
+    DBG_ASSERT(start_addr < end_addr, start_addr, end_addr);
+
+    *region_start_addr = (void *)ROUND_DOWN((uintptr_t)start_addr, MIN_MPU_REGION_ALIGNMENT);
+    *region_end_addr = (void *)ROUND_UP((uintptr_t)end_addr, MIN_MPU_REGION_ALIGNMENT);
 }
 
 
@@ -1238,7 +1242,7 @@ calc_crc_32(const void *data_buf_p, size_t num_bytes)
     /*
      * Configure CRC functionality:
      * - Select 32-bit CRC
-     * - Don't do 1's complement of input data 
+     * - Don't do 1's complement of input data
      * - Bits in bytes are transposed but bytes are not transposed, when writing
      *   to DATA register.
      * - Both bits in bytes and bytes are transposed when reading DATA register
@@ -1255,7 +1259,7 @@ calc_crc_32(const void *data_buf_p, size_t num_bytes)
      */
     write_32bit_mmio_register(&crc_regs_p->GPOLY, CRC_32_POLYNOMIAL);
 
-    /* 
+    /*
      * Program seed
      */
     reg_value = read_32bit_mmio_register(&crc_regs_p->CTRL);
@@ -1274,32 +1278,32 @@ calc_crc_32(const void *data_buf_p, size_t num_bytes)
     const uint8_t *end_p = p + num_words * 4;
 
     for ( ; p != end_p; p += 4) {
-#if 1        
+#if 1
         reg_value = (((uint32_t)p[0] << 24) |
                      ((uint32_t)p[1] << 16) |
                      ((uint32_t)p[2] << 8) |
                      (uint32_t)p[3]);
         write_32bit_mmio_register(&crc_regs_p->DATA, reg_value);
-#else        
-        write_8bit_mmio_register(&crc_regs_p->ACCESS8BIT.DATAHU, p[0]); 
-        write_8bit_mmio_register(&crc_regs_p->ACCESS8BIT.DATAHL, p[1]); 
+#else
+        write_8bit_mmio_register(&crc_regs_p->ACCESS8BIT.DATAHU, p[0]);
+        write_8bit_mmio_register(&crc_regs_p->ACCESS8BIT.DATAHL, p[1]);
         write_8bit_mmio_register(&crc_regs_p->ACCESS8BIT.DATALU, p[2]);
         write_8bit_mmio_register(&crc_regs_p->ACCESS8BIT.DATALL, p[3]);
-#endif        
+#endif
     }
 
     switch (remaining_bytes) {
     case 3:
-        write_8bit_mmio_register(&crc_regs_p->ACCESS8BIT.DATAHU, p[0]); 
-        write_8bit_mmio_register(&crc_regs_p->ACCESS8BIT.DATAHL, p[1]); 
+        write_8bit_mmio_register(&crc_regs_p->ACCESS8BIT.DATAHU, p[0]);
+        write_8bit_mmio_register(&crc_regs_p->ACCESS8BIT.DATAHL, p[1]);
         write_8bit_mmio_register(&crc_regs_p->ACCESS8BIT.DATALU, p[2]);
         break;
     case 2:
-        write_8bit_mmio_register(&crc_regs_p->ACCESS8BIT.DATAHU, p[0]); 
-        write_8bit_mmio_register(&crc_regs_p->ACCESS8BIT.DATAHL, p[1]); 
+        write_8bit_mmio_register(&crc_regs_p->ACCESS8BIT.DATAHU, p[0]);
+        write_8bit_mmio_register(&crc_regs_p->ACCESS8BIT.DATAHL, p[1]);
         break;
     case 1:
-        write_8bit_mmio_register(&crc_regs_p->ACCESS8BIT.DATAHU, p[0]); 
+        write_8bit_mmio_register(&crc_regs_p->ACCESS8BIT.DATAHU, p[0]);
         break;
     }
 
@@ -1311,7 +1315,7 @@ calc_crc_32(const void *data_buf_p, size_t num_bytes)
         rtos_exit_privileged_mode();
     }
 
-    return reg_value;        
+    return reg_value;
 }
 
 
@@ -1340,7 +1344,7 @@ soc_hardware_init(void)
 #   ifdef _CPU_CYCLES_MEASURE_
     init_cpu_clock_cycles_counter();
 #   endif
-    
+
     capture_fdc_msg_printf("SoC model: %#x, SoC ID: %x-%x-%x\n",
                            SIM_SDID, SIM_UIDMH, SIM_UIDML, SIM_UIDL);
 
@@ -1432,7 +1436,7 @@ bool
 software_reset_happened(void)
 {
     bool caller_was_privileged = rtos_enter_privileged_mode();
-    
+
     bool result = ((RCM_SRS1 & RCM_SRS1_SW_MASK) != 0);
 
     if (!caller_was_privileged) {

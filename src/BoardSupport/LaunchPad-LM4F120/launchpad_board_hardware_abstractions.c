@@ -137,15 +137,15 @@ rgb_led_init(void)
 void
 toggle_rgb_led(uint32_t led_color_mask)
 {
-    struct rtos_mpu_data_region old_data_region;
-    bool data_region_replaced = false;
-    
+    struct mpu_region_range old_comp_region;
+    bool comp_region_changed = false;
+
     if (!rtos_in_privileged_mode()) {
-        rtos_thread_replace_top_mpu_data_region(&g_launchpad_board,
-                                                sizeof g_launchpad_board,
-                                                false,
-                                                &old_data_region);
-        data_region_replaced = true;
+        rtos_thread_set_comp_region(&g_launchpad_board,
+                                    sizeof g_launchpad_board,
+                                    0,
+                                    &old_comp_region);
+        comp_region_changed = true;
     }
 
     if (!g_launchpad_board.rgb_led_initialized) {
@@ -161,8 +161,8 @@ toggle_rgb_led(uint32_t led_color_mask)
     }
 
 exit:
-    if (data_region_replaced) {
-        rtos_thread_restore_top_mpu_data_region(&old_data_region);
+    if (comp_region_changed) {
+        rtos_thread_restore_comp_region(&old_comp_region);
     }
 }
 
@@ -173,15 +173,15 @@ exit:
 uint32_t
 set_rgb_led_color(uint32_t led_color_mask)
 {
-    struct rtos_mpu_data_region old_data_region;
-    bool data_region_replaced = false;
-    
+    struct mpu_region_range old_comp_region;
+    bool comp_region_changed = false;
+
     if (!rtos_in_privileged_mode()) {
-        rtos_thread_replace_top_mpu_data_region(&g_launchpad_board,
-                                                sizeof g_launchpad_board,
-                                                false,
-                                                &old_data_region);
-        data_region_replaced = true;
+        rtos_thread_set_comp_region(&g_launchpad_board,
+                                    sizeof g_launchpad_board,
+                                    0,
+                                    &old_comp_region);
+        comp_region_changed = true;
     }
 
     uint32_t old_rgb_led_mask = g_launchpad_board.rgb_led_current_mask;
@@ -201,8 +201,8 @@ set_rgb_led_color(uint32_t led_color_mask)
     }
 
 common_exit:
-    if (data_region_replaced) {
-        rtos_thread_restore_top_mpu_data_region(&old_data_region);
+    if (comp_region_changed) {
+        rtos_thread_restore_comp_region(&old_comp_region);
     }
 
     return old_rgb_led_mask;

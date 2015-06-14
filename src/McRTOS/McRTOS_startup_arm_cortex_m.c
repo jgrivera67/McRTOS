@@ -366,10 +366,9 @@ cortex_m_set_mpu_region(
  * NOTE: This function is to be invoked as part of a thread context switch
  */
 void
-mpu_set_thread_data_regions(
+mpu_set_all_thread_data_regions(
     cpu_id_t cpu_id,
-    struct mpu_region_range regions[],
-    uint8_t num_regions)
+    struct mpu_region_range regions[RTOS_NUM_THREAD_MPU_REGIONS])
 {
     DBG_ASSERT(
         g_mpu.signature == MPU_DEVICE_SIGNATURE,
@@ -380,35 +379,30 @@ mpu_set_thread_data_regions(
 
     volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
 
-    DBG_ASSERT(num_regions <= RTOS_MAX_MPU_THREAD_DATA_REGIONS,
-	num_regions, RTOS_MAX_MPU_THREAD_DATA_REGIONS);
+    uint_fast8_t region_index = FIRST_THREAD_MPU_REGION_INDEX;
 
-    uint_fast8_t region_index = FIRST_MPU_THREAD_DATA_REGION;
+    for (uint_fast8_t i = 0; i < RTOS_NUM_THREAD_MPU_REGIONS; i++) {
+        struct mpu_region_range *region_p = &regions[i];
 
-    for (uint_fast8_t i = 0; i < num_regions; i++) {
-	uint32_t unprivileged_permissions;
-
-	DBG_ASSERT(regions[i].start_addr != NULL, i, 0);
-
-        if (regions[i].read_only) {
-            unprivileged_permissions = UNPRIVILEGED_READ_MASK;
+        if (region_p->flags & MPU_REGION_INACTIVE) {
+            write_32bit_mmio_register(&mpu_regs_p->RNR, region_index);
+            write_32bit_mmio_register(&mpu_regs_p->RASR, 0x0);
         } else {
-            unprivileged_permissions = UNPRIVILEGED_READ_MASK | UNPRIVILEGED_WRITE_MASK;
+            uint32_t unprivileged_permissions;
+
+            DBG_ASSERT(region_p->start_addr != NULL, i, 0);
+            if (region_p->flags & MPU_REGION_READ_ONLY) {
+                unprivileged_permissions = UNPRIVILEGED_READ_MASK;
+            } else {
+                unprivileged_permissions = UNPRIVILEGED_READ_MASK | UNPRIVILEGED_WRITE_MASK;
+            }
+
+            cortex_m_set_mpu_region(mpu_var_p, mpu_regs_p, region_index,
+                                    region_p->start_addr, region_p->end_addr,
+                                    unprivileged_permissions);
         }
 
-	cortex_m_set_mpu_region(mpu_var_p, mpu_regs_p, region_index,
-				regions[i].start_addr, regions[i].end_addr,
-				unprivileged_permissions);
-
 	region_index ++;
-    }
-
-    /*
-     * Set remaining regions as invalid
-     */
-    for ( ; region_index < RTOS_MAX_MPU_THREAD_DATA_REGIONS; region_index ++) {
-        write_32bit_mmio_register(&mpu_regs_p->RNR, region_index);
-        write_32bit_mmio_register(&mpu_regs_p->RASR, 0x0);
     }
 }
 
@@ -416,10 +410,10 @@ mpu_set_thread_data_regions(
 void
 mpu_set_thread_data_region(
     cpu_id_t cpu_id,
-    uint8_t thread_region_index,
+    mpu_region_index_t region_index,
     void *start_addr,
     void *end_addr,
-    bool read_only)
+    uint32_t flags)
 {
     uint32_t unprivileged_permissions;
 
@@ -433,14 +427,12 @@ mpu_set_thread_data_region(
     volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
 
     FDC_ASSERT(start_addr != NULL, start_addr, end_addr);
-    FDC_ASSERT(start_addr <= end_addr, start_addr, end_addr);
-    FDC_ASSERT(thread_region_index < RTOS_MAX_MPU_THREAD_DATA_REGIONS,
-	       thread_region_index, RTOS_MAX_MPU_THREAD_DATA_REGIONS);
+    FDC_ASSERT(start_addr < end_addr, start_addr, end_addr);
+    FDC_ASSERT(region_index >= FIRST_THREAD_MPU_REGION_INDEX &&
+               region_index < RTOS_MAX_MPU_REGIONS,
+	       region_index, FIRST_THREAD_MPU_REGION_INDEX);
 
-    mpu_region_index_t region_index = FIRST_MPU_THREAD_DATA_REGION +
-				      thread_region_index;
-
-    if (read_only) {
+    if (flags & MPU_REGION_READ_ONLY) {
         unprivileged_permissions = UNPRIVILEGED_READ_MASK;
     } else {
         unprivileged_permissions = UNPRIVILEGED_READ_MASK | UNPRIVILEGED_WRITE_MASK;
@@ -452,7 +444,7 @@ mpu_set_thread_data_region(
 
 
 void
-mpu_unset_thread_data_region(mpu_thread_data_region_index_t thread_region_index)
+mpu_unset_thread_data_region(mpu_region_index_t region_index)
 {
     FDC_ASSERT(
         g_mpu.signature == MPU_DEVICE_SIGNATURE,
@@ -465,11 +457,9 @@ mpu_unset_thread_data_region(mpu_thread_data_region_index_t thread_region_index)
 
     volatile MPU_Type *mpu_regs_p = g_mpu.mmio_regs_p;
 
-    FDC_ASSERT(thread_region_index < RTOS_MAX_MPU_THREAD_DATA_REGIONS,
-	       thread_region_index, RTOS_MAX_MPU_THREAD_DATA_REGIONS);
-
-    mpu_region_index_t region_index = FIRST_MPU_THREAD_DATA_REGION +
-				      thread_region_index;
+    FDC_ASSERT(region_index >= FIRST_THREAD_MPU_REGION_INDEX &&
+               region_index < RTOS_MAX_MPU_REGIONS,
+	       region_index, FIRST_THREAD_MPU_REGION_INDEX);
 
     /*
      * Set region as invalid
@@ -488,6 +478,24 @@ mpu_register_dma_region(
     DEBUG_PRINTF("DMA regions not supported for Cortex-M MPU "
                  "(dma_bus_master: %u, start_add: %p, size: %u)\n",
                  dma_bus_master, start_addr, size);
+}
+
+
+void
+mpu_get_enclosing_region_boundaries(void *start_addr, void *end_addr,
+                                    void **region_start_addr, void **region_end_addr)
+{
+    DBG_ASSERT(start_addr < end_addr, start_addr, end_addr);
+
+    size_t range_size = (uintptr_t)end_addr - (uintptr_t)start_addr;
+    size_t region_size = UINT32_C(1) << log_base_2(range_size);
+
+    if (region_size < range_size) {
+        region_size *= 2;
+    }
+
+    *region_start_addr = (void *)ROUND_DOWN((uintptr_t)start_addr, region_size);
+    *region_end_addr = (void *)ROUND_UP((uintptr_t)end_addr, region_size);
 }
 
 
@@ -557,6 +565,15 @@ cortex_m_mpu_init(void)
     }
 
     mpu_var_p->num_defined_global_regions ++;
+
+    /*
+     * Set remaining regions as invalid to save power
+     */
+    for (uint_fast8_t region_index = 2; region_index < mpu_var_p->num_regions;
+         region_index ++) {
+        write_32bit_mmio_register(&mpu_regs_p->RNR, region_index);
+        write_32bit_mmio_register(&mpu_regs_p->RASR, 0x0);
+    }
 
     /*
      * Enable MPU:

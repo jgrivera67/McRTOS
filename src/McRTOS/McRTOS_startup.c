@@ -10,6 +10,7 @@
 
 #include "McRTOS.h"
 #include "McRTOS_internals.h"
+#include "McRTOS_command_processor.h"
 #include "failure_data_capture.h"
 #include "hardware_abstractions.h"
 #include "utils.h"
@@ -60,7 +61,7 @@ static fdc_error_t rtos_root_thread_f(void *arg);
 static fdc_error_t rtos_idle_thread_f(void *arg);
 static fdc_error_t rtos_touch_screen_reader_thread_f(void *arg);
 
-const char g_McRTOS_version[] = "McRTOS v2.1 (" RTOS_BUILD_FLAVOR ")";
+const char g_McRTOS_version[] = "McRTOS v2.2 (" RTOS_BUILD_FLAVOR ")";
 
 const char g_McRTOS_build_timestamp[] = "built "__DATE__ " " __TIME__;
 
@@ -143,12 +144,6 @@ static struct McRTOS g_McRTOS =
 
     RTOS_CPU_CONTROLLER_INITIALIZER(0),
 }};
-
-static const struct rtos_mpu_data_region g_McRTOS_region = {
-    .start_addr = &g_McRTOS,
-    .size = sizeof g_McRTOS,
-    .read_only = false
-};
 
 /**
  * Access to the McRTOS global structure should be done through this pointer,
@@ -259,11 +254,9 @@ rtos_startup(
     g_McRTOS_p->rts_app_hardware_stop_p = rtos_app_config_p->stc_app_hardware_stop_p;
     g_McRTOS_p->rts_app_software_init_p = rtos_app_config_p->stc_app_software_init_p;
 
-    g_McRTOS_p->rts_num_app_console_commands =
-        rtos_app_config_p->stc_num_app_console_commands;
-
-    g_McRTOS_p->rts_app_console_commands_p =
-        rtos_app_config_p->stc_app_console_commands_p;
+    init_command_processor(
+        rtos_app_config_p->stc_num_app_console_commands,
+        rtos_app_config_p->stc_app_console_commands_p);
 
     rtos_init_reset_execution_context(cpu_controller_p);
 
@@ -342,7 +335,6 @@ rtos_startup(
     rtos_k_thread_init(
         &g_rtos_system_threads[RTOS_ROOT_SYSTEM_THREAD],
         &cpu_controller_p->cpc_system_threads_execution_stacks_p[RTOS_ROOT_SYSTEM_THREAD],
-        &g_McRTOS_region,
         &cpu_controller_p->cpc_system_threads[RTOS_ROOT_SYSTEM_THREAD]);
 
     struct rtos_execution_context *current_context_p =
@@ -502,6 +494,11 @@ rtos_root_thread_f(void *arg)
 {
     FDC_ASSERT_UNPRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED();
 
+    rtos_thread_set_comp_region(&g_McRTOS,
+                                sizeof g_McRTOS,
+                                0,
+                                NULL);
+
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
     struct rtos_cpu_controller *cpu_controller_p =
@@ -558,7 +555,6 @@ rtos_root_thread_f(void *arg)
         rtos_thread_init(
             &g_rtos_system_threads[i],
             &cpu_controller_p->cpc_system_threads_execution_stacks_p[i],
-            &g_McRTOS_region,
             &cpu_controller_p->cpc_system_threads[i]);
 
         console_printf("CPU core %u: %s started\n", cpu_id,
@@ -615,6 +611,11 @@ static fdc_error_t
 rtos_idle_thread_f(void *arg)
 {
     FDC_ASSERT_UNPRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED();
+
+    rtos_thread_set_comp_region(&g_McRTOS,
+                                sizeof g_McRTOS,
+                                0,
+                                NULL);
 
     fdc_error_t fdc_error;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();

@@ -90,7 +90,6 @@ enum rtos_execution_context_switched_out_reasons
  */
 C_ASSERT(CTX_SWITCHED_OUT_LAST_INVALID_VALUE <= 0x10);
 
-
 /**
  * McRTOS interrupt object
  */
@@ -487,16 +486,6 @@ struct __McRTOS
      */
     app_software_init_t *rts_app_software_init_p;
 
-   /**
-     * Number of application-specific console commands
-     */
-    uint8_t rts_num_app_console_commands;
-
-    /**
-     * Pointer to array of application-specific console command
-     */
-    const struct rtos_console_command *rts_app_console_commands_p;
-
     /**
      * Array of interrupt objects, one for each interrupt registered with McRTOS.
      */
@@ -539,10 +528,6 @@ struct __McRTOS
 #endif
 #endif /* MCRTOS_PRIVATE_OBJECTS */
 
-    /**
-     * Command line buffer used by the McRTOS console and the McRTOS debugger
-     */
-    char rts_command_line_buffer[RTOS_COMMAND_LINE_BUFFER_SIZE];
 };
 
 struct McRTOS

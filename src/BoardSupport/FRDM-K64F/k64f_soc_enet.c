@@ -718,7 +718,7 @@ enet_phy_read(const struct enet_device *enet_device_p, uint32_t phy_reg)
 
 void
 enet_register_dma_region(void *start_addr, size_t size)
-{ 
+{
     mpu_register_dma_region(MPU_BUS_MASTER_ENET,  start_addr, size);
 }
 
@@ -862,7 +862,7 @@ void
 enet_get_mac_addr(const struct enet_device *enet_device_p,
                   struct ethernet_mac_address *mac_addr_p)
 {
-    fdc_error_t fdc_error;
+    struct mpu_region_range old_comp_region;
 
     DBG_ASSERT(
         enet_device_p->signature == ENET_DEVICE_SIGNATURE,
@@ -870,14 +870,17 @@ enet_get_mac_addr(const struct enet_device *enet_device_p,
 
     struct enet_device_var *const enet_var_p = enet_device_p->var_p;
 
-    fdc_error = rtos_thread_add_mpu_data_region(enet_var_p,
-                                                sizeof *enet_var_p,
-                                                false);
-    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+    rtos_thread_set_comp_region(enet_var_p,
+                                sizeof *enet_var_p,
+                                0,
+                                &old_comp_region);
+
     DBG_ASSERT(enet_var_p->initialized, enet_device_p, enet_var_p);
 
+    rtos_thread_set_tmp_region(mac_addr_p, sizeof *mac_addr_p, 0);
     COPY_MAC_ADDRESS(mac_addr_p, &enet_var_p->mac_address);
-    rtos_thread_remove_top_mpu_data_region();   /* enet_var_p */
+    rtos_thread_unset_tmp_region();
+    rtos_thread_restore_comp_region(&old_comp_region);
 }
 
 
@@ -889,7 +892,7 @@ enet_start(const struct enet_device *enet_device_p,
 	   struct local_l3_end_point *local_l3_end_point_p)
 {
     uint32_t reg_value;
-    fdc_error_t fdc_error;
+    struct mpu_region_range old_comp_region;
 
     FDC_ASSERT(
         enet_device_p->signature == ENET_DEVICE_SIGNATURE,
@@ -898,10 +901,11 @@ enet_start(const struct enet_device *enet_device_p,
     volatile ENET_Type *enet_regs_p = enet_device_p->mmio_registers_p;
     struct enet_device_var *const enet_var_p = enet_device_p->var_p;
 
-    fdc_error = rtos_thread_add_mpu_data_region(enet_var_p,
-                                                sizeof *enet_var_p,
-                                                false);
-    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+    rtos_thread_set_comp_region(enet_var_p,
+                                sizeof *enet_var_p,
+                                0,
+                                &old_comp_region);
+
     FDC_ASSERT(enet_var_p->initialized, enet_device_p, enet_var_p);
     FDC_ASSERT(enet_var_p->local_l3_end_point_p == NULL,
                enet_var_p->local_l3_end_point_p, enet_var_p);
@@ -909,7 +913,7 @@ enet_start(const struct enet_device *enet_device_p,
     enet_var_p->local_l3_end_point_p = local_l3_end_point_p;
 
     bool caller_was_privileged = rtos_enter_privileged_mode();
-    
+
     /*
      * Enable access to Rx/Tx rings memory for the ENET DMA engine:
      */
@@ -962,7 +966,7 @@ enet_start(const struct enet_device *enet_device_p,
         rtos_exit_privileged_mode();
     }
 
-    rtos_thread_remove_top_mpu_data_region();   /* enet_var_p */
+    rtos_thread_restore_comp_region(&old_comp_region);
 }
 
 
@@ -976,7 +980,7 @@ enet_add_multicast_mac_addr(const struct enet_device *enet_device_p,
     uint32_t reg_value;
     uint32_t hash_bit_index;
     volatile uint32_t *reg_p;
-    fdc_error_t fdc_error;
+    struct mpu_region_range old_comp_region;
 
     FDC_ASSERT(
         enet_device_p->signature == ENET_DEVICE_SIGNATURE,
@@ -988,16 +992,18 @@ enet_add_multicast_mac_addr(const struct enet_device *enet_device_p,
     volatile ENET_Type *enet_regs_p = enet_device_p->mmio_registers_p;
     struct enet_device_var *const enet_var_p = enet_device_p->var_p;
 
-    fdc_error = rtos_thread_add_mpu_data_region(enet_var_p,
-                                                sizeof *enet_var_p,
-                                                false);
-    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+    rtos_thread_set_comp_region(enet_var_p,
+                                sizeof *enet_var_p,
+                                0,
+                                &old_comp_region);
+
     FDC_ASSERT(enet_var_p->initialized, enet_device_p, enet_var_p);
 
     bool caller_was_privileged = rtos_enter_privileged_mode();
+
     uint32_t crc = calc_crc_32(mac_addr_p, sizeof *mac_addr_p);
     uint32_t hash_value = crc >> 26; /* top 6 bits */
- 
+
     DBG_ASSERT(hash_value < ENET_MULTICAST_HASH_TABLE_NUM_BUCKETS,
                hash_value, enet_device_p);
 
@@ -1032,7 +1038,7 @@ enet_add_multicast_mac_addr(const struct enet_device *enet_device_p,
         rtos_exit_privileged_mode();
     }
 
-    rtos_thread_remove_top_mpu_data_region();   /* enet_var_p */
+    rtos_thread_restore_comp_region(&old_comp_region);
 }
 
 
@@ -1046,7 +1052,7 @@ enet_remove_multicast_mac_addr(const struct enet_device *enet_device_p,
     uint32_t reg_value;
     volatile uint32_t *reg_p;
     uint32_t hash_bit_index;
-    fdc_error_t fdc_error;
+    struct mpu_region_range old_comp_region;
 
     FDC_ASSERT(
         enet_device_p->signature == ENET_DEVICE_SIGNATURE,
@@ -1055,19 +1061,16 @@ enet_remove_multicast_mac_addr(const struct enet_device *enet_device_p,
     volatile ENET_Type *enet_regs_p = enet_device_p->mmio_registers_p;
     struct enet_device_var *const enet_var_p = enet_device_p->var_p;
 
-    fdc_error = rtos_thread_add_mpu_data_region(enet_var_p,
-                                                sizeof *enet_var_p,
-                                                false);
-    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
-    fdc_error = rtos_thread_add_mpu_data_region((void *)enet_regs_p,
-                                                sizeof *enet_regs_p,
-                                                false);
-    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+    rtos_thread_set_comp_region(enet_var_p,
+                                sizeof *enet_var_p,
+                                0,
+                                &old_comp_region);
+
     FDC_ASSERT(enet_var_p->initialized, enet_device_p, enet_var_p);
 
     uint32_t crc = calc_crc_32(mac_addr_p, sizeof *mac_addr_p);
     uint32_t hash_value = crc >> 26; /* top 6 bits */
- 
+
     DBG_ASSERT(hash_value < ENET_MULTICAST_HASH_TABLE_NUM_BUCKETS,
                hash_value, enet_device_p);
     FDC_ASSERT(enet_var_p->multicast_hash_table_counts[hash_value] != 0,
@@ -1097,8 +1100,7 @@ enet_remove_multicast_mac_addr(const struct enet_device *enet_device_p,
         write_32bit_mmio_register(reg_p, reg_value);
     }
 
-    rtos_thread_remove_top_mpu_data_region();   /* enet_regs_p */
-    rtos_thread_remove_top_mpu_data_region();   /* enet_var_p */
+    rtos_thread_restore_comp_region(&old_comp_region);
 }
 
 

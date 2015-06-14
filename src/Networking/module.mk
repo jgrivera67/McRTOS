@@ -5,5 +5,5 @@
 #
 local_src :=	$(subdirectory)/networking.c \
 
-$(eval $(call make-library, $(subdirectory)/lwip.a, $(local_src)))
+$(eval $(call make-library, $(subdirectory)/Networking.a, $(local_src)))
 

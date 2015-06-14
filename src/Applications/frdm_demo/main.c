@@ -110,12 +110,6 @@ static struct app_state_vars g_app = {
     .accel_reading_ready = false,
 };
 
-static const struct rtos_mpu_data_region g_app_region = {
-    .start_addr = &g_app,
-    .size = sizeof g_app,
-    .read_only = false,
-};
-
 #define RTOS_NUM_APP_THREADS 4
 
 /**
@@ -261,21 +255,21 @@ void app_hardware_stop(void)
 static
 void app_software_init(void)
 {
-    static const char g_app_version[] = "FRDM K64F board demo application v2.0";
+    static const char g_app_version[] = "FRDM K64F board demo application v2.1";
     static const char g_app_build_timestamp[] = "built " __DATE__ " " __TIME__;
 
     fdc_error_t fdc_error;
-    struct rtos_mpu_data_region old_data_region;
+    struct mpu_region_range old_comp_region;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
     console_printf(
         "%s\n%s\n",
         g_app_version, g_app_build_timestamp);
 
-    rtos_thread_replace_top_mpu_data_region(&g_app,
-                                            sizeof g_app,
-                                            false,
-                                            &old_data_region);
+    rtos_thread_set_comp_region(&g_app,
+                                sizeof g_app,
+                                0,
+                                &old_comp_region);
 
     rtos_mutex_init("Accelerometer reading mutex", &g_app.accel_reading_mutex);
     rtos_condvar_init("Accelerometer reading condvar", &g_app.accel_reading_condvar);
@@ -288,14 +282,13 @@ void app_software_init(void)
         rtos_thread_init(
             &g_app_thread_creation_params[i],
             &g_app_thread_execution_stacks[i],
-            &g_app_region,
             &g_app_threads[i]);
 
         console_printf("CPU core %u: %s started\n", cpu_id,
             g_app_thread_creation_params[i].p_name_p);
     }
 
-    rtos_thread_restore_top_mpu_data_region(&old_data_region);
+    rtos_thread_restore_comp_region(&old_comp_region);
 
     networking_init(&g_enet_device0);
 }
@@ -363,10 +356,10 @@ demo_ping_command(void)
     };
 
     fdc_error_t fdc_error;
-    struct rtos_mpu_data_region old_data_region;
+    struct mpu_region_range old_comp_region;
     struct ipv4_address local_ip_addr;
     struct ipv4_address remote_ip_addr;
-    token_t token = get_next_token(&g_tokenizer);
+    token_t token = get_next_token(&g_command_processor);
 
     if (token == HELP) {
 	console_printf("\tdemo-ping <remote IPv4 address>\n\n");
@@ -392,10 +385,10 @@ demo_ping_command(void)
         return;
     }
 
-    rtos_thread_replace_top_mpu_data_region(&g_app,
-                                            sizeof g_app,
-                                            false,
-                                            &old_data_region);
+    rtos_thread_set_comp_region(&g_app,
+                                sizeof g_app,
+                                0,
+                                &old_comp_region);
 
     if (g_app.demo_ping_started) {
         console_printf("Ping demo already started\n");
@@ -411,7 +404,6 @@ demo_ping_command(void)
     rtos_thread_init(
         &thread_params,
         &demo_ping_thread_execution_stack,
-        NULL,
         &g_app.demo_ping_thread);
 
     console_printf("%s started (destination IP address: %u.%u.%u.%u)\n",
@@ -422,7 +414,7 @@ demo_ping_command(void)
                    remote_ip_addr.bytes[3]);
 
 exit_restore_region:
-    rtos_thread_restore_top_mpu_data_region(&old_data_region);
+    rtos_thread_restore_comp_region(&old_comp_region);
     return;
 
 syntax_error:
@@ -443,10 +435,10 @@ demo_udp_client_command(void)
     };
 
     fdc_error_t fdc_error;
-    struct rtos_mpu_data_region old_data_region;
+    struct mpu_region_range old_comp_region;
     struct ipv4_address local_ip_addr;
     struct ipv4_address remote_ip_addr;
-    token_t token = get_next_token(&g_tokenizer);
+    token_t token = get_next_token(&g_command_processor);
 
     if (token == HELP) {
 	console_printf("\tdemo-client <remote IPv4 address>\n\n");
@@ -472,10 +464,10 @@ demo_udp_client_command(void)
         return;
     }
 
-    rtos_thread_replace_top_mpu_data_region(&g_app,
-                                            sizeof g_app,
-                                            false,
-                                            &old_data_region);
+    rtos_thread_set_comp_region(&g_app,
+                                sizeof g_app,
+                                0,
+                                &old_comp_region);
 
     if (g_app.demo_udp_client_started) {
         console_printf("UDP client demo already started\n");
@@ -491,7 +483,6 @@ demo_udp_client_command(void)
     rtos_thread_init(
         &thread_params,
         &demo_udp_client_thread_execution_stack,
-        &g_app_region,
         &g_app.demo_udp_client_thread);
 
     console_printf("%s started (server IP address: %u.%u.%u.%u)\n",
@@ -502,7 +493,7 @@ demo_udp_client_command(void)
                    remote_ip_addr.bytes[3]);
 
 exit_restore_region:
-    rtos_thread_restore_top_mpu_data_region(&old_data_region);
+    rtos_thread_restore_comp_region(&old_comp_region);
     return;
 
 syntax_error:
@@ -522,12 +513,12 @@ demo_udp_server_command(void)
         .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 3,
     };
 
-    struct rtos_mpu_data_region old_data_region;
+    struct mpu_region_range old_comp_region;
 
-    rtos_thread_replace_top_mpu_data_region(&g_app,
-                                            sizeof g_app,
-                                            false,
-                                            &old_data_region);
+    rtos_thread_set_comp_region(&g_app,
+                                sizeof g_app,
+                                0,
+                                &old_comp_region);
 
     if (g_app.demo_udp_server_started) {
         console_printf("UDP server demo already started\n");
@@ -542,13 +533,12 @@ demo_udp_server_command(void)
     rtos_thread_init(
         &thread_params,
         &demo_udp_server_thread_execution_stack,
-        &g_app_region,
         &g_app.demo_udp_server_thread);
 
     console_printf("%s started\n", thread_params.p_name_p);
 
 exit_restore_region:
-    rtos_thread_restore_top_mpu_data_region(&old_data_region);
+    rtos_thread_restore_comp_region(&old_comp_region);
 }
 
 
@@ -567,8 +557,8 @@ demo_ping_ipv6_command(void)
     fdc_error_t fdc_error;
     struct ipv6_address local_ipv6_addr;
     struct ipv6_address *remote_ipv6_addr_p;
-    struct rtos_mpu_data_region old_data_region;
-    token_t token = get_next_token(&g_tokenizer);
+    struct mpu_region_range old_comp_region;
+    token_t token = get_next_token(&g_command_processor);
 
     if (token == HELP) {
 	console_printf("\tdemo-ping6 <remote IPv6 address>\n\n");
@@ -579,10 +569,10 @@ demo_ping_ipv6_command(void)
         goto syntax_error;
     }
 
-    rtos_thread_replace_top_mpu_data_region(&g_app,
-                                            sizeof g_app,
-                                            false,
-                                            &old_data_region);
+    rtos_thread_set_comp_region(&g_app,
+                                sizeof g_app,
+                                0,
+                                &old_comp_region);
 
     remote_ipv6_addr_p = &g_app.remote_ipv6_addr_for_demo_ping6;
     if (!parse_ip6_address(remote_ipv6_addr_p)) {
@@ -612,7 +602,6 @@ demo_ping_ipv6_command(void)
     rtos_thread_init(
         &thread_params,
         &demo_ping_ipv6_thread_execution_stack,
-        NULL,
         &g_app.demo_ping_ipv6_thread);
 
     console_printf("%s started (destination IPv6 address: %x:%x:%x:%x:%x:%x:%x:%x)\n",
@@ -627,7 +616,7 @@ demo_ping_ipv6_command(void)
                    remote_ipv6_addr_p->hwords[7]);
 
 exit_restore_region:
-    rtos_thread_restore_top_mpu_data_region(&old_data_region);
+    rtos_thread_restore_comp_region(&old_comp_region);
     return;
 
 syntax_error:
@@ -648,28 +637,28 @@ demo_udp_ipv6_client_command(void)
     };
 
     fdc_error_t fdc_error;
-    struct rtos_mpu_data_region old_data_region;
+    struct mpu_region_range old_comp_region;
     struct ipv6_address local_ipv6_addr;
     struct ipv6_address *remote_ipv6_addr_p;
-    token_t token = get_next_token(&g_tokenizer);
+    token_t token = get_next_token(&g_command_processor);
 
     if (token == HELP) {
 	console_printf("\tdemo-client6 <remote IPv6 address>\n\n");
         return;
     }
 
-    if (token != DECIMAL_NUMBER) {
+    if (token != HEXADECIMAL_NUMBER) {
         goto syntax_error;
     }
 
-    rtos_thread_replace_top_mpu_data_region(&g_app,
-                                            sizeof g_app,
-                                            false,
-                                            &old_data_region);
+    rtos_thread_set_comp_region(&g_app,
+                                sizeof g_app,
+                                0,
+                                &old_comp_region);
 
     remote_ipv6_addr_p = &g_app.remote_ipv6_addr_for_demo_client6;
     if (!parse_ip6_address(remote_ipv6_addr_p)) {
-        return;
+        goto exit_restore_region;
     }
 
     net_get_local_ipv6_address(&local_ipv6_addr);
@@ -678,7 +667,7 @@ demo_udp_ipv6_client_command(void)
 
     if (IPV6_ADDRESSES_EQUAL(&local_ipv6_addr, remote_ipv6_addr_p)) {
         console_printf("Error: Remote IPv6 address must be different from local IPv6 address\n");
-        return;
+        goto exit_restore_region;
     }
 
     if (g_app.demo_udp_ipv6_client_started) {
@@ -695,7 +684,6 @@ demo_udp_ipv6_client_command(void)
     rtos_thread_init(
         &thread_params,
         &demo_udp_ipv6_client_thread_execution_stack,
-        &g_app_region,
         &g_app.demo_udp_ipv6_client_thread);
 
     console_printf("%s started (server IPv6 address: %x:%x:%x:%x:%x:%x:%x:%x)\n",
@@ -711,11 +699,11 @@ demo_udp_ipv6_client_command(void)
 
 
 exit_restore_region:
-    rtos_thread_restore_top_mpu_data_region(&old_data_region);
+    rtos_thread_restore_comp_region(&old_comp_region);
     return;
 
 syntax_error:
-	console_printf("\'demo-client\' command syntax error (type \'demo-client help\')\n");
+    console_printf("\'demo-client\' command syntax error (type \'demo-client help\')\n");
 }
 
 
@@ -731,12 +719,12 @@ demo_udp_ipv6_server_command(void)
         .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 3,
     };
 
-    struct rtos_mpu_data_region old_data_region;
+    struct mpu_region_range old_comp_region;
 
-    rtos_thread_replace_top_mpu_data_region(&g_app,
-                                            sizeof g_app,
-                                            false,
-                                            &old_data_region);
+    rtos_thread_set_comp_region(&g_app,
+                                sizeof g_app,
+                                0,
+                                &old_comp_region);
 
     if (g_app.demo_udp_ipv6_server_started) {
         console_printf("UDP server demo already started\n");
@@ -751,13 +739,12 @@ demo_udp_ipv6_server_command(void)
     rtos_thread_init(
         &thread_params,
         &demo_udp_ipv6_server_thread_execution_stack,
-        &g_app_region,
         &g_app.demo_udp_ipv6_server_thread);
 
     console_printf("%s started\n", thread_params.p_name_p);
 
 exit_restore_region:
-    rtos_thread_restore_top_mpu_data_region(&old_data_region);
+    rtos_thread_restore_comp_region(&old_comp_region);
 }
 
 
@@ -848,6 +835,11 @@ accelerometer_thread_f(void *arg)
     accelerometer_init();
     accelerometer_started = true;
 
+    rtos_thread_set_comp_region(&g_app,
+                                sizeof g_app,
+                                0,
+                                NULL);
+
     g_app.accel_reading.x_acceleration = 0;
     g_app.accel_reading.y_acceleration = 0;
     g_app.accel_reading.z_acceleration = 0;
@@ -934,6 +926,11 @@ demo_udp_server_thread_f(void *arg)
 
     struct local_l4_end_point *server_end_point_p;
 
+    rtos_thread_set_comp_region(&g_app,
+                                sizeof g_app,
+                                0,
+                                NULL);
+
     fdc_error = net_create_local_l4_end_point(TRANSPORT_PROTO_UDP,
 					      MY_UDP_SERVER_PORT,
 					      &server_end_point_p);
@@ -956,10 +953,9 @@ demo_udp_server_thread_f(void *arg)
                                                   &rx_packet_p);
         FDC_ASSERT(fdc_error == 0, fdc_error, 0);
 
-        fdc_error = rtos_thread_add_mpu_data_region(rx_packet_p,
-                                                    sizeof *rx_packet_p,
-                                                    true);
-        FDC_ASSERT(fdc_error == 0, fdc_error, rx_packet_p);
+        rtos_thread_set_tmp_region(rx_packet_p,
+                                   sizeof *rx_packet_p,
+                                   MPU_REGION_READ_ONLY);
 
 	in_msg_size = net_get_udp_data_payload_length(rx_packet_p);
 	FDC_ASSERT(in_msg_size == sizeof(struct accel_reading_msg), in_msg_size, 0);
@@ -972,17 +968,16 @@ demo_udp_server_thread_f(void *arg)
 
 	CONSOLE_POS_PRINTF(42, 81, "UDP server received message %10u", seq_num);
 
-        rtos_thread_remove_top_mpu_data_region(); /* rx_packet_p */
+        rtos_thread_unset_tmp_region(); /* rx_packet_p */
 	net_recycle_rx_packet(rx_packet_p);
 
-        fdc_error = rtos_thread_add_mpu_data_region(tx_packet_p,
-                                                    sizeof *tx_packet_p,
-                                                    false);
-        FDC_ASSERT(fdc_error == 0, fdc_error, tx_packet_p);
+        rtos_thread_set_tmp_region(tx_packet_p,
+                                   sizeof *tx_packet_p,
+                                   0);
 
 	out_msg_p = net_get_udp_data_payload_area(tx_packet_p);
 	*out_msg_p = seq_num;
-        rtos_thread_remove_top_mpu_data_region(); /* tx_packet_p */
+        rtos_thread_unset_tmp_region(); /* tx_packet_p */
 
 	fdc_error = net_send_ipv4_udp_datagram(server_end_point_p, &client_ip_addr,
                                                client_port,
@@ -1014,6 +1009,11 @@ demo_udp_client_thread_f(void *arg)
 
     struct local_l4_end_point *client_end_point_p;
 
+    rtos_thread_set_comp_region(&g_app,
+                                sizeof g_app,
+                                0,
+                                NULL);
+
     fdc_error = net_create_local_l4_end_point(TRANSPORT_PROTO_UDP, 0,
 					      &client_end_point_p);
     FDC_ASSERT(fdc_error == 0, fdc_error, 0);
@@ -1028,10 +1028,9 @@ demo_udp_client_thread_f(void *arg)
 	uint32_t *in_msg_p;
 	size_t in_msg_size;
 
-        fdc_error = rtos_thread_add_mpu_data_region(tx_packet_p,
-                                                    sizeof *tx_packet_p,
-                                                    false);
-        FDC_ASSERT(fdc_error == 0, fdc_error, tx_packet_p);
+        rtos_thread_set_tmp_region(tx_packet_p,
+                                   sizeof *tx_packet_p,
+                                   0);
 
 	out_msg_p = net_get_udp_data_payload_area(tx_packet_p);
 	out_msg_p->seq_num = seq_num;
@@ -1045,7 +1044,7 @@ demo_udp_client_thread_f(void *arg)
         g_app.accel_reading_ready = false;
         rtos_mutex_release(&g_app.accel_reading_mutex);
 
-        rtos_thread_remove_top_mpu_data_region(); /* tx_packet_p */
+        rtos_thread_unset_tmp_region(); /* tx_packet_p */
 
 	fdc_error = net_send_ipv4_udp_datagram(client_end_point_p, &dest_ip_addr,
 		                   MY_UDP_SERVER_PORT,
@@ -1076,10 +1075,9 @@ demo_udp_client_thread_f(void *arg)
 	FDC_ASSERT(server_port == MY_UDP_SERVER_PORT,
 		   server_port, 0);
 
-        fdc_error = rtos_thread_add_mpu_data_region(rx_packet_p,
-                                                    sizeof *rx_packet_p,
-                                                    true);
-        FDC_ASSERT(fdc_error == 0, fdc_error, rx_packet_p);
+        rtos_thread_set_tmp_region(rx_packet_p,
+                                   sizeof *rx_packet_p,
+                                   MPU_REGION_READ_ONLY);
 
 	in_msg_size = net_get_udp_data_payload_length(rx_packet_p);
 	FDC_ASSERT(in_msg_size == sizeof(uint32_t), in_msg_size, 0);
@@ -1088,7 +1086,7 @@ demo_udp_client_thread_f(void *arg)
 
 	CONSOLE_POS_PRINTF(43, 1, "UDP client received ack for message %10u", *in_msg_p);
 
-        rtos_thread_remove_top_mpu_data_region(); /* rx_packet_p */
+        rtos_thread_unset_tmp_region(); /* rx_packet_p */
 	net_recycle_rx_packet(rx_packet_p);
 
 	seq_num ++;
@@ -1220,10 +1218,9 @@ demo_udp_ipv6_server_thread_f(void *arg)
                                                   &rx_packet_p);
         FDC_ASSERT(fdc_error == 0, fdc_error, 0);
 
-        fdc_error = rtos_thread_add_mpu_data_region(rx_packet_p,
-                                                    sizeof *rx_packet_p,
-                                                    true);
-        FDC_ASSERT(fdc_error == 0, fdc_error, rx_packet_p);
+        rtos_thread_set_tmp_region(rx_packet_p,
+                                   sizeof *rx_packet_p,
+                                   MPU_REGION_READ_ONLY);
 
 	in_msg_size = net_get_udp_data_payload_length(rx_packet_p);
 	FDC_ASSERT(in_msg_size == sizeof(struct accel_reading_msg), in_msg_size, 0);
@@ -1236,17 +1233,16 @@ demo_udp_ipv6_server_thread_f(void *arg)
 
 	CONSOLE_POS_PRINTF(45, 81, "UDP IPv6 server received message %10u", seq_num);
 
-        rtos_thread_remove_top_mpu_data_region(); /* rx_packet_p */
+        rtos_thread_unset_tmp_region(); /* rx_packet_p */
 	net_recycle_rx_packet(rx_packet_p);
 
-        fdc_error = rtos_thread_add_mpu_data_region(tx_packet_p,
-                                                    sizeof *tx_packet_p,
-                                                    false);
-        FDC_ASSERT(fdc_error == 0, fdc_error, tx_packet_p);
+        rtos_thread_set_tmp_region(tx_packet_p,
+                                   sizeof *tx_packet_p,
+                                   0);
 
 	out_msg_p = net_get_udp_data_payload_area(tx_packet_p);
 	*out_msg_p = seq_num;
-        rtos_thread_remove_top_mpu_data_region(); /* tx_packet_p */
+        rtos_thread_unset_tmp_region(); /* tx_packet_p */
 
 	fdc_error = net_send_ipv6_udp_datagram(server_end_point_p, &client_ipv6_addr,
                                                client_port,
@@ -1278,6 +1274,11 @@ demo_udp_ipv6_client_thread_f(void *arg)
 
     struct local_l4_end_point *client_end_point_p;
 
+    rtos_thread_set_comp_region(&g_app,
+                                sizeof g_app,
+                                0,
+                                NULL);
+
     fdc_error = net_create_local_l4_end_point(TRANSPORT_PROTO_UDP, 0,
 					      &client_end_point_p);
     FDC_ASSERT(fdc_error == 0, fdc_error, 0);
@@ -1292,10 +1293,9 @@ demo_udp_ipv6_client_thread_f(void *arg)
 	uint32_t *in_msg_p;
 	size_t in_msg_size;
 
-        fdc_error = rtos_thread_add_mpu_data_region(tx_packet_p,
-                                                    sizeof *tx_packet_p,
-                                                    false);
-        FDC_ASSERT(fdc_error == 0, fdc_error, tx_packet_p);
+        rtos_thread_set_tmp_region(tx_packet_p,
+                                   sizeof *tx_packet_p,
+                                   0);
 
 	out_msg_p = net_get_udp_data_payload_area(tx_packet_p);
 	out_msg_p->seq_num = seq_num;
@@ -1309,7 +1309,7 @@ demo_udp_ipv6_client_thread_f(void *arg)
         g_app.accel_reading_ready = false;
         rtos_mutex_release(&g_app.accel_reading_mutex);
 
-        rtos_thread_remove_top_mpu_data_region(); /* tx_packet_p */
+        rtos_thread_unset_tmp_region(); /* tx_packet_p */
 
 	fdc_error = net_send_ipv6_udp_datagram(client_end_point_p, dest_ipv6_addr_p,
 		                   MY_UDP_SERVER_PORT,
@@ -1340,10 +1340,9 @@ demo_udp_ipv6_client_thread_f(void *arg)
 	FDC_ASSERT(server_port == MY_UDP_SERVER_PORT,
 		   server_port, 0);
 
-        fdc_error = rtos_thread_add_mpu_data_region(rx_packet_p,
-                                                    sizeof *rx_packet_p,
-                                                    true);
-        FDC_ASSERT(fdc_error == 0, fdc_error, rx_packet_p);
+        rtos_thread_set_tmp_region(rx_packet_p,
+                                   sizeof *rx_packet_p,
+                                   MPU_REGION_READ_ONLY);
 
 	in_msg_size = net_get_udp_data_payload_length(rx_packet_p);
 	FDC_ASSERT(in_msg_size == sizeof(uint32_t), in_msg_size, 0);
@@ -1352,7 +1351,7 @@ demo_udp_ipv6_client_thread_f(void *arg)
 
 	CONSOLE_POS_PRINTF(46, 1, "UDP IPv6 client received ack for message %10u", *in_msg_p);
 
-        rtos_thread_remove_top_mpu_data_region(); /* rx_packet_p */
+        rtos_thread_unset_tmp_region(); /* rx_packet_p */
 	net_recycle_rx_packet(rx_packet_p);
 
 	seq_num ++;

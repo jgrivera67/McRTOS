@@ -18,6 +18,19 @@ TODO("Remove these pragmas")
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wunused-function"
 
+struct __debugger {
+    /**
+     * Command-line buffer
+     */
+    char command_line_buffer[RTOS_COMMAND_LINE_BUFFER_SIZE];
+};
+
+struct debugger {
+    struct __debugger;
+}  __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT(struct __debugger))));
+
+C_ASSERT(sizeof(struct debugger) % SOC_MPU_REGION_ALIGNMENT(struct __debugger) == 0);
+
 static bool rtos_dbg_parse_command(
     const char *cmd_line,
     _IN_ const struct rtos_execution_context *current_execution_context_p,
@@ -64,6 +77,9 @@ debug_dump_micro_trace_buffer(void);
 
 static void
 debug_dump_captured_registers(void);
+
+static struct debugger g_debugger;
+
 
 /**
  * Enters McRTOS debugger from the hard fault exception handler.
@@ -193,11 +209,11 @@ rtos_run_debugger(
             (putchar_func_t *)uart_putchar_with_polling,
             (getchar_func_t *)uart_getchar_with_polling,
             (void *)g_console_serial_port_p,
-            g_McRTOS_p->rts_command_line_buffer,
+            g_debugger.command_line_buffer,
             RTOS_COMMAND_LINE_BUFFER_SIZE);
 
         quit = rtos_dbg_parse_command(
-                    g_McRTOS_p->rts_command_line_buffer,
+                    g_debugger.command_line_buffer,
                     current_execution_context_p,
                     before_exception_stack_p);
 
@@ -317,7 +333,7 @@ rtos_dbg_dump_exception_info(
         before_exception_stack_p[CPU_REG_PSR]);
 
     debugger_printf(
-	"Fault status registers (see DUI0553A_cortex_m4_dgug.pdf):\n"
+	"Fault status registers (see section 4.3 of DUI0553A_cortex_m4_dgug.pdf):\n"
 	"\tSCB CFSR: %#x\n"
 	"\tSCB HFSR: %#x\n"
 	"\tSCB DFSR: %#x\n"
@@ -648,7 +664,7 @@ rtos_dbg_dump_context_switch_traces(void)
         struct rtos_execution_context *execution_context_p;
 
         switch (trace_context_type) {
-#if 0 //???            
+#if 0 //???
         case FDC_CST_APPLICATION_THREAD:
             thread_p = &g_McRTOS_p->rts_app_threads[context_id];
             execution_context_p = &thread_p->thr_execution_context;

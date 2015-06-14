@@ -695,11 +695,6 @@ struct rtos_thread
 #   endif
 
     /**
-     * Number of MPU data regions currently defined for the thread
-     */
-    uint8_t thr_num_mpu_data_regions;
-
-    /**
      * Thread state history
      */
     uint32_t thr_state_history;
@@ -779,11 +774,29 @@ struct rtos_thread
     struct rtos_condvar  __attribute__ ((aligned(sizeof(uint32_t)))) thr_condvar;
 
     /**
-     * MPU data regions accessible from the thread, including one region
-     * for the thread's stack
+     * Thread-specific MPU data regions
      */
-    struct mpu_region_range
-	    thr_mpu_data_regions[RTOS_MAX_MPU_THREAD_DATA_REGIONS];
+    union {
+        struct mpu_region_range thr_mpu_regions[RTOS_NUM_THREAD_MPU_REGIONS];
+        struct {
+            /**
+             * MPU region for the thread's stack
+             */
+            struct mpu_region_range thr_stack_region;
+
+            /**
+             * MPU region for global data of current component called by the
+             * thread
+             */
+            struct mpu_region_range thr_comp_region;
+
+            /**
+             * MPU region for temporary use, to be able to dereference input or
+             * output arguments of functions, or a device's MMIO registers.
+             */
+            struct mpu_region_range thr_tmp_region;
+        };
+    };
 
     /**
      * Saved FPU context on last context switch, if the thread was using the FPU
@@ -793,7 +806,15 @@ struct rtos_thread
 } __attribute__ ((aligned(SOC_CACHE_LINE_SIZE_IN_BYTES)));
 
 C_ASSERT(sizeof(struct rtos_thread) % SOC_CACHE_LINE_SIZE_IN_BYTES == 0);
-
+C_ASSERT(offsetof(struct rtos_thread, thr_stack_region) ==
+         offsetof(struct rtos_thread, thr_mpu_regions[RTOS_THREAD_STACK_MPU_REGION_INDEX -
+                                                      FIRST_THREAD_MPU_REGION_INDEX]));
+C_ASSERT(offsetof(struct rtos_thread, thr_comp_region) ==
+         offsetof(struct rtos_thread, thr_mpu_regions[RTOS_THREAD_COMP_MPU_REGION_INDEX -
+                                                      FIRST_THREAD_MPU_REGION_INDEX]));
+C_ASSERT(offsetof(struct rtos_thread, thr_tmp_region) ==
+         offsetof(struct rtos_thread, thr_mpu_regions[RTOS_THREAD_TMP_MPU_REGION_INDEX -
+                                                      FIRST_THREAD_MPU_REGION_INDEX]));
 
 /**
  * Generic queue
@@ -829,9 +850,8 @@ struct rtos_queue {
 _MAY_NOT_RETURN_
 void
 rtos_k_thread_init(
-    _IN_ const struct rtos_thread_creation_params *params_p,    
+    _IN_ const struct rtos_thread_creation_params *params_p,
     _IN_ struct rtos_thread_execution_stack *thread_stack_p,
-    _IN_ const struct rtos_mpu_data_region *global_data_region_p,
     _OUT_ struct rtos_thread *rtos_thread_p);
 
 _THREAD_CALLERS_ONLY_
@@ -1045,25 +1065,29 @@ rtos_k_lcd_draw_tile(
     _IN_ lcd_y_t y,
     _IN_ lcd_color_t fill_color);
 
-fdc_error_t
-rtos_k_thread_add_mpu_data_region(
+_THREAD_CALLERS_ONLY_
+void
+rtos_k_thread_set_comp_region(
     _IN_ void *start_addr,
     _IN_ size_t size,
-    _IN_ bool read_only);
+    _IN_ uint32_t flags,
+    _OUT_ struct mpu_region_range *old_comp_region_p);
 
+_THREAD_CALLERS_ONLY_
 void
-rtos_k_thread_remove_top_mpu_data_region(void);
+rtos_k_thread_restore_comp_region(
+    _IN_ const struct mpu_region_range *old_comp_region_p);
 
+_THREAD_CALLERS_ONLY_
 void
-rtos_k_thread_replace_top_mpu_data_region(
+rtos_k_thread_set_tmp_region(
     _IN_ void *start_addr,
     _IN_ size_t size,
-    _IN_ bool read_only,
-    _OUT_ struct rtos_mpu_data_region *old_mpu_region_p);
+    _IN_ uint32_t flags);
 
+_THREAD_CALLERS_ONLY_
 void
-rtos_k_thread_restore_top_mpu_data_region(
-    _IN_ const struct rtos_mpu_data_region *old_mpu_region_p);
+rtos_k_thread_unset_tmp_region(void);
 
 fdc_error_t
 rtos_k_app_system_call(

@@ -188,19 +188,19 @@ rgb_led_init(void)
 void
 toggle_rgb_led(uint32_t led_color_mask)
 {
-    fdc_error_t fdc_error;
-    bool region_added = false;
-    
+    struct mpu_region_range old_comp_region;
+    bool comp_region_changed = false;
+
     if (!rtos_in_privileged_mode()) {
-        fdc_error = rtos_thread_add_mpu_data_region(&g_frdm_board,
-                                                    sizeof g_frdm_board,
-                                                    false);
-        FDC_ASSERT(fdc_error == 0, fdc_error, 0);
-        region_added = true;
+        rtos_thread_set_comp_region(&g_frdm_board,
+                                    sizeof g_frdm_board,
+                                    0,
+                                    &old_comp_region);
+        comp_region_changed = true;
     }
 
     if (!g_frdm_board.rgb_led_initialized) {
-        return;
+        goto common_exit;
     }
 
     g_frdm_board.rgb_led_current_mask ^= led_color_mask;
@@ -211,8 +211,9 @@ toggle_rgb_led(uint32_t led_color_mask)
         }
     }
 
-    if (region_added) {
-        rtos_thread_remove_top_mpu_data_region();   /* g_launchpad_board */
+common_exit:
+    if (comp_region_changed) {
+        rtos_thread_restore_comp_region(&old_comp_region);
     }
 }
 
@@ -223,15 +224,16 @@ toggle_rgb_led(uint32_t led_color_mask)
 uint32_t
 set_rgb_led_color(uint32_t led_color_mask)
 {
-    fdc_error_t fdc_error;
-    bool region_added = false;
-    
+    struct mpu_region_range old_comp_region;
+    bool comp_region_changed = false;
+
     if (!rtos_in_privileged_mode()) {
-        fdc_error = rtos_thread_add_mpu_data_region(&g_frdm_board,
-                                                    sizeof g_frdm_board,
-                                                    false);
-        FDC_ASSERT(fdc_error == 0, fdc_error, 0);
-        region_added = true;
+        rtos_thread_set_comp_region(&g_frdm_board,
+                                    sizeof g_frdm_board,
+                                    0,
+                                    &old_comp_region);
+
+        comp_region_changed = true;
     }
 
     uint32_t old_rgb_led_mask = g_frdm_board.rgb_led_current_mask;
@@ -251,8 +253,8 @@ set_rgb_led_color(uint32_t led_color_mask)
     }
 
 common_exit:
-    if (region_added) {
-        rtos_thread_remove_top_mpu_data_region();   /* g_launchpad_board */
+    if (comp_region_changed) {
+        rtos_thread_restore_comp_region(&old_comp_region);
     }
 
     return old_rgb_led_mask;
