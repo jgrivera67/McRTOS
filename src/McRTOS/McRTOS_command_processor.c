@@ -473,11 +473,20 @@ parse_ip6_address(struct ipv6_address *ipv6_addr_p)
 {
     token_t token;
     uint32_t value;
+    bool parse_ok = false;
+    struct mpu_region_range old_comp_region;
+
+    rtos_thread_set_comp_region(&g_command_processor,
+                                sizeof g_command_processor,
+                                0,
+                                &old_comp_region);
+
+    rtos_thread_set_tmp_region(ipv6_addr_p, sizeof *ipv6_addr_p, 0);
 
     value = convert_string_to_hexadecimal(g_command_processor.last_lexical_unit);
     if (value > UINT16_MAX) {
 	console_printf("IPv6 address parsing error: Invalid value \'%u\'\n", value);
-	return false;
+	goto common_exit;
     }
 
     ipv6_addr_p->hwords[0] = hton16(value);
@@ -485,20 +494,20 @@ parse_ip6_address(struct ipv6_address *ipv6_addr_p)
     if (token != COLON_TOKEN) {
 	console_printf("IPv6 address parsing error: Invalid token \'%s\'\n",
                        g_command_processor.last_lexical_unit);
-	return false;
+	goto common_exit;
     }
 
     token = get_next_token(&g_command_processor);
     if (token != HEXADECIMAL_NUMBER && token != DECIMAL_NUMBER) {
 	console_printf("IPv6 address parsing error: Invalid token \'%s\'\n",
                        g_command_processor.last_lexical_unit);
-	return false;
+	goto common_exit;
     }
 
     value = convert_string_to_hexadecimal(g_command_processor.last_lexical_unit);
     if (value > UINT16_MAX) {
 	console_printf("IPv6 address parsing error: Invalid value \'%u\'\n", value);
-	return false;
+	goto common_exit;
     }
 
     ipv6_addr_p->hwords[1] = hton16(value);
@@ -507,20 +516,20 @@ parse_ip6_address(struct ipv6_address *ipv6_addr_p)
 	console_printf("IPv6 address parsing error: Invalid token \'%s\'\n",
                        g_command_processor.last_lexical_unit);
 
-	return false;
+	goto common_exit;
     }
 
     token = get_next_token(&g_command_processor);
     if (token != HEXADECIMAL_NUMBER && token != DECIMAL_NUMBER) {
 	console_printf("IPv6 address parsing error: Invalid token \'%s\'\n",
                        g_command_processor.last_lexical_unit);
-	return false;
+	goto common_exit;
     }
 
     value = convert_string_to_hexadecimal(g_command_processor.last_lexical_unit);
     if (value > UINT16_MAX) {
 	console_printf("IPv6 address parsing error: Invalid value \'%u\'\n", value);
-	return false;
+	goto common_exit;
     }
 
     ipv6_addr_p->hwords[2] = hton16(value);
@@ -528,20 +537,20 @@ parse_ip6_address(struct ipv6_address *ipv6_addr_p)
     if (token != COLON_TOKEN) {
 	console_printf("IPv6 address parsing error: Invalid token \'%s\'\n",
                        g_command_processor.last_lexical_unit);
-	return false;
+	goto common_exit;
     }
 
     token = get_next_token(&g_command_processor);
     if (token != HEXADECIMAL_NUMBER && token != DECIMAL_NUMBER) {
 	console_printf("IPv6 address parsing error: Invalid token \'%s\'\n",
                        g_command_processor.last_lexical_unit);
-	return false;
+	goto common_exit;
     }
 
     value = convert_string_to_hexadecimal(g_command_processor.last_lexical_unit);
     if (value > UINT16_MAX) {
 	console_printf("IPv6 address parsing error: Invalid value \'%u\'\n", value);
-	return false;
+	goto common_exit;
     }
 
     ipv6_addr_p->hwords[3] = hton16(value);
@@ -549,20 +558,20 @@ parse_ip6_address(struct ipv6_address *ipv6_addr_p)
     if (token != COLON_TOKEN) {
 	console_printf("IPv6 address parsing error: Invalid token \'%s\'\n",
                        g_command_processor.last_lexical_unit);
-	return false;
+	goto common_exit;
     }
 
     token = get_next_token(&g_command_processor);
     if (token != HEXADECIMAL_NUMBER && token != DECIMAL_NUMBER) {
 	console_printf("IPv6 address parsing error: Invalid token \'%s\'\n",
                        g_command_processor.last_lexical_unit);
-	return false;
+	goto common_exit;
     }
 
     value = convert_string_to_hexadecimal(g_command_processor.last_lexical_unit);
     if (value > UINT16_MAX) {
 	console_printf("IPv6 address parsing error: Invalid value \'%u\'\n", value);
-	return false;
+	goto common_exit;
     }
 
     ipv6_addr_p->hwords[4] = hton16(value);
@@ -570,20 +579,20 @@ parse_ip6_address(struct ipv6_address *ipv6_addr_p)
     if (token != COLON_TOKEN) {
 	console_printf("IPv6 address parsing error: Invalid token \'%s\'\n",
                        g_command_processor.last_lexical_unit);
-	return false;
+	goto common_exit;
     }
 
     token = get_next_token(&g_command_processor);
     if (token != HEXADECIMAL_NUMBER && token != DECIMAL_NUMBER) {
 	console_printf("IPv6 address parsing error: Invalid token \'%s\'\n",
                        g_command_processor.last_lexical_unit);
-	return false;
+	goto common_exit;
     }
 
     value = convert_string_to_hexadecimal(g_command_processor.last_lexical_unit);
     if (value > UINT16_MAX) {
 	console_printf("IPv6 address parsing error: Invalid value \'%u\'\n", value);
-	return false;
+	goto common_exit;
     }
 
     ipv6_addr_p->hwords[5] = hton16(value);
@@ -591,20 +600,20 @@ parse_ip6_address(struct ipv6_address *ipv6_addr_p)
     if (token != COLON_TOKEN) {
 	console_printf("IPv6 address parsing error: Invalid token \'%s\'\n",
                        g_command_processor.last_lexical_unit);
-	return false;
+	goto common_exit;
     }
 
     token = get_next_token(&g_command_processor);
     if (token != HEXADECIMAL_NUMBER && token != DECIMAL_NUMBER) {
 	console_printf("IPv6 address parsing error: Invalid token \'%s\'\n",
                        g_command_processor.last_lexical_unit);
-	return false;
+	goto common_exit;
     }
 
     value = convert_string_to_hexadecimal(g_command_processor.last_lexical_unit);
     if (value > UINT16_MAX) {
 	console_printf("IPv6 address parsing error: Invalid value \'%u\'\n", value);
-	return false;
+	goto common_exit;
     }
 
     ipv6_addr_p->hwords[6] = hton16(value);
@@ -612,20 +621,20 @@ parse_ip6_address(struct ipv6_address *ipv6_addr_p)
     if (token != COLON_TOKEN) {
 	console_printf("IPv6 address parsing error: Invalid token \'%s\'\n",
                        g_command_processor.last_lexical_unit);
-	return false;
+	goto common_exit;
     }
 
     token = get_next_token(&g_command_processor);
     if (token != HEXADECIMAL_NUMBER && token != DECIMAL_NUMBER) {
 	console_printf("IPv6 address parsing error: Invalid token \'%s\'\n",
                        g_command_processor.last_lexical_unit);
-	return false;
+	goto common_exit;
     }
 
     value = convert_string_to_hexadecimal(g_command_processor.last_lexical_unit);
     if (value > UINT16_MAX) {
 	console_printf("IPv6 address parsing error: Invalid value \'%u\'\n", value);
-	return false;
+	goto common_exit;
     }
 
     ipv6_addr_p->hwords[7] = hton16(value);
@@ -640,10 +649,15 @@ parse_ip6_address(struct ipv6_address *ipv6_addr_p)
                        ntoh16(ipv6_addr_p->hwords[5]),
                        ntoh16(ipv6_addr_p->hwords[6]),
                        ntoh16(ipv6_addr_p->hwords[7]));
-	return false;
+	goto common_exit;
     }
 
-    return true;
+    parse_ok = true;
+
+common_exit:
+    rtos_thread_unset_tmp_region();
+    rtos_thread_restore_comp_region(&old_comp_region);
+    return parse_ok;
 }
 
 
