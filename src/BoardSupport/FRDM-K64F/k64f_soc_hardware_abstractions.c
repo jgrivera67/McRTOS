@@ -467,6 +467,9 @@ struct rtos_interrupt *g_rtos_interrupt_i2c0_p = NULL;
 static struct i2c_device_var g_i2c_devices_var[] = {
     [0] = {
         .i2c_initialized = false,
+        .transaction = {
+            .state = I2C_TRANSACTION_NOT_STARTED,
+        },
     },
 
     [1] = {
@@ -3030,129 +3033,77 @@ k64f_ftm_set_duty_cycle(
 #endif // ???
 
 /**
- * Wait until the current I2C byte transfer completes
+ * Wait until the current I2C transaction completes
  */
 static void
-i2c_wait_transfer_completion(
-    const struct i2c_device *i2c_device_p)
+i2c_wait_transaction_completion(const struct i2c_device *i2c_device_p)
 {
     struct i2c_device_var *i2c_var_p = i2c_device_p->i2c_var_p;
     cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
 
-    while (!i2c_var_p->i2c_byte_transfer_completed) {
+    DEBUG_PRINTF("Before I2C condvar_wait\n"); //???
+    while (i2c_var_p->transaction.state != I2C_TRANSACTION_COMPLETED &&
+           i2c_var_p->transaction.state != I2C_TRANSACTION_ABORTED) {
         rtos_k_condvar_wait_intr_disabled(&i2c_var_p->i2c_condvar, NULL);
     }
+    DEBUG_PRINTF("After I2C condvar_wait\n"); //???
 
-    i2c_var_p->i2c_byte_transfer_completed = false;
+    i2c_var_p->transaction.state = I2C_TRANSACTION_NOT_STARTED;
     rtos_k_restore_cpu_interrupts(cpu_status_register);
 }
 
 
 static void
-i2c_write_data_byte(
-    const struct i2c_device *i2c_device_p,
-    uint8_t data_byte)
+i2c_end_transaction(const struct i2c_device *i2c_device_p,
+                    enum i2c_transaction_states final_state)
 {
     uint32_t reg_value;
-    fdc_error_t fdc_error;
+    struct i2c_device_var *const i2c_var_p = i2c_device_p->i2c_var_p;
     I2C_MemMapPtr i2c_mmio_registers_p = i2c_device_p->i2c_mmio_registers_p;
 
-    write_8bit_mmio_register(&I2C_D_REG(i2c_mmio_registers_p), data_byte);
-
-    i2c_wait_transfer_completion(i2c_device_p);
-
-    /*
-     * Receive ACK/NAK signal from the I2C bus:
-     */
-    reg_value = read_8bit_mmio_register(&I2C_S_REG(i2c_mmio_registers_p));
-    if ((reg_value & I2C_S_RXAK_MASK) != 0) {
-        fdc_error = CAPTURE_FDC_ERROR("NAK received from the I2C bus",
-                                      i2c_device_p, data_byte);
-
-        fatal_error_handler(fdc_error);
-    }
-}
-
-
-static void
-i2c_end_transaction(
-    const struct i2c_device *i2c_device_p)
-{
-    uint32_t reg_value;
-    I2C_MemMapPtr i2c_mmio_registers_p = i2c_device_p->i2c_mmio_registers_p;
-
+    FDC_ASSERT(i2c_var_p->transaction.state != I2C_TRANSACTION_NOT_STARTED,
+               i2c_var_p->transaction.state, i2c_device_p);
     reg_value =
         read_8bit_mmio_register(&I2C_S_REG(i2c_mmio_registers_p));
     FDC_ASSERT((reg_value & I2C_S_BUSY_MASK) != 0, reg_value, i2c_device_p);
 
+    /*
+     * Generate STOP signal by transitioning the MST bit from 1 to 0:
+     */
     reg_value = read_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p));
+    FDC_ASSERT(reg_value & I2C_C1_MST_MASK, reg_value, i2c_device_p);
     reg_value &= ~(I2C_C1_MST_MASK | I2C_C1_TX_MASK | I2C_C1_RSTA_MASK);
     write_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p), reg_value);
-    delay_loop(100);
+    //???delay_loop(100);
+    i2c_var_p->transaction.state = final_state;
+    rtos_k_condvar_signal(&i2c_var_p->i2c_condvar);
 }
 
-static uint8_t
-i2c_read_data_byte(
-    const struct i2c_device *i2c_device_p,
-    bool first_read,
-    bool last_read)
-{
-    uint32_t reg_value;
-    I2C_MemMapPtr i2c_mmio_registers_p = i2c_device_p->i2c_mmio_registers_p;
-
-    /*
-     * Set generation of ACK/NAK for next byte to be received:
-     */
-    reg_value = read_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p));
-    if (last_read) {
-        /*
-         * Send a NAK signal to the I2C bus:
-         */
-        reg_value |= I2C_C1_TXAK_MASK;
-    } else {
-        /*
-         * Send an ACK signal to the I2C bus:
-         */
-        reg_value &= ~I2C_C1_TXAK_MASK;
-    }
-    write_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p), reg_value);
-
-    if (first_read) {
-        /*
-         * Initiate first read transfer:
-         */
-        (void)read_8bit_mmio_register(&I2C_D_REG(i2c_mmio_registers_p));
-    }
-
-    /*
-     * Wait for completion of current read transfer:
-     */
-    i2c_wait_transfer_completion(i2c_device_p);
-
-    if (last_read) {
-        i2c_end_transaction(i2c_device_p);
-    }
-
-    /*
-     * Read data byte received from current read transfer:
-     *
-     * NOTE: If i2c_end_transaction() is not called above, this will also
-     * initiate another read transfer.
-     */
-    reg_value = read_8bit_mmio_register(&I2C_D_REG(i2c_mmio_registers_p));
-
-    return (uint8_t)reg_value;
-}
 
 static void
-i2c_start_or_continue_transaction(
+i2c_start_transaction(
     const struct i2c_device *i2c_device_p,
     uint8_t i2c_slave_addr,
-    bool first_transaction,
-    bool read_transaction)
+    uint8_t i2c_slave_reg_addr,
+    uint8_t flags,
+    uint8_t *data_buffer_p,
+    size_t num_bytes)
 {
     uint32_t reg_value;
+    struct i2c_device_var *const i2c_var_p = i2c_device_p->i2c_var_p;
     I2C_MemMapPtr i2c_mmio_registers_p = i2c_device_p->i2c_mmio_registers_p;
+
+    FDC_ASSERT(i2c_var_p->transaction.state == I2C_TRANSACTION_NOT_STARTED,
+               i2c_var_p->transaction.state, i2c_device_p);
+
+    i2c_var_p->transaction.flags = flags;
+    i2c_var_p->transaction.slave_addr = i2c_slave_addr;
+    if (flags & I2C_TRANSACTION_HAS_REG_ADDR) {
+        i2c_var_p->transaction.slave_reg_addr = i2c_slave_reg_addr;
+    }
+
+    i2c_var_p->transaction.next_data_byte_p = data_buffer_p;
+    i2c_var_p->transaction.num_data_bytes_left = num_bytes;
 
     reg_value = read_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p));
 
@@ -3161,69 +3112,31 @@ i2c_start_or_continue_transaction(
         read_8bit_mmio_register(&I2C_S_REG(i2c_mmio_registers_p));
 #   endif
 
-    if (first_transaction) {
-        FDC_ASSERT(
-            (reg_value & (I2C_C1_MST_MASK|I2C_C1_RSTA_MASK|I2C_C1_TX_MASK)) == 0,
-            reg_value, i2c_device_p);
-        FDC_ASSERT(
-            (reg_value2 & I2C_S_BUSY_MASK) == 0 ||
-	    (reg_value2 & I2C_S_TCF_MASK) != 0, reg_value2, i2c_device_p);
+    /*
+     * Generate START signal by changing MST bit from 0 to 1:
+     */
+    FDC_ASSERT(
+        (reg_value & (I2C_C1_MST_MASK|I2C_C1_RSTA_MASK|I2C_C1_TX_MASK)) == 0,
+        reg_value, i2c_device_p);
+    FDC_ASSERT(
+        (reg_value2 & I2C_S_BUSY_MASK) == 0 ||
+        (reg_value2 & I2C_S_TCF_MASK) != 0, reg_value2, i2c_device_p);
 
-        reg_value |= I2C_C1_MST_MASK;
-    } else {
-        FDC_ASSERT(
-            (reg_value & I2C_C1_MST_MASK) != 0, reg_value, i2c_device_p);
-        FDC_ASSERT(
-            (reg_value2 & I2C_S_BUSY_MASK) != 0, reg_value2, i2c_device_p);
-
-        reg_value |= I2C_C1_RSTA_MASK;
-    }
-
-    reg_value |= I2C_C1_TX_MASK;
+    reg_value |= (I2C_C1_MST_MASK | I2C_C1_TX_MASK);
     write_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p), reg_value);
 
     uint8_t data_value = 0;
     SET_BIT_FIELD(
         data_value, I2C_SLAVE_ADDR_MASK, I2C_SLAVE_ADDR_SHIFT, i2c_slave_addr);
 
-    if (read_transaction) {
-        data_value |= I2C_READ_TRANSACTION_MASK;
-    }
+    i2c_var_p->transaction.state = I2C_SENDING_SLAVE_ADDR;
 
-    i2c_write_data_byte(i2c_device_p, data_value);
-
-    if (read_transaction) {
-        reg_value = read_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p));
-        reg_value &= ~I2C_C1_TX_MASK;
-        write_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p), reg_value);
-    }
+    /*
+     * Initiate transmit of slave address on the I2C bus:
+     */
+    write_8bit_mmio_register(&I2C_D_REG(i2c_mmio_registers_p), data_value);
 }
 
-static void
-i2c_start_transaction(
-    const struct i2c_device *i2c_device_p,
-    uint8_t i2c_slave_addr,
-    bool read_transaction)
-{
-    i2c_start_or_continue_transaction(
-        i2c_device_p,
-        i2c_slave_addr,
-        true,
-        read_transaction);
-}
-
-static void
-i2c_continue_transaction(
-    const struct i2c_device *i2c_device_p,
-    uint8_t i2c_slave_addr,
-    bool read_transaction)
-{
-    i2c_start_or_continue_transaction(
-        i2c_device_p,
-        i2c_slave_addr,
-        false,
-        read_transaction);
-}
 
 void
 i2c_init(
@@ -3244,8 +3157,6 @@ i2c_init(
     rtos_k_condvar_init(
         i2c_device_p->i2c_condvar_name,
         &i2c_var_p->i2c_condvar);
-
-    i2c_var_p->i2c_byte_transfer_completed = false;
 
     /*
      * Enable the Clock to the I2C Module
@@ -3316,7 +3227,7 @@ i2c_shutdown(
     reg_value =
         read_8bit_mmio_register(&I2C_S_REG(i2c_mmio_registers_p));
     if ((reg_value & I2C_S_BUSY_MASK) != 0) {
-        i2c_end_transaction(i2c_device_p);
+        i2c_end_transaction(i2c_device_p, I2C_TRANSACTION_ABORTED);
     }
 
     /*
@@ -3353,20 +3264,15 @@ void i2c_read(
     DBG_ASSERT_VALID_RAM_POINTER(buffer_p, 1);
     DBG_ASSERT(num_bytes != 0, 0, 0);
 
-    i2c_start_transaction(i2c_device_p, i2c_slave_addr, false);
-    i2c_write_data_byte(i2c_device_p, i2c_slave_reg_addr);
+    i2c_start_transaction(i2c_device_p,
+                          i2c_slave_addr,
+                          i2c_slave_reg_addr,
+                          I2C_TRANSACTION_HAS_REG_ADDR |
+                          I2C_TRANSACTION_IS_READ_DATA,
+                          buffer_p,
+                          num_bytes);
 
-    i2c_continue_transaction(i2c_device_p, i2c_slave_addr, true);
-
-    buffer_p[0] = i2c_read_data_byte(i2c_device_p, true, (num_bytes == 1));
-
-    for (size_t i = 1; i < num_bytes - 1; i ++) {
-        buffer_p[i] = i2c_read_data_byte(i2c_device_p, false, false);
-    }
-
-    if (num_bytes > 1) {
-        buffer_p[num_bytes - 1] = i2c_read_data_byte(i2c_device_p, false, true);
-    }
+    i2c_wait_transaction_completion(i2c_device_p);
 }
 
 
@@ -3375,15 +3281,75 @@ void i2c_write(
     uint8_t i2c_slave_addr, uint8_t i2c_slave_reg_addr,
     uint8_t *buffer_p, size_t num_bytes)
 {
-    i2c_start_transaction(i2c_device_p, i2c_slave_addr, false);
-    i2c_write_data_byte(i2c_device_p, i2c_slave_reg_addr);
+    i2c_start_transaction(i2c_device_p,
+                          i2c_slave_addr,
+                          i2c_slave_reg_addr,
+                          I2C_TRANSACTION_HAS_REG_ADDR,
+                          buffer_p,
+                          num_bytes);
 
-    for (size_t i = 0; i < num_bytes; i ++) {
-        i2c_write_data_byte(i2c_device_p,  buffer_p[i]);
+    i2c_wait_transaction_completion(i2c_device_p);
+}
+
+
+static void
+i2c_switch_to_rx_mode(const struct i2c_device *i2c_device_p)
+{
+    uint32_t reg_value;
+    struct i2c_device_var *const i2c_var_p = i2c_device_p->i2c_var_p;
+    I2C_MemMapPtr i2c_mmio_registers_p = i2c_device_p->i2c_mmio_registers_p;
+
+#   ifdef DEBUG
+    if (i2c_var_p->transaction.flags & I2C_TRANSACTION_HAS_REG_ADDR) {
+        DBG_ASSERT(i2c_var_p->transaction.state == I2C_SENDING_SLAVE_REG_ADDR,
+                   i2c_var_p->transaction.state, i2c_device_p);
+    } else {
+        DBG_ASSERT(i2c_var_p->transaction.state == I2C_SENDING_SLAVE_ADDR,
+                   i2c_var_p->transaction.state, i2c_device_p);
     }
 
-    i2c_end_transaction(i2c_device_p);
+    DBG_ASSERT(i2c_var_p->transaction.flags & I2C_TRANSACTION_IS_READ_DATA,
+               i2c_var_p->transaction.flags, i2c_device_p);
+#   endif
+
+    /*
+     * Generate a repeated START signal and also set TX mode to send
+     * slave addr and transfer direction flag:
+     */
+    reg_value = read_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p));
+    FDC_ASSERT(
+        (reg_value & I2C_C1_MST_MASK) != 0, reg_value, i2c_device_p);
+
+#   ifdef _RELIABILITY_CHECKS_
+    uint32_t reg_value2 = read_8bit_mmio_register(&I2C_S_REG(i2c_mmio_registers_p));
+
+    FDC_ASSERT(
+        (reg_value2 & I2C_S_BUSY_MASK) != 0, reg_value2, i2c_device_p);
+#   endif
+
+    reg_value |= (I2C_C1_RSTA_MASK | I2C_C1_TX_MASK);
+    write_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p), reg_value);
+
+    /*
+     * Send slave addr and direction flag set, to effectively switch
+     * data transfer direction to Rx:
+     */
+    uint8_t data_value = 0;
+    SET_BIT_FIELD(
+        data_value, I2C_SLAVE_ADDR_MASK, I2C_SLAVE_ADDR_SHIFT,
+        i2c_var_p->transaction.slave_addr);
+
+    data_value |= I2C_READ_TRANSACTION_MASK;
+
+    i2c_var_p->transaction.state = I2C_SENDING_SLAVE_ADDR_FOR_RX;
+
+    /*
+     * Initiate transmit of slave address and transfer direction flag on the
+     * I2C bus:
+     */
+    write_8bit_mmio_register(&I2C_D_REG(i2c_mmio_registers_p), data_value);
 }
+
 
 void
 k64f_i2c_interrupt_e_handler(
@@ -3400,10 +3366,6 @@ k64f_i2c_interrupt_e_handler(
 
     struct i2c_device_var *const i2c_var_p = i2c_device_p->i2c_var_p;
     I2C_MemMapPtr i2c_mmio_registers_p = i2c_device_p->i2c_mmio_registers_p;
-
-    DBG_ASSERT(
-        !i2c_var_p->i2c_byte_transfer_completed,
-        i2c_device_p, i2c_var_p);
 
     uint32_t reg_value =
         read_8bit_mmio_register(&I2C_S_REG(i2c_mmio_registers_p));
@@ -3424,7 +3386,6 @@ k64f_i2c_interrupt_e_handler(
 	    &I2C_S_REG(i2c_mmio_registers_p), I2C_S_IICIF_MASK);
     }
 
-#   ifdef DEBUG
     reg_value =
         read_8bit_mmio_register(&I2C_S_REG(i2c_mmio_registers_p));
 
@@ -3432,10 +3393,144 @@ k64f_i2c_interrupt_e_handler(
         (reg_value & I2C_S_IICIF_MASK) == 0, reg_value, i2c_device_p);
     DBG_ASSERT(
         (reg_value & I2C_S_ARBL_MASK) == 0, reg_value, i2c_device_p);
-#   endif
 
-    i2c_var_p->i2c_byte_transfer_completed = true;
-    rtos_k_condvar_signal(&i2c_var_p->i2c_condvar);
+    if (i2c_var_p->transaction.state == I2C_SENDING_SLAVE_ADDR ||
+        i2c_var_p->transaction.state == I2C_SENDING_SLAVE_REG_ADDR ||
+        i2c_var_p->transaction.state == I2C_SENDING_DATA_BYTE) {
+        if (reg_value & I2C_S_RXAK_MASK) {
+            /*
+             * RXAK == 1 means no ACK signal from the slave detected
+             */
+            CAPTURE_FDC_ERROR("ACK signal not received from i2C slave",
+                              reg_value, i2c_device_p);
+
+            i2c_end_transaction(i2c_device_p, I2C_TRANSACTION_ABORTED);
+            return;
+        }
+    }
+
+    switch (i2c_var_p->transaction.state) {
+    case I2C_SENDING_SLAVE_ADDR:
+        if (i2c_var_p->transaction.flags & I2C_TRANSACTION_HAS_REG_ADDR) {
+            write_8bit_mmio_register(&I2C_D_REG(i2c_mmio_registers_p),
+                                     i2c_var_p->transaction.slave_reg_addr);
+            i2c_var_p->transaction.state = I2C_SENDING_SLAVE_REG_ADDR;
+            break;
+        }
+        /* fall through */
+
+    case I2C_SENDING_SLAVE_REG_ADDR:
+        if (i2c_var_p->transaction.flags & I2C_TRANSACTION_IS_READ_DATA) {
+            i2c_switch_to_rx_mode(i2c_device_p);
+        } else {
+            /*
+             * Initiate send of first data byte to the slave:
+             */
+            FDC_ASSERT(i2c_var_p->transaction.num_data_bytes_left > 0,
+                       i2c_device_p, 0);
+
+            i2c_var_p->transaction.state = I2C_SENDING_DATA_BYTE;
+            write_8bit_mmio_register(&I2C_D_REG(i2c_mmio_registers_p),
+                                     *i2c_var_p->transaction.next_data_byte_p);
+        }
+
+        break;
+
+    case I2C_SENDING_SLAVE_ADDR_FOR_RX:
+        /*
+         * Initiate receive of first data byte from the slave:
+         */
+        FDC_ASSERT(i2c_var_p->transaction.num_data_bytes_left > 0,
+                   i2c_device_p, 0);
+
+        reg_value = read_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p));
+        reg_value &= ~I2C_C1_TX_MASK;
+        if (i2c_var_p->transaction.num_data_bytes_left == 1) {
+            /*
+             * Don't send ACK signal for next byte received from the slave
+             */
+            reg_value |= I2C_C1_TXAK_MASK;
+        } else {
+            /*
+             * Send ACK signal for next byte received from the slave
+             * (TXAK bit is active low)
+             */
+            reg_value &= ~I2C_C1_TXAK_MASK;
+        }
+
+        write_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p), reg_value);
+
+        /*
+         * Do a dummy read of the D register to initiate receive of first data
+         * byte from slave:
+         */
+        (void)read_8bit_mmio_register(&I2C_D_REG(i2c_mmio_registers_p));
+
+        i2c_var_p->transaction.state = I2C_RECEIVING_DATA_BYTE;
+        break;
+
+    case I2C_SENDING_DATA_BYTE:
+        FDC_ASSERT(i2c_var_p->transaction.num_data_bytes_left > 0,
+                   i2c_device_p, 0);
+
+        i2c_var_p->transaction.next_data_byte_p ++;
+        i2c_var_p->transaction.num_data_bytes_left --;
+        if (i2c_var_p->transaction.num_data_bytes_left == 0) {
+            i2c_end_transaction(i2c_device_p, I2C_TRANSACTION_COMPLETED);
+            return;
+        }
+
+        /*
+         * Initiate send of next data byte:
+         */
+        write_8bit_mmio_register(&I2C_D_REG(i2c_mmio_registers_p),
+                                 *i2c_var_p->transaction.next_data_byte_p);
+        break;
+
+    case I2C_RECEIVING_DATA_BYTE:
+        FDC_ASSERT(i2c_var_p->transaction.num_data_bytes_left > 0,
+                   i2c_device_p, 0);
+
+        i2c_var_p->transaction.num_data_bytes_left --;
+        if (i2c_var_p->transaction.num_data_bytes_left == 0) {
+            /*
+             * This is the last byte:
+             */
+            i2c_end_transaction(i2c_device_p, I2C_TRANSACTION_COMPLETED);
+        } else {
+            reg_value = read_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p));
+            if (i2c_var_p->transaction.num_data_bytes_left == 1) {
+                /*
+                 * Don't send ACK signal for next byte received from the slave
+                 * (TXAK bit is active low)
+                 */
+                reg_value |= I2C_C1_TXAK_MASK;
+            } else {
+                /*
+                 * Send ACK signal for next byte received from the slave
+                 */
+                reg_value &= ~I2C_C1_TXAK_MASK;
+            }
+
+            write_8bit_mmio_register(&I2C_C1_REG(i2c_mmio_registers_p), reg_value);
+        }
+
+        /*
+         * Read D register to retrieve last data byte received and to start
+         * receiving the next data byte from the slave
+         *
+         * NOTE: If i2c_end_transaction() is not called above, this will also
+         * initiate another read transfer.
+         */
+        *i2c_var_p->transaction.next_data_byte_p =
+            read_8bit_mmio_register(&I2C_D_REG(i2c_mmio_registers_p));
+
+        i2c_var_p->transaction.next_data_byte_p ++;
+        break;
+
+    default:
+        FDC_ASSERT(false, i2c_var_p->transaction.state, i2c_device_p);
+    }
 }
 
 

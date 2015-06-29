@@ -225,7 +225,6 @@ struct adc_device_var {
     struct adc_channel ad_adc_channels[NUM_ADC_CHANNELS];
 };
 
-
 /**
  * Const fields of the I2C controller device (to be placed in flash)
  */
@@ -245,6 +244,35 @@ struct i2c_device {
 };
 
 /**
+ * States of an I2C data transfer transaction
+ */
+enum i2c_transaction_states {
+    I2C_TRANSACTION_NOT_STARTED = 0,
+    I2C_SENDING_SLAVE_ADDR,
+    I2C_SENDING_SLAVE_REG_ADDR,
+    I2C_SENDING_SLAVE_ADDR_FOR_RX,
+    I2C_SENDING_DATA_BYTE,
+    I2C_RECEIVING_DATA_BYTE,
+    I2C_TRANSACTION_COMPLETED,
+    I2C_TRANSACTION_ABORTED
+};
+
+/**
+ * Data transfer transaction over an I2C bus
+ */
+struct i2c_transaction {
+    enum i2c_transaction_states state;
+    uint8_t flags;
+#   define I2C_TRANSACTION_IS_READ_DATA     UINT8_C(0x1)
+#   define I2C_TRANSACTION_HAS_REG_ADDR     UINT8_C(0x2)
+
+    uint8_t slave_addr;
+    uint8_t slave_reg_addr;
+    uint8_t *next_data_byte_p;
+    size_t num_data_bytes_left;
+};
+
+/**
  * Non-const fields of an I2C controller device (to be placed in SRAM)
  */
 struct i2c_device_var {
@@ -254,12 +282,13 @@ struct i2c_device_var {
     bool i2c_initialized;
 
     /**
-     * Flag set when a byte transfer has completed
+     * Current data transfer transaction
      */
-    volatile bool i2c_byte_transfer_completed;
+    struct i2c_transaction transaction;
 
     /**
-     * Condvar to signal a thread waiting for an I2C byte transfer
+     * Condvar to signal a thread waiting for an I2C data transaction
+     * to finish
      */
     struct rtos_condvar i2c_condvar;
 };
