@@ -47,9 +47,7 @@ ifeq "$(PLATFORM)" "LPC2478-STK"
     ARM_ARCH = armv4
     ARM_CORE  = arm7tdmi
     CODETYPE = arm
-endif
-
-ifeq "$(PLATFORM)" "LaunchPad-LM4F120"
+else ifeq "$(PLATFORM)" "LaunchPad-LM4F120"
     SYSTEM_ON_CHIP = LM4F120_SOC
     CPU_ARCHITECTURE = arm_cortex_m
     ARM_ARCH = armv7e-m
@@ -57,25 +55,19 @@ ifeq "$(PLATFORM)" "LaunchPad-LM4F120"
     CODETYPE = thumb
     # See https://gcc.gnu.org/onlinedocs/gcc/ARM-Options.html
     EXTRA_MCFLAGS = -mfloat-abi=softfp -mfpu=fpv4-sp-d16
-endif
-
-ifeq "$(PLATFORM)" "FRDM-KL25Z"
+else ifeq "$(PLATFORM)" "FRDM-KL25Z"
     SYSTEM_ON_CHIP = KL25Z_SOC
     CPU_ARCHITECTURE = arm_cortex_m
     ARM_ARCH = armv6-m
     ARM_CORE = cortex-m0plus
     CODETYPE = thumb
-endif
-
-ifeq "$(PLATFORM)" "FRDM-K20D5"
+else ifeq "$(PLATFORM)" "FRDM-K20D5"
     SYSTEM_ON_CHIP = K20D5_SOC
     CPU_ARCHITECTURE = arm_cortex_m
     ARM_ARCH = armv7e-m
     ARM_CORE = cortex-m4
     CODETYPE = thumb
-endif
-
-ifeq "$(PLATFORM)" "FRDM-K64F"
+else ifeq "$(PLATFORM)" "FRDM-K64F"
     SYSTEM_ON_CHIP = K64F_SOC
     CPU_ARCHITECTURE = arm_cortex_m
     ARM_ARCH = armv7e-m
@@ -83,6 +75,16 @@ ifeq "$(PLATFORM)" "FRDM-K64F"
     CODETYPE = thumb
     # See https://gcc.gnu.org/onlinedocs/gcc/ARM-Options.html
     EXTRA_MCFLAGS = -mfloat-abi=softfp -mfpu=fpv4-sp-d16
+else ifeq "$(PLATFORM)" "LPC-54102"
+    SYSTEM_ON_CHIP = LPC54102_SOC
+    CPU_ARCHITECTURE = arm_cortex_m
+    ARM_ARCH = armv7e-m
+    ARM_CORE = cortex-m4
+    CODETYPE = thumb
+    # See https://gcc.gnu.org/onlinedocs/gcc/ARM-Options.html
+    EXTRA_MCFLAGS = -mfloat-abi=softfp -mfpu=fpv4-sp-d16
+else
+    $(error unsupported platform $(PLATFORM))
 endif
 
 ifndef CPU_ARCHITECTURE
@@ -90,11 +92,11 @@ ifndef CPU_ARCHITECTURE
 endif
 
 ifeq "$(CPU_ARCHITECTURE)" "arm_cortex_m"
-    #EXTRA_MCFLAGS += -fno-omit-frame-pointer #-mtpcs-frame #-mtpcs-leaf-frame
-    EXTRA_MCFLAGS += -fomit-frame-pointer
+    EXTRA_MCFLAGS += -fno-omit-frame-pointer #-mtpcs-frame #-mtpcs-leaf-frame
+    #EXTRA_MCFLAGS += -fomit-frame-pointer
 else
-    #EXTRA_MCFLAGS += -fno-omit-frame-pointer #-mapcs-frame
-    EXTRA_MCFLAGS += -fomit-frame-pointer
+    EXTRA_MCFLAGS += -fno-omit-frame-pointer #-mapcs-frame
+    #EXTRA_MCFLAGS += -fomit-frame-pointer
 endif
 
 LDSCRIPT = $(PROJECT_DIR)/$(SYSTEM_ON_CHIP)-flash.ld

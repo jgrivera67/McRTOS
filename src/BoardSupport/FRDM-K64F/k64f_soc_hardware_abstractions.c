@@ -3041,12 +3041,10 @@ i2c_wait_transaction_completion(const struct i2c_device *i2c_device_p)
     struct i2c_device_var *i2c_var_p = i2c_device_p->i2c_var_p;
     cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
 
-    DEBUG_PRINTF("Before I2C condvar_wait\n"); //???
     while (i2c_var_p->transaction.state != I2C_TRANSACTION_COMPLETED &&
            i2c_var_p->transaction.state != I2C_TRANSACTION_ABORTED) {
         rtos_k_condvar_wait_intr_disabled(&i2c_var_p->i2c_condvar, NULL);
     }
-    DEBUG_PRINTF("After I2C condvar_wait\n"); //???
 
     i2c_var_p->transaction.state = I2C_TRANSACTION_NOT_STARTED;
     rtos_k_restore_cpu_interrupts(cpu_status_register);

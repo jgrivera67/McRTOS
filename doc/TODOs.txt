@@ -1,0 +1,16 @@
+Modify MPU APIs to:
+- New API to register a region , and returning a region Id (0 .. 31)
+- Components register a region(or regions) in their boot-time initalization
+  function (function invoked before threads are created)
+- Each thread has a region mask, which contains one bit per region.
+- Add region, adds the region to the calling thread if not already added
+  to the thread, sets the corresponding bit in the region mask and returns
+  the previous region mask
+- Remove a region removes the region and turns off the corresponding
+  bit in the region mask
+- Interface functions of components are supposed to add the component's
+  region(s) on etry and remove the componet region(s) on exit, but only
+  if the region was actually added on entry (not if the reion was already
+  there)
+
+    
