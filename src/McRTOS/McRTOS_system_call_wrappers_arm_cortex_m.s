@@ -49,7 +49,9 @@
 .func \_rtos_function_
 
 \_rtos_function_:
-    push    {r4-r5, lr}
+    push    {r4-r5, r7, lr}
+    add	    r7, sp, #0
+
     /*
      * Check if caller is an ISR:
      */
@@ -84,7 +86,7 @@ L_exit_\_rtos_function_:
     /*
      * r0 == return code from the system call
      */
-    pop     {r4-r5, pc}
+    pop     {r4-r5, r7, pc}
 
     /*
      * Caller is in unprivileged mode, so execute an svc instruction:
@@ -123,7 +125,11 @@ L_slow_path_\_rtos_function_:
 .func rtos_invoke_system_call
 
 rtos_invoke_system_call:
-    push    {lr}
+    /*
+     * Function prolog with frame pointer:
+     */
+    push    {r7, lr}
+    add	    r7, sp, #0
 
     /*
      * Save r0-r3 on the stack:
@@ -177,7 +183,7 @@ L_exit_rtos_invoke_system_call:
     isb
 
     mov     r0, r5
-    pop     {pc}
+    pop     {r7, pc}
 .endfunc
 
 /*

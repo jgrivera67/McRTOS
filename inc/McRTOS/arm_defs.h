@@ -200,38 +200,113 @@
     /**
      * Bitmasks to decode the op-code and operand fields of a THUMB instruction
      */
-#   define THUMB_INSTR_OP_CODE_MASK 0xFF00
-#   define THUMB_INSTR_OPEEAND_MASK 0x00FF
+#   define THUMB_INSTR_OP_CODE_MASK	0xFF00
+#   define THUMB_INSTR_OPERANDS_MASK	0x00FF
+
+    /**
+     * Tell if a thumb instruction is the first half of a 32-bit instruction
+     */
+#   define IS_THUMB2_32_BIT_INSTR_FIRST_HALF(_thumb_instr) \
+	   (((_instr) & 0xE000) == 0xE000 && \
+	    ((_instr) & 0x1800) != 0x0)
 
     /**
      * bkpt instruction opcode mask
      */
-#   define  BKPT_OP_CODE_MASK       0xBE00
+#   define  BKPT_OP_CODE_MASK			0xBE00
 
     /**
      * svc instruction opcode mask
      */
-#   define  SVC_OP_CODE_MASK        0xDF00
+#   define  SVC_OP_CODE_MASK			0xDF00
 
     /**
      * bl instruction opcode mask
      */
-#   define  BL_OP_CODE_MASK         0xF000
+#   define  BL_OP_CODE_MASK			0xF000
 
     /**
      * bx instruction opcode mask
      */
-#   define  BX_OP_CODE_MASK         0x4700
+#   define  BX_OP_CODE_MASK			0x4700
 
     /**
      * pop instruction opcode mask
      */
-#   define  POP_OP_CODE_MASK        0xBD00
+#   define  POP_OP_CODE_MASK			0xBD00
+
+    /**
+     * Tell if it is the 'push {...,r7,...}' instruction
+     */
+#   define  IS_PUSH_R7(_instr) \
+	    (((_instr) & 0xFE00) == 0xB400 && \
+	     ((_instr) & 0x80))
+
+    /**
+     * Tell if it is the 'push {lr}' instruction
+     */
+#   define  IS_PUSH_LR(_instr) \
+	    (((_instr) & 0xFF00) == 0xB500)
+
+    /**
+     * 'push' instruction modifier "append lr to reg list" mask
+     */
+#   define  PUSH_OPERAND_INCLUDES_LR_MASK	0x0100
+
+    /**
+     * 'push' instruction operand register list mask
+     */
+#   define  PUSH_OPERAND_REG_LIST_MASK		0x00FF
+
+    /**
+     * Tell if it is the 'sub sp, #imm7' instruction
+     */
+#   define  IS_SUB_SP_IMMEDITATE(_instr) \
+	    (((_instr) & THUMB_INSTR_OP_CODE_MASK) == 0xB000 && \
+	     ((_instr) & 0x80))
+
+    /**
+     * 'sub sp, #imm7' instruction immediate operand mask
+     * (since this operand must be a multiple of 4, it
+     * is encoded in the instruction shifted 2 bits to the
+     * right)
+     */
+#   define  SUB_SP_IMMEDITATE_OPERAND_MASK	0x007F
+
+    /**
+     * Tell if it is the 'add r7, sp, #imm8' instruction
+     */
+#   define  IS_ADD_R7_SP_IMMEDITATE(_instr) \
+	    (((_instr) & THUMB_INSTR_OP_CODE_MASK) == 0xAF00)
+
+    /**
+     * "add r7, sp, #imm8" instruction immediate operand mask
+     * (since this operand must be a multiple of 4, it
+     * is encoded in the instruction shifted 2 bits to the
+     * right)
+     */
+#   define  ADD_SP_IMMEDITATE_OPERAND_MASK	0x00FF
+
+    /**
+     * "bl" instruction opcode mask (32-bit instruction)
+     */
+#   define  IS_BL32_FIRST_HALF(_instr) \
+	    (((_instr) & 0xF000) == 0xF000 && \
+	     ((_instr) & 0x800) == 0x0)
+
+#   define  IS_BL32_SECOND_HALF(_instr) \
+	    (((_instr) & 0xD000) == 0xD000)
+
+    /**
+     * "blx" instruction opcode mask (16-bit instruction)
+     */
+#   define  IS_BLX(_instr) \
+	    (((_instr) & 0xFF80) == 0x4780)
 
     /**
      * "bx lr" instruction
      */
-#   define  BX_LR_INSTRUCTION       0x4770
+#   define  BX_LR_INSTRUCTION			0x4770
 
     /*
      * Bit masks for the IPSR register

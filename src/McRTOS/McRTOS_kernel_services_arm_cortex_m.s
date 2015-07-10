@@ -366,7 +366,8 @@ L_do_enter_privileged_mode:
     /*
      * We return here in privileged mode now.
      */
-    push    {lr}
+    push    {r7, lr}
+    add	    r7, sp, #0
 
     /*
      * Call rtos_k_enter_privileged_mode(RTOS_ENTER_PRIVILEGED_MODE_SVC_CODE):
@@ -375,7 +376,7 @@ L_do_enter_privileged_mode:
     bl      rtos_k_enter_privileged_mode
 
     mov     r0, #0
-    pop     {pc}
+    pop     {r7, pc}
 
 .endfunc
 
@@ -393,7 +394,8 @@ L_do_enter_privileged_mode:
 .func rtos_exit_privileged_mode
 
 rtos_exit_privileged_mode:
-    push    {lr}
+    push    {r7, lr}
+    add	    r7, sp, #0
 
     /*
      * Call rtos_k_exit_privileged_mode():
@@ -401,10 +403,11 @@ rtos_exit_privileged_mode:
     bl      rtos_k_exit_privileged_mode
 
     /*
-     * Restore saved lr
+     * Restore saved r7, lr
      */
-    pop	    {r0}
-    mov	    lr, r0
+    pop	    {r0, r1}
+    mov	    r7, r0
+    mov	    lr, r1
 
     /*
      * Set nPRIV bit in control register to return to unprivileged mode
@@ -419,7 +422,7 @@ rtos_exit_privileged_mode:
 .endfunc
 
 /**
- * Tell if caller is privileged. It returns true if the CPU is 
+ * Tell if caller is privileged. It returns true if the CPU is
  * in privileged mode, and false otherwise.
  *
  * bool
@@ -440,7 +443,7 @@ rtos_in_privileged_mode:
     mov     r0, #1
     bx      lr
 
-1:  /* check for unprivileged thread */ 
+1:  /* check for unprivileged thread */
     mrs	    r0, control
     mov	    r1, #CPU_REG_CONTROL_nPRIV_MASK
     tst	    r0, r1

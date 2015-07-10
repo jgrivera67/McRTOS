@@ -1090,6 +1090,9 @@ cmd_display_msg_log(void)
 static void
 cmd_display_stack_trace(uintptr_t execution_context_addr, bool only_call_entries)
 {
+    uintptr_t trace_buff[16];
+    uint8_t num_trace_entries;
+
     if (!BOARD_VALID_RAM_ADDRESS(execution_context_addr) || execution_context_addr % 4 != 0) {
         console_printf("ERROR: Invalid address %p\n", execution_context_addr);
         return;
@@ -1111,34 +1114,17 @@ cmd_display_stack_trace(uintptr_t execution_context_addr, bool only_call_entries
         return;
     }
 
-    const uint32_t *context_stack_p;
-
-#   if DEFINED_ARM_CLASSIC_ARCH()
-    context_stack_p = execution_context_p->ctx_cpu_registers[CPU_REG_SP];
-#   elif DEFINED_ARM_CORTEX_M_ARCH()
-    context_stack_p =
-        (rtos_execution_stack_entry_t *)execution_context_p->ctx_cpu_saved_registers.cpu_reg_psp;
-#   else
-        #error "unsupported CPU architecture"
-#   endif
-
     console_printf("Stack trace for %s:\n",
                    execution_context_p->ctx_name_p);
 
-    for ( ; context_stack_p < execution_context_p->ctx_execution_stack_bottom_end_p;
-         context_stack_p ++) {
-        uint32_t stack_entry = *context_stack_p;
-        if ((stack_entry & 0x1) != 0 && VALID_CODE_ADDRESS(stack_entry)) {
-            cpu_instruction_t *call_stack_entry =
-                 (cpu_instruction_t *)((stack_entry & ~0x1) -
-                                       sizeof(cpu_instruction_t));
+    num_trace_entries = sizeof(trace_buff) / sizeof(trace_buff[0]);
+    get_stack_trace(execution_context_p, trace_buff,
+		                &num_trace_entries);
 
-            console_printf("\t%#p: %#x (call stack entry: %#p)\n",
-                context_stack_p, stack_entry, call_stack_entry);
-        } else if (!only_call_entries) {
-            console_printf("\t%#p: %#x\n", context_stack_p, stack_entry);
-        }
+    for (uint_fast8_t i = 0; i < num_trace_entries; i ++) {
+	console_printf("\t%#p\n", trace_buff[i]);
     }
+
 }
 
 

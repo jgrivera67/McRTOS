@@ -48,13 +48,12 @@ my $USAGE_STR = "Usage: $PROG_NAME <ELF file> <raw stack trace file>";
     while (<IN_FILE_HANDLE>) {
         chomp $_;
         $_ =~ s/^\s+//;     # trim leading white spaces
-        my @record = split /[ \)]/, $_;
+        my @record = split /[ \t]/, $_;
         if (@record == 0) {
             next;
         }
 
-        my $call_addr = $record[5];
-
+        my $call_addr = $record[0];
         system "addr2line -e $elf_file -afps $call_addr";
     }
 

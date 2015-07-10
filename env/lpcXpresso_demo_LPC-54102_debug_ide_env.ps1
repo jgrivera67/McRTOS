@@ -6,12 +6,7 @@ $env:build_flavor = "debug"
 
 function my_update_flash
 {
-    echo "copying $env:bin_file to $env:PLATFORM flash (drive E:\) ..."
-    copy-item "$env:bin_file" e:\
+    echo "copying $env:elf_file to $env:PLATFORM flash ..."
+    C:\nxp\LPCXpresso_7.6.2_326\lpcxpresso\bin\crt_emu_cm_redlink -pLPC54100 -vendor=NXP -flash-load-exec "$env:elf_file"
 }
 
-function my_update_flash2
-{
-    echo "copying $env:bin_file to $env:PLATFORM flash (drive F:\) ..."
-    copy-item "$env:bin_file" f:\
-}

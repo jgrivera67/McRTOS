@@ -59,6 +59,10 @@ rtos_dbg_dump_memory(
     _IN_ const char *title);
 
 static void
+rtos_dbg_dump_stack_trace(
+    _IN_ const struct rtos_execution_context *execution_context_p);
+
+static void
 rtos_dbg_dump_memory_with_call_stack(
     _IN_ const uint32_t *addr,
     _IN_ uint32_t num_words,
@@ -253,10 +257,8 @@ rtos_dbg_parse_command(
 
         case 'e':
 	    if (before_exception_stack_p != NULL) {
-		    rtos_dbg_dump_exception_info(
-			before_exception_stack_p);
-		    rtos_dbg_dump_memory_with_call_stack(
-			before_exception_stack_p, 64, "Stack before exception");
+		    rtos_dbg_dump_exception_info(before_exception_stack_p);
+		    rtos_dbg_dump_stack_trace(current_execution_context_p);
 	    }
 
             break;
@@ -562,11 +564,328 @@ rtos_dbg_dump_execution_context(
                 context_stack_p, execution_context_p->ctx_execution_stack_bottom_end_p);
         }
 
+	rtos_dbg_dump_stack_trace(execution_context_p);
+
         rtos_dbg_dump_memory_with_call_stack(
             context_stack_p,
             execution_context_p->ctx_execution_stack_bottom_end_p - context_stack_p,
             "Stack entries");
     }
+}
+
+static uint_fast8_t get_pushed_r7_stack_index(cpu_instruction_t push_instruction)
+{
+    uint_fast8_t reg_list = (push_instruction & PUSH_OPERAND_REG_LIST_MASK);
+    uint_fast8_t index = 0;
+
+    /*
+     * Check if registers r0 .. r6 are saved on the stack by the push instruction
+     */
+    for (uint_fast8_t i = 0; i < 7; i ++) {
+        if (reg_list & BIT(i)) {
+	    index ++;
+        }
+    }
+
+    return index;
+}
+
+
+/*
+ * This function assumes that function prologs have the following code pattern
+ * ([] means optional):
+ *
+ *  push {[r4,] [r5,] [r6,] r7 [, lr]}   ([] means optional)
+ *  [sub sp, #imm7]
+ *  add	r7, sp, #imm8
+ */
+static fdc_error_t
+find_previous_stack_frame(_IN_ const cpu_instruction_t *program_counter,
+			  _INOUT_ const rtos_execution_stack_entry_t **frame_pointer_p,
+			  _OUT_ uintptr_t *prev_return_address_p)
+{
+    fdc_error_t fdc_error;
+    cpu_instruction_t instruction;
+    uint_fast8_t stack_index;
+    const rtos_execution_stack_entry_t *prev_frame_pointer;
+    uintptr_t prev_return_address;
+    const rtos_execution_stack_entry_t *frame_pointer = *frame_pointer_p;
+    uint_fast16_t stop_count = UINT16_MAX;
+
+    DBG_ASSERT(((uintptr_t)program_counter & 0x1) == 0 &&
+	       VALID_CODE_ADDRESS(program_counter),
+	       program_counter, 0);
+
+    DBG_ASSERT_VALID_RAM_POINTER(frame_pointer,
+				 sizeof(rtos_execution_stack_entry_t));
+
+    /*
+     * Scan instructions backwards looking for one of the 3 instructions in the
+     * function prolog pattern:
+     */
+    while (stop_count != 0) {
+	instruction = *program_counter;
+	if (IS_ADD_R7_SP_IMMEDITATE(instruction) ||
+	    IS_SUB_SP_IMMEDITATE(instruction) ||
+	    IS_PUSH_R7(instruction)) {
+	    break;
+	}
+
+	program_counter--;
+	stop_count--;
+    }
+
+    if (stop_count == 0) {
+        fdc_error = CAPTURE_FDC_ERROR("Could not find previous stack frame",
+				      0, 0);
+	return fdc_error;
+    }
+
+    if (IS_ADD_R7_SP_IMMEDITATE(instruction)) {
+	/*
+	 * The instruction to be executed is the 'add r7, ...' in the function
+	 * prolog.
+	 *
+	 * NOTE: the decoded operand of the add instruction is
+	 *	(instruction & ADD_SP_IMMEDITATE_OPERAND_MASK) << 2
+	 *
+	 * which is a byte offset that was added to the frame pointer. To
+	 * convert it to an stack entry index we need to divide it by 4,
+	 * so, the '/ 4' and the '<< 2' cancel each other.
+	 */
+	frame_pointer -= (instruction & ADD_SP_IMMEDITATE_OPERAND_MASK);
+	program_counter --;
+
+	/*
+	 * Scan instructions backwards looking for the preceding 'sub sp, ...'
+	 * or 'push {...r7}':
+	 */
+	while (stop_count != 0) {
+	    instruction = *program_counter;
+	    if (IS_SUB_SP_IMMEDITATE(instruction) ||
+		IS_PUSH_R7(instruction)) {
+		break;
+	    }
+
+	    program_counter--;
+	    stop_count--;
+	}
+
+	if (stop_count == 0) {
+	    fdc_error = CAPTURE_FDC_ERROR("Could not find previous 'sub sp, ...' or "
+					  "push {... r7} instruction", 0, 0);
+	    return fdc_error;
+	}
+    }
+
+    if (IS_SUB_SP_IMMEDITATE(instruction)) {
+	/*
+	 * The preceding instruction to be executed is the 'sub sp, ...' in the
+	 * function prolog.
+	 *
+	 * NOTE: the decoded operand of the sub instruction is
+	 *	(instruction & SUB_SP_IMMEDITATE_OPERAND_MASK) << 2
+	 *
+	 * which is a byte offset that was subtracted from the stack pointer. To
+	 * convert it to an stack entry index we need to divide it by 4,
+	 * so, the '/ 4' and the '<< 2' cancel each other.
+	 */
+	frame_pointer += (instruction & SUB_SP_IMMEDITATE_OPERAND_MASK);
+	program_counter --;
+
+	/*
+	 * Scan instructions backwards looking for the preceding 'push {...r7}'
+	 */
+	while (stop_count != 0) {
+	    instruction = *program_counter;
+	    if (IS_PUSH_R7(instruction)) {
+		break;
+	    }
+
+	    program_counter--;
+	    stop_count--;
+	}
+
+	if (stop_count == 0) {
+	    fdc_error = CAPTURE_FDC_ERROR("Could not find previous push {... r7} instruction",
+					  0, 0);
+	    return fdc_error;
+	}
+    }
+
+    /*
+     * The preceding instruction is the 'push {...r7}'
+     * at the beginning of the prolog:
+     */
+    DBG_ASSERT(IS_PUSH_R7(instruction), instruction, program_counter);
+
+    stack_index = get_pushed_r7_stack_index(instruction);
+    prev_frame_pointer = (rtos_execution_stack_entry_t *)frame_pointer[stack_index];
+    FDC_ASSERT(prev_frame_pointer > frame_pointer,
+	       prev_frame_pointer, frame_pointer);
+
+    FDC_ASSERT_VALID_RAM_POINTER(prev_frame_pointer,
+				 sizeof(rtos_execution_stack_entry_t));
+
+    if (instruction & PUSH_OPERAND_INCLUDES_LR_MASK) {
+	prev_return_address = frame_pointer[stack_index + 1];
+	FDC_ASSERT((prev_return_address & 0x1) != 0 &&
+	       VALID_CODE_ADDRESS(prev_return_address),
+	       prev_return_address, frame_pointer);
+    } else {
+	/*
+	 * Inline function with stack frame case
+	 */
+	prev_return_address = (uintptr_t)(program_counter - 1);
+    }
+
+    *frame_pointer_p = prev_frame_pointer;
+    *prev_return_address_p = prev_return_address;
+    return 0;
+}
+
+
+/*
+ * Unwinds a given execution stack
+ */
+void
+unwind_execution_stack(_IN_ uintptr_t top_return_address,
+		       _IN_ const rtos_execution_stack_entry_t *frame_pointer,
+		       _IN_ const rtos_execution_stack_entry_t *stack_bottom_p,
+		       _OUT_ uintptr_t trace_buff[],
+		       _INOUT_ uint8_t *num_entries_p)
+{
+    fdc_error_t fdc_error;
+    uint_fast8_t i;
+    uint_fast8_t max_num_entries = *num_entries_p;
+
+    /*
+     * TODO: Disable preemption, so that the thread being examined does not
+     * preempt us
+     */
+
+    FDC_ASSERT(frame_pointer <= stack_bottom_p,
+	       frame_pointer, stack_bottom_p);
+
+    FDC_ASSERT_VALID_RAM_POINTER(frame_pointer,
+				 sizeof(rtos_execution_stack_entry_t));
+
+    FDC_ASSERT((top_return_address & 0x1) != 0 &&
+	       VALID_CODE_ADDRESS(top_return_address),
+	       top_return_address, frame_pointer);
+
+    uintptr_t return_address = top_return_address;
+
+    for (i = 0; i < max_num_entries && frame_pointer < stack_bottom_p; i ++) {
+	/*
+	 * The next stack trace entry is the address of the instruction
+	 * preceding the instruction at the return address, unless we
+	 * have reached the bottom of the call chain.
+	 */
+	cpu_instruction_t *instruction_p = (cpu_instruction_t *)(return_address & ~0x1);
+
+	if (IS_BLX(*(instruction_p - 1))) {
+	    instruction_p --;
+	} else if (IS_BL32_FIRST_HALF(*(instruction_p - 2)) &&
+		   IS_BL32_SECOND_HALF(*(instruction_p - 1))) {
+	    instruction_p -= 2;
+	}
+
+	trace_buff[i] = (uintptr_t)instruction_p;
+
+	fdc_error = find_previous_stack_frame(instruction_p - 1,
+					      &frame_pointer,
+					      &return_address);
+	if (fdc_error != 0) {
+	    break;
+	}
+
+	/*
+	 * TODO: For the first iteration, check if return address saved
+	 * in the previous stack frame is the same as top_return_address
+	 * (LR register), to avoid wasting one trace entry with a duplicate.
+	 */
+    }
+
+    *num_entries_p = i;
+}
+
+
+/*
+ * Generate the call trace of a given execution context.
+ */
+void
+get_stack_trace(_IN_ const struct rtos_execution_context *execution_context_p,
+	        _OUT_ uintptr_t trace_buff[],
+	        _INOUT_ uint8_t *num_entries_p)
+{
+    uint8_t num_entries = *num_entries_p;
+
+    FDC_ASSERT(num_entries >= 1, num_entries, 0);
+
+    #if DEFINED_ARM_CLASSIC_ARCH()
+	#error "unsupported CPU architecture"
+
+    #elif DEFINED_ARM_CORTEX_M_ARCH()
+	const cpu_instruction_t *program_counter;
+	uintptr_t return_address;
+	const rtos_execution_stack_entry_t *stack_pointer;
+	const rtos_execution_stack_entry_t *frame_pointer;
+
+	if (execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT) {
+	    stack_pointer = (rtos_execution_stack_entry_t *)
+		execution_context_p->ctx_cpu_saved_registers.cpu_reg_psp;
+	} else {
+	    /*
+	     * TODO: We cannot get an accurate stack trace of an ISR,
+	     * unless we are called from the debugger. So, check that
+	     * the caller is the debugger, otherwise, return.
+	     */
+	    stack_pointer = (rtos_execution_stack_entry_t *)
+		execution_context_p->ctx_cpu_saved_registers.cpu_reg_msp;
+	}
+
+	program_counter = (cpu_instruction_t *)stack_pointer[CPU_REG_PC];
+	return_address = stack_pointer[CPU_REG_LR];
+	frame_pointer = (rtos_execution_stack_entry_t *)
+	    execution_context_p->ctx_cpu_saved_registers.cpu_reg_r7;
+
+	FDC_ASSERT(stack_pointer + CPU_NUM_PRE_SAVED_REGISTERS <=
+		   execution_context_p->ctx_execution_stack_bottom_end_p,
+	           stack_pointer,
+		   execution_context_p->ctx_execution_stack_bottom_end_p);
+
+	FDC_ASSERT(frame_pointer >= stack_pointer + CPU_NUM_PRE_SAVED_REGISTERS,
+	           frame_pointer, stack_pointer);
+    #else
+	#error "unsupported CPU architecture"
+    #endif
+
+    FDC_ASSERT(stack_pointer <
+	       execution_context_p->ctx_execution_stack_bottom_end_p &&
+	       stack_pointer >=
+	       execution_context_p->ctx_execution_stack_top_end_p,
+	       stack_pointer, execution_context_p);
+    FDC_ASSERT(frame_pointer <
+	       execution_context_p->ctx_execution_stack_bottom_end_p &&
+	       frame_pointer >=
+	       execution_context_p->ctx_execution_stack_top_end_p,
+	       frame_pointer, execution_context_p);
+
+    FDC_ASSERT(VALID_CODE_ADDRESS(program_counter),
+	       program_counter, execution_context_p);
+
+    trace_buff[0] = (uintptr_t)program_counter;
+    num_entries --;
+
+    unwind_execution_stack(return_address,
+			   frame_pointer,
+			   execution_context_p->ctx_execution_stack_bottom_end_p,
+			   trace_buff + 1,
+			   &num_entries);
+
+    DBG_ASSERT(num_entries < *num_entries_p, num_entries, *num_entries_p);
+    *num_entries_p = num_entries + 1;
 }
 
 
@@ -581,6 +900,26 @@ rtos_dbg_dump_memory(
 
     for (uint32_t i = 0; i < num_words; i ++) {
         debugger_printf("\t%3u: [%#p]: %#x\n", i, addr + i, addr[i]);
+    }
+}
+
+
+static void
+rtos_dbg_dump_stack_trace(
+    _IN_ const struct rtos_execution_context *execution_context_p)
+{
+    uintptr_t trace_buff[16];
+    uint8_t num_trace_entries;
+
+    debugger_printf("Stack trace for %s:\n",
+                    execution_context_p->ctx_name_p);
+
+    num_trace_entries = sizeof(trace_buff) / sizeof(trace_buff[0]);
+    get_stack_trace(execution_context_p, trace_buff,
+		                &num_trace_entries);
+
+    for (uint_fast8_t i = 0; i < num_trace_entries; i ++) {
+	debugger_printf("\t%#p\n", trace_buff[i]);
     }
 }
 

@@ -2306,6 +2306,8 @@ rtos_execution_context_init(
         &cpu_controller_p->cpc_execution_contexts_list_anchor,
         &execution_context_p->ctx_list_node);
 
+    cpu_register_t *frame_pointer_register_p;
+
 #if DEFINED_ARM_CLASSIC_ARCH()
     cpu_status_register_t cpu_status_register = 0;
 
@@ -2367,6 +2369,8 @@ rtos_execution_context_init(
         (cpu_register_t)execution_context_p->ctx_execution_stack_bottom_end_p;
 
     execution_context_p->ctx_cpu_registers[CPU_REG_PC] = cpu_pc_register;
+
+    frame_pointer_register_p = NULL; /* TODO: fix this */
 
 #elif DEFINED_ARM_CORTEX_M_ARCH()
 
@@ -2464,7 +2468,10 @@ rtos_execution_context_init(
 
         execution_context_p->ctx_cpu_saved_registers.cpu_reg_control =
             cpu_control_register;
+
     }
+
+    frame_pointer_register_p = &execution_context_p->ctx_cpu_saved_registers.cpu_reg_r7;
 
     /*
      * NOTE: if context_type is RTOS_RESET_CONTEXT or RTOS_INTERRUPT_CONTEXT,
@@ -2474,6 +2481,13 @@ rtos_execution_context_init(
 #else
 #   error "CPU architrecture not supported"
 #endif
+
+    /*
+     * NOTE: To make sure that unwinding the stack works correctly, we
+     * need to initialize the frame pointer to a value representing the
+     * end of the chain of stack frames
+     */
+    *frame_pointer_register_p = (cpu_register_t)stack_bottom_end_p;
 }
 
 
