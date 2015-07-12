@@ -362,16 +362,25 @@ void cpputest_fail_test_fdc_assert(const char *fmt, ...);
 
 
 #if DEFINED_ARM_CLASSIC_ARCH()
-/**
- * Capture current value of the ARM core CPSR register
- */
+    /**
+     * Capture current value of the ARM core CPSR register
+     */
 #   define CAPTURE_ARM_CPSR_REGISTER(_cpsr_value) \
     asm volatile ("mrs %[cpsr_value], cpsr" : [cpsr_value] "=r" (_cpsr_value))
 
 #elif DEFINED_ARM_CORTEX_M_ARCH()
 
+    /**
+     * Capture current value of the ARM core PSR register
+     */
 #   define CAPTURE_ARM_PSR_REGISTER(_psr_value) \
     asm volatile ("mrs %[psr_value], psr" : [psr_value] "=r" (_psr_value))
+
+    /**
+     * Capture current value of the ARM core frame pointer (r7) register
+     */
+#   define CAPTURE_ARM_FRAME_POINTER_REGISTER(_fp_value) \
+    asm volatile ("mov %[fp_value], r7" : [fp_value] "=r" (_fp_value))
 
 #endif
 

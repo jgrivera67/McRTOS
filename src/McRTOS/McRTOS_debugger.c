@@ -759,11 +759,6 @@ unwind_execution_stack(_IN_ uintptr_t top_return_address,
     uint_fast8_t i;
     uint_fast8_t max_num_entries = *num_entries_p;
 
-    /*
-     * TODO: Disable preemption, so that the thread being examined does not
-     * preempt us
-     */
-
     FDC_ASSERT(frame_pointer <= stack_bottom_p,
 	       frame_pointer, stack_bottom_p);
 
@@ -782,7 +777,8 @@ unwind_execution_stack(_IN_ uintptr_t top_return_address,
 	 * preceding the instruction at the return address, unless we
 	 * have reached the bottom of the call chain.
 	 */
-	cpu_instruction_t *instruction_p = (cpu_instruction_t *)(return_address & ~0x1);
+	cpu_instruction_t *instruction_p =
+	    (cpu_instruction_t *)GET_CODE_ADDRESS(return_address);
 
 	if (IS_BLX(*(instruction_p - 1))) {
 	    instruction_p --;
@@ -819,73 +815,130 @@ get_stack_trace(_IN_ const struct rtos_execution_context *execution_context_p,
 	        _OUT_ uintptr_t trace_buff[],
 	        _INOUT_ uint8_t *num_entries_p)
 {
+    const cpu_instruction_t *program_counter;
+    const rtos_execution_stack_entry_t *frame_pointer;
+    uintptr_t return_address;
+    fdc_error_t fdc_error;
     uint8_t num_entries = *num_entries_p;
+    struct rtos_execution_context *current_execution_context_p =
+	RTOS_GET_CURRENT_EXECUTION_CONTEXT();
 
     FDC_ASSERT(num_entries >= 1, num_entries, 0);
 
-    #if DEFINED_ARM_CLASSIC_ARCH()
-	#error "unsupported CPU architecture"
+    if (execution_context_p == current_execution_context_p) {
+	/*
+	 * Latest context state has not been saved:
+	 */
+	CAPTURE_ARM_FRAME_POINTER_REGISTER(frame_pointer);
 
-    #elif DEFINED_ARM_CORTEX_M_ARCH()
-	const cpu_instruction_t *program_counter;
-	uintptr_t return_address;
-	const rtos_execution_stack_entry_t *stack_pointer;
-	const rtos_execution_stack_entry_t *frame_pointer;
-
-	if (execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT) {
-	    stack_pointer = (rtos_execution_stack_entry_t *)
-		execution_context_p->ctx_cpu_saved_registers.cpu_reg_psp;
-	} else {
-	    /*
-	     * TODO: We cannot get an accurate stack trace of an ISR,
-	     * unless we are called from the debugger. So, check that
-	     * the caller is the debugger, otherwise, return.
-	     */
-	    stack_pointer = (rtos_execution_stack_entry_t *)
-		execution_context_p->ctx_cpu_saved_registers.cpu_reg_msp;
+	program_counter = get_program_counter();
+	fdc_error = find_previous_stack_frame(program_counter,
+					      &frame_pointer,
+					      &return_address);
+	if (fdc_error != 0) {
+	    return;
 	}
 
-	program_counter = (cpu_instruction_t *)stack_pointer[CPU_REG_PC];
-	return_address = stack_pointer[CPU_REG_LR];
-	frame_pointer = (rtos_execution_stack_entry_t *)
-	    execution_context_p->ctx_cpu_saved_registers.cpu_reg_r7;
+	unwind_execution_stack(return_address,
+			       frame_pointer,
+			       execution_context_p->ctx_execution_stack_bottom_end_p,
+			       trace_buff,
+			       &num_entries);
 
-	FDC_ASSERT(stack_pointer + CPU_NUM_PRE_SAVED_REGISTERS <=
-		   execution_context_p->ctx_execution_stack_bottom_end_p,
-	           stack_pointer,
-		   execution_context_p->ctx_execution_stack_bottom_end_p);
+	DBG_ASSERT(num_entries <= *num_entries_p, num_entries, *num_entries_p);
+	*num_entries_p = num_entries;
+    } else {
+	/*
+	 * Latest context state has been saved:
+	 */
+	const rtos_execution_stack_entry_t *stack_pointer;
+	bool old_preemption_state;
+	bool restore_preemption_state = false;
 
-	FDC_ASSERT(frame_pointer >= stack_pointer + CPU_NUM_PRE_SAVED_REGISTERS,
-	           frame_pointer, stack_pointer);
-    #else
-	#error "unsupported CPU architecture"
-    #endif
+	if (execution_context_p->ctx_context_type != RTOS_THREAD_CONTEXT) {
+	    CAPTURE_FDC_ERROR(
+		"Cannot get stack trace for non-thread context",
+		execution_context_p, 0);
 
-    FDC_ASSERT(stack_pointer <
-	       execution_context_p->ctx_execution_stack_bottom_end_p &&
-	       stack_pointer >=
-	       execution_context_p->ctx_execution_stack_top_end_p,
-	       stack_pointer, execution_context_p);
-    FDC_ASSERT(frame_pointer <
-	       execution_context_p->ctx_execution_stack_bottom_end_p &&
-	       frame_pointer >=
-	       execution_context_p->ctx_execution_stack_top_end_p,
-	       frame_pointer, execution_context_p);
+	    return;
+	}
 
-    FDC_ASSERT(VALID_CODE_ADDRESS(program_counter),
-	       program_counter, execution_context_p);
+	/*
+	 * Disable preemption if the calling thread has lower priority than
+	 * the thread being examined examined, so we don't get preempted by
+	 * that thread, while getting its stack trace:
+	 */
+	if (current_execution_context_p->ctx_context_type == RTOS_THREAD_CONTEXT) {
+	    struct rtos_thread *current_thread_p =
+		RTOS_EXECUTION_CONTEXT_GET_THREAD(current_execution_context_p);
 
-    trace_buff[0] = (uintptr_t)program_counter;
-    num_entries --;
+	    struct rtos_thread *target_thread_p =
+		RTOS_EXECUTION_CONTEXT_GET_THREAD(execution_context_p);
 
-    unwind_execution_stack(return_address,
-			   frame_pointer,
-			   execution_context_p->ctx_execution_stack_bottom_end_p,
-			   trace_buff + 1,
-			   &num_entries);
+	    DBG_ASSERT(target_thread_p->thr_current_priority > RTOS_HIGHEST_THREAD_PRIORITY,
+		       target_thread_p->thr_current_priority, execution_context_p);
 
-    DBG_ASSERT(num_entries < *num_entries_p, num_entries, *num_entries_p);
-    *num_entries_p = num_entries + 1;
+	    if (current_thread_p->thr_current_priority >=
+		target_thread_p->thr_current_priority) {
+		old_preemption_state = rtos_disable_preemption();
+		restore_preemption_state = true;
+	    }
+	}
+
+#	if DEFINED_ARM_CLASSIC_ARCH()
+#	    error "unsupported CPU architecture"
+
+#	elif DEFINED_ARM_CORTEX_M_ARCH()
+	    stack_pointer = (rtos_execution_stack_entry_t *)
+		execution_context_p->ctx_cpu_saved_registers.cpu_reg_psp;
+
+	    FDC_ASSERT(stack_pointer + CPU_NUM_PRE_SAVED_REGISTERS <=
+		       execution_context_p->ctx_execution_stack_bottom_end_p,
+		       stack_pointer,
+		       execution_context_p->ctx_execution_stack_bottom_end_p);
+
+	    FDC_ASSERT(stack_pointer >=
+		       execution_context_p->ctx_execution_stack_top_end_p,
+		       stack_pointer,
+		       execution_context_p->ctx_execution_stack_top_end_p);
+
+	    program_counter = (cpu_instruction_t *)stack_pointer[CPU_REG_PC];
+	    return_address = stack_pointer[CPU_REG_LR];
+	    frame_pointer = (rtos_execution_stack_entry_t *)
+		execution_context_p->ctx_cpu_saved_registers.cpu_reg_r7;
+
+	    FDC_ASSERT(frame_pointer >= stack_pointer + CPU_NUM_PRE_SAVED_REGISTERS,
+		       frame_pointer, stack_pointer);
+
+#	else
+#	    error "unsupported CPU architecture"
+#	endif
+
+	FDC_ASSERT(frame_pointer <=
+		   execution_context_p->ctx_execution_stack_bottom_end_p &&
+		   frame_pointer >=
+		   execution_context_p->ctx_execution_stack_top_end_p,
+		   frame_pointer, execution_context_p);
+
+	FDC_ASSERT(VALID_CODE_ADDRESS(program_counter),
+		   program_counter, execution_context_p);
+
+	trace_buff[0] = (uintptr_t)program_counter;
+	num_entries --;
+
+	unwind_execution_stack(return_address,
+			       frame_pointer,
+			       execution_context_p->ctx_execution_stack_bottom_end_p,
+			       trace_buff + 1,
+			       &num_entries);
+
+	DBG_ASSERT(num_entries < *num_entries_p, num_entries, *num_entries_p);
+	*num_entries_p = num_entries + 1;
+
+	if (restore_preemption_state) {
+	    rtos_restore_preemption_state(old_preemption_state);
+	}
+    }
 }
 
 

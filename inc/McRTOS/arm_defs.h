@@ -136,7 +136,7 @@
 #   define CPU_INTERRUPTS_ARE_DISABLED(_cpsr) \
         (((_cpsr) & ARM_INTERRUPTS_DISABLED_MASK) != 0)
 
-#define GET_FUNCTION_ADDRESS(_func_p)   ((uintptr_t)(_func_p)
+#define GET_CODE_ADDRESS(_addr)   ((uintptr_t)(_addr))
 
 #elif DEFINED_ARM_CORTEX_M_ARCH()
 
@@ -425,13 +425,27 @@
 #   define CPU_INTERRUPTS_ARE_DISABLED(_reg_primask_value) \
         (((_reg_primask_value) & CPU_REG_PRIMASK_PM_MASK) != 0)
 
-#define GET_FUNCTION_ADDRESS(_func_p)   ((uintptr_t)(_func_p) & ~0x1)
+#define GET_CODE_ADDRESS(_addr)   ((uintptr_t)(_addr) & ~0x1)
 
 #else
 
 #   error "CPU architecture not supported"
 
 #endif /* #if DEFINED_ARM_CLASSIC_ARCH() */
+
+#define GET_FUNCTION_ADDRESS(_func_p)   GET_CODE_ADDRESS(_func_p)
+
+/**
+ * Size of of the "bl" instruction in bytes for ARM classic and
+ * thumb-2
+ */
+#define BL_INSTRUCTION_SIZE 4
+
+/**
+ * Calculate the call address given a return address
+ */
+#define GET_CALL_ADDRESS(_return_address) \
+	(GET_CODE_ADDRESS(_return_address) - BL_INSTRUCTION_SIZE)
 
 /**
  * Context switch types for context switch tracing (must fit in 4 bits)

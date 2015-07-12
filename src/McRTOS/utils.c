@@ -951,6 +951,7 @@ strlen(_IN_ const char *s)
    return len;
 }
 
+
 void
 bzero(_INOUT_ uint8_t *buf, size_t len)
 {
@@ -964,3 +965,23 @@ bzero(_INOUT_ uint8_t *buf, size_t len)
 	}
 }
 
+
+/**
+ * Return address where this function was called
+ */
+cpu_instruction_t *
+get_program_counter(void)
+{
+    uintptr_t return_address;
+    cpu_instruction_t *program_counter;
+
+    CAPTURE_ARM_LR_REGISTER(return_address);
+
+    program_counter = (cpu_instruction_t *)GET_CALL_ADDRESS(return_address);
+
+    DBG_ASSERT(IS_BL32_FIRST_HALF(*program_counter) &&
+	       IS_BL32_SECOND_HALF(*(program_counter + 1)),
+	       program_counter, 0);
+
+    return program_counter;
+}

@@ -61,7 +61,7 @@ static fdc_error_t rtos_root_thread_f(void *arg);
 static fdc_error_t rtos_idle_thread_f(void *arg);
 static fdc_error_t rtos_touch_screen_reader_thread_f(void *arg);
 
-const char g_McRTOS_version[] = "McRTOS v2.4 (" RTOS_BUILD_FLAVOR ")";
+const char g_McRTOS_version[] = "McRTOS v2.5 (" RTOS_BUILD_FLAVOR ")";
 
 const char g_McRTOS_build_timestamp[] = "built "__DATE__ " " __TIME__;
 

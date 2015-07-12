@@ -603,6 +603,16 @@ rtos_thread_disable_fpu(void);
 void
 rtos_capture_fdc_msg_vprintf(const char *fmt, va_list va);
 
+void
+rtos_get_stack_trace(_OUT_ uintptr_t trace_buff[],
+		     _INOUT_ uint8_t *num_entries_p);
+
+bool
+rtos_disable_preemption(void);
+
+void
+rtos_restore_preemption_state(bool preemption_state);
+
 #ifdef __cplusplus
 }
 #endif

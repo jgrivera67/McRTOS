@@ -3303,6 +3303,33 @@ common_exit:
 }
 
 
+void
+rtos_get_stack_trace(_OUT_ uintptr_t trace_buff[],
+		     _INOUT_ uint8_t *num_entries_p)
+{
+    const struct rtos_execution_context *current_execution_context_p =
+	RTOS_GET_CURRENT_EXECUTION_CONTEXT();
+
+    get_stack_trace(current_execution_context_p, trace_buff, num_entries_p);
+}
+
+
+bool
+rtos_disable_preemption(void)
+{
+    DEBUG_PRINTF("Not implemented yet\n");
+    return true;
+}
+
+
+void
+rtos_restore_preemption_state(bool preemption_state)
+{
+    DEBUG_PRINTF("Not implemented yet\n");
+}
+
+
+
 #if DEFINED_ARM_CORTEX_M_ARCH()
 
 /**

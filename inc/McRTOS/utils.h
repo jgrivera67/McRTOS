@@ -230,6 +230,8 @@ int strcmp(_IN_ const char *s1, _IN_ const char *s2);
 int strlen(_IN_ const char *s);
 void bzero(_INOUT_ uint8_t *buf, size_t len);
 
+cpu_instruction_t *get_program_counter(void);
+
 static inline int to_lower(int c)
 {
     return (c >= 'A' && c <= 'Z') ? 'a' + (c - 'A')

@@ -197,8 +197,8 @@ capture_assert_failure(
     uintptr_t arg1,
     uintptr_t arg2)
 {
-    uint32_t *return_address;
-    uint32_t *assert_address;
+    uintptr_t return_address;
+    uintptr_t assert_address;
 
     /*
      * Capture ARM LR register on entry
@@ -213,13 +213,13 @@ capture_assert_failure(
      * The exact location of the assertion is the place where this
      * function was invoked
      */
-    assert_address = return_address - 1;
+    assert_address = GET_CALL_ADDRESS(return_address);
 
     rtos_capture_failure_data(
         cond_str,
         arg1,
         arg2,
-        assert_address);
+        (void *)assert_address);
 
     struct rtos_cpu_controller *cpu_controller_p =
         &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
@@ -250,8 +250,8 @@ capture_fdc_error(
     uintptr_t arg2)
 {
 #   ifdef _RELIABILITY_CHECKS_
-    uint32_t *return_address;
-    uint32_t *error_address;
+    uintptr_t return_address;
+    uintptr_t error_address;
 
     /*
      * Capture ARM LR register on entry
@@ -262,13 +262,13 @@ capture_fdc_error(
     micro_trace_stop();
 #   endif
 
-    error_address = return_address - 1;
+    error_address = GET_CALL_ADDRESS(return_address);
 
     rtos_capture_failure_data(
         error_description,
         arg1,
         arg2,
-        error_address);
+        (void *)error_address);
 
     bool caller_was_privileged = rtos_enter_privileged_mode();
 
