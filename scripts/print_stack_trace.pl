@@ -24,7 +24,7 @@ my $MULTIPLE_NAMES_FILE_NAME = "Defined in multiple files";
 #
 my $PROG_NAME = basename($0);
 
-my $USAGE_STR = "Usage: $PROG_NAME <ELF file> <raw stack trace file>";
+my $USAGE_STR = "Usage: $PROG_NAME <ELF file> < <raw stack trace file>";
 
 #
 # Main program
@@ -34,18 +34,15 @@ my $USAGE_STR = "Usage: $PROG_NAME <ELF file> <raw stack trace file>";
     my $raw_stack_trace_file;
     my $result;
 
-    if (@ARGV != 2)
+    if (@ARGV != 1)
     {
         my $num_args = @ARGV;
         die "*** Error: Invalid number of arguments: $num_args (@ARGV)\n$USAGE_STR\n";
     }
 
-    ($elf_file, $raw_stack_trace_file) = @ARGV;
+    ($elf_file) = @ARGV;
 
-    open IN_FILE_HANDLE, "<$raw_stack_trace_file" ||
-        die "$PROG_NAME: *** Error: cannot open $raw_stack_trace_file\n";
-
-    while (<IN_FILE_HANDLE>) {
+    while (<STDIN>) {
         chomp $_;
         $_ =~ s/^\s+//;     # trim leading white spaces
         my @record = split /[ \t]/, $_;
@@ -57,7 +54,6 @@ my $USAGE_STR = "Usage: $PROG_NAME <ELF file> <raw stack trace file>";
         system "addr2line -e $elf_file -afps $call_addr";
     }
 
-    close  IN_FILE_HANDLE;
     exit 0;
 }
 
