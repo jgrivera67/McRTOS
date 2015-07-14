@@ -829,6 +829,8 @@ fdc_error_t capture_fdc_error(
 
 void capture_fdc_msg_printf(const char *fmt, ...);
 
+void capture_fdc_stack_trace(uint_fast8_t entries_to_skip);
+
 void debug_dump_r0_to_r3(
     uint32_t r0,
     uint32_t r1,

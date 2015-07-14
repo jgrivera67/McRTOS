@@ -50,7 +50,7 @@ my $USAGE_STR = "Usage: $PROG_NAME <ELF file> < <raw stack trace file>";
             next;
         }
 
-        my $call_addr = $record[0];
+        my $call_addr = $record[2];
         system "addr2line -e $elf_file -afps $call_addr";
     }
 

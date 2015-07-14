@@ -32,6 +32,11 @@
 #define RTOS_TIMER_WHEEL_NUM_SPOKES UINT16_C(128)
 
 /**
+ * Size (in etries) of a stack trace buffer
+ */
+#define RTOS_MAX_STACK_TRACE_ENTRIES    16
+
+/**
  * Timer wheel spoke index range type
  */
 typedef _RANGE_(0, RTOS_TIMER_WHEEL_NUM_SPOKES - 1)

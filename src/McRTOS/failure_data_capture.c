@@ -158,6 +158,7 @@ rtos_k_capture_failure_data(
                 failure_str, failure_location, arg1, arg2,
                 cpu_controller_p->cpc_current_execution_context_p);
 
+            capture_fdc_stack_trace(4);
             failure_being_printed = false;
         }
     }
@@ -1541,3 +1542,23 @@ rtos_k_capture_fdc_msg_vprintf(const char *fmt, va_list va)
     }
 }
 
+
+void
+capture_fdc_stack_trace(uint_fast8_t entries_to_skip)
+{
+    uintptr_t trace_buff[RTOS_MAX_STACK_TRACE_ENTRIES];
+    uint8_t num_trace_entries;
+
+    struct rtos_execution_context *current_execution_context_p =
+        RTOS_GET_CURRENT_EXECUTION_CONTEXT();
+
+    FAILURE_PRINTF("Stack trace for %s:\n",
+                   current_execution_context_p->ctx_name_p);
+
+    num_trace_entries = sizeof(trace_buff) / sizeof(trace_buff[0]);
+    get_stack_trace(current_execution_context_p, trace_buff, &num_trace_entries);
+
+    for (uint_fast8_t i = entries_to_skip; i < num_trace_entries; i ++) {
+	FAILURE_PRINTF("\t%#p\n", trace_buff[i]);
+    }
+}

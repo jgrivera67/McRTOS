@@ -1088,9 +1088,9 @@ cmd_display_msg_log(void)
 }
 
 static void
-cmd_display_stack_trace(uintptr_t execution_context_addr, bool only_call_entries)
+cmd_display_stack_trace(uintptr_t execution_context_addr)
 {
-    uintptr_t trace_buff[16];
+    uintptr_t trace_buff[RTOS_MAX_STACK_TRACE_ENTRIES];
     uint8_t num_trace_entries;
 
     if (!BOARD_VALID_RAM_ADDRESS(execution_context_addr) || execution_context_addr % 4 != 0) {
@@ -1118,8 +1118,7 @@ cmd_display_stack_trace(uintptr_t execution_context_addr, bool only_call_entries
                    execution_context_p->ctx_name_p);
 
     num_trace_entries = sizeof(trace_buff) / sizeof(trace_buff[0]);
-    get_stack_trace(execution_context_p, trace_buff,
-		                &num_trace_entries);
+    get_stack_trace(execution_context_p, trace_buff, &num_trace_entries);
 
     for (uint_fast8_t i = 0; i < num_trace_entries; i ++) {
 	console_printf("\t%#p\n", trace_buff[i]);
@@ -1147,7 +1146,7 @@ parse_stack(void)
 
         bool caller_was_privileged = rtos_enter_privileged_mode();
 
-	cmd_display_stack_trace(mem_addr, true);
+	cmd_display_stack_trace(mem_addr);
         if (!caller_was_privileged) {
             rtos_exit_privileged_mode();
         }

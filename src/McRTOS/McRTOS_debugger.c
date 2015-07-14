@@ -63,12 +63,6 @@ rtos_dbg_dump_stack_trace(
     _IN_ const struct rtos_execution_context *execution_context_p);
 
 static void
-rtos_dbg_dump_memory_with_call_stack(
-    _IN_ const uint32_t *addr,
-    _IN_ uint32_t num_words,
-    _IN_ const char *title);
-
-static void
 rtos_dbg_dump_context_switch_traces(void);
 
 static void
@@ -385,13 +379,6 @@ rtos_dbg_dump_all_execution_contexts(void)
 
         rtos_dbg_dump_execution_context(context_p);
     }
-
-#   ifdef _RELIABILITY_CHECKS_
-    rtos_dbg_dump_memory_with_call_stack(
-        g_cortex_m_exception_stack.es_stack - 1,
-        RTOS_INTERRUPT_STACK_NUM_ENTRIES + 2,
-        "Stack shared by all exceptions");
-#   endif
 }
 
 static void
@@ -565,11 +552,6 @@ rtos_dbg_dump_execution_context(
         }
 
 	rtos_dbg_dump_stack_trace(execution_context_p);
-
-        rtos_dbg_dump_memory_with_call_stack(
-            context_stack_p,
-            execution_context_p->ctx_execution_stack_bottom_end_p - context_stack_p,
-            "Stack entries");
     }
 }
 
@@ -820,12 +802,16 @@ get_stack_trace(_IN_ const struct rtos_execution_context *execution_context_p,
     uintptr_t return_address;
     fdc_error_t fdc_error;
     uint8_t num_entries = *num_entries_p;
+    struct rtos_cpu_controller *cpu_controller_p =
+        &g_McRTOS_p->rts_cpu_controllers[SOC_GET_CURRENT_CPU_ID()];
     struct rtos_execution_context *current_execution_context_p =
-	RTOS_GET_CURRENT_EXECUTION_CONTEXT();
+	cpu_controller_p->cpc_current_execution_context_p;
+    struct fdc_info *fdc_info_p = &cpu_controller_p->cpc_failures_info;
 
     FDC_ASSERT(num_entries >= 1, num_entries, 0);
 
-    if (execution_context_p == current_execution_context_p) {
+    if (execution_context_p == current_execution_context_p &&
+        !fdc_info_p->fdc_handling_exception) {
 	/*
 	 * Latest context state has not been saved:
 	 */
@@ -874,9 +860,6 @@ get_stack_trace(_IN_ const struct rtos_execution_context *execution_context_p,
 
 	    struct rtos_thread *target_thread_p =
 		RTOS_EXECUTION_CONTEXT_GET_THREAD(execution_context_p);
-
-	    DBG_ASSERT(target_thread_p->thr_current_priority > RTOS_HIGHEST_THREAD_PRIORITY,
-		       target_thread_p->thr_current_priority, execution_context_p);
 
 	    if (current_thread_p->thr_current_priority >=
 		target_thread_p->thr_current_priority) {
@@ -961,43 +944,17 @@ static void
 rtos_dbg_dump_stack_trace(
     _IN_ const struct rtos_execution_context *execution_context_p)
 {
-    uintptr_t trace_buff[16];
+    uintptr_t trace_buff[RTOS_MAX_STACK_TRACE_ENTRIES];
     uint8_t num_trace_entries;
 
     debugger_printf("Stack trace for %s:\n",
                     execution_context_p->ctx_name_p);
 
     num_trace_entries = sizeof(trace_buff) / sizeof(trace_buff[0]);
-    get_stack_trace(execution_context_p, trace_buff,
-		                &num_trace_entries);
+    get_stack_trace(execution_context_p, trace_buff, &num_trace_entries);
 
     for (uint_fast8_t i = 0; i < num_trace_entries; i ++) {
 	debugger_printf("\t%#p\n", trace_buff[i]);
-    }
-}
-
-
-static void
-rtos_dbg_dump_memory_with_call_stack(
-    _IN_ const uint32_t *addr,
-    _IN_ uint32_t num_words,
-    _IN_ const char *title)
-{
-    debugger_printf("%s: Memory at %#p (%u words):\n",
-        title, addr, num_words);
-
-    for (uint32_t i = 0; i < num_words; i ++) {
-        uint32_t stack_entry = addr[i];
-        if ((stack_entry & 0x1) != 0 && VALID_CODE_ADDRESS(stack_entry)) {
-            cpu_instruction_t *call_stack_entry =
-                 (cpu_instruction_t *)((stack_entry & ~0x1) -
-                                       sizeof(cpu_instruction_t));
-
-            debugger_printf("\t%3u: [%#p]: %#x (call stack entry: %#p)\n",
-                i, addr + i, stack_entry, call_stack_entry);
-        } else {
-            debugger_printf("\t%3u: [%#p]: %#x\n", i, addr + i, stack_entry);
-        }
     }
 }
 
