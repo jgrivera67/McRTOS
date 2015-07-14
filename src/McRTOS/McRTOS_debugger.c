@@ -730,15 +730,15 @@ find_previous_stack_frame(_IN_ const cpu_instruction_t *program_counter,
 /*
  * Unwinds a given execution stack
  */
-void
-unwind_execution_stack(_IN_ uintptr_t top_return_address,
+static void
+unwind_execution_stack(_IN_ uint_fast8_t num_entries_to_skip,
+                       _IN_ uintptr_t top_return_address,
 		       _IN_ const rtos_execution_stack_entry_t *frame_pointer,
 		       _IN_ const rtos_execution_stack_entry_t *stack_bottom_p,
 		       _OUT_ uintptr_t trace_buff[],
 		       _INOUT_ uint8_t *num_entries_p)
 {
     fdc_error_t fdc_error;
-    uint_fast8_t i;
     uint_fast8_t max_num_entries = *num_entries_p;
 
     FDC_ASSERT(frame_pointer <= stack_bottom_p,
@@ -752,8 +752,9 @@ unwind_execution_stack(_IN_ uintptr_t top_return_address,
 	       top_return_address, frame_pointer);
 
     uintptr_t return_address = top_return_address;
+    uint_fast8_t i = 0;
 
-    for (i = 0; i < max_num_entries && frame_pointer < stack_bottom_p; i ++) {
+    while (i < max_num_entries && frame_pointer < stack_bottom_p) {
 	/*
 	 * The next stack trace entry is the address of the instruction
 	 * preceding the instruction at the return address, unless we
@@ -769,7 +770,12 @@ unwind_execution_stack(_IN_ uintptr_t top_return_address,
 	    instruction_p -= 2;
 	}
 
-	trace_buff[i] = (uintptr_t)instruction_p;
+        if (num_entries_to_skip != 0) {
+            num_entries_to_skip --;
+        } else {
+            trace_buff[i] = (uintptr_t)instruction_p;
+            i ++;
+        }
 
 	fdc_error = find_previous_stack_frame(instruction_p - 1,
 					      &frame_pointer,
@@ -790,10 +796,11 @@ unwind_execution_stack(_IN_ uintptr_t top_return_address,
 
 
 /*
- * Generate the call trace of a given execution context.
+ * Captures the call trace of a given execution context.
  */
 void
 get_stack_trace(_IN_ const struct rtos_execution_context *execution_context_p,
+                _IN_ uint_fast8_t num_entries_to_skip,
 	        _OUT_ uintptr_t trace_buff[],
 	        _INOUT_ uint8_t *num_entries_p)
 {
@@ -825,7 +832,8 @@ get_stack_trace(_IN_ const struct rtos_execution_context *execution_context_p,
 	    return;
 	}
 
-	unwind_execution_stack(return_address,
+	unwind_execution_stack(num_entries_to_skip,
+                               return_address,
 			       frame_pointer,
 			       execution_context_p->ctx_execution_stack_bottom_end_p,
 			       trace_buff,
@@ -840,6 +848,7 @@ get_stack_trace(_IN_ const struct rtos_execution_context *execution_context_p,
 	const rtos_execution_stack_entry_t *stack_pointer;
 	bool old_preemption_state;
 	bool restore_preemption_state = false;
+        bool one_more_entry = false;
 
 	if (execution_context_p->ctx_context_type != RTOS_THREAD_CONTEXT) {
 	    CAPTURE_FDC_ERROR(
@@ -906,17 +915,26 @@ get_stack_trace(_IN_ const struct rtos_execution_context *execution_context_p,
 	FDC_ASSERT(VALID_CODE_ADDRESS(program_counter),
 		   program_counter, execution_context_p);
 
-	trace_buff[0] = (uintptr_t)program_counter;
-	num_entries --;
+        if (num_entries_to_skip != 0) {
+            num_entries_to_skip --;
+        } else {
+            trace_buff[0] = (uintptr_t)program_counter;
+            trace_buff ++;
+            num_entries --;
+            one_more_entry = true;
+        }
 
-	unwind_execution_stack(return_address,
+	unwind_execution_stack(num_entries_to_skip,
+                               return_address,
 			       frame_pointer,
 			       execution_context_p->ctx_execution_stack_bottom_end_p,
-			       trace_buff + 1,
+			       trace_buff,
 			       &num_entries);
 
 	DBG_ASSERT(num_entries < *num_entries_p, num_entries, *num_entries_p);
-	*num_entries_p = num_entries + 1;
+        if (one_more_entry) {
+            *num_entries_p = num_entries + 1;
+        }
 
 	if (restore_preemption_state) {
 	    rtos_restore_preemption_state(old_preemption_state);
@@ -951,7 +969,7 @@ rtos_dbg_dump_stack_trace(
                     execution_context_p->ctx_name_p);
 
     num_trace_entries = sizeof(trace_buff) / sizeof(trace_buff[0]);
-    get_stack_trace(execution_context_p, trace_buff, &num_trace_entries);
+    get_stack_trace(execution_context_p, 0, trace_buff, &num_trace_entries);
 
     for (uint_fast8_t i = 0; i < num_trace_entries; i ++) {
 	debugger_printf("\t%#p\n", trace_buff[i]);

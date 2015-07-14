@@ -854,14 +854,9 @@ void rtos_run_debugger(
 
 void rtos_command_processor(void);
 
-void unwind_execution_stack(_IN_ uintptr_t top_return_address,
-		            _IN_ const rtos_execution_stack_entry_t *frame_pointer,
-		            _IN_ const rtos_execution_stack_entry_t *stack_bottom_p,
-		            _OUT_ uintptr_t trace_buff[],
-		            _INOUT_ uint8_t *num_entries_p);
-
 void get_stack_trace(
 	_IN_ const struct rtos_execution_context *execution_context_p,
+        _IN_ uint_fast8_t num_entries_to_skip,
 	_OUT_ uintptr_t trace_buff[],
 	_INOUT_ uint8_t *num_entries_p);
 

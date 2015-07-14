@@ -3304,13 +3304,15 @@ common_exit:
 
 
 void
-rtos_get_stack_trace(_OUT_ uintptr_t trace_buff[],
-		     _INOUT_ uint8_t *num_entries_p)
+rtos_capture_stack_trace(_IN_ uint_fast8_t num_entries_to_skip,
+                         _OUT_ uintptr_t trace_buff[],
+		         _INOUT_ uint8_t *num_entries_p)
 {
     const struct rtos_execution_context *current_execution_context_p =
 	RTOS_GET_CURRENT_EXECUTION_CONTEXT();
 
-    get_stack_trace(current_execution_context_p, trace_buff, num_entries_p);
+    get_stack_trace(current_execution_context_p, num_entries_to_skip,
+                    trace_buff, num_entries_p);
 }
 
 

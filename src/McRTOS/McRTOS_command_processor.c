@@ -1118,7 +1118,7 @@ cmd_display_stack_trace(uintptr_t execution_context_addr)
                    execution_context_p->ctx_name_p);
 
     num_trace_entries = sizeof(trace_buff) / sizeof(trace_buff[0]);
-    get_stack_trace(execution_context_p, trace_buff, &num_trace_entries);
+    get_stack_trace(execution_context_p, 0, trace_buff, &num_trace_entries);
 
     for (uint_fast8_t i = 0; i < num_trace_entries; i ++) {
 	console_printf("\t%#p\n", trace_buff[i]);

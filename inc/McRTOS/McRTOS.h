@@ -604,8 +604,9 @@ void
 rtos_capture_fdc_msg_vprintf(const char *fmt, va_list va);
 
 void
-rtos_get_stack_trace(_OUT_ uintptr_t trace_buff[],
-		     _INOUT_ uint8_t *num_entries_p);
+rtos_capture_stack_trace(_IN_ uint_fast8_t num_entries_to_skip,
+                         _OUT_ uintptr_t trace_buff[],
+		         _INOUT_ uint8_t *num_entries_p);
 
 bool
 rtos_disable_preemption(void);

@@ -1544,7 +1544,7 @@ rtos_k_capture_fdc_msg_vprintf(const char *fmt, va_list va)
 
 
 void
-capture_fdc_stack_trace(uint_fast8_t entries_to_skip)
+capture_fdc_stack_trace(uint_fast8_t num_entries_to_skip)
 {
     uintptr_t trace_buff[RTOS_MAX_STACK_TRACE_ENTRIES];
     uint8_t num_trace_entries;
@@ -1556,9 +1556,10 @@ capture_fdc_stack_trace(uint_fast8_t entries_to_skip)
                    current_execution_context_p->ctx_name_p);
 
     num_trace_entries = sizeof(trace_buff) / sizeof(trace_buff[0]);
-    get_stack_trace(current_execution_context_p, trace_buff, &num_trace_entries);
+    get_stack_trace(current_execution_context_p, num_entries_to_skip,
+                    trace_buff, &num_trace_entries);
 
-    for (uint_fast8_t i = entries_to_skip; i < num_trace_entries; i ++) {
+    for (uint_fast8_t i = 0; i < num_trace_entries; i ++) {
 	FAILURE_PRINTF("\t%#p\n", trace_buff[i]);
     }
 }
