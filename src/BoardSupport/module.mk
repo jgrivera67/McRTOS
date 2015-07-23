@@ -46,7 +46,7 @@ ifeq "$(PLATFORM)" "LPC-54102"
     local_src := \
                  $(subdirectory)/$(PLATFORM)/lpc54102_soc_hardware_abstractions.c \
                  $(subdirectory)/$(PLATFORM)/lpc54102_interrupt_service_routines.s \
-                 $(subdirectory)/$(PLATFORM)/lpcXpresso_board_hardware_abstractions.c
+                 $(subdirectory)/$(PLATFORM)/lpcxpresso_board_hardware_abstractions.c
 endif
 
 local_subdirs := $(subdirectory)/$(PLATFORM)

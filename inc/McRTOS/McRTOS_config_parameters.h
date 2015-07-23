@@ -109,6 +109,8 @@ C_ASSERT(RTOS_MAX_NUM_INTERRUPTS < SOC_NUM_INTERRUPT_CHANNELS);
 #   define RTOS_MAX_FDC_INFO_SIZE  UINT32_C(4*1024)
 #elif defined(LM4F120_SOC)
 #   define RTOS_MAX_FDC_INFO_SIZE  UINT32_C(4*1024)
+#elif defined(LPC54102_SOC)
+#   define RTOS_MAX_FDC_INFO_SIZE  UINT32_C(4*1024)
 #else
 #   error "No system on chip specified"
 #endif
@@ -123,6 +125,8 @@ C_ASSERT(RTOS_MAX_NUM_INTERRUPTS < SOC_NUM_INTERRUPT_CHANNELS);
 #elif defined(K64F_SOC)
 #   define RTOS_FDC_MSG_BUFFER_SIZE  UINT16_C(2048)
 #elif defined(LM4F120_SOC)
+#   define RTOS_FDC_MSG_BUFFER_SIZE  UINT16_C(2048)
+#elif defined(LPC54102_SOC)
 #   define RTOS_FDC_MSG_BUFFER_SIZE  UINT16_C(2048)
 #else
 #   error "No system on chip specified"
@@ -179,6 +183,8 @@ C_ASSERT(RTOS_MAX_NUM_INTERRUPTS < SOC_NUM_INTERRUPT_CHANNELS);
 #   define RTOS_MAX_NUM_APP_THREADS UINT8_C(64)
 #elif defined(LM4F120_SOC)
 #   define RTOS_MAX_NUM_APP_THREADS UINT8_C(8)
+#elif defined(LPC54102_SOC)
+#   define RTOS_MAX_NUM_APP_THREADS UINT8_C(16)
 #else
 #   error "No system on chip specified"
 #endif

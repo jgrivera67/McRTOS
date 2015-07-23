@@ -125,6 +125,7 @@ modules      :=	McRTOS \
 
 ifeq "$(PLATFORM)" "FRDM-K64F"
     modules +=	Networking
+    CPPFLAGS += -D_NETWORKING_
 endif
 
 modules +=	Applications/$(APPLICATION)
@@ -165,8 +166,7 @@ ifeq "$(CPU_ARCHITECTURE)" "arm_cortex_m"
 endif
 
 CPPFLAGS     += $(addprefix -I ,$(include_dirs)) \
-		-D$(SYSTEM_ON_CHIP) \
-		-D_NETWORKING_
+		-D$(SYSTEM_ON_CHIP)
 
 ifeq "$(BUILD_FLAVOR)" "debug"
     CPPFLAGS += -DDEBUG \
@@ -178,15 +178,13 @@ ifeq "$(BUILD_FLAVOR)" "debug"
     endif
 
     OPT = -O0
-endif
 
-ifeq "$(BUILD_FLAVOR)" "reliability"
+else ifeq "$(BUILD_FLAVOR)" "reliability"
     CPPFLAGS += -D_RELIABILITY_CHECKS_ \
 		-D_CPU_CYCLES_MEASURE_
     OPT = -O0
-endif
 
-ifeq "$(BUILD_FLAVOR)" "performance"
+else ifeq "$(BUILD_FLAVOR)" "performance"
     CPPFLAGS += -D_CPU_CYCLES_MEASURE_
     #OPT can be -O1, -O2, -Os or -O3
     OPT = -O2
@@ -194,8 +192,10 @@ endif
 
 ifeq "$(PLATFORM)" "LaunchPad-LM4F120"
     # FIXME: Implement cycle measurement for LM4F120
-    CPPFLAGS += -U_CPU_CYCLES_MEASURE_ \
-		-U_NETWORKING_
+    CPPFLAGS += -U_CPU_CYCLES_MEASURE_
+else ifeq "$(PLATFORM)" "LPC-54102"
+    # FIXME: Implement cycle measurement for LPC-54102
+    CPPFLAGS += -U_CPU_CYCLES_MEASURE_
 endif
 
 # optimisation level here -O0, -O1, -O2, -Os, or -03

@@ -6,21 +6,15 @@
 
 ifeq "$(PLATFORM)" "LPC2478-STK"
     local_src := $(subdirectory)/McRTOS_crt_armv4.s
-endif
-
-ifeq "$(PLATFORM)" "FRDM-KL25Z"
+else ifeq "$(PLATFORM)" "FRDM-KL25Z"
     local_src := $(subdirectory)/McRTOS_startup_arm_cortex_m.c
-endif
-
-ifeq "$(PLATFORM)" "FRDM-K20D5"
+else ifeq "$(PLATFORM)" "FRDM-K20D5"
     local_src := $(subdirectory)/McRTOS_startup_arm_cortex_m.c
-endif
-
-ifeq "$(PLATFORM)" "FRDM-K64F"
+else ifeq "$(PLATFORM)" "FRDM-K64F"
     local_src := $(subdirectory)/McRTOS_startup_arm_cortex_m.c
-endif
-
-ifeq "$(PLATFORM)" "LaunchPad-LM4F120"
+else ifeq "$(PLATFORM)" "LaunchPad-LM4F120"
+    local_src := $(subdirectory)/McRTOS_startup_arm_cortex_m.c
+else ifeq "$(PLATFORM)" "LPC-54102"
     local_src := $(subdirectory)/McRTOS_startup_arm_cortex_m.c
 endif
 

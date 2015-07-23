@@ -658,9 +658,11 @@ rtos_k_thread_name(
 }
 
 
-void
+bool
 rtos_k_thread_enable_fpu(void)
 {
+    bool fpu_enabled_in_caller;
+
     FDC_ASSERT_RTOS_PUBLIC_KERNEL_SERVICE_PRECONDITIONS(true);
 
     struct rtos_execution_context *current_execution_context_p =
@@ -684,6 +686,7 @@ rtos_k_thread_enable_fpu(void)
 	    cpu_controller_p->cpc_last_fpu_thread_p;
 
     if (current_thread_p->thr_fpu_enable_count == 0) {
+        fpu_enabled_in_caller = false;
         cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
 
         cortex_m_enable_fpu();
@@ -701,11 +704,13 @@ rtos_k_thread_enable_fpu(void)
         cpu_controller_p->cpc_last_fpu_thread_p = current_thread_p;
         rtos_k_restore_cpu_interrupts(cpu_status_register);
     } else {
+        fpu_enabled_in_caller = true;
 	FDC_ASSERT(last_fpu_thread_p == current_thread_p,
 		   last_fpu_thread_p, current_thread_p);
     }
 
     current_thread_p->thr_fpu_enable_count ++;
+    return fpu_enabled_in_caller;
 }
 
 

@@ -1401,7 +1401,7 @@ find_reset_cause(void)
         generic_cause = GRC_EXTERNAL_PIN_RESET;
     } else if (reg_rcm_srs0 & RCM_SRS0_WDOG_MASK) {
         generic_cause = GRC_WATCHDOG_RESET;
-    } if (reg_rcm_srs0 != 0) {
+    } else if (reg_rcm_srs0 != 0) {
         generic_cause = GRC_OTHER_HW_REASON_RESET;
     }
 
@@ -1794,6 +1794,7 @@ uart_init(
     reg_value = read_8bit_mmio_register(&UART_C4_REG(uart_mmio_registers_p));
     SET_BIT_FIELD(
         reg_value, UART_C4_BRFA_MASK, UART_C4_BRFA_SHIFT, brfa_val);
+    write_8bit_mmio_register(&UART_C4_REG(uart_mmio_registers_p), reg_value); // TODO: check if this works????
 
     /*
      * Enable UART's transmitter and receiver:
@@ -1844,6 +1845,10 @@ uart_init(
         *uart_device_p->urt_rtos_interrupt_err_pp != NULL,
         uart_device_p->urt_rtos_interrupt_err_pp, uart_device_p);
 
+    /*
+     * NOTE: Generation of Tx/Rx FIFO interrupts is enabled in
+     * uart_putchar() and uart_getchar() respectively
+     */
     uart_var_p->urt_initialized = true;
 }
 
@@ -2204,7 +2209,7 @@ uart_putchar(
      * necessary:
      *
      * NOTE: if the "transmit data register" is empty there will be a
-     * pending "transmit data register empty" interrupt empty, regardless
+     * pending "transmit data register empty" interrupt, regardless
      * of this interrupt being enabled or not in the UART. Thus, as soon
      * as we enable the generation of this interrupt, the interrupt will
      * fire, if the "transmit data register" was empty.
@@ -2280,11 +2285,13 @@ uart_getchar(
     DBG_ASSERT_PRIVILEGED_CPU_MODE_AND_INTERRUPTS_ENABLED();
 
     /*
-     * Enable generation of receive interrupts:
+     * Enable generation of receive interrupts, if necessary:
      */
     reg_value = read_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p));
-    reg_value |= UART_C2_RIE_MASK;
-    write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
+    if ((reg_value & UART_C2_RIE_MASK) == 0) {
+        reg_value |= UART_C2_RIE_MASK;
+        write_8bit_mmio_register(&UART_C2_REG(uart_mmio_registers_p), reg_value);
+    }
 
     bool entry_read = rtos_k_byte_circular_buffer_read(
 			&uart_var_p->urt_receive_queue,

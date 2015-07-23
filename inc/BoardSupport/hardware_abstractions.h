@@ -47,6 +47,11 @@
 #   include "lm4f120_soc_public.h"
 #   include "launchpad_board.h"
 
+#elif defined(LPC54102_SOC)
+
+#   include "lpc54102_soc_public.h"
+#   include "lpcxpresso_board.h"
+
 #else
 
 #error "No system on chip specified"

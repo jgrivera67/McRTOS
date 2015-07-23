@@ -1,5 +1,5 @@
 $env:platform = "LPC-54102"
-$env:application = "lpcXpresso_demo"
+$env:application = "lpcxpresso_demo"
 $env:build_flavor = "debug"
 
 . "$env:userprofile/MyProjects/EMBSYS/projects/McRTOS/env/McRTOS_common_ide_env.ps1"

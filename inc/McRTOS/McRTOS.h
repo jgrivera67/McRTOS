@@ -592,13 +592,29 @@ rtos_exit_privileged_mode(void);
 bool
 rtos_in_privileged_mode(void);
 
+static inline void
+rtos_restore_privilege_mode(bool privilege_mode_before)
+{
+    if (!privilege_mode_before) {
+        rtos_exit_privileged_mode();
+    }
+}
+
 _THREAD_CALLERS_ONLY_
-void
+bool
 rtos_thread_enable_fpu(void);
 
 _THREAD_CALLERS_ONLY_
 void
 rtos_thread_disable_fpu(void);
+
+static inline void
+rtos_thread_restore_fpu_mode(bool enabled_before)
+{
+    if (!enabled_before) {
+        rtos_thread_disable_fpu();
+    }
+}
 
 void
 rtos_capture_fdc_msg_vprintf(const char *fmt, va_list va);
@@ -612,7 +628,7 @@ bool
 rtos_disable_preemption(void);
 
 void
-rtos_restore_preemption_state(bool preemption_state);
+rtos_restore_preemption_state(bool preemption_state_before);
 
 #ifdef __cplusplus
 }

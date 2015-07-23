@@ -886,7 +886,7 @@ void
 rtos_k_thread_yield(void);
 
 _THREAD_CALLERS_ONLY_
-void
+bool
 rtos_k_thread_enable_fpu(void);
 
 _THREAD_CALLERS_ONLY_

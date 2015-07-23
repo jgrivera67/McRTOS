@@ -354,6 +354,8 @@
 #	define SOC_NUM_INTERRUPT_PRIORITIES 16
 #   elif defined(LM4F120_SOC)
 #	define SOC_NUM_INTERRUPT_PRIORITIES 8
+#   elif defined(LPC54102_SOC)
+#	define SOC_NUM_INTERRUPT_PRIORITIES 8
 #   else
 #	error "SOC not supported"
 #   endif
@@ -582,7 +584,8 @@
 /**
  * Number of CPU cores
  */
-#if defined(LPC2478_SOC) || defined(LM4F120_SOC) || defined(KL25Z_SOC) || defined(K64F_SOC)
+#if defined(LPC2478_SOC) || defined(LM4F120_SOC) || defined(KL25Z_SOC) || \
+    defined(K64F_SOC) || defined(LPC54102_SOC)
 
 #   define SOC_NUM_CPU_CORES   1
 #else
