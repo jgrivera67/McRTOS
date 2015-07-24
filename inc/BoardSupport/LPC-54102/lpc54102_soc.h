@@ -48,6 +48,11 @@ struct rtos_interrupt;  /* opaque type */
 #define UART_CFG_STOPLEN_MASK       BIT(6)
 
 /*
+ * Fields of UART CTL register
+ */
+#define UART_CTL_AUTOBAUD_MASK        BIT(16)
+
+/*
  * FIFOCTLUSART register fields
  */
 #define FIFOCTLUSART_RXPAUSE_MASK        BIT(0)

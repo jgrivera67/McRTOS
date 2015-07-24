@@ -52,11 +52,6 @@ static void init_cpu_clock_cycles_counter(void);
 static void uart_stop(
     const struct uart_device *uart_device_p);
 
-#if 0 // ???
-static void
-k64f_adc_calibrate(const struct adc_device *adc_device_p);
-#endif // ???
-
 /*
  * Function prototypes for external interrupt ISRs
  */
@@ -475,6 +470,8 @@ soc_hardware_init(void)
         CONSOLE_SERIAL_PORT_BAUD_RATE,
         CONSOLE_SERIAL_PORT_MODE);
 
+    //???    uart_putchar_with_polling(g_console_serial_port_p, '8'); //???
+
     capture_fdc_msg_printf("%s initialized (Tx FIFO size: %u, Rx FIFO size: %u)\n",
 		 g_console_serial_port_p->urt_name,
 		 g_console_serial_port_p->urt_var_p->urt_tx_fifo_size,
@@ -775,7 +772,7 @@ uart_init(
     /*
      * Clear reset for the UART:
      */
-    write_32bit_mmio_register(&LPC_ASYNC_SYSCON->ASYNCAPBCLKCTRLCLR,
+    write_32bit_mmio_register(&LPC_ASYNC_SYSCON->ASYNCPRESETCTRLCLR,
                               uart_device_p->urt_async_apb_control_mask);
 
     /*
@@ -874,10 +871,16 @@ uart_init(
     FDC_ASSERT(reg_value >= 1 && reg_value <= UINT16_MAX + 1,
                uart_device_p, reg_value);
 
+#if 1 //???
     /*
      * Set Baud rat generator (BRG) register (BRG):
      */
     write_32bit_mmio_register(&uart_mmio_registers_p->BRG, reg_value - 1);
+#else
+    reg_value = read_32bit_mmio_register(&uart_mmio_registers_p->CTL);
+    reg_value |= UART_CTL_AUTOBAUD_MASK;
+    write_32bit_mmio_register(&uart_mmio_registers_p->CTL, reg_value);
+#endif
 
     /*
      * Enable UART:
