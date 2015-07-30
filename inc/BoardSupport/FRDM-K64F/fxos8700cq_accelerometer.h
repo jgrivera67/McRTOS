@@ -9,7 +9,7 @@
 #define __FXOS8700CQ_ACCELEROMETER_H
 
 #include <stdint.h>
-#include "utils.h"
+#include <McRTOS/utils.h>
 
 /*
  * I2C slave address for the accelerometer

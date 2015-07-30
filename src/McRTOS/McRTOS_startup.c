@@ -8,12 +8,12 @@
  * @author German Rivera
  */
 
-#include "McRTOS.h"
-#include "McRTOS_internals.h"
-#include "McRTOS_command_processor.h"
-#include "failure_data_capture.h"
-#include "hardware_abstractions.h"
-#include "utils.h"
+#include <McRTOS/McRTOS.h>
+#include <McRTOS/McRTOS_internals.h>
+#include <McRTOS/McRTOS_command_processor.h>
+#include <McRTOS/failure_data_capture.h>
+#include <BoardSupport/hardware_abstractions.h>
+#include <McRTOS/utils.h>
 
 TODO("Remove these pragmas")
 #pragma GCC diagnostic ignored "-Wunused-function"

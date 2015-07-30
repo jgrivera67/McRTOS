@@ -7,6 +7,6 @@ $env:build_flavor = "debug"
 function my_update_flash
 {
     echo "copying $env:elf_file to $env:PLATFORM flash ..."
-    C:\nxp\LPCXpresso_7.6.2_326\lpcxpresso\bin\crt_emu_cm_redlink -flash-load-exec "$env:bin_file" -g -2 -vendor=NXP -pLPC54102J512 #-flash-driver=LPC5410x_512K.cfx
+    C:\nxp\LPCXpresso_7.6.2_326\lpcxpresso\bin\crt_emu_cm_redlink -flash-load-exec "$env:bin_file" -g -2 -vendor=NXP -pLPC54102J512 -flash-driver=C:\nxp\LPCXpresso_7.6.2_326\lpcxpresso\bin\Flash\LPC5410x_512K.cfx
 }
 

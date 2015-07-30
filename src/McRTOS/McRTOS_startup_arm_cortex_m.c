@@ -7,8 +7,8 @@
  *
  * @author German Rivera
  */
-#include "McRTOS_arm_cortex_m.h"
-#include "hardware_abstractions.h"
+#include <McRTOS/McRTOS_arm_cortex_m.h>
+#include <BoardSupport/hardware_abstractions.h>
 #include <stdint.h>
 
 #pragma GCC diagnostic ignored "-Wunused-local-typedefs"

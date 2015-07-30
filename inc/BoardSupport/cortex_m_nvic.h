@@ -14,7 +14,7 @@
 #   error "SOC_NUM_INTERRUPT_CHANNELS must be defined before including this file"
 #endif
 
-#include "arm_defs.h"
+#include <McRTOS/arm_defs.h>
 
 #define INT_SVCall_IRQn     VECTOR_NUMBER_TO_IRQ_NUMBER(INT_SVCall)
 #define PendableSrvReq_IRQn VECTOR_NUMBER_TO_IRQ_NUMBER(INT_PendableSrvReq)

@@ -8,7 +8,7 @@
  * @author German Rivera
  */
 
-#include "McRTOS_arm_cortex_m_macros.s"
+#include <McRTOS/McRTOS_arm_cortex_m_macros.s>
 
 /*
  * Imported symbols

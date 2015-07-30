@@ -8,11 +8,11 @@
  * @author German Rivera
  */
 #include <stdint.h>
-#include "McRTOS_kernel_services.h"
-#include "McRTOS_internals.h"
-#include "arm_defs.h"
-#include "utils.h"
-#include "failure_data_capture.h"
+#include <McRTOS/McRTOS_kernel_services.h>
+#include <McRTOS/McRTOS_internals.h>
+#include <McRTOS/arm_defs.h>
+#include <McRTOS/utils.h>
+#include <McRTOS/failure_data_capture.h>
 
 TODO("Remove these pragmas")
 #pragma GCC diagnostic ignored "-Wunused-parameter"

@@ -6,14 +6,14 @@
  * @author German Rivera
  */
 
-#include "hardware_abstractions.h"
-#include "lpc54102_soc.h"
-#include "McRTOS_arm_cortex_m.h"
-#include "failure_data_capture.h"
-#include "utils.h"
-#include "McRTOS_config_parameters.h"
-#include "McRTOS_kernel_services.h"
-#include "lpcxpresso_board.h"
+#include <BoardSupport/hardware_abstractions.h>
+#include <BoardSupport/LPC-54102/lpc54102_soc.h>
+#include <McRTOS/McRTOS_arm_cortex_m.h>
+#include <McRTOS/failure_data_capture.h>
+#include <McRTOS/utils.h>
+#include <McRTOS/McRTOS_config_parameters.h>
+#include <McRTOS/McRTOS_kernel_services.h>
+#include <BoardSupport/LPC-54102/lpcxpresso_board.h>
 
 static void rgb_led_init(void);
 static void push_buttons_init(void);

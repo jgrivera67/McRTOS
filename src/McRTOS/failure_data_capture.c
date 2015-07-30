@@ -9,12 +9,12 @@
  */
 
 #include <stdint.h>
-#include "failure_data_capture.h"
-#include "hardware_abstractions.h"
-#include "arm_defs.h"
-#include "McRTOS_kernel_services.h"
-#include "McRTOS_internals.h"
-#include "utils.h"
+#include <McRTOS/failure_data_capture.h>
+#include <BoardSupport/hardware_abstractions.h>
+#include <McRTOS/arm_defs.h>
+#include <McRTOS/McRTOS_kernel_services.h>
+#include <McRTOS/McRTOS_internals.h>
+#include <McRTOS/utils.h>
 
 /**
  * Macro that prints a failure message on the serial port in product code,

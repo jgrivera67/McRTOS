@@ -5,14 +5,14 @@
  *
  * Copyright (C) 2013 German Rivera
  *
- * @author German Rivera 
- */ 
+ * @author German Rivera
+ */
 #ifndef LCD_H
 #define LCD_H
 
 #include <stdint.h>
-#include "lcd_fonts.h"
-#include "compile_time_checks.h"
+#include <BoardSupport/lcd_fonts.h>
+#include <McRTOS/compile_time_checks.h>
 
 /*
  * LCD X-axis size (one of 320, 640, 800, 1024)

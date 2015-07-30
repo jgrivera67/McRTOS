@@ -17,8 +17,13 @@ $env:elf_file = "$env:bin_file_prefix.elf"
 $env:makefile_dir = "$env:src_tree_dir"
 
 function my_build_all
-{ 
+{
     run_build build
+}
+
+function my_clean_all
+{
+    run_build clean
 }
 
 function my_rebuild_all
@@ -58,6 +63,7 @@ function run_build([string]$target)
     echo "*** Building $env:application for platform $env:platform, flavor $env:build_flavor ..."
 
     $make_args = "$target",
+                 "--jobs=2",
                  "APPLICATION=$env:application",
                  "PLATFORM=$env:platform",
                  "BUILD_FLAVOR=$env:build_flavor"

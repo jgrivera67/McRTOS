@@ -11,7 +11,7 @@
 #include <McRTOS/compile_time_checks.h>
 #include <McRTOS/McRTOS_kernel_services.h>
 #include <McRTOS/McRTOS_kernel_services.h>
-#include <hardware_abstractions.h>
+#include <BoardSupport/hardware_abstractions.h>
 
 /*
  * Networking subsystem configuration options

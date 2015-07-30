@@ -6,15 +6,15 @@
  * @author German Rivera
  */
 
-#include "hardware_abstractions.h"
-#include "k64f_soc.h"
-#include "k64f_soc_enet.h"
-#include "frdm_board.h"
-#include "McRTOS_arm_cortex_m.h"
-#include "failure_data_capture.h"
-#include "utils.h"
-#include "McRTOS_config_parameters.h"
-#include "McRTOS_kernel_services.h"
+#include <BoardSupport/hardware_abstractions.h>
+#include <BoardSupport/FRDM-K64F/k64f_soc.h>
+#include <BoardSupport/FRDM-K64F/k64f_soc_enet.h>
+#include <BoardSupport/FRDM-K64F/frdm_board.h>
+#include <McRTOS/McRTOS_arm_cortex_m.h>
+#include <McRTOS/failure_data_capture.h>
+#include <McRTOS/utils.h>
+#include <McRTOS/McRTOS_config_parameters.h>
+#include <McRTOS/McRTOS_kernel_services.h>
 
 #pragma GCC diagnostic ignored "-Wunused-local-typedefs"
 #pragma GCC diagnostic ignored "-Wunused-parameter" // ???

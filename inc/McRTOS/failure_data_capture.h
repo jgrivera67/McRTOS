@@ -12,10 +12,10 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "compile_time_checks.h"
-#include "arm_defs.h"
-#include "hardware_abstractions.h"
-#include "McRTOS_config_parameters.h"
+#include <McRTOS/compile_time_checks.h>
+#include <McRTOS/arm_defs.h>
+#include <BoardSupport/hardware_abstractions.h>
+#include <McRTOS/McRTOS_config_parameters.h>
 
 /*
  * Run-time assertion macros

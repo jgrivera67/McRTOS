@@ -9,8 +9,8 @@
 #ifndef __K64F_SOC_H
 #define __K64F_SOC_H
 
-#include "k64f_soc_public.h"
-#include <McRTOS_kernel_services.h>
+#include <BoardSupport/FRDM-K64F/k64f_soc_public.h>
+#include <McRTOS/McRTOS_kernel_services.h>
 
 struct rtos_interrupt;  /* opaque type */
 

@@ -13,9 +13,9 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
-#include "compile_time_checks.h"
-#include "lcd.h"
-#include "touch_screen.h"
+#include <McRTOS/compile_time_checks.h>
+#include <BoardSupport/lcd.h>
+#include <BoardSupport/touch_screen.h>
 
 /**
  * DRAM Page size in bytes (4KB)
@@ -24,33 +24,33 @@
 
 #if defined(LPC2478_SOC)
 
-#   include "lpc2478_stk_board_public.h"
+#   include <BoardSupport/LPC2478-STK/lpc2478_stk_board_public.h>
 
 #   define LCD_SUPPORTED
 #   define DRAM_SUPPORTED
 
 #elif defined(KL25Z_SOC)
 
-#   include "kl25z_soc_public.h"
+#   include <BoardSupport/FRDM-KL25Z/kl25z_soc_public.h>
 
 #elif defined(K20D5_SOC)
 
-#   include "k20d5_soc_public.h"
+#   include <BoardSupport/FRDM-K20D50k20d5_soc_public.h>
 
 #elif defined(K64F_SOC)
 
-#   include "k64f_soc_public.h"
-#   include "frdm_board.h"
+#   include <BoardSupport/FRDM-K64F/k64f_soc_public.h>
+#   include <BoardSupport/FRDM-K64F/frdm_board.h>
 
 #elif defined(LM4F120_SOC)
 
-#   include "lm4f120_soc_public.h"
-#   include "launchpad_board.h"
+#   include <BoardSupport/lm4f120_soc_public.h>
+#   include <BoardSupport/launchpad_board.h>
 
 #elif defined(LPC54102_SOC)
 
-#   include "lpc54102_soc_public.h"
-#   include "lpcxpresso_board.h"
+#   include <BoardSupport/LPC-54102/lpc54102_soc_public.h>
+#   include <BoardSupport/LPC-54102/lpcxpresso_board.h>
 
 #else
 

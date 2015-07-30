@@ -6,16 +6,16 @@
  * @author German Rivera
  */
 
-#include "hardware_abstractions.h"
-#include "k64f_soc.h"
-#include "McRTOS_arm_cortex_m.h"
-#include "MK64F12.h"
-#include "failure_data_capture.h"
-#include "utils.h"
-#include "McRTOS_config_parameters.h"
-#include "McRTOS_kernel_services.h"
-#include "frdm_board.h"
-#include "fxos8700cq_accelerometer.h"
+#include <BoardSupport/hardware_abstractions.h>
+#include <BoardSupport/FRDM-K64F/k64f_soc.h>
+#include <McRTOs/McRTOS_arm_cortex_m.h>
+#include <BoardSupport/FRDM-K64F/MK64F12.h>
+#include <McRTOS/failure_data_capture.h>
+#include <McRTOS/utils.h>
+#include <McRTOS/McRTOS_config_parameters.h>
+#include <McRTOS/McRTOS_kernel_services.h>
+#include <BoardSupport/FRDM-K64F/frdm_board.h>
+#include <BoardSupport/FRDM-K64F/fxos8700cq_accelerometer.h>
 
 /**
  * Const fields of the Accelerometer device (to be placed in flash)

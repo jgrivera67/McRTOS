@@ -14,9 +14,9 @@
 #include <stddef.h>     // offsetof()
 #include <stdarg.h>
 #include <stdalign.h>
-#include "hardware_abstractions.h"
-#include "compile_time_checks.h"
-#include "failure_data_capture.h"
+#include <BoardSupport/hardware_abstractions.h>
+#include <McRTOS/compile_time_checks.h>
+#include <McRTOS/failure_data_capture.h>
 
 #define ARRAY_SIZE(_array) \
         (sizeof(_array) / sizeof((_array)[0]))

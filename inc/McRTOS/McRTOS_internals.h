@@ -10,16 +10,16 @@
 #ifndef _McRTOS_INTERNALS_H
 #define _McRTOS_INTERNALS_H
 
-#include "McRTOS_config_parameters.h"
-#include "McRTOS_kernel_services.h"
+#include <McRTOS/McRTOS_config_parameters.h>
+#include <McRTOS/McRTOS_kernel_services.h>
 
 #if DEFINED_ARM_CORTEX_M_ARCH()
-#   include "McRTOS_arm_cortex_m.h"
+#   include <McRTOS/McRTOS_arm_cortex_m.h>
 #endif
 
-#include "generic_list.h"
-#include "utils.h"
-#include "compile_time_checks.h"
+#include <McRTOS/generic_list.h>
+#include <McRTOS/utils.h>
+#include <McRTOS/compile_time_checks.h>
 
 /**
  * Number of system threads per CPU

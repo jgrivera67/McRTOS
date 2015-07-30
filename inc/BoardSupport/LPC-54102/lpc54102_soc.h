@@ -9,8 +9,8 @@
 #ifndef __LPC54102_SOC_H
 #define __LPC54102_SOC_H
 
-#include "lpc54102_soc_public.h"
-#include <McRTOS_kernel_services.h>
+#include <BoardSupport/LPC-54102/lpc54102_soc_public.h>
+#include <McRTOS/McRTOS_kernel_services.h>
 
 struct rtos_interrupt;  /* opaque type */
 

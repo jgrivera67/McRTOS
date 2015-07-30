@@ -155,15 +155,7 @@ hex_files = 	$(subst .elf,.hex,$(programs))
 bin_files = 	$(subst .elf,.bin,$(programs))
 lst_files = 	$(subst .elf,.lst,$(programs))
 
-include_dirs := $(INCLUDE_DIR) \
-		$(INCLUDE_DIR)/McRTOS \
-	        $(INCLUDE_DIR)/BoardSupport \
-	        $(INCLUDE_DIR)/BoardSupport/$(PLATFORM) \
-	        $(INCLUDE_DIR)/Networking \
-
-ifeq "$(CPU_ARCHITECTURE)" "arm_cortex_m"
-    include_dirs += $(INCLUDE_DIR)/BoardSupport/CMSIS
-endif
+include_dirs := $(INCLUDE_DIR)
 
 CPPFLAGS     += $(addprefix -I ,$(include_dirs)) \
 		-D$(SYSTEM_ON_CHIP)

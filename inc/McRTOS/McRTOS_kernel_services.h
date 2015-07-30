@@ -11,11 +11,11 @@
 #define _McRTOS_KERNEL_SERVICES_H
 
 #include <stdint.h>
-#include "McRTOS.h"
-#include "arm_defs.h"
-#include "generic_list.h"
-#include "hardware_abstractions.h"
-#include "compile_time_checks.h"
+#include <McRTOS/McRTOS.h>
+#include <McRTOS/arm_defs.h>
+#include <McRTOS/generic_list.h>
+#include <BoardSupport/hardware_abstractions.h>
+#include <McRTOS/compile_time_checks.h>
 
 #ifdef __cplusplus
 extern "C" {

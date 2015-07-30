@@ -8,7 +8,7 @@
  * @author German Rivera
  */
 
-#include "McRTOS_arm_cortex_m_macros.s"
+#include <McRTOS/McRTOS_arm_cortex_m_macros.s>
 
 .global rtos_k_restore_execution_context
 .global rtos_k_synchronous_context_switch

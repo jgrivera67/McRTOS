@@ -10,10 +10,10 @@
 #ifndef _McRTOS_H
 #define _McRTOS_H
 
-#include "McRTOS_config_parameters.h"
-#include "hardware_abstractions.h"
-#include "failure_data_capture.h"
-#include "utils.h"
+#include <McRTOS/McRTOS_config_parameters.h>
+#include <BoardSupport/hardware_abstractions.h>
+#include <McRTOS/failure_data_capture.h>
+#include <McRTOS/utils.h>
 
 #ifdef __cplusplus
 extern "C" {

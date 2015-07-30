@@ -9,8 +9,8 @@
 #ifndef __McRTOS_ARM_CORTEX_M_H
 #define __McRTOS_ARM_CORTEX_M_H
 
-#include "McRTOS_internals.h"
-#include "McRTOS_kernel_services.h"
+#include <McRTOS/McRTOS_internals.h>
+#include <McRTOS/McRTOS_kernel_services.h>
 
 /**
  * Exception handlers stack

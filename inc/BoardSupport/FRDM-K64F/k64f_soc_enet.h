@@ -10,7 +10,7 @@
 #define __K64F_SOC_ENET_H
 
 #include <stdint.h>
-#include <McRTOS_kernel_services.h>
+#include <McRTOS/McRTOS_kernel_services.h>
 #include <Networking/networking.h>
 
 /**
@@ -183,7 +183,7 @@ struct enet_device_var {
      * corresponds to the number of multicast addresses added to the
      * corresponding bucket (bit in the GAUR/GALR bit hash table)
      */
-#   define ENET_MULTICAST_HASH_TABLE_NUM_BUCKETS    64    
+#   define ENET_MULTICAST_HASH_TABLE_NUM_BUCKETS    64
     uint8_t multicast_hash_table_counts[ENET_MULTICAST_HASH_TABLE_NUM_BUCKETS];
 
     /**

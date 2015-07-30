@@ -11,8 +11,8 @@
 #define _McRTOS_CONFIG_PARAMS_H
 
 #include <stdint.h>
-#include "hardware_abstractions.h"
-#include "arm_defs.h"
+#include <BoardSupport/hardware_abstractions.h>
+#include <McRTOS/arm_defs.h>
 
 /**
  * Tick Timer frequency in Hz

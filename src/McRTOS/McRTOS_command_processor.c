@@ -8,13 +8,13 @@
  * @author German Rivera
  */
 
-#include "McRTOS.h"
-#include "McRTOS_internals.h"
-#include "failure_data_capture.h"
-#include "utils.h"
-#include "McRTOS_command_processor.h"
+#include <McRTOS/McRTOS.h>
+#include <McRTOS/McRTOS_internals.h>
+#include <McRTOS/failure_data_capture.h>
+#include <McRTOS/utils.h>
+#include <McRTOS/McRTOS_command_processor.h>
 #ifdef _NETWORKING_
-#include <networking.h>
+#include <Networking/networking.h>
 #endif
 
 TODO("Remove these pragmas")

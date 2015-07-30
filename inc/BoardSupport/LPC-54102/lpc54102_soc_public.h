@@ -9,9 +9,9 @@
 #ifndef __LPC54102_SOC_PUBLIC_H
 #define __LPC54102_SOC_PUBLIC_H
 
-#include <nxp_chip.h>
-#include <arm_defs.h>
-#include <compile_time_checks.h>
+#include <BoardSupport/LPC-54102/nxp_chip.h>
+#include <McRTOS/arm_defs.h>
+#include <McRTOs/compile_time_checks.h>
 #include <stdint.h>
 
 /**
@@ -19,7 +19,7 @@
  * controller
  */
 #define SOC_NUM_INTERRUPT_CHANNELS INT32_C(45)
-#include "cortex_m_nvic.h"
+#include <BoardSupport/cortex_m_nvic.h>
 
 /**
  * CPU clock frequency in MHz
@@ -63,7 +63,7 @@ C_ASSERT(ADC_INTERRUPT_PRIORITY > SOC_HIGHEST_INTERRUPT_PRIORITY);
 #define __MPU_PRESENT   1
 #define __FPU_PRESENT   1
 #define __CHECK_DEVICE_DEFINES
-#include "core_cm4.h"
+#include <BoardSupport/CMSIS/core_cm4.h>
 
 C_ASSERT(__FPU_USED == 1);
 

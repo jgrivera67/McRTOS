@@ -9,9 +9,9 @@
 #ifndef __K64F_SOC_PUBLIC_H
 #define __K64F_SOC_PUBLIC_H
 
-#include "MK64F12.h"
-#include <arm_defs.h>
-#include <compile_time_checks.h>
+#include <BoardSupport/FRDM-K64F/MK64F12.h>
+#include <McRTOS/arm_defs.h>
+#include <McRTOS/compile_time_checks.h>
 #include <stdint.h>
 
 /**
@@ -19,7 +19,7 @@
  * controller
  */
 #define SOC_NUM_INTERRUPT_CHANNELS INT32_C(86)
-#include "cortex_m_nvic.h"
+#include <BoardSupport/cortex_m_nvic.h>
 
 /**
  * CPU clock frequency in MHz
@@ -64,7 +64,7 @@ C_ASSERT(ADC_INTERRUPT_PRIORITY > SOC_HIGHEST_INTERRUPT_PRIORITY);
  * NOTE: CMSIS parametric #defines were done in MK64F12.h
  */
 #define __CHECK_DEVICE_DEFINES
-#include "core_cm4.h"
+#include <BoardSupport/CMSIS/core_cm4.h>
 
 C_ASSERT(__FPU_USED == 1);
 

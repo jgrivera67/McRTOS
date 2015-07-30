@@ -6,8 +6,8 @@
  * @author: German Rivera
  */
 
-#include "generic_list.h"
-#include "failure_data_capture.h"
+#include <McRTOS/generic_list.h>
+#include <McRTOS/failure_data_capture.h>
 
 /**
  * Tell if a list list node is not linked to any other list node.

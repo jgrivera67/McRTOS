@@ -7,12 +7,12 @@
  *
  * @author German Rivera
  */
-#include "utils.h"
-#include "failure_data_capture.h"
-#include "hardware_abstractions.h"
-#include "McRTOS.h"
-#include "McRTOS_kernel_services.h"
-#include "McRTOS_internals.h"
+#include <McRTOS/utils.h>
+#include <McRTOS/failure_data_capture.h>
+#include <BoardSupport/hardware_abstractions.h>
+#include <McRTOS/McRTOS.h>
+#include <McRTOS/McRTOS_kernel_services.h>
+#include <McRTOS/McRTOS_internals.h>
 #include <inttypes.h>
 
 TODO("Remove these pragmas")

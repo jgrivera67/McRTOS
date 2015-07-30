@@ -8,14 +8,14 @@
  * @author German Rivera
  */
 
-#include "McRTOS.h"
-#include "McRTOS_kernel_services.h"
-#include "McRTOS_command_processor.h"
-#include "failure_data_capture.h"
-#include "utils.h"
-#include "frdm_board.h"
-#include <networking.h>
-#include <k64f_soc_enet.h>
+#include <McRTOS/McRTOS.h>
+#include <McRTOS/McRTOS_kernel_services.h>
+#include <McRTOS/McRTOS_command_processor.h>
+#include <McRTOS/failure_data_capture.h>
+#include <McRTOS/utils.h>
+#include <BoardSupport/FRDM-K64F/frdm_board.h>
+#include <Networking/networking.h>
+#include <BoardSupport/FRDM-K64F/k64f_soc_enet.h>
 #include <stdalign.h>
 
 TODO("Remove these pragmas")

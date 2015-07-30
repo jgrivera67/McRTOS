@@ -8,9 +8,9 @@
  * @author German Rivera
  */
 
-#include "McRTOS_internals.h"
-#include "failure_data_capture.h"
-#include "utils.h"
+#include <McRTOS/McRTOS_internals.h>
+#include <McRTOS/failure_data_capture.h>
+#include <McRTOS/utils.h>
 
 /**
  * Per-CPU McRTOS thread scheduler
