@@ -17,17 +17,49 @@ struct rtos_interrupt;  /* opaque type */
 /*
  * AHBCLKCTRL0, PRESET0 register fields
  */
-#define SYSCON0_IOCON_MASK  BIT(13)
-#define SYSCON0_GPIO0_MASK  BIT(14)
-#define SYSCON0_GPIO1_MASK  BIT(15)
-#define SYSCON0_PINT_MASK   BIT(18)
-#define SYSCON0_GINT_MASK   BIT(19)
+#define SYSCON0_SRAM2_MASK      BIT(4)
+#define SYSCON0_INPUTMUX_MASK   BIT(11)
+#define SYSCON0_IOCON_MASK      BIT(13)
+#define SYSCON0_GPIO0_MASK      BIT(14)
+#define SYSCON0_GPIO1_MASK      BIT(15)
+#define SYSCON0_PINT_MASK       BIT(18)
+#define SYSCON0_GINT_MASK       BIT(19)
+
+/*
+ * ASYNCAPBCLKCTRLSET register fields
+ */
+#define APBCLKCTRL_UART0_MASK   BIT(1)
+#define APBCLKCTRL_FRACDIV_MASK BIT(15)
+
+/*
+ * ASYNCAPBCTR register fields
+ */
+#define ASYNCAPBCTR_ENABLE_MASK   BIT(0)
 
 /*
  * SYSPLLCLKSEL register fields
  */
 #define SYSPLLCLKSEL_SEL_MASK    MULTI_BIT_MASK(1, 0)
 #define SYSPLLCLKSEL_SEL_SHIFT   0
+
+/*
+ * SYSPLLSSCTRL register fields
+ */
+#define SYSPLLSSCTRL_MDEC_MASK     MULTI_BIT_MASK(16, 0)
+#define SYSPLLSSCTRL_MDEC_SHIFT    0
+#define SYSPLLSSCTRL_MREQ_MASK     BIT(17)
+#define SYSPLLSSCTRL_SEL_EXT_MASK  BIT(18)
+
+/*
+ * SYSPLLSTAT register fields
+ */
+#define SYSPLLSTAT_LOCK_MASK    BIT(0)
+
+/*
+ * MAINCLKSELB register fields
+ */
+#define MAINCLKSELB_SEL_MASK    MULTI_BIT_MASK(1, 0)
+#define MAINCLKSELB_SEL_SHIFT   0
 
 /*
  * AHBCLKCTRL1, PRESET1 register fields

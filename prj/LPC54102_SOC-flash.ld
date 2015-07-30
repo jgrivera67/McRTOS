@@ -16,7 +16,7 @@ MEMORY
 {
   flash_interrupts  (rx) : ORIGIN = 0x00000000, LENGTH = 0xF4
   flash_text        (rx) : ORIGIN = 0x00000400, LENGTH = 512K - 0x400 /*?? change to 100 */
-  sram_data         (rwx) : ORIGIN = 0x02000000, LENGTH = 104K
+  sram_data         (rwx) : ORIGIN = 0x02000000, LENGTH = 96K   /* main SRAM block */
 }
 
 

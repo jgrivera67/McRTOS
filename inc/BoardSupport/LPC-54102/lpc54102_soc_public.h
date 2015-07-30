@@ -81,10 +81,10 @@ C_ASSERT(__FPU_USED == 1);
 #define SOC_FLASH_SIZE     (UINT32_C(512) * 1024)
 
 /**
- * Static RAM Memory Ranges
+ * Main Static RAM Memory Ranges
  */
-#define SOC_SRAM_BASE      UINT32_C(0x20000000)
-#define SOC_SRAM_SIZE      (UINT32_C(104) * 1024)
+#define SOC_SRAM_BASE      UINT32_C(0x02000000)
+#define SOC_SRAM_SIZE      (UINT32_C(96) * 1024)
 
 /*
  * MMIO Ranges

@@ -206,7 +206,7 @@ static const struct uart_device g_uart_devices[] =
         .urt_mmio_uart_p = LPC_USART0,
         .urt_tx_pin = PIN_INITIALIZER(PIN_PORT_0, 1, IOCON_FUNC1),
         .urt_rx_pin = PIN_INITIALIZER(PIN_PORT_0, 0, IOCON_FUNC1),
-        .urt_async_apb_control_mask = BIT(1),
+        .urt_async_apb_control_mask = APBCLKCTRL_UART0_MASK,
         .urt_rtos_interrupt_params = {
             .irp_name_p = "UART0 Interrupt",
             .irp_isr_function_p = lpc54102_uart0_irq_isr,
@@ -347,8 +347,43 @@ pll_init(void)
                              );
 
     /*
+     * Not using spread spectrum mode:
+     */
+    uint32_t current_ssctrl_reg =
+        read_32bit_mmio_register(&LPC_SYSCON->SYSPLLSSCTRL[0]);
+
+    FDC_ASSERT(current_ssctrl_reg & SYSPLLSSCTRL_SEL_EXT_MASK,
+               current_ssctrl_reg, 0);
+
+    /*
      * Power on PLL:
      */
+    write_32bit_mmio_register(&LPC_SYSCON->PDRUNCFGCLR,
+                              SYSCON_PDRUNCFG_PD_SYS_PLL);
+
+    /*
+     * this sequence acclerates the PLL lock time
+     */
+    reg_value = SYSPLLSSCTRL_SEL_EXT_MASK;
+    SET_BIT_FIELD(reg_value, SYSPLLSSCTRL_MDEC_MASK,
+                  SYSPLLSSCTRL_MDEC_SHIFT, 0x3fff);
+
+    /* Set mreq to activate */
+    write_32bit_mmio_register(&LPC_SYSCON->SYSPLLSSCTRL[0],
+                              reg_value | SYSPLLSSCTRL_MREQ_MASK);
+
+    /* clear mreq to prepare for restoring mreq */
+    write_32bit_mmio_register(&LPC_SYSCON->SYSPLLSSCTRL[0],
+                              reg_value);
+
+    /* Delay for 20 uSec @ 12Mhz*/
+    delay_loop(48);
+
+    /* set original value back with mreq */
+    write_32bit_mmio_register(&LPC_SYSCON->SYSPLLSSCTRL[0],
+                              current_ssctrl_reg | SYSPLLSSCTRL_MREQ_MASK);
+
+    /*  Turn on PLL again??? */
     write_32bit_mmio_register(&LPC_SYSCON->PDRUNCFGCLR,
                               SYSCON_PDRUNCFG_PD_SYS_PLL);
 
@@ -357,7 +392,7 @@ pll_init(void)
      */
     do {
         reg_value = read_32bit_mmio_register(&LPC_SYSCON->SYSPLLSTAT);
-    } while ((reg_value & 1) == 0);
+    } while ((reg_value & SYSPLLSTAT_LOCK_MASK) == 0);
 }
 
 
@@ -368,9 +403,10 @@ system_clocks_init(void)
     uint32_t reg_value;
 
     /*
-     * Enable IOCON clock and all GPIO port clocks:
+     * Enable clocks for IOCON, INPUTMUX and all GPIO port clocks:
      */
     reg_value = SYSCON0_IOCON_MASK |
+                SYSCON0_INPUTMUX_MASK |
                 SYSCON0_GPIO0_MASK |
                 SYSCON0_GPIO1_MASK;
 # if 0 //???
@@ -380,6 +416,11 @@ system_clocks_init(void)
 
     write_32bit_mmio_register(&LPC_SYSCON->AHBCLKCTRLSET[0], reg_value);
 
+    /*
+     * Clear reset for the GPIO ports:
+     */
+    write_32bit_mmio_register(&LPC_SYSCON->PRESETCTRLCLR[0],
+                              SYSCON0_GPIO0_MASK | SYSCON0_GPIO1_MASK);
     /*
      * Turn on the IRC by clearing the power down bit:
      */
@@ -394,15 +435,19 @@ system_clocks_init(void)
     write_32bit_mmio_register(&LPC_SYSCON->AHBCLKDIV, 0x1);
 
     /*
-     * Set main clock source to the system PLL. This will drive 24MHz
+     * Set main clock source to the system PLL output. This will drive 24MHz
      * for the main clock and 24MHz for the system clock
      */
-    write_32bit_mmio_register(&LPC_SYSCON->MAINCLKSELB, 0x2);
+    reg_value = 0;
+    SET_BIT_FIELD(reg_value, MAINCLKSELB_SEL_MASK, MAINCLKSELB_SEL_SHIFT,
+                  0x2);
+    write_32bit_mmio_register(&LPC_SYSCON->MAINCLKSELB, reg_value);
 
     /*
      * ASYSNC SYSCON needs to be on or all serial peripheral won't work.
      */
-    write_32bit_mmio_register(&LPC_SYSCON->ASYNCAPBCTRL, 0x1);
+    write_32bit_mmio_register(&LPC_SYSCON->ASYNCAPBCTRL,
+                              ASYNCAPBCTR_ENABLE_MASK);
 
     /*
      * Set asynchronous APB clock divider (for peripherals attached to the async
@@ -410,11 +455,26 @@ system_clocks_init(void)
      */
     write_32bit_mmio_register(&LPC_ASYNC_SYSCON->ASYNCCLKDIV, 0x1);
 
+#if 0
+    /*
+     * Enable clock for fractional divider for UARTs:
+     */
+    write_32bit_mmio_register(&LPC_ASYNC_SYSCON->ASYNCAPBCLKCTRLSET,
+                              APBCLKCTRL_FRACDIV_MASK);
+#endif
+
     /*
      * Set asynchronous APB clock source to IRC input:
      */
     write_32bit_mmio_register(&LPC_ASYNC_SYSCON->ASYNCAPBCLKSELA, 0x0);
     write_32bit_mmio_register(&LPC_ASYNC_SYSCON->ASYNCAPBCLKSELB, 0x3);
+
+    /*
+     * Set CLKOUT clock source and divider to 1:
+     */
+    write_32bit_mmio_register(&LPC_SYSCON->CLKOUTSELA, 0x0);
+    write_32bit_mmio_register(&LPC_SYSCON->CLKOUTSELB, 0x0);
+    write_32bit_mmio_register(&LPC_SYSCON->CLKOUTDIV, 0x1);
 
     /*
      * Enable clocks for system FIFO peripheral and clear its reset:
@@ -434,6 +494,11 @@ system_clocks_init(void)
 void
 soc_early_init(void)
 {
+    /*
+     * Enable clock for SRAM2, which is disabled upon reset
+     */
+    write_32bit_mmio_register(&LPC_SYSCON->AHBCLKCTRLSET[0],
+                              SYSCON0_SRAM2_MASK);
 }
 
 
@@ -734,6 +799,12 @@ read_input_pin(const struct gpio_pin *gpio_pin_p)
         read_32bit_mmio_register(&LPC_GPIO->PIN[gpio_pin_p->pin_info.pin_port]);
 
     bool result = ((reg_value & gpio_pin_p->pin_bit_mask) != 0);
+
+#   ifdef DEBUG
+     reg_value = read_8bit_mmio_register(&LPC_GPIO->B[gpio_pin_p->pin_info.pin_port]
+                                                     [gpio_pin_p->pin_info.pin_index]);
+    DBG_ASSERT(reg_value == result, reg_value, result);
+#   endif
 
     if (!caller_was_privileged) {
         rtos_exit_privileged_mode();
