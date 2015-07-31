@@ -20,7 +20,6 @@ endif
 BASE_DIR := $(dir $(CURDIR))
 SOURCE_DIR := $(BASE_DIR)src
 INCLUDE_DIR := $(BASE_DIR)src/include
-PROJECT_DIR := $(BASE_DIR)prj
 
 #
 # Check that this makefile is not being run from the source directory
@@ -99,7 +98,7 @@ else
     #EXTRA_MCFLAGS += -fomit-frame-pointer
 endif
 
-LDSCRIPT = $(PROJECT_DIR)/$(SYSTEM_ON_CHIP)-flash.ld
+LDSCRIPT = $(SOURCE_DIR)/BoardSupport/$(PLATFORM)/$(SYSTEM_ON_CHIP)-flash.ld
 
 
 # $(call source-to-object, source-file-list)

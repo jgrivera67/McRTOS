@@ -51,21 +51,16 @@ badd +1 src/Applications/McRTOS-demo/main.c
 badd +16 src/Applications/autonomous_car/main.c
 badd +11 src/Applications/autonomous_car/module.mk
 badd +66 src/McRTOS/TMP_startup_ARMCM0plus.S
-badd +1 prj/LPC2478-STK-flash.ld
-badd +1 prj/FRDM-KL25Z-flash.ld
-badd +52 prj/TMP_gcc_arm.ld
 badd +655 src/include/BoardSupport/CMSIS/core_cm0plus.h
 badd +662 src/include/BoardSupport/CMSIS/core_cmInstr.h
 badd +340 src/include/BoardSupport/CMSIS/core_cmFunc.h
 badd +1559 src/include/BoardSupport/FRDM-KL25Z/MKL25Z4.h
-badd +31 prj/temp.ld
 badd +1 src/McRTOS/McRTOS_crt_armv6-m.S
 badd +476 src/McRTOS/McRTOS_startup_arm_cortex_m.c
 badd +513 src/BoardSupport/FRDM-KL25Z/frdm_kl25z_hardware_abstractions.c
 badd +87 src/include/McRTOS/McRTOS_startup_arm_cortex_m.h
 badd +101 src/include/McRTOS/McRTOS_arm_cortex_m.h
 badd +58 src/include/BoardSupport/FRDM-KL25Z/kl25z_soc.h
-badd +101 prj/KL25Z_SOC-flash.ld
 badd +70 src/include/BoardSupport/LPC2478-STK/lpc2478_uarts.h
 badd +78 src/include/BoardSupport/LPC2478-STK/lpc2478_gpio.h
 badd +2 src/McRTOS/McRTOS_kernel_services_cortex_m.c
@@ -99,7 +94,6 @@ badd +4 src/Applications/McRTOS-FRDM/module.mk
 badd +14 src/include/BoardSupport/FRDM-K64F/MK64F12.h
 badd +48 src/include/BoardSupport/CMSIS/core_cm4.h
 badd +115 /Users/b46482/embsys/projects/McRTOS/src/include/BoardSupport/FRDM-K20D50/k20d5_soc_public.h
-badd +100 prj/K64F_SOC-flash.ld
 badd +4 src/BoardSupport/FRDM-K64F/frdm_board_hardware_abstractions.c
 badd +216 src/Applications/frdm_demo/main.c
 badd +611 src/BoardSupport/LPC2478-STK/lpc2478_ethernet.c
@@ -129,13 +123,12 @@ badd +1 src/include/McRTOS/McRTOS_command_processor.h
 badd +295 src/include/BoardSupport/FRDM-K64F/k64f_soc_public.h
 badd +767 src/BoardSupport/LaunchPad-LM4F120/lm4f120_soc_hardware_abstractions.c
 badd +90 src/BoardSupport/LaunchPad-LM4F120/launchpad_board_hardware_abstractions.c
-badd +4 prj/LM4F120_SOC-flash.ld
 badd +221 src/Applications/launchpad_demo/main.c
 badd +1 src/BoardSupport/LPC-54102/lpcxpresso_board_hardware_abstractions.c
 badd +201 src/BoardSupport/LPC-54102/lpc54102_soc_hardware_abstractions.c
 badd +162 src/include/BoardSupport/LPC-54102/lpc54102_soc_public.h
 badd +18 src/include/BoardSupport/LPC-54102/lpc54102_soc.h
-badd +0 prj/LPC54102_SOC-flash.ld
+badd +0 src/BoardSupport/LPC-54102/LPC54102_SOC-flash.ld
 badd +25 ~/MyProjects/EMBSYS/projects/McRTOS/src/include/BoardSupport/FRDM-K20D50/k20d5_soc_public.h
 badd +71 src/include/BoardSupport/LaunchPad-LM4F120/lm4f120_soc_public.h
 badd +102 ~/MyProjects/EMBSYS/projects/McRTOS/src/include/BoardSupport/FRDM-K20D50/MK20D5.h
@@ -208,7 +201,7 @@ normal! zt
 normal! 014|
 wincmd w
 argglobal
-edit prj/LPC54102_SOC-flash.ld
+edit src/BoardSupport/LPC-54102/LPC54102_SOC-flash.ld
 setlocal fdm=manual
 setlocal fde=0
 setlocal fmr={{{,}}}
@@ -316,7 +309,6 @@ normal! zt
 normal! 018|
 wincmd w
 argglobal
-edit prj/LM4F120_SOC-flash.ld
 setlocal fdm=manual
 setlocal fde=0
 setlocal fmr={{{,}}}
