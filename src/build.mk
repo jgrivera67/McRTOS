@@ -19,7 +19,7 @@ endif
 
 BASE_DIR := $(dir $(CURDIR))
 SOURCE_DIR := $(BASE_DIR)src
-INCLUDE_DIR := $(BASE_DIR)inc
+INCLUDE_DIR := $(BASE_DIR)src/include
 PROJECT_DIR := $(BASE_DIR)prj
 
 #

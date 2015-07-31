@@ -15,37 +15,37 @@ badd +11 src/Applications/LPC2478-STK/McRTOS-demo/module.mk
 badd +5 src/McRTOS/module.mk
 badd +31 src/BoardSupport/module.mk
 badd +602 src/McRTOS/McRTOS_startup.c
-badd +576 inc/McRTOS/McRTOS.h
-badd +162 inc/McRTOS/McRTOS_internals.h
-badd +73 inc/McRTOS/McRTOS_config_parameters.h
+badd +576 src/include/McRTOS/McRTOS.h
+badd +162 src/include/McRTOS/McRTOS_internals.h
+badd +73 src/include/McRTOS/McRTOS_config_parameters.h
 badd +134 src/McRTOS/McRTOS_kernel_services.c
 badd +15 src/McRTOS/McRTOS_crt_armv4.s
 badd +508 src/McRTOS/McRTOS_kernel_services_armv4.s
-badd +415 inc/McRTOS/McRTOS_kernel_services.h
+badd +415 src/include/McRTOS/McRTOS_kernel_services.h
 badd +1 src/McRTOS/McRTOS_execution_controller.c
 badd +318 src/BoardSupport/LPC2478-STK/lpc2478_interrupt_handlers.s
 badd +4 src/McRTOS/McRTOS_interrupt_handlers_armv4.s
 badd +137 src/McRTOS/McRTOS_interrupt_service_routines_armv4.s
 badd +32 src/McRTOS/failure_data_capture.c
-badd +265 inc/McRTOS/failure_data_capture.h
-badd +89 inc/McRTOS/compile_time_checks.h
+badd +265 src/include/McRTOS/failure_data_capture.h
+badd +89 src/include/McRTOS/compile_time_checks.h
 badd +73 src/McRTOS/run_time_exception_handlers_armv4.s
 badd +342 src/McRTOS/McRTOS_system_call_wrappers_armv4.s
 badd +837 src/McRTOS/utils.c
-badd +38 inc/McRTOS/utils.h
+badd +38 src/include/McRTOS/utils.h
 badd +1183 src/BoardSupport/LPC2478-STK/lpc2478_hardware_abstractions.c
-badd +83 inc/BoardSupport/hardware_abstractions.h
-badd +156 inc/BoardSupport/LPC2478-STK/lpc2478_stk_board.h
-badd +137 inc/BoardSupport/arm_defs.h
-badd +2 inc/BoardSupport/LPC2478-STK/lpc2478.h
-badd +42 inc/BoardSupport/LPC2478-STK/lpc2478_stk_board_public.h
-badd +6 inc/BoardSupport/LPC2478-STK/lpc2478_arm_defs.h
-badd +215 inc/BoardSupport/LPC2478-STK/lpc2478_vic.h
+badd +83 src/include/BoardSupport/hardware_abstractions.h
+badd +156 src/include/BoardSupport/LPC2478-STK/lpc2478_stk_board.h
+badd +137 src/include/BoardSupport/arm_defs.h
+badd +2 src/include/BoardSupport/LPC2478-STK/lpc2478.h
+badd +42 src/include/BoardSupport/LPC2478-STK/lpc2478_stk_board_public.h
+badd +6 src/include/BoardSupport/LPC2478-STK/lpc2478_arm_defs.h
+badd +215 src/include/BoardSupport/LPC2478-STK/lpc2478_vic.h
 badd +11 src/BoardSupport/LPC2478-STK/lpc2478_lcd.c
 badd +6 src/BoardSupport/LPC2478-STK/lpc2478_touch_screen.c
-badd +4 inc/BoardSupport/LPC2478-STK/lpc2478_lcd.h
-badd +9 inc/BoardSupport/lcd.h
-badd +364 inc/McRTOS/arm_defs.h
+badd +4 src/include/BoardSupport/LPC2478-STK/lpc2478_lcd.h
+badd +9 src/include/BoardSupport/lcd.h
+badd +364 src/include/McRTOS/arm_defs.h
 badd +9 src/Applications/McRTOS-demo/module.mk
 badd +1 src/Applications/McRTOS-demo/main.c
 badd +16 src/Applications/autonomous_car/main.c
@@ -54,20 +54,20 @@ badd +66 src/McRTOS/TMP_startup_ARMCM0plus.S
 badd +1 prj/LPC2478-STK-flash.ld
 badd +1 prj/FRDM-KL25Z-flash.ld
 badd +52 prj/TMP_gcc_arm.ld
-badd +655 inc/BoardSupport/CMSIS/core_cm0plus.h
-badd +662 inc/BoardSupport/CMSIS/core_cmInstr.h
-badd +340 inc/BoardSupport/CMSIS/core_cmFunc.h
-badd +1559 inc/BoardSupport/FRDM-KL25Z/MKL25Z4.h
+badd +655 src/include/BoardSupport/CMSIS/core_cm0plus.h
+badd +662 src/include/BoardSupport/CMSIS/core_cmInstr.h
+badd +340 src/include/BoardSupport/CMSIS/core_cmFunc.h
+badd +1559 src/include/BoardSupport/FRDM-KL25Z/MKL25Z4.h
 badd +31 prj/temp.ld
 badd +1 src/McRTOS/McRTOS_crt_armv6-m.S
 badd +476 src/McRTOS/McRTOS_startup_arm_cortex_m.c
 badd +513 src/BoardSupport/FRDM-KL25Z/frdm_kl25z_hardware_abstractions.c
-badd +87 inc/McRTOS/McRTOS_startup_arm_cortex_m.h
-badd +101 inc/McRTOS/McRTOS_arm_cortex_m.h
-badd +58 inc/BoardSupport/FRDM-KL25Z/kl25z_soc.h
+badd +87 src/include/McRTOS/McRTOS_startup_arm_cortex_m.h
+badd +101 src/include/McRTOS/McRTOS_arm_cortex_m.h
+badd +58 src/include/BoardSupport/FRDM-KL25Z/kl25z_soc.h
 badd +101 prj/KL25Z_SOC-flash.ld
-badd +70 inc/BoardSupport/LPC2478-STK/lpc2478_uarts.h
-badd +78 inc/BoardSupport/LPC2478-STK/lpc2478_gpio.h
+badd +70 src/include/BoardSupport/LPC2478-STK/lpc2478_uarts.h
+badd +78 src/include/BoardSupport/LPC2478-STK/lpc2478_gpio.h
 badd +2 src/McRTOS/McRTOS_kernel_services_cortex_m.c
 badd +29 src/McRTOS/McRTOS_kernel_services_arm_cortex_m.c
 badd +12 src/McRTOS/McRTOS_kernel_services_armv6_m.c
@@ -80,39 +80,39 @@ badd +46 src/McRTOS/McRTOS_run_time_exception_handlers_arm_cortex_m.s
 badd +1 src/McRTOS/McRTOS_system_call_wrappers_arm_cortex_m.s
 badd +126 src/McRTOS/McRTOS_debugger.c
 badd +250 src/McRTOS/McRTOS_kernel_services_arm_cortex_m.s
-badd +1 inc/McRTOS/arm_cortex_m_macros.s
-badd +18 inc/BoardSupport/FRDM-KL25Z/frdm_board.h
-badd +13 inc/BoardSupport/FRDM-KL25Z/tfc_board.h
+badd +1 src/include/McRTOS/arm_cortex_m_macros.s
+badd +18 src/include/BoardSupport/FRDM-KL25Z/frdm_board.h
+badd +13 src/include/BoardSupport/FRDM-KL25Z/tfc_board.h
 badd +25 src/BoardSupport/FRDM-KL25Z/tfc_board_hardware_abstractions.c
 badd +144 src/BoardSupport/FRDM-KL25Z/frdm_board_hardware_abstractions.c
 badd +15 src/BoardSupport/FRDM-KL25Z/kl25z_hardware_abstractions.c
 badd +1073 src/BoardSupport/FRDM-KL25Z/kl25z_soc_hardware_abstractions.c
-badd +101 inc/BoardSupport/FRDM-KL25Z/kl25z_soc_public.h
+badd +101 src/include/BoardSupport/FRDM-KL25Z/kl25z_soc_public.h
 badd +77 src/Applications/McRTOS-FRDM/main.c
-badd +1 /Users/b46482/embsys/projects/McRTOS/inc/BoardSupport/FRDM-K64F/k64f_soc_public.h
+badd +1 /Users/b46482/embsys/projects/McRTOS/src/include/BoardSupport/FRDM-K64F/k64f_soc_public.h
 badd +114 /Users/b46482/embsys/projects/McRTOS/src/BoardSupport/LM4F120-LaunchPad/lm4f120_soc_hardware_abstractions.c
 badd +1685 src/BoardSupport/FRDM-K64F/k64f_soc_hardware_abstractions.c
 badd +12 src/BoardSupport/frdm_board_hardware_abstractions.c
-badd +18 inc/BoardSupport/frdm_board.h
-badd +15 inc/BoardSupport/FRDM-K64F/k64f_soc.h
+badd +18 src/include/BoardSupport/frdm_board.h
+badd +15 src/include/BoardSupport/FRDM-K64F/k64f_soc.h
 badd +4 src/Applications/McRTOS-FRDM/module.mk
-badd +14 inc/BoardSupport/FRDM-K64F/MK64F12.h
-badd +48 inc/BoardSupport/CMSIS/core_cm4.h
-badd +115 /Users/b46482/embsys/projects/McRTOS/inc/BoardSupport/FRDM-K20D50/k20d5_soc_public.h
+badd +14 src/include/BoardSupport/FRDM-K64F/MK64F12.h
+badd +48 src/include/BoardSupport/CMSIS/core_cm4.h
+badd +115 /Users/b46482/embsys/projects/McRTOS/src/include/BoardSupport/FRDM-K20D50/k20d5_soc_public.h
 badd +100 prj/K64F_SOC-flash.ld
 badd +4 src/BoardSupport/FRDM-K64F/frdm_board_hardware_abstractions.c
 badd +216 src/Applications/frdm_demo/main.c
 badd +611 src/BoardSupport/LPC2478-STK/lpc2478_ethernet.c
 badd +259 /Users/b46482/ide/vimrc.vim
-badd +498 /Users/b46482/embsys/projects/McRTOS/inc/BoardSupport/LPC2478-STK/lpc2478_ethernet.h
+badd +498 /Users/b46482/embsys/projects/McRTOS/src/include/BoardSupport/LPC2478-STK/lpc2478_ethernet.h
 badd +773 src/BoardSupport/FRDM-K64F/k64f_soc_enet.c
 badd +1 src/Applications/frdm_demo/module.mk
 badd +1 src/McRTOS_tcpip/module.mk
 badd +18 src/McRTOS_tcpip/McRTOS_tcpip.c
-badd +18 inc/McRTOS_tcpip/McRTOS_tcpip.h
+badd +18 src/include/McRTOS_tcpip/McRTOS_tcpip.h
 badd +7 /Users/b46482/embsys/projects/McRTOS/src/Networking/lwip/src/netif/etharp.c
 badd +30 src/Networking/networking.c
-badd +20 inc/Networking/networking.h
+badd +20 src/include/Networking/networking.h
 badd +8 src/Networking/module.mk
 badd +150 /Users/b46482/embsys/projects/McRTOS/src/Networking/lwip_glue/ethernetif.c
 badd +37 /Users/b46482/embsys/projects/McRTOS/src/Networking/lwip/src/netif/ethernetif.c
@@ -123,24 +123,24 @@ badd +6 src/Networking/lwip_glue/sys_arch.c
 badd +470 /Users/b46482/embsys/projects/McRTOS/src/Networking/lwip/src/api/tcpip.c
 badd +1293 /Users/b46482/embsys/projects/McRTOS/src/Networking/lwip/src/include/lwip/opt.h
 badd +369 /Users/b46482/embsys/projects/McRTOS/src/Networking/lwip/src/netif/slipif.c
-badd +11 inc/BoardSupport/FRDM-K64F/k64f_soc_enet.h
+badd +11 src/include/BoardSupport/FRDM-K64F/k64f_soc_enet.h
 badd +1 src/McRTOS/McRTOS_command_processor.c
-badd +1 inc/McRTOS/McRTOS_command_processor.h
-badd +295 inc/BoardSupport/FRDM-K64F/k64f_soc_public.h
+badd +1 src/include/McRTOS/McRTOS_command_processor.h
+badd +295 src/include/BoardSupport/FRDM-K64F/k64f_soc_public.h
 badd +767 src/BoardSupport/LaunchPad-LM4F120/lm4f120_soc_hardware_abstractions.c
 badd +90 src/BoardSupport/LaunchPad-LM4F120/launchpad_board_hardware_abstractions.c
 badd +4 prj/LM4F120_SOC-flash.ld
 badd +221 src/Applications/launchpad_demo/main.c
 badd +1 src/BoardSupport/LPC-54102/lpcxpresso_board_hardware_abstractions.c
 badd +201 src/BoardSupport/LPC-54102/lpc54102_soc_hardware_abstractions.c
-badd +162 inc/BoardSupport/LPC-54102/lpc54102_soc_public.h
-badd +18 inc/BoardSupport/LPC-54102/lpc54102_soc.h
+badd +162 src/include/BoardSupport/LPC-54102/lpc54102_soc_public.h
+badd +18 src/include/BoardSupport/LPC-54102/lpc54102_soc.h
 badd +0 prj/LPC54102_SOC-flash.ld
-badd +25 ~/MyProjects/EMBSYS/projects/McRTOS/inc/BoardSupport/FRDM-K20D50/k20d5_soc_public.h
-badd +71 inc/BoardSupport/LaunchPad-LM4F120/lm4f120_soc_public.h
-badd +102 ~/MyProjects/EMBSYS/projects/McRTOS/inc/BoardSupport/FRDM-K20D50/MK20D5.h
-badd +49 ~/MyProjects/EMBSYS/projects/McRTOS/inc/BoardSupport/cortex_m_nvic.h
-badd +0 inc/BoardSupport/LPC-54102/nxp_chip.h
+badd +25 ~/MyProjects/EMBSYS/projects/McRTOS/src/include/BoardSupport/FRDM-K20D50/k20d5_soc_public.h
+badd +71 src/include/BoardSupport/LaunchPad-LM4F120/lm4f120_soc_public.h
+badd +102 ~/MyProjects/EMBSYS/projects/McRTOS/src/include/BoardSupport/FRDM-K20D50/MK20D5.h
+badd +49 ~/MyProjects/EMBSYS/projects/McRTOS/src/include/BoardSupport/cortex_m_nvic.h
+badd +0 src/include/BoardSupport/LPC-54102/nxp_chip.h
 silent! argdel *
 set lines=53 columns=207
 winpos 1 1
@@ -426,7 +426,7 @@ normal! zt
 normal! 0
 wincmd w
 argglobal
-edit inc/McRTOS/McRTOS_arm_cortex_m.h
+edit src/include/McRTOS/McRTOS_arm_cortex_m.h
 setlocal fdm=manual
 setlocal fde=0
 setlocal fmr={{{,}}}
@@ -462,7 +462,7 @@ normal! zt
 normal! 0
 wincmd w
 argglobal
-edit inc/McRTOS/McRTOS.h
+edit src/include/McRTOS/McRTOS.h
 setlocal fdm=manual
 setlocal fde=0
 setlocal fmr={{{,}}}
@@ -480,7 +480,7 @@ normal! zt
 normal! 03|
 wincmd w
 argglobal
-edit inc/McRTOS/McRTOS_config_parameters.h
+edit src/include/McRTOS/McRTOS_config_parameters.h
 setlocal fdm=manual
 setlocal fde=0
 setlocal fmr={{{,}}}
@@ -498,7 +498,7 @@ normal! zt
 normal! 0
 wincmd w
 argglobal
-edit inc/McRTOS/McRTOS_internals.h
+edit src/include/McRTOS/McRTOS_internals.h
 setlocal fdm=manual
 setlocal fde=0
 setlocal fmr={{{,}}}
@@ -559,7 +559,7 @@ normal! zt
 normal! 0
 wincmd w
 argglobal
-edit inc/McRTOS/McRTOS_command_processor.h
+edit src/include/McRTOS/McRTOS_command_processor.h
 setlocal fdm=manual
 setlocal fde=0
 setlocal fmr={{{,}}}
@@ -650,7 +650,7 @@ normal! zt
 normal! 0
 wincmd w
 argglobal
-edit inc/McRTOS/McRTOS_kernel_services.h
+edit src/include/McRTOS/McRTOS_kernel_services.h
 setlocal fdm=manual
 setlocal fde=0
 setlocal fmr={{{,}}}
@@ -668,7 +668,7 @@ normal! zt
 normal! 0
 wincmd w
 argglobal
-edit inc/McRTOS/McRTOS_internals.h
+edit src/include/McRTOS/McRTOS_internals.h
 setlocal fdm=manual
 setlocal fde=0
 setlocal fmr={{{,}}}
@@ -774,7 +774,7 @@ normal! zt
 normal! 0
 wincmd w
 argglobal
-edit inc/McRTOS/arm_defs.h
+edit src/include/McRTOS/arm_defs.h
 setlocal fdm=manual
 setlocal fde=0
 setlocal fmr={{{,}}}
@@ -792,7 +792,7 @@ normal! zt
 normal! 019|
 wincmd w
 argglobal
-edit inc/McRTOS/arm_cortex_m_macros.s
+edit src/include/McRTOS/arm_cortex_m_macros.s
 setlocal fdm=manual
 setlocal fde=0
 setlocal fmr={{{,}}}
@@ -917,7 +917,7 @@ normal! zt
 normal! 0
 wincmd w
 argglobal
-edit inc/McRTOS/compile_time_checks.h
+edit src/include/McRTOS/compile_time_checks.h
 setlocal fdm=manual
 setlocal fde=0
 setlocal fmr={{{,}}}
@@ -935,7 +935,7 @@ normal! zt
 normal! 02|
 wincmd w
 argglobal
-edit inc/McRTOS/failure_data_capture.h
+edit src/include/McRTOS/failure_data_capture.h
 setlocal fdm=manual
 setlocal fde=0
 setlocal fmr={{{,}}}
@@ -992,7 +992,7 @@ normal! zt
 normal! 0
 wincmd w
 argglobal
-edit inc/McRTOS/utils.h
+edit src/include/McRTOS/utils.h
 setlocal fdm=manual
 setlocal fde=0
 setlocal fmr={{{,}}}
@@ -1080,7 +1080,7 @@ normal! zt
 normal! 0
 wincmd w
 argglobal
-edit inc/BoardSupport/hardware_abstractions.h
+edit src/include/BoardSupport/hardware_abstractions.h
 setlocal fdm=manual
 setlocal fde=0
 setlocal fmr={{{,}}}
@@ -1098,7 +1098,7 @@ normal! zt
 normal! 031|
 wincmd w
 argglobal
-edit inc/BoardSupport/LPC-54102/lpc54102_soc_public.h
+edit src/include/BoardSupport/LPC-54102/lpc54102_soc_public.h
 setlocal fdm=manual
 setlocal fde=0
 setlocal fmr={{{,}}}
@@ -1116,7 +1116,7 @@ normal! zt
 normal! 035|
 wincmd w
 argglobal
-edit inc/BoardSupport/LPC-54102/lpc54102_soc.h
+edit src/include/BoardSupport/LPC-54102/lpc54102_soc.h
 setlocal fdm=manual
 setlocal fde=0
 setlocal fmr={{{,}}}
@@ -1144,7 +1144,7 @@ exe '4resize ' . ((&lines * 16 + 26) / 53)
 exe 'vert 4resize ' . ((&columns * 87 + 103) / 207)
 exe '5resize ' . ((&lines * 16 + 26) / 53)
 exe 'vert 5resize ' . ((&columns * 87 + 103) / 207)
-tabedit inc/BoardSupport/LPC-54102/nxp_chip.h
+tabedit src/include/BoardSupport/LPC-54102/nxp_chip.h
 set splitbelow splitright
 wincmd _ | wincmd |
 vsplit
@@ -1193,7 +1193,7 @@ normal! zt
 normal! 052|
 wincmd w
 argglobal
-edit inc/McRTOS/McRTOS_arm_cortex_m.h
+edit src/include/McRTOS/McRTOS_arm_cortex_m.h
 setlocal fdm=manual
 setlocal fde=0
 setlocal fmr={{{,}}}
@@ -1211,7 +1211,7 @@ normal! zt
 normal! 0
 wincmd w
 argglobal
-edit inc/BoardSupport/CMSIS/core_cm4.h
+edit src/include/BoardSupport/CMSIS/core_cm4.h
 setlocal fdm=manual
 setlocal fde=0
 setlocal fmr={{{,}}}
@@ -1229,7 +1229,7 @@ normal! zt
 normal! 017|
 wincmd w
 argglobal
-edit inc/BoardSupport/CMSIS/core_cmInstr.h
+edit src/include/BoardSupport/CMSIS/core_cmInstr.h
 setlocal fdm=manual
 setlocal fde=0
 setlocal fmr={{{,}}}
@@ -1247,7 +1247,7 @@ normal! zt
 normal! 0
 wincmd w
 argglobal
-edit inc/BoardSupport/CMSIS/core_cmFunc.h
+edit src/include/BoardSupport/CMSIS/core_cmFunc.h
 setlocal fdm=manual
 setlocal fde=0
 setlocal fmr={{{,}}}
