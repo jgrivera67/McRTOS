@@ -81,9 +81,9 @@ C_ASSERT(__FPU_USED == 1);
 #define SOC_FLASH_SIZE     (UINT32_C(512) * 1024)
 
 /**
- * Main Static RAM Memory Ranges
+ * Main Static RAM Memory Ranges (combined SRAM0 and SRAM1 banks)
  */
-#define SOC_SRAM_BASE      UINT32_C(0x02000000)
+#define SOC_SRAM_BASE      LPC_SRAM0_BASE
 #define SOC_SRAM_SIZE      (UINT32_C(96) * 1024)
 
 /*
@@ -101,7 +101,9 @@ C_ASSERT(__FPU_USED == 1);
         (((uintptr_t)(_io_addr) >= SOC_PERIPHERAL_BRIDGE_MIN_ADDR &&    \
           (uintptr_t)(_io_addr) <= SOC_PERIPHERAL_BRIDGE_MAX_ADDR) ||   \
          ((uintptr_t)(_io_addr) >= SOC_PRIVATE_PERIPHERALS_MIN_ADDR &&  \
-          (uintptr_t)(_io_addr) <= SOC_PRIVATE_PERIPHERALS_MAX_ADDR))
+          (uintptr_t)(_io_addr) <= SOC_PRIVATE_PERIPHERALS_MAX_ADDR) || \
+         ((uintptr_t)(_io_addr) >= LPC_GPIO_PORT_BASE &&                \
+          (uintptr_t)(_io_addr) < LPC_FIFO_BASE + sizeof(LPC_FIFO_T)))
 
 /**
  * Check that an address is in flash memory and it is not address 0x0
@@ -114,8 +116,10 @@ C_ASSERT(__FPU_USED == 1);
  * Check that an address is in RAM memory
  */
 #define BOARD_VALID_RAM_ADDRESS(_addr) \
-        ((uintptr_t)(_addr) >= SOC_SRAM_BASE &&                        \
-         (uintptr_t)(_addr) < SOC_SRAM_BASE + SOC_SRAM_SIZE)
+        (((uintptr_t)(_addr) >= SOC_SRAM_BASE &&                        \
+          (uintptr_t)(_addr) < SOC_SRAM_BASE + SOC_SRAM_SIZE) ||        \
+         ((uintptr_t)(_addr) >= LPC_SRAM2_BASE &&                       \
+          (uintptr_t)(_addr) < LPC_SRAM2_BASE + 8182))
 
 /**
  * Max number of PWM channels in a PWM device
