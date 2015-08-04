@@ -6,14 +6,14 @@
  * @author German Rivera
  */
 
-#include "hardware_abstractions.h"
-#include "lm4f120_soc.h"
-#include "launchpad_board.h"
-#include "McRTOS_arm_cortex_m.h"
-#include "failure_data_capture.h"
-#include "utils.h"
-#include "McRTOS_config_parameters.h"
-#include "McRTOS_kernel_services.h"
+#include <BoardSupport/hardware_abstractions.h>
+#include <BoardSupport/LaunchPad-LM4F120/lm4f120_soc.h>
+#include <BoardSupport/LaunchPad-LM4F120/launchpad_board.h>
+#include <McRTOS/McRTOS_arm_cortex_m.h>
+#include <McRTOS/failure_data_capture.h>
+#include <McRTOS/utils.h>
+#include <McRTOS/McRTOS_config_parameters.h>
+#include <McRTOS/McRTOS_kernel_services.h>
 
 #pragma GCC diagnostic ignored "-Wunused-parameter" //???
 #pragma GCC diagnostic ignored "-Wunused-variable" //???
@@ -300,7 +300,7 @@ uint64_t __attribute__ ((section(".mtb_buf")))
 /**
  *  SoC-specific early initialization to be invoked at the beginning of
  *  the Reset exception handler.
- */    
+ */
 void
 soc_early_init(void)
 {
@@ -676,7 +676,7 @@ deactivate_output_pin(const struct gpio_pin *pin_info_p)
 {
     uint32_t reg_value;
     volatile struct gpio_port *pin_gpio_port_p = pin_info_p->pin_gpio_port_p;
-    
+
     bool caller_was_privileged = rtos_enter_privileged_mode();
 
 #   ifdef DEBUG

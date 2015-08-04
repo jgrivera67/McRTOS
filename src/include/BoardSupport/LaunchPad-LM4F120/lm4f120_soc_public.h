@@ -9,10 +9,10 @@
 #ifndef __LM4F120_SOC_PUBLIC_H
 #define __LM4F120_SOC_PUBLIC_H
 
-#include "arm_defs.h"
-#include "compile_time_checks.h"
-#include "tivaware/hw_memmap.h"
-#include "tivaware/tm4c123gh6pm.h"
+#include <McRTOS/arm_defs.h>
+#include <McRTOS/compile_time_checks.h>
+#include <BoardSupport/LaunchPad-LM4F120/tivaware/hw_memmap.h>
+#include <BoardSupport/LaunchPad-LM4F120/tivaware/tm4c123gh6pm.h>
 #include <stdint.h>
 
 /**
@@ -20,7 +20,7 @@
  * controller
  */
 #define SOC_NUM_INTERRUPT_CHANNELS INT32_C(139)
-#include "cortex_m_nvic.h"
+#include <BoardSupport/cortex_m_nvic.h>
 
 /**
  * CPU clock frequency in MHz
@@ -49,7 +49,7 @@
 #define __MPU_PRESENT   1
 #define __FPU_PRESENT   1
 #define __CHECK_DEVICE_DEFINES
-#include "core_cm4.h"
+#include <BoardSupport/CMSIS/core_cm4.h>
 
 #pragma GCC diagnostic pop
 

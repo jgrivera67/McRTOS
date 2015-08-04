@@ -46,7 +46,7 @@ SECTIONS
     KEEP (*(.init))
     KEEP (*(.fini))
 
-    . = ALIGN(128 * 1024); /* MPU_REGION_ALIGNMENT);??? */
+    . = ALIGN(MPU_REGION_ALIGNMENT);
     __flash_text_end = .;
     __flash_initialized_data_start = .;
   } >flash_text

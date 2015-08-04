@@ -6,14 +6,14 @@
  * @author German Rivera
  */
 
-#include "hardware_abstractions.h"
-#include "lm4f120_soc.h"
-#include "McRTOS_arm_cortex_m.h"
-#include "failure_data_capture.h"
-#include "utils.h"
-#include "McRTOS_config_parameters.h"
-#include "McRTOS_kernel_services.h"
-#include "launchpad_board.h"
+#include <BoardSupport/hardware_abstractions.h>
+#include <BoardSupport/LaunchPad-LM4F120/lm4f120_soc.h>
+#include <McRTOS/McRTOS_arm_cortex_m.h>
+#include <McRTOS/failure_data_capture.h>
+#include <McRTOS/utils.h>
+#include <McRTOS/McRTOS_config_parameters.h>
+#include <McRTOS/McRTOS_kernel_services.h>
+#include <BoardSupport/LaunchPad-LM4F120/launchpad_board.h>
 
 #pragma GCC diagnostic ignored "-Wunused-parameter" //???
 

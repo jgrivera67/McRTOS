@@ -22,7 +22,7 @@ badd +134 src\McRTOS\McRTOS_kernel_services.c
 badd +15 src\McRTOS\McRTOS_crt_armv4.s
 badd +508 src\McRTOS\McRTOS_kernel_services_armv4.s
 badd +415 inc\McRTOS\McRTOS_kernel_services.h
-badd +335 src\McRTOS\McRTOS_execution_controller.c
+badd +1 src\McRTOS\McRTOS_execution_controller.c
 badd +318 src\BoardSupport\LPC2478-STK\lpc2478_interrupt_handlers.s
 badd +4 src\McRTOS\McRTOS_interrupt_handlers_armv4.s
 badd +137 src\McRTOS\McRTOS_interrupt_service_routines_armv4.s
@@ -96,7 +96,7 @@ badd +12 src\BoardSupport\frdm_board_hardware_abstractions.c
 badd +18 inc\BoardSupport\frdm_board.h
 badd +343 inc\BoardSupport\FRDM-K64F\k64f_soc.h
 badd +4 src\Applications\McRTOS-FRDM\module.mk
-badd +20 inc\BoardSupport\FRDM-K64F\MK64F12.h
+badd +1 inc\BoardSupport\FRDM-K64F\MK64F12.h
 badd +48 inc\BoardSupport\CMSIS\core_cm4.h
 badd +115 \Users\b46482\embsys\projects\McRTOS\inc\BoardSupport\FRDM-K20D50\k20d5_soc_public.h
 badd +12 prj\K64F_SOC-flash.ld
@@ -127,10 +127,11 @@ badd +1 inc\BoardSupport\FRDM-K64F\k64f_soc_enet.h
 badd +1 src\McRTOS\McRTOS_command_processor.c
 badd +1 inc\McRTOS\McRTOS_command_processor.h
 badd +1 inc\BoardSupport\FRDM-K64F\k64f_soc_public.h
-badd +778 src\BoardSupport\LaunchPad-LM4F120\lm4f120_soc_hardware_abstractions.c
+badd +1 src\BoardSupport\LaunchPad-LM4F120\lm4f120_soc_hardware_abstractions.c
 badd +90 src\BoardSupport\LaunchPad-LM4F120\launchpad_board_hardware_abstractions.c
 badd +1 prj\LM4F120_SOC-flash.ld
-badd +221 src\Applications\launchpad_demo\main.c
+badd +1 src\Applications\launchpad_demo\main.c
+badd +0 src\BoardSupport\LaunchPad-LM4F120\LM4F120_SOC-flash.ld
 silent! argdel *
 set lines=54 columns=207
 winpos 0 0
@@ -198,7 +199,7 @@ normal! zt
 normal! 020|
 wincmd w
 argglobal
-edit prj\LM4F120_SOC-flash.ld
+edit src\BoardSupport\LaunchPad-LM4F120\LM4F120_SOC-flash.ld
 setlocal fdm=manual
 setlocal fde=0
 setlocal fmr={{{,}}}
@@ -208,12 +209,12 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 silent! normal! zE
-let s:l = 8 - ((7 * winheight(0) + 13) / 26)
+let s:l = 31 - ((25 * winheight(0) + 13) / 26)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-8
-normal! 026|
+31
+normal! 0
 wincmd w
 argglobal
 edit makefile
@@ -285,7 +286,7 @@ if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
 19
-normal! 029|
+normal! 05|
 wincmd w
 argglobal
 edit src\BoardSupport\module.mk
@@ -316,6 +317,7 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 wincmd w
+2wincmd w
 exe '1resize ' . ((&lines * 24 + 27) / 54)
 exe 'vert 1resize ' . ((&columns * 126 + 103) / 207)
 exe '2resize ' . ((&lines * 26 + 27) / 54)
@@ -388,7 +390,7 @@ if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
 476
-normal! 07|
+normal! 0
 wincmd w
 argglobal
 edit src\McRTOS\McRTOS_startup.c
@@ -419,11 +421,11 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 silent! normal! zE
-let s:l = 55 - ((0 * winheight(0) + 6) / 12)
+let s:l = 1 - ((0 * winheight(0) + 6) / 12)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-55
+1
 normal! 0
 wincmd w
 argglobal
@@ -455,12 +457,12 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 silent! normal! zE
-let s:l = 34 - ((0 * winheight(0) + 3) / 7)
+let s:l = 1 - ((0 * winheight(0) + 3) / 7)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-34
-normal! 03|
+1
+normal! 0
 wincmd w
 argglobal
 edit inc\McRTOS\McRTOS_config_parameters.h
@@ -491,13 +493,14 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 silent! normal! zE
-let s:l = 35 - ((0 * winheight(0) + 3) / 6)
+let s:l = 1 - ((0 * winheight(0) + 3) / 6)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-35
-normal! 03|
+1
+normal! 0
 wincmd w
+2wincmd w
 exe '1resize ' . ((&lines * 26 + 27) / 54)
 exe 'vert 1resize ' . ((&columns * 154 + 103) / 207)
 exe '2resize ' . ((&lines * 1 + 27) / 54)
@@ -559,6 +562,7 @@ normal! zt
 1
 normal! 0
 wincmd w
+2wincmd w
 exe 'vert 1resize ' . ((&columns * 85 + 103) / 207)
 exe 'vert 2resize ' . ((&columns * 121 + 103) / 207)
 tabedit src\McRTOS\McRTOS_kernel_services.c
@@ -643,11 +647,11 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 silent! normal! zE
-let s:l = 953 - ((0 * winheight(0) + 2) / 5)
+let s:l = 1 - ((0 * winheight(0) + 2) / 5)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-953
+1
 normal! 0
 wincmd w
 argglobal
@@ -661,11 +665,11 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 silent! normal! zE
-let s:l = 797 - ((6 * winheight(0) + 8) / 16)
+let s:l = 1 - ((0 * winheight(0) + 8) / 16)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-797
+1
 normal! 0
 wincmd w
 argglobal
@@ -697,6 +701,7 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 wincmd w
+2wincmd w
 exe '1resize ' . ((&lines * 44 + 27) / 54)
 exe 'vert 1resize ' . ((&columns * 157 + 103) / 207)
 exe '2resize ' . ((&lines * 6 + 27) / 54)
@@ -767,12 +772,12 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 silent! normal! zE
-let s:l = 13 - ((0 * winheight(0) + 2) / 5)
+let s:l = 1 - ((0 * winheight(0) + 2) / 5)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-13
-normal! 019|
+1
+normal! 0
 wincmd w
 argglobal
 edit inc\McRTOS\arm_cortex_m_macros.s
@@ -828,6 +833,7 @@ normal! zt
 46
 normal! 0
 wincmd w
+2wincmd w
 exe '1resize ' . ((&lines * 37 + 27) / 54)
 exe 'vert 1resize ' . ((&columns * 121 + 103) / 207)
 exe '2resize ' . ((&lines * 5 + 27) / 54)
@@ -910,12 +916,12 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 silent! normal! zE
-let s:l = 6 - ((0 * winheight(0) + 19) / 38)
+let s:l = 1 - ((0 * winheight(0) + 19) / 38)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-6
-normal! 02|
+1
+normal! 0
 wincmd w
 argglobal
 edit inc\McRTOS\failure_data_capture.h
@@ -928,13 +934,14 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 silent! normal! zE
-let s:l = 6 - ((0 * winheight(0) + 6) / 12)
+let s:l = 1 - ((0 * winheight(0) + 6) / 12)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-6
-normal! 02|
+1
+normal! 0
 wincmd w
+2wincmd w
 exe '1resize ' . ((&lines * 37 + 27) / 54)
 exe 'vert 1resize ' . ((&columns * 160 + 103) / 207)
 exe '2resize ' . ((&lines * 13 + 27) / 54)
@@ -985,13 +992,14 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 silent! normal! zE
-let s:l = 224 - ((28 * winheight(0) + 14) / 29)
+let s:l = 1 - ((0 * winheight(0) + 14) / 29)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-224
+1
 normal! 0
 wincmd w
+2wincmd w
 exe '1resize ' . ((&lines * 29 + 27) / 54)
 exe 'vert 1resize ' . ((&columns * 99 + 103) / 207)
 exe '2resize ' . ((&lines * 29 + 27) / 54)
@@ -1052,7 +1060,7 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 silent! normal! zE
-let s:l = 758 - ((8 * winheight(0) + 12) / 25)
+let s:l = 758 - ((0 * winheight(0) + 12) / 25)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
@@ -1088,12 +1096,12 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 silent! normal! zE
-let s:l = 8 - ((0 * winheight(0) + 4) / 9)
+let s:l = 1 - ((0 * winheight(0) + 4) / 9)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-8
-normal! 024|
+1
+normal! 0
 wincmd w
 argglobal
 edit inc\BoardSupport\FRDM-K64F\k64f_soc_enet.h
@@ -1106,12 +1114,12 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 silent! normal! zE
-let s:l = 6 - ((0 * winheight(0) + 5) / 10)
+let s:l = 1 - ((0 * winheight(0) + 5) / 10)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-6
-normal! 024|
+1
+normal! 0
 wincmd w
 argglobal
 edit inc\BoardSupport\FRDM-K64F\k64f_soc_public.h
@@ -1124,11 +1132,11 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 silent! normal! zE
-let s:l = 294 - ((2 * winheight(0) + 3) / 7)
+let s:l = 1 - ((0 * winheight(0) + 3) / 7)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-294
+1
 normal! 0
 wincmd w
 argglobal
@@ -1229,12 +1237,12 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 silent! normal! zE
-let s:l = 20 - ((12 * winheight(0) + 7) / 15)
+let s:l = 1 - ((0 * winheight(0) + 7) / 15)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-20
-normal! 02|
+1
+normal! 0
 wincmd w
 argglobal
 edit inc\McRTOS\McRTOS_arm_cortex_m.h
@@ -1247,11 +1255,11 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 silent! normal! zE
-let s:l = 56 - ((1 * winheight(0) + 13) / 26)
+let s:l = 1 - ((0 * winheight(0) + 13) / 26)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-56
+1
 normal! 0
 wincmd w
 argglobal
@@ -1265,12 +1273,12 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 silent! normal! zE
-let s:l = 372 - ((0 * winheight(0) + 4) / 8)
+let s:l = 1 - ((0 * winheight(0) + 4) / 8)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-372
-normal! 017|
+1
+normal! 0
 wincmd w
 argglobal
 edit inc\BoardSupport\CMSIS\core_cmInstr.h
@@ -1283,11 +1291,11 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 silent! normal! zE
-let s:l = 663 - ((1 * winheight(0) + 21) / 43)
+let s:l = 1 - ((0 * winheight(0) + 21) / 43)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-663
+1
 normal! 0
 wincmd w
 argglobal
@@ -1301,12 +1309,12 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 silent! normal! zE
-let s:l = 367 - ((0 * winheight(0) + 3) / 7)
+let s:l = 1 - ((0 * winheight(0) + 3) / 7)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-367
-normal! 059|
+1
+normal! 0
 wincmd w
 2wincmd w
 exe '1resize ' . ((&lines * 15 + 27) / 54)
@@ -1391,11 +1399,11 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 silent! normal! zE
-let s:l = 20 - ((0 * winheight(0) + 17) / 35)
+let s:l = 1 - ((0 * winheight(0) + 17) / 35)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-20
+1
 normal! 0
 wincmd w
 argglobal
@@ -1425,7 +1433,7 @@ exe '3resize ' . ((&lines * 35 + 27) / 54)
 exe 'vert 3resize ' . ((&columns * 89 + 103) / 207)
 exe '4resize ' . ((&lines * 15 + 27) / 54)
 exe 'vert 4resize ' . ((&columns * 89 + 103) / 207)
-tabnext 8
+tabnext 1
 if exists('s:wipebuf')
   silent exe 'bwipe ' . s:wipebuf
 endif

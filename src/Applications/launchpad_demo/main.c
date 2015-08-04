@@ -8,11 +8,11 @@
  * @author German Rivera
  */
 
-#include "McRTOS.h"
-#include "McRTOS_kernel_services.h"
-#include "failure_data_capture.h"
-#include "utils.h"
-#include "launchpad_board.h"
+#include <McRTOS/McRTOS.h>
+#include <McRTOS/McRTOS_kernel_services.h>
+#include <McRTOS/failure_data_capture.h>
+#include <McRTOS/utils.h>
+#include <BoardSupport/LaunchPad-LM4F120/launchpad_board.h>
 
 TODO("Remove these pragmas")
 #pragma GCC diagnostic ignored "-Wunused-parameter"

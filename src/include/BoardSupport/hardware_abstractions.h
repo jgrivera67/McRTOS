@@ -44,8 +44,8 @@
 
 #elif defined(LM4F120_SOC)
 
-#   include <BoardSupport/lm4f120_soc_public.h>
-#   include <BoardSupport/launchpad_board.h>
+#   include <BoardSupport/LaunchPad-LM4F120/lm4f120_soc_public.h>
+#   include <BoardSupport/LaunchPad-LM4F120/launchpad_board.h>
 
 #elif defined(LPC54102_SOC)
 
