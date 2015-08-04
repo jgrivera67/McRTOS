@@ -13,7 +13,7 @@
 #include <McRTOS/failure_data_capture.h>
 #include <McRTOS/utils.h>
 #include <McRTOS/McRTOS_config_parameters.h>
-#include <McRTOs/McRTOS_kernel_services.h>
+#include <McRTOS/McRTOS_kernel_services.h>
 
 #pragma GCC diagnostic ignored "-Wunused-local-typedefs"
 
@@ -304,6 +304,7 @@ pll_init(void)
             (1 << SYSCON_SYSPLLCTRL_BANDSEL_SSCGREG_N_P) |  /* Manual bandwidth selection enabled */
             (1 << SYSCON_SYSPLLCTRL_DIRECTO_P);	            /* Bypass post-divider */
 
+
     write_32bit_mmio_register(&LPC_SYSCON->SYSPLLCTRL, reg_value);
 
     /*
@@ -362,7 +363,7 @@ pll_init(void)
                               SYSCON_PDRUNCFG_PD_SYS_PLL);
 
     /*
-     * this sequence acclerates the PLL lock time
+     * this sequence accelerates the PLL lock time
      */
     reg_value = SYSPLLSSCTRL_SEL_EXT_MASK;
     SET_BIT_FIELD(reg_value, SYSPLLSSCTRL_MDEC_MASK,
@@ -393,6 +394,8 @@ pll_init(void)
     do {
         reg_value = read_32bit_mmio_register(&LPC_SYSCON->SYSPLLSTAT);
     } while ((reg_value & SYSPLLSTAT_LOCK_MASK) == 0);
+
+    LPC_ROM_API->pPWRD->set_voltage(POWER_LOW_POWER_MODE, CPU_CLOCK_FREQ_IN_HZ);
 }
 
 

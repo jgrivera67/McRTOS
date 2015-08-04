@@ -9,7 +9,7 @@
 #ifndef __LPC54102_SOC_PUBLIC_H
 #define __LPC54102_SOC_PUBLIC_H
 
-#include <BoardSupport/LPC-54102/nxp_chip.h>
+#include <BoardSupport/LPC-54102/nxp/chip.h>
 #include <McRTOS/arm_defs.h>
 #include <McRTOs/compile_time_checks.h>
 #include <stdint.h>

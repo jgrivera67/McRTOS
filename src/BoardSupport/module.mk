@@ -11,42 +11,34 @@ ifeq "$(PLATFORM)" "LPC2478-STK"
 		 $(subdirectory)/lcd_fonts.c \
 		 $(subdirectory)/$(PLATFORM)/lpc2478_touch_screen.c \
 		 $(subdirectory)/$(PLATFORM)/lpc2478_touch_screen_xy_reading_to_80x80_tile_map.c
-endif
-
-ifeq "$(PLATFORM)" "FRDM-KL25Z"
+else ifeq "$(PLATFORM)" "FRDM-KL25Z"
     local_src := \
                  $(subdirectory)/$(PLATFORM)/kl25z_soc_hardware_abstractions.c \
                  $(subdirectory)/$(PLATFORM)/kl25z_interrupt_service_routines.s \
                  $(subdirectory)/$(PLATFORM)/frdm_board_hardware_abstractions.c
-endif
-
-ifeq "$(PLATFORM)" "FRDM-K20D5"
+else ifeq "$(PLATFORM)" "FRDM-K20D5"
     local_src := \
                  $(subdirectory)/$(PLATFORM)/k20d5_soc_hardware_abstractions.c \
                  $(subdirectory)/$(PLATFORM)/k20d5_interrupt_service_routines.s \
                  $(subdirectory)/$(PLATFORM)/frdm_board_hardware_abstractions.c
-endif
-
-ifeq "$(PLATFORM)" "FRDM-K64F"
+else ifeq "$(PLATFORM)" "FRDM-K64F"
     local_src := \
                  $(subdirectory)/$(PLATFORM)/k64f_soc_hardware_abstractions.c \
                  $(subdirectory)/$(PLATFORM)/k64f_soc_enet.c \
                  $(subdirectory)/$(PLATFORM)/k64f_interrupt_service_routines.s \
                  $(subdirectory)/$(PLATFORM)/frdm_board_hardware_abstractions.c
-endif
-
-ifeq "$(PLATFORM)" "LaunchPad-LM4F120"
+else ifeq "$(PLATFORM)" "LaunchPad-LM4F120"
     local_src := \
                  $(subdirectory)/$(PLATFORM)/lm4f120_soc_hardware_abstractions.c \
                  $(subdirectory)/$(PLATFORM)/lm4f120_interrupt_service_routines.s \
                  $(subdirectory)/$(PLATFORM)/launchpad_board_hardware_abstractions.c
-endif
-
-ifeq "$(PLATFORM)" "LPC-54102"
+else ifeq "$(PLATFORM)" "LPC-54102"
     local_src := \
                  $(subdirectory)/$(PLATFORM)/lpc54102_soc_hardware_abstractions.c \
                  $(subdirectory)/$(PLATFORM)/lpc54102_interrupt_service_routines.s \
                  $(subdirectory)/$(PLATFORM)/lpcxpresso_board_hardware_abstractions.c
+
+    #libraries += $(BASE_DIR)lib/$(PLATFORM)/libpower.a
 endif
 
 local_subdirs := $(subdirectory)/$(PLATFORM)

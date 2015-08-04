@@ -288,29 +288,18 @@ is_power_of_2(uint32_t value)
 
 
 static inline uint8_t
-log_base_2(uint32_t power_of_2_value)
+int_log_base_2(uint32_t value)
 {
-    DBG_ASSERT(power_of_2_value >= 32, power_of_2_value, 0);
+    uint32_t log_value;
 
+    FDC_ASSERT(value != 0, value, 0);
 #   if __CORTEX_M >= 0x03
-    uint32_t log_value = 31 - __CLZ(power_of_2_value);
-
-    if (power_of_2_value == BIT(log_value)) {
-        return (uint8_t)log_value;
-    }
+    log_value = 31 - __CLZ(value);
 #   else
-    for (uint32_t log_value = 5; log_value <= 31; log_value ++) {
-        if (power_of_2_value == BIT(log_value)) {
-            return (uint8_t)log_value;
-        }
-    }
+    for (uint32_t log_value = 31; (value & BIT(log_value)) == 0; log_value --)
+        ;
 #   endif
-
-    fdc_error_t fdc_error =
-        CAPTURE_FDC_ERROR("Invalid power of 2 value", power_of_2_value, 0);
-
-    fatal_error_handler(fdc_error);
-    return UINT8_MAX;
+    return (uint8_t)log_value;
 }
 
 
@@ -338,7 +327,7 @@ cortex_m_set_mpu_region(
 
     DBG_ASSERT(is_power_of_2(region_size), region_size, 0);
 
-    uint8_t encoded_region_size = log_base_2(region_size) - 1;
+    uint8_t encoded_region_size = int_log_base_2(region_size) - 1;
 
     /*
      * Configure region:
@@ -488,7 +477,7 @@ mpu_get_enclosing_region_boundaries(void *start_addr, void *end_addr,
     DBG_ASSERT(start_addr < end_addr, start_addr, end_addr);
 
     size_t range_size = (uintptr_t)end_addr - (uintptr_t)start_addr;
-    size_t region_size = UINT32_C(1) << log_base_2(range_size);
+    size_t region_size = UINT32_C(1) << int_log_base_2(range_size);
 
     if (region_size < range_size) {
         region_size *= 2;
@@ -510,7 +499,8 @@ cortex_m_mpu_init(void)
     extern uint32_t __flash_text_end[];
 
     uint32_t reg_value;
-    void *start_addr;
+    void *aligned_start_addr;
+    void *aligned_end_addr;
 
     FDC_ASSERT(
         g_mpu.signature == MPU_DEVICE_SIGNATURE,
@@ -550,18 +540,15 @@ cortex_m_mpu_init(void)
     /*
      * Make region 0, the code in flash to be executable in unprivileged mode
      */
-    if (is_power_of_2((uintptr_t)__flash_text_end - (uintptr_t)__flash_text_start)) {
-        start_addr = __flash_text_start;
-    } else {
-        start_addr = (void *)0x0;
-    }
+    mpu_get_enclosing_region_boundaries(__flash_text_start, __flash_text_end,
+                                        &aligned_start_addr, &aligned_end_addr);
 
     for (cpu_id_t cpu_id = 0; cpu_id < SOC_NUM_CPU_CORES; cpu_id ++) {
 	cortex_m_set_mpu_region(mpu_var_p, mpu_regs_p, 0,
-			       start_addr,
-			       (void *)__flash_text_end,
-			       UNPRIVILEGED_READ_MASK |
-                               UNPRIVILEGED_EXEC_MASK);
+			        aligned_start_addr,
+			        aligned_end_addr,
+			        UNPRIVILEGED_READ_MASK |
+                                UNPRIVILEGED_EXEC_MASK);
     }
 
     mpu_var_p->num_defined_global_regions ++;
