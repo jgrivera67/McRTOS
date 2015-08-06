@@ -25,7 +25,9 @@ enum {
  */
 enum {
     LPCX_SW1_BUTTON = 0x0,
+#if 0 /*  We cannot use it, as it uses the same pin as LPCX_BLUE_LED */
     LPCX_SW2_BUTTON,
+#endif
     LPCX_NUM_PUSH_BUTTONS
 };
 

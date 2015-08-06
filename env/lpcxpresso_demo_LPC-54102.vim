@@ -95,7 +95,7 @@ badd +14 src\include\BoardSupport\FRDM-K64F\MK64F12.h
 badd +48 src\include\BoardSupport\CMSIS\core_cm4.h
 badd +115 \Users\b46482\embsys\projects\McRTOS\src\include\BoardSupport\FRDM-K20D50\k20d5_soc_public.h
 badd +4 src\BoardSupport\FRDM-K64F\frdm_board_hardware_abstractions.c
-badd +1 src\Applications\frdm_demo\main.c
+badd +235 src\Applications\frdm_demo\main.c
 badd +611 src\BoardSupport\LPC2478-STK\lpc2478_ethernet.c
 badd +259 \Users\b46482\ide\vimrc.vim
 badd +498 \Users\b46482\embsys\projects\McRTOS\src\include\BoardSupport\LPC2478-STK\lpc2478_ethernet.h
@@ -125,7 +125,7 @@ badd +767 src\BoardSupport\LaunchPad-LM4F120\lm4f120_soc_hardware_abstractions.c
 badd +90 src\BoardSupport\LaunchPad-LM4F120\launchpad_board_hardware_abstractions.c
 badd +221 src\Applications\launchpad_demo\main.c
 badd +1 src\BoardSupport\LPC-54102\lpcxpresso_board_hardware_abstractions.c
-badd +401 src\BoardSupport\LPC-54102\lpc54102_soc_hardware_abstractions.c
+badd +995 src\BoardSupport\LPC-54102\lpc54102_soc_hardware_abstractions.c
 badd +162 src\include\BoardSupport\LPC-54102\lpc54102_soc_public.h
 badd +16 src\include\BoardSupport\LPC-54102\lpc54102_soc.h
 badd +1 src\BoardSupport\LPC-54102\LPC54102_SOC-flash.ld
@@ -135,13 +135,14 @@ badd +102 src\include\BoardSupport\FRDM-K20D50\MK20D5.h
 badd +49 src\include\BoardSupport\cortex_m_nvic.h
 badd +1 src\include\BoardSupport\LPC-54102\nxp_chip.h
 badd +112 src\include\BoardSupport\LPC-54102\nxp\power_lib_5410x.h
-badd +1 src\include\BoardSupport\LPC-54102\nxp\chip.h
+badd +879 src\include\BoardSupport\LPC-54102\nxp\chip.h
 badd +45 src\include\BoardSupport\LPC-54102\nxp\rom_pwr_5410x.h
 badd +1 src\include\BoardSupport\LPC-54102\nxp\romapi_5410x.h
+badd +0 src\Applications\lpcxpresso_demo\main.c
 silent! argdel *
 set lines=53 columns=207
 winpos 1 1
-edit src\Applications\frdm_demo\main.c
+edit src\Applications\lpcxpresso_demo\main.c
 set splitbelow splitright
 wincmd _ | wincmd |
 vsplit
@@ -202,12 +203,12 @@ setlocal fml=1
 setlocal fdn=20
 setlocal fen
 silent! normal! zE
-let s:l = 235 - ((19 * winheight(0) + 12) / 24)
+let s:l = 221 - ((11 * winheight(0) + 12) / 24)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-235
-normal! 014|
+221
+normal! 019|
 wincmd w
 argglobal
 edit src\BoardSupport\LPC-54102\LPC54102_SOC-flash.ld
@@ -1146,7 +1147,7 @@ if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
 13
-normal! 01|
+normal! 0
 wincmd w
 exe '1resize ' . ((&lines * 24 + 26) / 53)
 exe 'vert 1resize ' . ((&columns * 79 + 103) / 207)
@@ -1278,7 +1279,6 @@ normal! zt
 367
 normal! 059|
 wincmd w
-2wincmd w
 exe '1resize ' . ((&lines * 16 + 26) / 53)
 exe 'vert 1resize ' . ((&columns * 135 + 103) / 207)
 exe '2resize ' . ((&lines * 16 + 26) / 53)
@@ -1289,7 +1289,7 @@ exe '4resize ' . ((&lines * 43 + 26) / 53)
 exe 'vert 4resize ' . ((&columns * 71 + 103) / 207)
 exe '5resize ' . ((&lines * 6 + 26) / 53)
 exe 'vert 5resize ' . ((&columns * 71 + 103) / 207)
-tabnext 9
+tabnext 1
 if exists('s:wipebuf')
   silent exe 'bwipe ' . s:wipebuf
 endif

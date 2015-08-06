@@ -157,7 +157,7 @@ app_hardware_stop(void)
 static void
 app_software_init(void)
 {
-    static const char g_app_version[] = "Launchpad application v0.2";
+    static const char g_app_version[] = "LPCXpresso application v0.1";
     static const char g_app_build_timestamp[] = "built " __DATE__ " " __TIME__;
 
     struct mpu_region_range old_comp_region;
@@ -227,9 +227,11 @@ buttons_reader_thread_f(void *arg)
 		if (push_buttons[i]) {
 		    console_printf("Pushed button %u\n", i);
 		    if (i == LPCX_SW1_BUTTON) {
-			g_app.led_color_mask = LED_COLOR_GREEN;
-		    } else if (i == LPCX_SW2_BUTTON) {
-			g_app.led_color_mask = LED_COLOR_RED;
+                        if (g_app.led_color_mask == LED_COLOR_RED) {
+                            g_app.led_color_mask = LED_COLOR_GREEN;
+                        } else {
+                            g_app.led_color_mask = LED_COLOR_RED;
+                        }
 		    }
 		} else {
 		    console_printf("Released button %u\n", i);

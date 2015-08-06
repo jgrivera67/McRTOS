@@ -50,14 +50,15 @@ static const struct gpio_pin g_lpcx_push_button_pins[] = {
     [LPCX_SW1_BUTTON] = GPIO_PIN_INITIALIZER(
 	    PIN_PORT_0,
             LPCX_SW1_PIN_INDEX,
-            PIN_FUNCTION0,
+            PIN_FUNCTION0 | IOCON_GPIO_MODE,
 	    false),
-
+#if 0 /*  We cannot use it, as it uses the same pin as LPCX_BLUE_LED */
     [LPCX_SW2_BUTTON] = GPIO_PIN_INITIALIZER(
 	    PIN_PORT_0,
             LPCX_SW2_PIN_INDEX,
             PIN_FUNCTION0,
             false),
+#endif
 };
 
 C_ASSERT(ARRAY_SIZE(g_lpcx_push_button_pins) == LPCX_NUM_PUSH_BUTTONS);
@@ -124,7 +125,7 @@ rgb_led_init(void)
     FDC_ASSERT(!g_lpcxpresso_board.rgb_led_initialized, 0, 0);
 
     for (int i = 0; i < LPCX_NUM_RGB_LED_PINS; i++) {
-        configure_gpio_pin(&g_lpcx_rgb_led_pins[i], 0, true);
+        configure_gpio_pin(&g_lpcx_rgb_led_pins[i], IOCON_DIGITAL_EN, true);
         deactivate_output_pin(&g_lpcx_rgb_led_pins[i]);
     }
 
@@ -211,7 +212,7 @@ static void
 push_buttons_init(void)
 {
     for (int i = 0; i < LPCX_NUM_PUSH_BUTTONS; i++) {
-        configure_gpio_pin(&g_lpcx_push_button_pins[i], 0, false);
+        configure_gpio_pin(&g_lpcx_push_button_pins[i], IOCON_DIGITAL_EN, false);
     }
 }
 
@@ -220,7 +221,7 @@ lpcxpresso_push_buttons_read(
         _OUT_ bool push_buttons[])
 {
     /*
-     * In the Launchpad board, a button is pressed when the
+     * In this board, when a button is pressed, the
      * corresponding input pin reads as 0.
      */
     for (int i = 0; i < LPCX_NUM_PUSH_BUTTONS; i++) {

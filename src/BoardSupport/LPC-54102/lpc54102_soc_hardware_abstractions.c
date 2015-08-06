@@ -183,7 +183,7 @@ struct rtos_interrupt *g_rtos_interrupt_uart0_p = NULL;
  * Global array of non-const structures for UART devices
  * (allocated in SRAM space)
  */
-static struct uart_device_var g_uart_devices_var[] =
+static struct uart_device_var g_uart_devices_var[LPC_FIFO_USART_MAX] =
 {
     [0] = {
         .urt_initialized = false,
@@ -197,7 +197,7 @@ static struct uart_device_var g_uart_devices_var[] =
  * Global array of const structures for UART devices for the K64F SoC
  * (allocated in flash space)
  */
-static const struct uart_device g_uart_devices[] =
+static const struct uart_device g_uart_devices[LPC_FIFO_USART_MAX] =
 {
     [0] = {
         .urt_signature = UART_DEVICE_SIGNATURE,
@@ -207,6 +207,8 @@ static const struct uart_device g_uart_devices[] =
         .urt_tx_pin = PIN_INITIALIZER(PIN_PORT_0, 1, IOCON_FUNC1),
         .urt_rx_pin = PIN_INITIALIZER(PIN_PORT_0, 0, IOCON_FUNC1),
         .urt_async_apb_control_mask = APBCLKCTRL_UART0_MASK,
+        .urt_tx_fifo_enable_mask = FIFOCTRL_U0TXFIFOEN_MASK,
+        .urt_rx_fifo_enable_mask = FIFOCTRL_U0RXFIFOEN_MASK,
         .urt_rtos_interrupt_params = {
             .irp_name_p = "UART0 Interrupt",
             .irp_isr_function_p = lpc54102_uart0_irq_isr,
@@ -221,7 +223,30 @@ static const struct uart_device g_uart_devices[] =
         .urt_transmit_queue_name_p = "UART0 transmit queue",
         .urt_receive_queue_name_p = "UART0 receive queue",
     },
+
+    [1] = {
+        .urt_signature = UART_DEVICE_SIGNATURE,
+	.urt_name = "UART1",
+        .urt_var_p = &g_uart_devices_var[1],
+        .urt_mmio_uart_p = LPC_USART1,
+    },
+
+    [2] = {
+        .urt_signature = UART_DEVICE_SIGNATURE,
+	.urt_name = "UART2",
+        .urt_var_p = &g_uart_devices_var[2],
+        .urt_mmio_uart_p = LPC_USART2,
+    },
+
+    [3] = {
+        .urt_signature = UART_DEVICE_SIGNATURE,
+	.urt_name = "UART3",
+        .urt_var_p = &g_uart_devices_var[3],
+        .urt_mmio_uart_p = LPC_USART3,
+    },
 };
+
+C_ASSERT(ARRAY_SIZE(g_uart_devices) == LPC_FIFO_USART_MAX);
 
 C_ASSERT(
     ARRAY_SIZE(g_uart_devices) == ARRAY_SIZE(g_uart_devices_var));
@@ -384,10 +409,6 @@ pll_init(void)
     write_32bit_mmio_register(&LPC_SYSCON->SYSPLLSSCTRL[0],
                               current_ssctrl_reg | SYSPLLSSCTRL_MREQ_MASK);
 
-    /*  Turn on PLL again??? */
-    write_32bit_mmio_register(&LPC_SYSCON->PDRUNCFGCLR,
-                              SYSCON_PDRUNCFG_PD_SYS_PLL);
-
     /*
      * Wait until PLL is locked:
      */
@@ -395,7 +416,14 @@ pll_init(void)
         reg_value = read_32bit_mmio_register(&LPC_SYSCON->SYSPLLSTAT);
     } while ((reg_value & SYSPLLSTAT_LOCK_MASK) == 0);
 
+    /*
+     * Set power mode:
+     */
+#if 1
     LPC_ROM_API->pPWRD->set_voltage(POWER_LOW_POWER_MODE, CPU_CLOCK_FREQ_IN_HZ);
+#else
+    LPC_ROM_API->pPWRD->set_voltage(POWER_HIGH_PERFORMANCE, CPU_CLOCK_FREQ_IN_HZ);
+#endif
 }
 
 
@@ -406,24 +434,11 @@ system_clocks_init(void)
     uint32_t reg_value;
 
     /*
-     * Enable clocks for IOCON, INPUTMUX and all GPIO port clocks:
+     * Enable clocks for IOCON, INPUTMUX clocks:
      */
-    reg_value = SYSCON0_IOCON_MASK |
-                SYSCON0_INPUTMUX_MASK |
-                SYSCON0_GPIO0_MASK |
-                SYSCON0_GPIO1_MASK;
-# if 0 //???
-                SYSCON0_PINT_MASK |
-                SYSCON0_GINT_MASK;
-#endif
+    write_32bit_mmio_register(&LPC_SYSCON->AHBCLKCTRLSET[0],
+                              SYSCON0_IOCON_MASK | SYSCON0_INPUTMUX_MASK);
 
-    write_32bit_mmio_register(&LPC_SYSCON->AHBCLKCTRLSET[0], reg_value);
-
-    /*
-     * Clear reset for the GPIO ports:
-     */
-    write_32bit_mmio_register(&LPC_SYSCON->PRESETCTRLCLR[0],
-                              SYSCON0_GPIO0_MASK | SYSCON0_GPIO1_MASK);
     /*
      * Turn on the IRC by clearing the power down bit:
      */
@@ -458,13 +473,11 @@ system_clocks_init(void)
      */
     write_32bit_mmio_register(&LPC_ASYNC_SYSCON->ASYNCCLKDIV, 0x1);
 
-#if 0
     /*
      * Enable clock for fractional divider for UARTs:
      */
     write_32bit_mmio_register(&LPC_ASYNC_SYSCON->ASYNCAPBCLKCTRLSET,
                               APBCLKCTRL_FRACDIV_MASK);
-#endif
 
     /*
      * Set asynchronous APB clock source to IRC input:
@@ -478,17 +491,151 @@ system_clocks_init(void)
     write_32bit_mmio_register(&LPC_SYSCON->CLKOUTSELA, 0x0);
     write_32bit_mmio_register(&LPC_SYSCON->CLKOUTSELB, 0x0);
     write_32bit_mmio_register(&LPC_SYSCON->CLKOUTDIV, 0x1);
+}
+
+
+static void
+gpio_init(void)
+{
+    uint32_t reg_value;
 
     /*
-     * Enable clocks for system FIFO peripheral and clear its reset:
+     * Enable all GPIO port clocks:
+     */
+    reg_value = SYSCON0_GPIO0_MASK |
+                SYSCON0_GPIO1_MASK;
+# if 0 //???
+                SYSCON0_PINT_MASK |
+                SYSCON0_GINT_MASK;
+#endif
+
+    write_32bit_mmio_register(&LPC_SYSCON->AHBCLKCTRLSET[0], reg_value);
+
+    /*
+     * Reset the GPIO ports:
+     */
+    write_32bit_mmio_register(&LPC_SYSCON->PRESETCTRLSET[0],
+                              SYSCON0_GPIO0_MASK | SYSCON0_GPIO1_MASK);
+
+    /*
+     * Release reset for the GPIO ports:
+     */
+    write_32bit_mmio_register(&LPC_SYSCON->PRESETCTRLCLR[0],
+                              SYSCON0_GPIO0_MASK | SYSCON0_GPIO1_MASK);
+}
+
+
+static void
+system_fifos_init(void)
+{
+    uint32_t reg_value;
+
+    /*
+     * Enable clocks for system FIFO peripheral:
      * (used for UART and SPI interfaces)
      */
     write_32bit_mmio_register(&LPC_SYSCON->AHBCLKCTRLSET[1],
                               SYSCON1_FIFO_MASK);
+
+    /*
+     * Reset system FIFO peripheral:
+     */
+    write_32bit_mmio_register(&LPC_SYSCON->PRESETCTRLSET[1],
+                              SYSCON1_FIFO_MASK);
+
+    /*
+     * Release reset for system FIFO peripheral:
+     */
     write_32bit_mmio_register(&LPC_SYSCON->PRESETCTRLCLR[1],
                               SYSCON1_FIFO_MASK);
-}
 
+    /*
+     * Get Tx and Rx FIFO space total sizes
+     */
+    reg_value = read_32bit_mmio_register(&LPC_FIFO->common.FIFOCTLUSART);
+    uint_fast8_t total_tx_fifo_space_size = GET_BIT_FIELD(
+                                                reg_value,
+					        FIFOCTLUSART_TXFIFOTOTAL_MASK,
+					        FIFOCTLUSART_TXFIFOTOTAL_SHIFT);
+
+    FDC_ASSERT(total_tx_fifo_space_size != 0 &&
+               total_tx_fifo_space_size % LPC_FIFO_USART_MAX == 0,
+               total_tx_fifo_space_size, LPC_FIFO_USART_MAX);
+
+    uint_fast8_t total_rx_fifo_space_size = GET_BIT_FIELD(
+                                                reg_value,
+					        FIFOCTLUSART_RXFIFOTOTAL_MASK,
+					        FIFOCTLUSART_RXFIFOTOTAL_SHIFT);
+
+    FDC_ASSERT(total_rx_fifo_space_size != 0 &&
+               total_rx_fifo_space_size % LPC_FIFO_USART_MAX == 0,
+               total_rx_fifo_space_size, LPC_FIFO_USART_MAX);
+
+    /*
+     * Configure Tx and RX FIFOs:
+     * - Pause all UARTs Rx FIFO operations and Tx FIFO operations
+     * - Allocate Rx and Tx FIFO space for this UART
+     * - Tx FIFO threshold = total num entries (generate interrupt when Tx FIFO is empty)
+     * - Rx FIFO threshold = 0 (generate interrupt when Rx FIFO is not empty)
+     * - Flush Tx and Rx FIFOs
+     * - Resume all UARTs Rx FIFO operations and Tx FIFO operations
+     */
+    write_32bit_mmio_register(
+        &LPC_FIFO->common.FIFOCTLUSART,
+        FIFOCTLUSART_RXPAUSE_MASK | FIFOCTLUSART_TXPAUSE_MASK);
+
+    uint32_t all_paused_and_empty_mask = FIFOCTLUSART_RXPAUSED_MASK |
+                                         FIFOCTLUSART_RXEMPTY_MASK |
+                                         FIFOCTLUSART_TXPAUSED_MASK |
+                                         FIFOCTLUSART_TXEMPTY_MASK;
+    do {
+        reg_value = read_32bit_mmio_register(&LPC_FIFO->common.FIFOCTLUSART);
+    } while ((reg_value & all_paused_and_empty_mask) != all_paused_and_empty_mask);
+
+    uint_fast8_t tx_fifo_size = total_tx_fifo_space_size / LPC_FIFO_USART_MAX;
+    uint_fast8_t rx_fifo_size = total_rx_fifo_space_size / LPC_FIFO_USART_MAX;
+
+    for (uint_fast8_t uart_index = 0; uart_index < LPC_FIFO_USART_MAX; uart_index ++) {
+        struct uart_device_var *uart_var_p = g_uart_devices[uart_index].urt_var_p;
+
+        uart_var_p->urt_tx_fifo_size = tx_fifo_size;
+        uart_var_p->urt_rx_fifo_size = rx_fifo_size;
+
+        reg_value = 0;
+        SET_BIT_FIELD(reg_value, FIFOCFGUSART_TXSIZE_MASK, FIFOCFGUSART_TXSIZE_SHIFT,
+                      uart_var_p->urt_tx_fifo_size);
+        SET_BIT_FIELD(reg_value, FIFOCFGUSART_RXSIZE_MASK, FIFOCFGUSART_RXSIZE_SHIFT,
+                      uart_var_p->urt_rx_fifo_size);
+        write_32bit_mmio_register(
+            &LPC_FIFO->common.FIFOCFGUSART[uart_index], reg_value);
+
+        write_32bit_mmio_register(
+            &LPC_FIFO->common.FIFOUPDATEUSART,
+            FIFOUPDATEUSART_RXSIZE_MASK(uart_index) |
+            FIFOUPDATEUSART_TXSIZE_MASK(uart_index));
+
+        reg_value = 0;
+        SET_BIT_FIELD(reg_value, FIFO_UART_CFGUSART_TX_THRESHOLD_MASK,
+                      FIFO_UART_CFGUSART_TX_THRESHOLD_SHIFT,
+                      uart_var_p->urt_tx_fifo_size - 1);
+        SET_BIT_FIELD(reg_value, FIFO_UART_CFGUSART_RX_THRESHOLD_MASK,
+                      FIFO_UART_CFGUSART_RX_THRESHOLD_SHIFT,
+                      0);
+        write_32bit_mmio_register(
+            &LPC_FIFO->usart[uart_index].CFG, reg_value);
+
+        /*
+         * Flush Tx and Rx FIFOs:
+         */
+        write_32bit_mmio_register(
+            &LPC_FIFO->usart[uart_index].CTLSET,
+            FIFO_UART_CTL_RXFLUSH_MASK |
+            FIFO_UART_CTL_TXFLUSH_MASK);
+    }
+
+     /* Resume all UART FIFOs: */
+    write_32bit_mmio_register(&LPC_FIFO->common.FIFOCTLUSART, 0x0);
+}
 
 /**
  *  SoC-specific early initialization to be invoked at the beginning of
@@ -532,13 +679,12 @@ soc_hardware_init(void)
 #   endif
 
     cortex_m_nvic_init();
-
+    gpio_init();
+    system_fifos_init();
     uart_init(
         g_console_serial_port_p,
         CONSOLE_SERIAL_PORT_BAUD_RATE,
         CONSOLE_SERIAL_PORT_MODE);
-
-    //???    uart_putchar_with_polling(g_console_serial_port_p, '8'); //???
 
     capture_fdc_msg_printf("%s initialized (Tx FIFO size: %u, Rx FIFO size: %u)\n",
 		 g_console_serial_port_p->urt_name,
@@ -824,7 +970,6 @@ uart_init(
     uint8_t mode)
 {
     uint32_t reg_value;
-    uint_fast8_t uart_index = uart_device_p - g_uart_devices;
 
     FDC_ASSERT(
         uart_device_p->urt_signature == UART_DEVICE_SIGNATURE,
@@ -844,10 +989,24 @@ uart_init(
                               uart_device_p->urt_async_apb_control_mask);
 
     /*
+     * Reset UART:
+     */
+    write_32bit_mmio_register(&LPC_ASYNC_SYSCON->ASYNCPRESETCTRLSET,
+                              uart_device_p->urt_async_apb_control_mask);
+
+    /*
      * Clear reset for the UART:
      */
     write_32bit_mmio_register(&LPC_ASYNC_SYSCON->ASYNCPRESETCTRLCLR,
                               uart_device_p->urt_async_apb_control_mask);
+
+    /*
+     * Enable Tx and Rx FIFOs:
+     */
+    reg_value = read_32bit_mmio_register(&LPC_SYSCON->FIFOCTRL);
+    reg_value |= uart_device_p->urt_tx_fifo_enable_mask |
+                 uart_device_p->urt_rx_fifo_enable_mask;
+    write_32bit_mmio_register(&LPC_SYSCON->FIFOCTRL, reg_value);
 
     /*
      * Configure the uart for 8-bit mode, no parity, 1 stop bit (mode is 0):
@@ -859,102 +1018,42 @@ uart_init(
     write_32bit_mmio_register(&uart_mmio_registers_p->CFG, reg_value);
 
     /*
-     * Get Tx and Rx FIFO space total sizes
-     */
-    reg_value = read_32bit_mmio_register(&LPC_FIFO->common.FIFOCTLUSART);
-    uint_fast8_t total_tx_fifo_space_size = GET_BIT_FIELD(
-                                                reg_value,
-					        FIFOCTLUSART_TXFIFOTOTAL_MASK,
-					        FIFOCTLUSART_TXFIFOTOTAL_SHIFT);
-
-    FDC_ASSERT(total_tx_fifo_space_size != 0 &&
-               total_tx_fifo_space_size % LPC_FIFO_USART_MAX == 0,
-               total_tx_fifo_space_size, LPC_FIFO_USART_MAX);
-
-    uint_fast8_t total_rx_fifo_space_size = GET_BIT_FIELD(
-                                                reg_value,
-					        FIFOCTLUSART_RXFIFOTOTAL_MASK,
-					        FIFOCTLUSART_RXFIFOTOTAL_SHIFT);
-
-    FDC_ASSERT(total_rx_fifo_space_size != 0 &&
-               total_rx_fifo_space_size % LPC_FIFO_USART_MAX == 0,
-               total_rx_fifo_space_size, LPC_FIFO_USART_MAX);
-
-    /*
-     * Configure Tx and RX FIFOs:
-     * - Pause all UARTs Rx FIFO operations and Tx FIFO operations
-     * - Allocate Rx and Tx FIFO space for this UART
-     * - Tx FIFO threshold = total num entries (generate interrupt when Tx FIFO is empty)
-     * - Rx FIFO threshold = 0 (generate interrupt when Rx FIFO is not empty)
-     * - Flush Tx and Rx FIFOs
-     * - Resume all UARTs Rx FIFO operations and Tx FIFO operations
-     */
-    write_32bit_mmio_register(
-        &LPC_FIFO->common.FIFOCTLUSART,
-        FIFOCTLUSART_RXPAUSE_MASK | FIFOCTLUSART_TXPAUSE_MASK);
-
-    uart_var_p->urt_tx_fifo_size = total_tx_fifo_space_size / LPC_FIFO_USART_MAX;
-    uart_var_p->urt_rx_fifo_size = total_rx_fifo_space_size / LPC_FIFO_USART_MAX;
-
-    reg_value = 0;
-    SET_BIT_FIELD(reg_value, FIFOCFGUSART_TXSIZE_MASK, FIFOCFGUSART_TXSIZE_SHIFT,
-                  uart_var_p->urt_tx_fifo_size);
-    SET_BIT_FIELD(reg_value, FIFOCFGUSART_RXSIZE_MASK, FIFOCFGUSART_RXSIZE_SHIFT,
-                  uart_var_p->urt_rx_fifo_size);
-    write_32bit_mmio_register(
-        &LPC_FIFO->common.FIFOCFGUSART[uart_index], reg_value);
-
-    write_32bit_mmio_register(
-        &LPC_FIFO->common.FIFOUPDATEUSART,
-        FIFOUPDATEUSART_RXSIZE_MASK(uart_index) |
-        FIFOUPDATEUSART_TXSIZE_MASK(uart_index));
-
-    reg_value = 0;
-    SET_BIT_FIELD(reg_value, FIFO_UART_CFGUSART_TX_THRESHOLD_MASK,
-                  FIFO_UART_CFGUSART_TX_THRESHOLD_SHIFT,
-                  uart_var_p->urt_tx_fifo_size);
-    SET_BIT_FIELD(reg_value, FIFO_UART_CFGUSART_RX_THRESHOLD_MASK,
-                  FIFO_UART_CFGUSART_RX_THRESHOLD_SHIFT,
-                  0);
-    write_32bit_mmio_register(
-        &LPC_FIFO->usart[uart_index].CFG, reg_value);
-
-#if 0
-    write_32bit_mmio_register(
-        &LPC_FIFO->usart[uart_index].CTLSET,
-        FIFO_UART_CTL_RXFLUSH_MASK |
-        FIFO_UART_CTL_TXFLUSH_MASK);
-#endif
-
-     /* Resume all UART FIFOs: */
-    write_32bit_mmio_register(&LPC_FIFO->common.FIFOCTLUSART, 0x0);
-
-    uart_var_p->urt_fifos_enabled = true;
-
-    /*
      * Configure Tx and Rx pins:
      */
     set_pin_function(&uart_device_p->urt_tx_pin, IOCON_DIGITAL_EN);
     set_pin_function(&uart_device_p->urt_rx_pin, IOCON_DIGITAL_EN);
 
    /*
-    * Calculate baud rate settings (assuming OSRVAL = 16):
+    * Calculate baud rate settings:
     */
-    reg_value = SYSCON_IRC_FREQ / (baud_rate * 16);
+    UART_BAUD_T baud;
 
-    FDC_ASSERT(reg_value >= 1 && reg_value <= UINT16_MAX + 1,
-               uart_device_p, reg_value);
+    baud.clk = SYSCON_IRC_FREQ;
+    baud.baud = baud_rate;
+    baud.ovr = 0;
+    baud.mul = 0;
+    baud.div = 0;
+    ErrorCode_t lpc_error = UART_CalculateBaud(&baud);
 
-#if 1 //???
-    /*
-     * Set Baud rat generator (BRG) register (BRG):
-     */
-    write_32bit_mmio_register(&uart_mmio_registers_p->BRG, reg_value - 1);
-#else
-    reg_value = read_32bit_mmio_register(&uart_mmio_registers_p->CTL);
-    reg_value |= UART_CTL_AUTOBAUD_MASK;
-    write_32bit_mmio_register(&uart_mmio_registers_p->CTL, reg_value);
-#endif
+    if (lpc_error != LPC_OK) {
+	fdc_error_t fdc_error =
+            CAPTURE_FDC_ERROR("UART_CalculateBaud() failed",
+                              lpc_error, uart_device_p);
+
+        fatal_error_handler(fdc_error);
+    }
+
+    /* Set fractional control register */
+    write_32bit_mmio_register(&LPC_ASYNC_SYSCON->FRGCTRL,
+                              ((uint32_t)baud.mul << 8) | 255);
+
+    /* Set Oversampling register (OSR) */
+    write_32bit_mmio_register(&uart_mmio_registers_p->OSR,
+                              (baud.ovr - 1) & 0x0F);
+
+    /* Baud rate generator register (BRG): */
+    write_32bit_mmio_register(&uart_mmio_registers_p->BRG,
+                              (baud.div - 1) & 0xFFFF);
 
     /*
      * Enable UART:
@@ -1041,6 +1140,13 @@ lpc54102_fifo_uart_tx_interrupt_handling(uint_fast8_t uart_index,
     bool sw_transmit_queue_empty = false;
 
     /*
+     * Disable generation of "transmit FIFO empty" interrupt:
+     */
+    write_32bit_mmio_register(
+        &LPC_FIFO->usart[uart_index].CTLCLR,
+        FIFO_UART_CTL_TXTHINTEN_MASK);
+
+    /*
      * Disable interrupts, to prevent higher priority interrupts to write
      * data to the UART (i.e., printf's)
      */
@@ -1067,12 +1173,12 @@ lpc54102_fifo_uart_tx_interrupt_handling(uint_fast8_t uart_index,
 
     rtos_k_restore_cpu_interrupts(cpu_status_register);
 
-    if (sw_transmit_queue_empty) {
+    if (!sw_transmit_queue_empty) {
 	/*
-	 * Disable "transmit FIFO empty" interrupt:
+	 * Re-enable generation of "transmit FIFO empty" interrupt:
 	 */
         write_32bit_mmio_register(
-            &LPC_FIFO->usart[uart_index].CTLCLR,
+            &LPC_FIFO->usart[uart_index].CTLSET,
             FIFO_UART_CTL_TXTHINTEN_MASK);
     }
 }
@@ -1220,6 +1326,7 @@ uart_putchar(
     _IN_ const struct uart_device *uart_device_p,
     _IN_ uint8_t c)
 {
+#if 1 // ???
     struct uart_device_var *const uart_var_p = uart_device_p->urt_var_p;
     uint_fast8_t uart_index = uart_device_p - g_uart_devices;
 
@@ -1258,9 +1365,12 @@ uart_putchar(
         read_32bit_mmio_register(&LPC_FIFO->usart[uart_index].CTLSET);
 
     if ((reg_value & FIFO_UART_CTL_TXTHINTEN_MASK) == 0) {
-        reg_value |= FIFO_UART_CTL_TXTHINTEN_MASK;
-        write_32bit_mmio_register(&LPC_FIFO->usart[uart_index].CTLSET, reg_value);
+        write_32bit_mmio_register(&LPC_FIFO->usart[uart_index].CTLSET,
+                                  FIFO_UART_CTL_TXTHINTEN_MASK);
     }
+#else
+    uart_putchar_with_polling(uart_device_p, c);
+#endif
 }
 
 #pragma GCC diagnostic pop
@@ -1341,8 +1451,8 @@ uart_getchar(
      */
     reg_value = read_32bit_mmio_register(&LPC_FIFO->usart[uart_index].CTLSET);
     if ((reg_value & FIFO_UART_CTL_RXTHINTEN_MASK) == 0) {
-        reg_value |= FIFO_UART_CTL_RXTHINTEN_MASK;
-        write_32bit_mmio_register(&LPC_FIFO->usart[uart_index].CTLSET, reg_value);
+        write_32bit_mmio_register(&LPC_FIFO->usart[uart_index].CTLSET,
+                                  FIFO_UART_CTL_RXTHINTEN_MASK);
     }
 
     bool entry_read = rtos_k_byte_circular_buffer_read(

@@ -46,12 +46,14 @@
     } while (0)
 
 #define SET_BIT_FIELD(_container, _bit_mask, _bit_shift, _value) \
-    do {                                                                \
-        (_container) &= ~(_bit_mask);                                   \
-        FDC_ASSERT(((uint32_t)(_value) << (_bit_shift)) <= (_bit_mask), \
-               _value, _bit_mask);                                      \
-        (_container) |=                                                 \
-            ((uint32_t)(_value) << (_bit_shift)) & (_bit_mask);         \
+    do {                                                                    \
+        (_container) &= ~(_bit_mask);                                       \
+        if ((_value) != 0) {                                                \
+            FDC_ASSERT(((uint32_t)(_value) << (_bit_shift)) <= (_bit_mask), \
+                       _value, _bit_mask);                                  \
+            (_container) |=                                                 \
+                ((uint32_t)(_value) << (_bit_shift)) & (_bit_mask);         \
+        }                                                                   \
     } while (0)
 
 #define BIT_MAP8(_bit7, _bit6, _bit5, _bit4, _bit3, _bit2, _bit1, _bit0) \

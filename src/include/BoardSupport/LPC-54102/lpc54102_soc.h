@@ -70,6 +70,22 @@ struct rtos_interrupt;  /* opaque type */
 #define SYSCON1_TIMER4_MASK  BIT(27)
 
 /*
+ * SYSCON FIFOCTRL register fields
+ */
+#define FIFOCTRL_U0TXFIFOEN_MASK    BIT(0)
+#define FIFOCTRL_U1TXFIFOEN_MASK    BIT(1)
+#define FIFOCTRL_U2TXFIFOEN_MASK    BIT(2)
+#define FIFOCTRL_U3TXFIFOEN_MASK    BIT(3)
+#define FIFOCTRL_SPI0TXFIFOEN_MASK  BIT(4)
+#define FIFOCTRL_SPI1TXFIFOEN_MASK  BIT(5)
+#define FIFOCTRL_U0RXFIFOEN_MASK    BIT(8)
+#define FIFOCTRL_U1RXFIFOEN_MASK    BIT(9)
+#define FIFOCTRL_U2RXFIFOEN_MASK    BIT(10)
+#define FIFOCTRL_U3RXFIFOEN_MASK    BIT(11)
+#define FIFOCTRL_SPI0RXFIFOEN_MASK  BIT(12)
+#define FIFOCTRL_SPI1RXFIFOEN_MASK  BIT(13)
+
+/*
  * Fields of UART CFG register
  */
 #define UART_CFG_ENABLE_MASK        BIT(0)
@@ -88,7 +104,11 @@ struct rtos_interrupt;  /* opaque type */
  * FIFOCTLUSART register fields
  */
 #define FIFOCTLUSART_RXPAUSE_MASK        BIT(0)
+#define FIFOCTLUSART_RXPAUSED_MASK       BIT(1)
+#define FIFOCTLUSART_RXEMPTY_MASK        BIT(2)
 #define FIFOCTLUSART_TXPAUSE_MASK        BIT(8)
+#define FIFOCTLUSART_TXPAUSED_MASK       BIT(9)
+#define FIFOCTLUSART_TXEMPTY_MASK        BIT(10)
 #define FIFOCTLUSART_RXFIFOTOTAL_MASK    MULTI_BIT_MASK(23, 16)
 #define FIFOCTLUSART_RXFIFOTOTAL_SHIFT   16
 #define FIFOCTLUSART_TXFIFOTOTAL_MASK    MULTI_BIT_MASK(31, 24)
@@ -160,6 +180,8 @@ struct uart_device {
     struct pin_info urt_tx_pin;
     struct pin_info urt_rx_pin;
     uint32_t urt_async_apb_control_mask;
+    uint32_t urt_tx_fifo_enable_mask;
+    uint32_t urt_rx_fifo_enable_mask;
     struct rtos_interrupt_registration_params urt_rtos_interrupt_params;
     struct rtos_interrupt **urt_rtos_interrupt_pp;
     const char *urt_transmit_queue_name_p;
@@ -180,7 +202,6 @@ struct uart_device_var {
     struct rtos_circular_buffer urt_receive_queue;
     uint8_t urt_tx_fifo_size;
     uint8_t urt_rx_fifo_size;
-    bool urt_fifos_enabled;
     uint8_t urt_transmit_queue_storage[UART_TRANSMIT_QUEUE_SIZE_IN_BYTES];
     uint8_t urt_receive_queue_storage[UART_RECEIVE_QUEUE_SIZE_IN_BYTES];
 };

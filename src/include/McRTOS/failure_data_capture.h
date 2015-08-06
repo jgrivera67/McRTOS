@@ -784,7 +784,7 @@ C_ASSERT(RTOS_NUM_CONTEXT_SWITCH_TRACE_BUFFER_ENTRIES <= UINT16_MAX);
 #define FDC_INFO_INITIALIZER(_fdc_info) \
     _fdc_info = {                                                       \
         .fdc_signature1 = FDC_INFO_SIGNATURE,                           \
-        .fdc_asserts_failures_breakpoint_on  = false,                   \
+        .fdc_asserts_failures_breakpoint_on = true,                     \
         .fdc_error_breakpoint_on = false,                               \
         .fdc_exception_debugger_on = true,                              \
         .fdc_handling_exception = false,                                \
