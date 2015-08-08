@@ -29,7 +29,9 @@
 
 .text
 .thumb
+#ifndef __ARM_ARCH_6M__
 .syntax unified
+#endif
 
 /*
  * PendSV exception handler. It is used for synchronous context switch.

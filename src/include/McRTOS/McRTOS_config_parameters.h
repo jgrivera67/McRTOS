@@ -190,13 +190,13 @@ C_ASSERT(RTOS_MAX_NUM_INTERRUPTS < SOC_NUM_INTERRUPT_CHANNELS);
 #endif
 
 
+#if defined(RTOS_APP_THREAD_STACK_DRAM_POOL_SIZE)
 /*
  * If the total size of application thread stacks is larger than 25% of
  * the SoC SRAM, use DRAM for the application thread stacks
  */
-#if (RTOS_MAX_NUM_APP_THREADS * RTOS_THREAD_STACK_SIZE_IN_BYTES) > \
-    (SOC_SRAM_SIZE / 4)
-#   if defined(RTOS_APP_THREAD_STACK_DRAM_POOL_SIZE)
+#   if (RTOS_MAX_NUM_APP_THREADS * RTOS_THREAD_STACK_SIZE_IN_BYTES) > \
+        (SOC_SRAM_SIZE / 4)
 #       define RTOS_USE_DRAM_FOR_APP_THREAD_STACKS
 
         C_ASSERT(

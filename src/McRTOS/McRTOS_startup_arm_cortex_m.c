@@ -72,8 +72,11 @@ cortex_m_set_ccr(void)
 {
     uint32_t reg_value = read_32bit_mmio_register(&SCB->CCR);
 
-    reg_value |= (SCB_CCR_UNALIGN_TRP_Msk |
-		  SCB_CCR_DIV_0_TRP_Msk);
+    reg_value |= SCB_CCR_UNALIGN_TRP_Msk;
+
+#   if __CORTEX_M >= 0x03
+    reg_value |= SCB_CCR_DIV_0_TRP_Msk;
+#   endif
 
     write_32bit_mmio_register(&SCB->CCR, reg_value);
 }
@@ -82,6 +85,7 @@ cortex_m_set_ccr(void)
 void
 cortex_m_enable_fpu(void)
 {
+#ifdef __FPU_PRESENT
     uint32_t reg_value;
 
     /*
@@ -102,12 +106,14 @@ cortex_m_enable_fpu(void)
 
     __DSB();
     __ISB();
+#endif
 }
 
 
 void
 cortex_m_disable_fpu(void)
 {
+#ifdef __FPU_PRESENT
     uint32_t reg_value;
 
     __DSB();
@@ -127,6 +133,7 @@ cortex_m_disable_fpu(void)
     SET_BIT_FIELD(reg_value, CPACR_CP10_MASK, CPACR_CP10_SHIFT, 0x0);
     SET_BIT_FIELD(reg_value, CPACR_CP11_MASK, CPACR_CP11_SHIFT, 0x0);
     write_32bit_mmio_register(&SCB->CPACR, reg_value);
+#endif
 }
 
 
@@ -136,6 +143,7 @@ cortex_m_disable_fpu(void)
 static void
 cortex_m_fpu_init(void)
 {
+#ifdef __FPU_PRESENT
     uint32_t reg_value;
 
     /**
@@ -164,12 +172,14 @@ cortex_m_fpu_init(void)
     reg_value |= SCnSCB_ACTLR_DISFPCA_Msk;
     write_32bit_mmio_register(&SCnSCB->ACTLR, reg_value);
 #endif
+#endif /* __FPU_PRESENT */
 }
 
 
 void
 cortex_m_save_fpu_context(struct fpu_context *fpu_context_p)
 {
+#ifdef __FPU_PRESENT
     asm volatile (
 	"mov		r1, %[fpu_context_p]\t\n"
 	"vstmia.32	r1!, {s0-s15}\n\t"
@@ -180,12 +190,14 @@ cortex_m_save_fpu_context(struct fpu_context *fpu_context_p)
 	: [fpu_context_p] "r" (fpu_context_p)
 	: "r1", "r2"
     );
+#endif
 }
 
 
 void
 cortex_m_restore_fpu_context(const struct fpu_context *fpu_context_p)
 {
+#ifdef __FPU_PRESENT
     asm volatile (
 	"mov		r1, %[fpu_context_p]\t\n"
 	"vldmia.32	r1!, {s0-s15}\n\t"
@@ -196,6 +208,7 @@ cortex_m_restore_fpu_context(const struct fpu_context *fpu_context_p)
 	: [fpu_context_p] "r" (fpu_context_p)
 	: "r1", "r2"
     );
+#endif
 }
 
 
@@ -296,7 +309,7 @@ int_log_base_2(uint32_t value)
 #   if __CORTEX_M >= 0x03
     log_value = 31 - __CLZ(value);
 #   else
-    for (uint32_t log_value = 31; (value & BIT(log_value)) == 0; log_value --)
+    for (log_value = 31; (value & BIT(log_value)) == 0; log_value --)
         ;
 #   endif
     return (uint8_t)log_value;

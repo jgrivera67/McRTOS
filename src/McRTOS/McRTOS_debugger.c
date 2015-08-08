@@ -328,6 +328,7 @@ rtos_dbg_dump_exception_info(
         before_exception_stack_p[CPU_REG_PC],
         before_exception_stack_p[CPU_REG_PSR]);
 
+#   if __CORTEX_M >= 0x03
     debugger_printf(
 	"Fault status registers (see section 4.3 of DUI0553A_cortex_m4_dgug.pdf):\n"
 	"\tSCB CFSR: %#x\n"
@@ -349,6 +350,12 @@ rtos_dbg_dump_exception_info(
 	"\tControl: %#x\n",
 	SCB->CPACR,
 	__get_CONTROL());
+#else
+    debugger_printf(
+	"Control registers:\n"
+	"\tControl: %#x\n",
+	__get_CONTROL());
+#endif
 
     debug_dump_captured_registers();
 

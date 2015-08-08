@@ -6,43 +6,40 @@
  * @author German Rivera
  */
 
-#include "hardware_abstractions.h"
-#include "kl25z_soc.h"
-#include "McRTOS_arm_cortex_m.h"
-#include "MKL25Z4.h"
-#include "failure_data_capture.h"
-#include "utils.h"
-#include "McRTOS_config_parameters.h"
-#include "McRTOS_kernel_services.h"
-#include "frdm_board.h"
-#include "mma8451q_accelerometer.h"
+#include <BoardSupport/hardware_abstractions.h>
+#include <BoardSupport/FRDM-KL25Z/kl25z_soc.h>
+#include <McRTOS/McRTOS_arm_cortex_m.h>
+#include <BoardSupport/FRDM-KL25Z/MKL25Z4.h>
+#include <McRTOS/failure_data_capture.h>
+#include <McRTOS/utils.h>
+#include <McRTOS/McRTOS_config_parameters.h>
+#include <McRTOS/McRTOS_kernel_services.h>
+#include <BoardSupport/FRDM-KL25Z/frdm_board.h>
+#include <BoardSupport/FRDM-KL25Z/mma8451q_accelerometer.h>
 
 static void rgb_led_init(void);
 
 /**
  * FRDM board RGB LED pins
  */
-static struct pin_config_info g_frdm_rgb_led_pins[] = {
-    [FRDM_RED_LED] = PIN_COFIG_INFO_INITIALIZER(
+static struct gpio_pin g_frdm_rgb_led_pins[] = {
+    [FRDM_RED_LED] = GPIO_PIN_INITIALIZER(
+            PORT_B,
             FRDM_RGB_LED_RED_PIN_INDEX,
-            PORT_PCR_MUX(1),
-            false,
-            PORTB_BASE_PTR,
-            PTB_BASE_PTR),
+            1,
+            false),
 
-    [FRDM_GREEN_LED] = PIN_COFIG_INFO_INITIALIZER(
+    [FRDM_GREEN_LED] =  GPIO_PIN_INITIALIZER(
+            PORT_B,
             FRDM_RGB_LED_GREEN_PIN_INDEX,
-            PORT_PCR_MUX(1),
-            false,
-            PORTB_BASE_PTR,
-            PTB_BASE_PTR),
+            1,
+            false),
 
-    [FRDM_BLUE_LED] = PIN_COFIG_INFO_INITIALIZER(
+    [FRDM_BLUE_LED] = GPIO_PIN_INITIALIZER(
+            PORT_D,
             FRDM_RGB_LED_BLUE_PIN_INDEX,
-            PORT_PCR_MUX(1),
-            false,
-            PORTD_BASE_PTR,
-            PTD_BASE_PTR)
+            1,
+            false),
 };
 
 C_ASSERT(ARRAY_SIZE(g_frdm_rgb_led_pins) == FRDM_NUM_RGB_LED_PINS);
@@ -52,13 +49,12 @@ static uint32_t g_rgb_led_current_mask = 0x0;
 /**
  * FRDM board accelerometer INT1 pin
  */
-static struct pin_config_info g_frdm_accelerometer_int1_pin =
-        PIN_COFIG_INFO_INITIALIZER(
+static struct gpio_pin g_frdm_accelerometer_int1_pin =
+        GPIO_PIN_INITIALIZER(
+            PORT_A,
             FRDM_ACCELEROMETER_INT1_PIN_INDEX,
-            PORT_PCR_MUX(1),
-            false,
-            PORTA_BASE_PTR,
-            PTA_BASE_PTR);
+            1,
+            false);
 
 void
 frdm_board_init(void)

@@ -144,14 +144,21 @@
  * So, we need to force an "artificial fault" here,
  * by doing an unaligned memory access.
  */
-#define ARTIFICIAL_BREAK_POINT() \
-    do {                                                                \
-        asm volatile (                                                  \
-            "mov    r0, #0x0\n\t"                                       \
-            "udiv   r0, r0, r0"                                         \
-            : : : "r0"                                                  \
-        );                                                              \
-    } while (0)
+#if __CORTEX_M >= 0x03
+#   define ARTIFICIAL_BREAK_POINT() \
+        do {                                                                \
+            asm volatile (                                                  \
+                "mov    r0, #0x0\n\t"                                       \
+                "udiv   r0, r0, r0"                                         \
+                : : : "r0"                                                  \
+            );                                                              \
+        } while (0)
+#else
+#   define ARTIFICIAL_BREAK_POINT() \
+        do {                                                                \
+            *(uint32_t *)((uintptr_t)0x1) = *(uint32_t *)((uintptr_t)0x1);  \
+        } while (0)
+#endif
 
 
 #define CONSOLE_POS_PRINTF(_row, _col, _fmt, ...) \

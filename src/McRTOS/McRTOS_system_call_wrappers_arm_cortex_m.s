@@ -16,7 +16,9 @@
 
 .text
 .thumb
+#ifndef __ARM_ARCH_6M__
 .syntax unified
+#endif
 
 /**
  * Macro that generates a system call wrapper function

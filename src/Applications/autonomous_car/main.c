@@ -8,11 +8,11 @@
  * @author German Rivera
  */
 
-#include "McRTOS.h"
-#include "McRTOS_kernel_services.h"
-#include "failure_data_capture.h"
-#include "utils.h"
-#include "frdm_board.h"
+#include <McRTOS/McRTOS.h>
+#include <McRTOS/McRTOS_kernel_services.h>
+#include <McRTOS/failure_data_capture.h>
+#include <McRTOS/utils.h>
+#include <BoardSupport/FRDM-KL25Z/frdm_board.h>
 #include "tfc_board.h"
 
 TODO("Remove these pragmas")
@@ -74,12 +74,12 @@ static fdc_error_t switches_and_buttons_reader_thread_f(void *arg);
 static fdc_error_t trimpot_reader_thread_f(void *arg);
 static fdc_error_t battery_monitor_thread_f(void *arg);
 static fdc_error_t accelerometer_thread_f(void *arg);
-static void toggle_dump_camera_frames(const char *cmd_line);
+static void toggle_dump_camera_frames(void);
 
 /**
- * Array of application threads for CPU core 0
+ * Array of application thread creation parameters
  */
-static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
+static const struct rtos_thread_creation_params g_app_thread_creation_params[] =
 {
     [0] =
     {
@@ -87,7 +87,6 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
         .p_function_p = camera_frame_reader_thread_f,
         .p_function_arg_p = NULL,
         .p_priority = CAMERA_FRAME_READER_THREAD_PRIORITY,
-        .p_thread_pp = NULL,
     },
 
     [1] =
@@ -96,7 +95,6 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
         .p_function_p = car_driver_thread_f,
         .p_function_arg_p = NULL,
         .p_priority = CAR_DRIVER_THREAD_PRIORITY,
-        .p_thread_pp = NULL,
     },
 
     [2] =
@@ -105,7 +103,6 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
         .p_function_p = trimpot_reader_thread_f,
         .p_function_arg_p = NULL,
         .p_priority = TRIMPOT_READER_THREAD_PRIORITY,
-        .p_thread_pp = NULL,
     },
 
     [3] =
@@ -114,7 +111,6 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
         .p_function_p = switches_and_buttons_reader_thread_f,
         .p_function_arg_p = NULL,
         .p_priority = SWITCHES_AND_BUTTONS_READER_THREAD_PRIORITY,
-        .p_thread_pp = NULL,
     },
 
     [4] =
@@ -123,7 +119,6 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
         .p_function_p = battery_monitor_thread_f,
         .p_function_arg_p = NULL,
         .p_priority = BATTERY_MONITOR_THREAD_PRIORITY,
-        .p_thread_pp = NULL,
     },
 
     [5] =
@@ -132,12 +127,22 @@ static const struct rtos_thread_creation_params g_app_threads_cpu0[] =
         .p_function_p = accelerometer_thread_f,
         .p_function_arg_p = NULL,
         .p_priority = ACCELEROMETER_THREAD_PRIORITY,
-        .p_thread_pp = NULL,
     },
 };
 
-C_ASSERT(
-    ARRAY_SIZE(g_app_threads_cpu0) <= RTOS_MAX_NUM_APP_THREADS);
+#define RTOS_NUM_APP_THREADS    ARRAY_SIZE(g_app_thread_creation_params)
+
+C_ASSERT(RTOS_NUM_APP_THREADS <= RTOS_MAX_NUM_APP_THREADS);
+
+/**
+ * Array of execution stacks for application threads
+ */
+static struct rtos_thread_execution_stack g_app_thread_execution_stacks[RTOS_NUM_APP_THREADS];
+
+/**
+ * Array of application threads
+ */
+struct rtos_thread g_app_threads[RTOS_NUM_APP_THREADS];
 
 /**
  * Array of application-specific console commands
@@ -163,18 +168,6 @@ static const struct rtos_startup_app_configuration g_rtos_app_config =
     .stc_app_software_init_p = autonomous_car_app_init,
     .stc_num_app_console_commands = ARRAY_SIZE(g_app_console_commands),
     .stc_app_console_commands_p = g_app_console_commands,
-    .stc_per_cpu_config =
-    {
-        /*
-         * CPU core 0
-         */
-        [0] =
-        {
-            .stc_idle_thread_hook_function_p = NULL,
-            .stc_num_autostart_threads = ARRAY_SIZE(g_app_threads_cpu0),
-            .stc_autostart_threads_p = g_app_threads_cpu0,
-        },
-    },
 };
 
 /**
@@ -262,18 +255,18 @@ struct autonomous_car {
     /**
      * Flag to enable/disable driving the car
      */
-    volatile bool c_turned_on;
+     alignas(MIN_MPU_REGION_ALIGNMENT) volatile bool c_turned_on;
 
     /**
-     * Pointer to mutex to serialize access to c_turned_on
+     * Mutex to serialize access to c_turned_on
      */
-    struct rtos_mutex *c_turned_on_mutex_p;
+    struct rtos_mutex c_turned_on_mutex;
 
     /**
-     * Pointer to condvar to signal threads to be activated when the
+     * Condvar to signal threads to be activated when the
      * car is turned on.
      */
-    struct rtos_condvar *c_turned_on_condvar_p;
+    struct rtos_condvar c_turned_on_condvar;
 
     /**
      * Array of entries for g_camera_frame_buffer_pool
@@ -288,14 +281,14 @@ struct autonomous_car {
         *c_captured_camera_frames_queue_entries[NUM_CAMERA_FRAMES];
 
     /**
-     * Pointer to mutex to serialize access to g_camera_frame_buffer_pool
+     * Mutex to serialize access to g_camera_frame_buffer_pool
      */
-    struct rtos_mutex *c_camera_frame_buffer_pool_mutex_p;
+    struct rtos_mutex c_camera_frame_buffer_pool_mutex;
 
     /**
-     * Pointer to mutex to serialize access to g_camera_frames_queue
+     * Mutex to serialize access to g_camera_frames_queue
      */
-    struct rtos_mutex *c_captured_camera_frames_queue_mutex_p;
+    struct rtos_mutex c_captured_camera_frames_queue_mutex;
 
     /**
      * Array of raw camera frame buffers
@@ -350,16 +343,12 @@ struct autonomous_car {
      * Push buttons state
      */
     volatile bool c_push_buttons[TFC_NUM_PUSH_BUTTONS];
-} __attribute__ ((aligned(SOC_MPU_REGION_ALIGNMENT)));
+};
 
-C_ASSERT(sizeof(struct autonomous_car) % SOC_MPU_REGION_ALIGNMENT == 0);
+C_ASSERT(sizeof(struct autonomous_car) % MIN_MPU_REGION_ALIGNMENT == 0);
 
 static struct autonomous_car g_car = {
     .c_turned_on = false,
-    .c_turned_on_mutex_p = NULL,
-    .c_turned_on_condvar_p = NULL,
-    .c_camera_frame_buffer_pool_mutex_p = NULL,
-    .c_captured_camera_frames_queue_mutex_p = NULL,
     .c_dump_camera_frames_on = false,
     .c_x_acceleration = 0,
     .c_y_acceleration = 0,
@@ -411,31 +400,23 @@ void autonomous_car_app_init(void)
     static const char g_app_version[] = "Autonomous car v0.1";
     static const char g_app_build_timestamp[] = "built " __DATE__ " " __TIME__;
     fdc_error_t fdc_error;
-    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
-    struct rtos_mutex_creation_params mutex_params;
-    struct rtos_condvar_creation_params condvar_params;
 
    /*
     * Initialize camera frame buffer pool:
     */
 
-    mutex_params.p_name_p = "Camera frame buffer pool mutex";
-    mutex_params.p_mutex_pp = &g_car.c_camera_frame_buffer_pool_mutex_p;
-    fdc_error = rtos_k_create_mutex(&mutex_params);
-    if (fdc_error != 0) {
-        fatal_error_handler(fdc_error);
-    }
+    rtos_mutex_init("Camera frame buffer pool mutex",
+                    &g_car.c_camera_frame_buffer_pool_mutex);
 
-    rtos_k_pointer_circular_buffer_init(
+    rtos_pointer_circular_buffer_init(
         "Raw camera frame buffer pool",
         NUM_CAMERA_FRAMES,
         (void **)g_car.c_camera_frame_buffer_pool_entries,
-        g_car.c_camera_frame_buffer_pool_mutex_p,
-        cpu_id,
+        &g_car.c_camera_frame_buffer_pool_mutex,
         &g_car.c_camera_frame_buffer_pool);
 
     for (int i = 0; i < NUM_CAMERA_FRAMES; i++) {
-        bool write_ok = rtos_k_pointer_circular_buffer_write(
+        bool write_ok = rtos_pointer_circular_buffer_write(
                             &g_car.c_camera_frame_buffer_pool,
                             &g_car.c_camera_frames[i],
                             false);
@@ -447,41 +428,21 @@ void autonomous_car_app_init(void)
      * Initialize captured camera frames circular buffer:
      */
 
-    mutex_params.p_name_p = "Captured camera frames circular buffer mutex";
-    mutex_params.p_mutex_pp = &g_car.c_captured_camera_frames_queue_mutex_p;
-    fdc_error = rtos_k_create_mutex(&mutex_params);
-    if (fdc_error != 0) {
-        fatal_error_handler(fdc_error);
-    }
+    rtos_mutex_init("Captured camera frames circular buffer mutex",
+                    &g_car.c_captured_camera_frames_queue_mutex);
 
-    rtos_k_pointer_circular_buffer_init(
+    rtos_pointer_circular_buffer_init(
         "Captured camera frames",
         NUM_CAMERA_FRAMES,
         (void **)g_car.c_captured_camera_frames_queue_entries,
-        g_car.c_captured_camera_frames_queue_mutex_p,
-        cpu_id,
+        &g_car.c_captured_camera_frames_queue_mutex,
         &g_car.c_captured_camera_frames_queue);
 
-    mutex_params.p_name_p = "c_turned_on mutex";
-    mutex_params.p_mutex_pp = &g_car.c_turned_on_mutex_p;
-    fdc_error = rtos_k_create_mutex(&mutex_params);
-    if (fdc_error != 0) {
-        fatal_error_handler(fdc_error);
-    }
+    rtos_mutex_init("c_turned_on mutex",
+                    &g_car.c_turned_on_mutex);
 
-    mutex_params.p_name_p = "c_turned_on mutex";
-    mutex_params.p_mutex_pp = &g_car.c_turned_on_mutex_p;
-    fdc_error = rtos_k_create_mutex(&mutex_params);
-    if (fdc_error != 0) {
-        fatal_error_handler(fdc_error);
-    }
-
-    condvar_params.p_name_p = "c_turned_on condvar";
-    condvar_params.p_condvar_pp = &g_car.c_turned_on_condvar_p;
-    fdc_error = rtos_k_create_condvar(&condvar_params);
-    if (fdc_error != 0) {
-        fatal_error_handler(fdc_error);
-    }
+    rtos_condvar_init("c_turned_on condvar",
+                      &g_car.c_turned_on_condvar);
 
     /*
      * Get initial trimpot reading:
@@ -550,20 +511,17 @@ camera_frame_reader_thread_f(void *arg)
 
     FDC_ASSERT(arg == NULL, arg, cpu_id);
 
-    fdc_error = rtos_mpu_rw_region_push(&g_car, &g_car + 1);
-    if (fdc_error != 0) {
-	return fdc_error;
-    }
+    rtos_thread_set_comp_region(&g_car, sizeof g_car, 0, NULL);
 
     console_printf("Initializing camera frame reader thread ...\n");
 
     for ( ; ; ) {
-        rtos_mutex_acquire(g_car.c_turned_on_mutex_p);
+        rtos_mutex_acquire(&g_car.c_turned_on_mutex);
         if (!g_car.c_turned_on) {
             do {
                 rtos_condvar_wait(
-                    g_car.c_turned_on_condvar_p,
-                    g_car.c_turned_on_mutex_p, NULL);
+                    &g_car.c_turned_on_condvar,
+                    &g_car.c_turned_on_mutex, NULL);
             } while (!g_car.c_turned_on);
 
             /*
@@ -571,26 +529,26 @@ camera_frame_reader_thread_f(void *arg)
              */
             tfc_camera_read_frame(NULL);
         }
-        rtos_mutex_release(g_car.c_turned_on_mutex_p);
+        rtos_mutex_release(&g_car.c_turned_on_mutex);
 
         /*
          * Get next available buffer from the frame buffer pool:
          */
         struct tfc_camera_frame *frame_buffer_p = NULL;
-        bool read_ok = rtos_k_pointer_circular_buffer_read(
+        bool read_ok = rtos_pointer_circular_buffer_read(
                             &g_car.c_camera_frame_buffer_pool,
                             (void **)&frame_buffer_p,
-                            false);
+                            false, NULL);
 
         if (!read_ok) {
             /*
              * The frame buffer pool is empty, so drop the oldest captured
              * frame, to use its buffer to capture the next camera frame:
              */
-            read_ok = rtos_k_pointer_circular_buffer_read(
+            read_ok = rtos_pointer_circular_buffer_read(
                         &g_car.c_captured_camera_frames_queue,
                         (void **)&frame_buffer_p,
-                        false);
+                        false, NULL);
 
             FDC_ASSERT(read_ok, 0, 0);
         }
@@ -603,7 +561,7 @@ camera_frame_reader_thread_f(void *arg)
         tfc_camera_read_frame(frame_buffer_p);
 
         bool write_ok =
-            rtos_k_pointer_circular_buffer_write(
+            rtos_pointer_circular_buffer_write(
                 &g_car.c_captured_camera_frames_queue,
                 frame_buffer_p,
                 false);
@@ -732,7 +690,7 @@ find_middle_black_spot(
 
 
 static void
-toggle_dump_camera_frames(const char *cmd_line)
+toggle_dump_camera_frames(void)
 {
     g_car.c_dump_camera_frames_on ^= true;
 }
@@ -924,9 +882,9 @@ steer_wheels(
 static void
 turn_off_car(void)
 {
-    rtos_mutex_acquire(g_car.c_turned_on_mutex_p);
+    rtos_mutex_acquire(&g_car.c_turned_on_mutex);
     g_car.c_turned_on = false;
-    rtos_mutex_release(g_car.c_turned_on_mutex_p);
+    rtos_mutex_release(&g_car.c_turned_on_mutex);
 
     tfc_battery_leds_set(0);
     console_printf("Car turned off\n");
@@ -949,10 +907,10 @@ turn_on_car(void)
     tfc_battery_leds_set(TFC_NUM_BATTERY_LEDS);
     console_printf("Car turned on\n");
 
-    rtos_mutex_acquire(g_car.c_turned_on_mutex_p);
+    rtos_mutex_acquire(&g_car.c_turned_on_mutex);
     g_car.c_turned_on = true;
-    rtos_mutex_release(g_car.c_turned_on_mutex_p);
-    rtos_condvar_broadcast(g_car.c_turned_on_condvar_p);
+    rtos_mutex_release(&g_car.c_turned_on_mutex);
+    rtos_condvar_broadcast(&g_car.c_turned_on_condvar);
 }
 
 
@@ -973,12 +931,12 @@ car_driver_thread_f(void *arg)
     for ( ; ; ) {
         struct tfc_camera_frame *camera_frame_p;
 
-        rtos_mutex_acquire(g_car.c_turned_on_mutex_p);
+        rtos_mutex_acquire(&g_car.c_turned_on_mutex);
         if (!g_car.c_turned_on) {
             do {
                 rtos_condvar_wait(
-                    g_car.c_turned_on_condvar_p,
-                    g_car.c_turned_on_mutex_p, NULL);
+                    &g_car.c_turned_on_condvar,
+                    &g_car.c_turned_on_mutex, NULL);
             } while (!g_car.c_turned_on);
 
             set_wheels_straight();
@@ -986,7 +944,7 @@ car_driver_thread_f(void *arg)
             current_steering_servo_pwm_duty_cycle_us =
                 TFC_STEERING_SERVO_NEUTRAL_DUTY_CYCLE_US;
         }
-        rtos_mutex_release(g_car.c_turned_on_mutex_p);
+        rtos_mutex_release(&g_car.c_turned_on_mutex);
 
         pwm_duty_cycle_us_t base_wheel_motor_pwm_duty_cycle_us =
             calculate_base_wheel_motor_pwm_duty_cycle_us();
@@ -998,10 +956,10 @@ car_driver_thread_f(void *arg)
         /*
          * Get the next camera frame to process, or wait if there is none yet:
          */
-        (void)rtos_k_pointer_circular_buffer_read(
+        (void)rtos_pointer_circular_buffer_read(
             &g_car.c_captured_camera_frames_queue,
             (void **)&camera_frame_p,
-            true);
+            true, NULL);
 
         previous_center_black_spot_position = center_black_spot_position;
         bool black_spot_found =

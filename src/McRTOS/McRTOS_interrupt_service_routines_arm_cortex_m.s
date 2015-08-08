@@ -13,7 +13,9 @@
 
 .text
 .thumb
+#ifndef __ARM_ARCH_6M__
 .syntax unified
+#endif
 
 /*
  * Generate ISR functions:

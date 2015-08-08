@@ -1516,7 +1516,7 @@ void set_pin_function(const struct pin_info *pin_p, uint32_t pin_flags)
         fatal_error_handler(fdc_error);
     }
 
-    volatile PORT_Type *port_regs_p =
+    PORT_MemMapPtr port_regs_p =
 	g_pin_config_registers[pin_p->pin_port].pin_port_regs_p;
 
     write_32bit_mmio_register(

@@ -6,14 +6,14 @@
  * @author German Rivera
  */
 
-#include "hardware_abstractions.h"
-#include "kl25z_soc.h"
-#include "frdm_board.h"
-#include "McRTOS_arm_cortex_m.h"
-#include "failure_data_capture.h"
-#include "utils.h"
-#include "McRTOS_config_parameters.h"
-#include "McRTOS_kernel_services.h"
+#include <BoardSupport/hardware_abstractions.h>
+#include <BoardSupport/FRDM-KL25Z/kl25z_soc.h>
+#include <BoardSupport/FRDM-KL25Z/frdm_board.h>
+#include <McRTOS/McRTOS_arm_cortex_m.h>
+#include <McRTOS/failure_data_capture.h>
+#include <McRTOS/utils.h>
+#include <McRTOS/McRTOS_config_parameters.h>
+#include <McRTOS/McRTOS_kernel_services.h>
 
 /**
  * Crystal frequency in HZ
@@ -936,110 +936,166 @@ get_cpu_clock_cycles(void)
 }
 #endif /* _CPU_CYCLES_MEASURE_ */
 
+void set_pin_function(const struct pin_info *pin_p, uint32_t pin_flags)
+{
+    const struct pin_info **pins_in_use_entry_p =
+	&g_pins_in_use_map[pin_p->pin_port][pin_p->pin_index];
+
+    FDC_ASSERT_CPU_INTERRUPTS_DISABLED();
+    if (*pins_in_use_entry_p != NULL) {
+	fdc_error_t fdc_error =
+            CAPTURE_FDC_ERROR("Pin already allocated", pin_p->pin_port,
+			      pin_p->pin_index);
+
+        fatal_error_handler(fdc_error);
+    }
+
+    volatile PORT_Type *port_regs_p =
+	g_pin_config_registers[pin_p->pin_port].pin_port_regs_p;
+
+    write_32bit_mmio_register(
+        &port_regs_p->PCR[pin_p->pin_index],
+        PORT_PCR_MUX(pin_p->pin_function) | pin_flags);
+
+    *pins_in_use_entry_p = pin_p;
+}
+
 
 /**
- * It configures a GPIO pin of the KL25 SoC
+ * It configures a GPIO pin of the K64F SoC
  */
 void
-configure_pin(const struct pin_config_info *pin_info_p, bool is_output)
+configure_gpio_pin(const struct gpio_pin *gpio_pin_p, uint32_t pin_flags,
+		   bool is_output)
 {
     uint32_t reg_value;
 
-    write_32bit_mmio_register(
-        &PORT_PCR_REG(pin_info_p->pin_port_base_p, pin_info_p->pin_bit_index),
-        pin_info_p->pin_pcr_value);
+    bool caller_was_privileged = rtos_enter_privileged_mode();
 
-    if (is_output) {
-        reg_value = read_32bit_mmio_register(
-                        &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p));
-        reg_value |= pin_info_p->pin_bit_mask;
-        write_32bit_mmio_register(
-            &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p), reg_value);
+    cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
+
+    set_pin_function(&gpio_pin_p->pin_info, pin_flags);
+
+    GPIO_MemMapPtr gpio_regs_p =
+	g_pin_config_registers[gpio_pin_p->pin_info.pin_port].pin_gpio_regs_p;
+
+   if (is_output) {
+        reg_value = read_32bit_mmio_register(&gpio_regs_p->PDDR);
+        reg_value |= gpio_pin_p->pin_bit_mask;
+        write_32bit_mmio_register(&gpio_regs_p->PDDR, reg_value);
+    } else {
+        reg_value = read_32bit_mmio_register(&gpio_regs_p->PDDR);
+        reg_value &= ~gpio_pin_p->pin_bit_mask;
+        write_32bit_mmio_register(&gpio_regs_p->PDDR, reg_value);
     }
-    else
-    {
-        reg_value = read_32bit_mmio_register(
-                        &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p));
-        reg_value &= ~pin_info_p->pin_bit_mask;
-        write_32bit_mmio_register(
-            &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p), reg_value);
+
+    rtos_k_restore_cpu_interrupts(cpu_status_register);
+
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
     }
 }
 
 
 void
-activate_output_pin(const struct pin_config_info *pin_info_p)
+activate_output_pin(const struct gpio_pin *gpio_pin_p)
 {
+    GPIO_MemMapPtr gpio_regs_p =
+	g_pin_config_registers[gpio_pin_p->pin_info.pin_port].pin_gpio_regs_p;
+
+    bool caller_was_privileged = rtos_enter_privileged_mode();
+
 #   ifdef DEBUG
-    uint32_t reg_value = read_32bit_mmio_register(
-                            &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p));
+    uint32_t reg_value = read_32bit_mmio_register(&gpio_regs_p->PDDR);
 
     FDC_ASSERT(
-        reg_value & pin_info_p->pin_bit_mask,
-        pin_info_p, reg_value);
+        reg_value & gpio_pin_p->pin_bit_mask,
+        gpio_pin_p, reg_value);
 #   endif
 
-    if (pin_info_p->pin_is_active_high) {
-        write_32bit_mmio_register(
-            &GPIO_PSOR_REG(pin_info_p->pin_gpio_base_p),
-            pin_info_p->pin_bit_mask);
+    if (gpio_pin_p->pin_is_active_high) {
+        write_32bit_mmio_register(&gpio_regs_p->PSOR, gpio_pin_p->pin_bit_mask);
     } else {
         write_32bit_mmio_register(
-            &GPIO_PCOR_REG(pin_info_p->pin_gpio_base_p),
-            pin_info_p->pin_bit_mask);
+            &gpio_regs_p->PCOR, gpio_pin_p->pin_bit_mask);
+    }
+
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
     }
 }
 
 
 void
-deactivate_output_pin(const struct pin_config_info *pin_info_p)
+deactivate_output_pin(const struct gpio_pin *gpio_pin_p)
 {
+    GPIO_MemMapPtr gpio_regs_p =
+	g_pin_config_registers[gpio_pin_p->pin_info.pin_port].pin_gpio_regs_p;
+
+    bool caller_was_privileged = rtos_enter_privileged_mode();
+
 #   ifdef DEBUG
-    uint32_t reg_value = read_32bit_mmio_register(
-                            &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p));
+    uint32_t reg_value = read_32bit_mmio_register(&gpio_regs_p->PDDR);
 
     FDC_ASSERT(
-        reg_value & pin_info_p->pin_bit_mask,
-        reg_value, pin_info_p->pin_bit_mask);
+        reg_value & gpio_pin_p->pin_bit_mask,
+        reg_value, gpio_pin_p->pin_bit_mask);
 #   endif
 
-    if (pin_info_p->pin_is_active_high) {
-        write_32bit_mmio_register(
-            &GPIO_PCOR_REG(pin_info_p->pin_gpio_base_p),
-            pin_info_p->pin_bit_mask);
+    if (gpio_pin_p->pin_is_active_high) {
+        write_32bit_mmio_register(&gpio_regs_p->PCOR, gpio_pin_p->pin_bit_mask);
     } else {
-        write_32bit_mmio_register(
-            &GPIO_PSOR_REG(pin_info_p->pin_gpio_base_p),
-            pin_info_p->pin_bit_mask);
+        write_32bit_mmio_register(&gpio_regs_p->PSOR, gpio_pin_p->pin_bit_mask);
+    }
+
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
     }
 }
 
 
 void
-toggle_output_pin(const struct pin_config_info *pin_info_p)
+toggle_output_pin(const struct gpio_pin *gpio_pin_p)
 {
+    GPIO_MemMapPtr gpio_regs_p =
+	g_pin_config_registers[gpio_pin_p->pin_info.pin_port].pin_gpio_regs_p;
+
+    bool caller_was_privileged = rtos_enter_privileged_mode();
+
 #   ifdef DEBUG
-    uint32_t reg_value = read_32bit_mmio_register(
-                            &GPIO_PDDR_REG(pin_info_p->pin_gpio_base_p));
+    uint32_t reg_value = read_32bit_mmio_register(&gpio_regs_p->PDDR);
 
     FDC_ASSERT(
-        reg_value & pin_info_p->pin_bit_mask,
-        pin_info_p, reg_value);
+        reg_value & gpio_pin_p->pin_bit_mask,
+        gpio_pin_p, reg_value);
 #   endif
 
     write_32bit_mmio_register(
-        &GPIO_PTOR_REG(pin_info_p->pin_gpio_base_p),
-        pin_info_p->pin_bit_mask);
+        &gpio_regs_p->PTOR, gpio_pin_p->pin_bit_mask);
+
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
+    }
 }
 
 
 bool
-read_input_pin(const struct pin_config_info *pin_info_p)
+read_input_pin(const struct gpio_pin *gpio_pin_p)
 {
-    uint32_t reg_value = read_32bit_mmio_register(
-        &GPIO_PDIR_REG(pin_info_p->pin_gpio_base_p));
+    GPIO_MemMapPtr gpio_regs_p =
+	g_pin_config_registers[gpio_pin_p->pin_info.pin_port].pin_gpio_regs_p;
 
-    return (reg_value & pin_info_p->pin_bit_mask) != 0;
+    bool caller_was_privileged = rtos_enter_privileged_mode();
+
+    uint32_t reg_value = read_32bit_mmio_register(&gpio_regs_p->PDIR);
+
+    bool result = ((reg_value & gpio_pin_p->pin_bit_mask) != 0);
+
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
+    }
+
+    return result;
 }
 
 

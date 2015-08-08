@@ -5,12 +5,13 @@
  *
  * @author German Rivera
  */
-#include "hardware_abstractions.h"
-#include "McRTOS_arm_cortex_m.h"
-#include "failure_data_capture.h"
-#include "utils.h"
-#include "McRTOS_config_parameters.h"
-#include "McRTOS_kernel_services.h"
+#include <BoardSupport/hardware_abstractions.h>
+#include <BoardSupport/FRDM-KL25Z/kl25z_soc.h>
+#include <McRTOS/McRTOS_arm_cortex_m.h>
+#include <McRTOS/failure_data_capture.h>
+#include <McRTOS/utils.h>
+#include <McRTOS/McRTOS_config_parameters.h>
+#include <McRTOS/McRTOS_kernel_services.h>
 #include "tfc_board.h"
 
 TODO("Remove these pragmas")
@@ -302,99 +303,89 @@ const struct adc_device *const g_adc0_device_p = &g_adc0_device;
 /**
  * TFC H-Bridge Enable pin for wheel motors (KL25's pin PTE21)
  */
-static struct pin_config_info g_tfc_hbridge_enable_pin =
-    PIN_COFIG_INFO_INITIALIZER(
+static struct gpio_pin g_tfc_hbridge_enable_pin =
+    GPIO_PIN_INITIALIZER(
+        PIN_PORT_E,
         TFC_HBRIDGE_ENABLE_PIN_INDEX,
-        PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK,
-        true,
-        PORTE_BASE_PTR,
-        PTE_BASE_PTR);
+        1,
+        true);
 
 /**
  * TFC H-Bridge Fault pin for wheel motors (KL25's pin PTE20)
  */
-static struct pin_config_info g_tfc_hbridge_fault_pin =
-    PIN_COFIG_INFO_INITIALIZER(
+static struct gpio_pin g_tfc_hbridge_fault_pin =
+    GPIO_PIN_INITIALIZER(
+        PIN_PORT_E,
         TFC_HBRIDGE_FAULT_PIN_INDEX,
-        PORT_PCR_MUX(1),
-        true,
-        PORTE_BASE_PTR,
-        PTE_BASE_PTR);
+        1,
+        true);
 
 /**
  * TFC camera SI pin (KL25's pin PTD7)
  */
-static struct pin_config_info g_tfc_camera_si_pin =
-    PIN_COFIG_INFO_INITIALIZER(
+static struct gpio_pin g_tfc_camera_si_pin =
+    GPIO_PIN_INITIALIZER(
+        PIN_PORT_D,
         TFC_CAMERA_SI_PIN_INDEX,
-        PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK,
-        true,
-        PORTD_BASE_PTR,
-        PTD_BASE_PTR);
+        1,
+        true);
 
 /**
  * TFC camera CLK pin (KL25's pin PTE1)
  */
-static struct pin_config_info g_tfc_camera_clk_pin =
-    PIN_COFIG_INFO_INITIALIZER(
+static struct gpio_pin g_tfc_camera_clk_pin =
+    GPIO_PIN_INITIALIZER(
+        PIN_PORT_E,
         TFC_CAMERA_CLK_PIN_INDEX,
-        PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK,
-        true,
-        PORTE_BASE_PTR,
-        PTE_BASE_PTR);
+        1,
+        true);
 
 /**
  * TFC camera AO0 pin (KL25's pin PTD5)
  */
-static struct pin_config_info g_tfc_camera_ao0_pin =
-    PIN_COFIG_INFO_INITIALIZER(
+static struct gpio_pin g_tfc_camera_ao0_pin =
+    GPIO_PIN_INITIALIZER(
+        PIN_PORT_D,
         TFC_CAMERA_AO0_PIN_INDEX,
-        PORT_PCR_MUX(0),
-        true,
-        PORTD_BASE_PTR,
-        PTD_BASE_PTR);
+        0,
+        true);
 
 #if 0
 /**
  * TFC camera AO1 pin (KL25's pin PTD6)
  */
-static struct pin_config_info g_tfc_camera_ao1_pin =
-    PIN_COFIG_INFO_INITIALIZER(
+static struct gpio_pin g_tfc_camera_ao1_pin =
+    GPIO_PIN_INITIALIZER(
+        PIN_PORT_D,
         TFC_CAMERA_AO1_PIN_INDEX,
-        PORT_PCR_MUX(0),
-        true,
-        PORTD_BASE_PTR,
-        PTD_BASE_PTR);
+        0,
+        true);
 #endif
 
 /**
  * TFC Battery LEDs pins (KL25's pins PTB8 - PTB11)
  */
-static struct pin_config_info g_tfc_battery_led_pins[] = {
-    [0] = PIN_COFIG_INFO_INITIALIZER(
+static struct gpio_pin g_tfc_battery_led_pins[] = {
+    [0] = GPIO_PIN_INITIALIZER(
+            PIN_PORT_B,
             TFC_BATTERY_LEDS_FIRST_PIN_INDEX,
-            PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK,
-            true,
-            PORTB_BASE_PTR,
-            PTB_BASE_PTR),
-    [1] = PIN_COFIG_INFO_INITIALIZER(
+            1,
+            true),
+    [1] = GPIO_PIN_INITIALIZER(
+            PIN_PORT_B,
             TFC_BATTERY_LEDS_FIRST_PIN_INDEX + 1,
-            PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK,
-            true,
-            PORTB_BASE_PTR,
-            PTB_BASE_PTR),
-    [2] = PIN_COFIG_INFO_INITIALIZER(
+            1,
+            true),
+    [2] = GPIO_PIN_INITIALIZER(
+            PIN_PORT_B,
             TFC_BATTERY_LEDS_FIRST_PIN_INDEX + 2,
-            PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK,
-            true,
-            PORTB_BASE_PTR,
-            PTB_BASE_PTR),
-    [3] = PIN_COFIG_INFO_INITIALIZER(
+            1,
+            true),
+    [3] = GPIO_PIN_INITIALIZER(
+            PIN_PORT_B,
             TFC_BATTERY_LEDS_FIRST_PIN_INDEX + 3,
-            PORT_PCR_MUX(1) | PORT_PCR_DSE_MASK,
-            true,
-            PORTB_BASE_PTR,
-            PTB_BASE_PTR)
+            1,
+            true),
 };
 
 C_ASSERT(ARRAY_SIZE(g_tfc_battery_led_pins) == TFC_NUM_BATTERY_LEDS);
@@ -402,51 +393,45 @@ C_ASSERT(ARRAY_SIZE(g_tfc_battery_led_pins) == TFC_NUM_BATTERY_LEDS);
 /**
  * TFC DIP switches pins (KL25's pins PTE2 - PTE5)
  */
-static struct pin_config_info g_tfc_dip_switch_pins[] = {
-    [0] = PIN_COFIG_INFO_INITIALIZER(
+static struct gpio_pin g_tfc_dip_switch_pins[] = {
+    [0] = GPIO_PIN_INITIALIZER(
+            PIN_PORT_E,
             TFC_DIP_SWITCHES_FIRST_PIN_INDEX,
-            PORT_PCR_MUX(1),
-            true,
-            PORTE_BASE_PTR,
-            PTE_BASE_PTR),
-    [1] = PIN_COFIG_INFO_INITIALIZER(
+            1,
+            true),
+    [1] = GPIO_PIN_INITIALIZER(
+            PIN_PORT_E,
             TFC_DIP_SWITCHES_FIRST_PIN_INDEX + 1,
-            PORT_PCR_MUX(1),
-            true,
-            PORTE_BASE_PTR,
-            PTE_BASE_PTR),
-    [2] = PIN_COFIG_INFO_INITIALIZER(
+            1,
+            true),
+    [2] = GPIO_PIN_INITIALIZER(
+            PIN_PORT_E,
             TFC_DIP_SWITCHES_FIRST_PIN_INDEX + 2,
-            PORT_PCR_MUX(1),
-            true,
-            PORTE_BASE_PTR,
-            PTE_BASE_PTR),
-    [3] = PIN_COFIG_INFO_INITIALIZER(
+            1,
+            true),
+    [3] = GPIO_PIN_INITIALIZER(
+            PIN_PORT_E,
             TFC_DIP_SWITCHES_FIRST_PIN_INDEX + 3,
-            PORT_PCR_MUX(1),
-            true,
-            PORTE_BASE_PTR,
-            PTE_BASE_PTR)
+            1,
+            true),
 };
 
 C_ASSERT(ARRAY_SIZE(g_tfc_dip_switch_pins) == TFC_NUM_DIP_SWITCHES);
 
 /**
- * TFC push buttons pins (KL25's pins PTC13, PTE17)
+ * TFC push buttons pins (KL25's pins PTC13, PTC17)
  */
-static struct pin_config_info g_tfc_push_button_pins[] = {
-    [0] = PIN_COFIG_INFO_INITIALIZER(
+static struct gpio_pin g_tfc_push_button_pins[] = {
+    [0] = GPIO_PIN_INITIALIZER(
+            PIN_PORT_C,
             TFC_PUSH_BUTTON_SW1_PIN_INDEX,
-            PORT_PCR_MUX(1),
-            true,
-            PORTC_BASE_PTR,
-            PTC_BASE_PTR),
-    [1] = PIN_COFIG_INFO_INITIALIZER(
+            1,
+            true),
+    [1] = GPIO_PIN_INITIALIZER(
+            PIN_PORT_C,
             TFC_PUSH_BUTTON_SW2_PIN_INDEX,
-            PORT_PCR_MUX(1),
-            true,
-            PORTC_BASE_PTR,
-            PTC_BASE_PTR)
+            1,
+            true),
 };
 
 C_ASSERT(ARRAY_SIZE(g_tfc_push_button_pins) == TFC_NUM_PUSH_BUTTONS);
@@ -512,8 +497,8 @@ tfc_wheel_motors_init(void)
     /*
      * Setup GPIO pins for wheel motor signals:
      */
-    configure_pin(&g_tfc_hbridge_enable_pin, true);
-    configure_pin(&g_tfc_hbridge_fault_pin, false);
+    configure_gpio_pin(&g_tfc_hbridge_enable_pin, PORT_PCR_DSE_MASK, true);
+    configure_gpio_pin(&g_tfc_hbridge_fault_pin, 0, false);
 
     /*
      * Disable TFC H-Bridge:
@@ -575,12 +560,12 @@ tfc_camera_init(void)
     /*
      * Setup GPIO pins for camera signals:
      */
-    configure_pin(&g_tfc_camera_si_pin, true);
-    configure_pin(&g_tfc_camera_clk_pin, true);
-    configure_pin(&g_tfc_camera_ao0_pin, false);
+    configure_gpio_pin(&g_tfc_camera_si_pin, PORT_PCR_DSE_MASK, true);
+    configure_gpio_pin(&g_tfc_camera_clk_pin, PORT_PCR_DSE_MASK, true);
+    configure_gpio_pin(&g_tfc_camera_ao0_pin, PORT_PCR_DSE_MASK, false);
 
 #   if 0
-    configure_pin(&g_tfc_camera_ao1_pin, false);
+    configure_gpio_pin(&g_tfc_camera_ao1_pin, 0, false);
 #   endif
 
     deactivate_output_pin(&g_tfc_camera_si_pin);
@@ -645,12 +630,12 @@ tfc_battery_sensor_init(void)
      * Initialize battery level LEDs:
      */
     for (int i = 0; i < TFC_NUM_BATTERY_LEDS; i++) {
-        configure_pin(&g_tfc_battery_led_pins[i], true);
+        configure_gpio_pin(&g_tfc_battery_led_pins[i], PORT_PCR_DSE_MASK, true);
         deactivate_output_pin(&g_tfc_battery_led_pins[i]);
     }
 
 #if 0 // ???
-    configure_pin(&g_tfc_battery_sensor_pin, false);
+    configure_gpio_pin(&g_tfc_battery_sensor_pin, 0, false);
 #endif
 }
 
@@ -683,7 +668,7 @@ static void
 tfc_push_buttons_init(void)
 {
     for (int i = 0; i < TFC_NUM_PUSH_BUTTONS; i++) {
-        configure_pin(&g_tfc_push_button_pins[i], false);
+        configure_gpio_pin(&g_tfc_push_button_pins[i], 0, false);
     }
 }
 
@@ -702,7 +687,7 @@ static void
 tfc_dip_switches_init(void)
 {
     for (int i = 0; i < TFC_NUM_DIP_SWITCHES; i++) {
-        configure_pin(&g_tfc_dip_switch_pins[i], false);
+        configure_gpio_pin(&g_tfc_dip_switch_pins[i], 0, false);
     }
 }
 

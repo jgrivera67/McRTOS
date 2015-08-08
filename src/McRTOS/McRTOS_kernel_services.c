@@ -3389,7 +3389,15 @@ rtos_k_disable_cpu_interrupts(void)
 uint32_t
 rtos_k_atomic_fetch_add_uint32(volatile uint32_t *counter_p, uint32_t value)
 {
-#if 0
+#if (__CORTEX_M >= 0x03)
+    uint32_t old_value;
+
+    do {
+	old_value = __LDREXW(counter_p);
+    } while (__STREXW(old_value + value, counter_p) != 0);
+
+    return old_value;
+#else
     cpu_status_register_t old_primask = __get_PRIMASK();
 
     __disable_irq();
@@ -3401,14 +3409,6 @@ rtos_k_atomic_fetch_add_uint32(volatile uint32_t *counter_p, uint32_t value)
     if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
         __enable_irq();
     }
-
-    return old_value;
-#else
-    uint32_t old_value;
-
-    do {
-	old_value = __LDREXW(counter_p);
-    } while (__STREXW(old_value + value, counter_p) != 0);
 
     return old_value;
 #endif
@@ -3428,7 +3428,15 @@ rtos_k_atomic_fetch_add_uint32(volatile uint32_t *counter_p, uint32_t value)
 uint32_t
 rtos_k_atomic_fetch_sub_uint32(volatile uint32_t *counter_p, uint32_t value)
 {
-#if 0
+#if (__CORTEX_M >= 0x03)
+    uint32_t old_value;
+
+    do {
+	old_value = __LDREXW(counter_p);
+    } while (__STREXW(old_value - value, counter_p) != 0);
+
+    return old_value;
+#else
     cpu_status_register_t old_primask = __get_PRIMASK();
 
     __disable_irq();
@@ -3440,14 +3448,6 @@ rtos_k_atomic_fetch_sub_uint32(volatile uint32_t *counter_p, uint32_t value)
     if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
         __enable_irq();
     }
-
-    return old_value;
-#else
-    uint32_t old_value;
-
-    do {
-	old_value = __LDREXW(counter_p);
-    } while (__STREXW(old_value - value, counter_p) != 0);
 
     return old_value;
 #endif
@@ -3467,7 +3467,15 @@ rtos_k_atomic_fetch_sub_uint32(volatile uint32_t *counter_p, uint32_t value)
 uint16_t
 rtos_k_atomic_fetch_add_uint16(volatile uint16_t *counter_p, uint16_t value)
 {
-#if 0
+#if (__CORTEX_M >= 0x03)
+    uint16_t old_value;
+
+    do {
+	old_value = __LDREXH(counter_p);
+    } while (__STREXH(old_value + value, counter_p) != 0);
+
+    return old_value;
+#else
     cpu_status_register_t old_primask = __get_PRIMASK();
 
     __disable_irq();
@@ -3479,14 +3487,6 @@ rtos_k_atomic_fetch_add_uint16(volatile uint16_t *counter_p, uint16_t value)
     if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
         __enable_irq();
     }
-
-    return old_value;
-#else
-    uint16_t old_value;
-
-    do {
-	old_value = __LDREXH(counter_p);
-    } while (__STREXH(old_value + value, counter_p) != 0);
 
     return old_value;
 #endif
@@ -3506,7 +3506,15 @@ rtos_k_atomic_fetch_add_uint16(volatile uint16_t *counter_p, uint16_t value)
 uint16_t
 rtos_k_atomic_fetch_sub_uint16(volatile uint16_t *counter_p, uint16_t value)
 {
-#if 0
+#if (__CORTEX_M >= 0x03)
+    uint16_t old_value;
+
+    do {
+	old_value = __LDREXH(counter_p);
+    } while (__STREXH(old_value - value, counter_p) != 0);
+
+    return old_value;
+#else
     cpu_status_register_t old_primask = __get_PRIMASK();
 
     __disable_irq();
@@ -3518,14 +3526,6 @@ rtos_k_atomic_fetch_sub_uint16(volatile uint16_t *counter_p, uint16_t value)
     if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
         __enable_irq();
     }
-
-    return old_value;
-#else
-    uint16_t old_value;
-
-    do {
-	old_value = __LDREXH(counter_p);
-    } while (__STREXH(old_value - value, counter_p) != 0);
 
     return old_value;
 #endif
@@ -3545,7 +3545,15 @@ rtos_k_atomic_fetch_sub_uint16(volatile uint16_t *counter_p, uint16_t value)
 uint8_t
 rtos_k_atomic_fetch_add_uint8(volatile uint8_t *counter_p, uint8_t value)
 {
-#if 0
+#if (__CORTEX_M >= 0x03)
+    uint8_t old_value;
+
+    do {
+	old_value = __LDREXB(counter_p);
+    } while (__STREXB(old_value + value, counter_p) != 0);
+
+    return old_value;
+#else
     cpu_status_register_t old_primask = __get_PRIMASK();
 
     __disable_irq();
@@ -3557,14 +3565,6 @@ rtos_k_atomic_fetch_add_uint8(volatile uint8_t *counter_p, uint8_t value)
     if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
         __enable_irq();
     }
-
-    return old_value;
-#else
-    uint8_t old_value;
-
-    do {
-	old_value = __LDREXB(counter_p);
-    } while (__STREXB(old_value + value, counter_p) != 0);
 
     return old_value;
 #endif
@@ -3584,7 +3584,15 @@ rtos_k_atomic_fetch_add_uint8(volatile uint8_t *counter_p, uint8_t value)
 uint8_t
 rtos_k_atomic_fetch_sub_uint8(volatile uint8_t *counter_p, uint8_t value)
 {
-#if 0
+#if (__CORTEX_M >= 0x03)
+    uint8_t old_value;
+
+    do {
+	old_value = __LDREXB(counter_p);
+    } while (__STREXB(old_value - value, counter_p) != 0);
+
+    return old_value;
+#else
     cpu_status_register_t old_primask = __get_PRIMASK();
 
     __disable_irq();
@@ -3596,14 +3604,6 @@ rtos_k_atomic_fetch_sub_uint8(volatile uint8_t *counter_p, uint8_t value)
     if (CPU_INTERRUPTS_ARE_ENABLED(old_primask)) {
         __enable_irq();
     }
-
-    return old_value;
-#else
-    uint8_t old_value;
-
-    do {
-	old_value = __LDREXB(counter_p);
-    } while (__STREXB(old_value - value, counter_p) != 0);
 
     return old_value;
 #endif

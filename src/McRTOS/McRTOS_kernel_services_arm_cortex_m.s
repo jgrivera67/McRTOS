@@ -26,7 +26,9 @@
 
 .text
 .thumb
+#ifndef __ARM_ARCH_6M__
 .syntax unified
+#endif
 
 /**
  * Restores the given McRTOS execution context CPU registers on the calling

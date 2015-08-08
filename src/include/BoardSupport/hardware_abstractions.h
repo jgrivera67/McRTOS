@@ -32,6 +32,7 @@
 #elif defined(KL25Z_SOC)
 
 #   include <BoardSupport/FRDM-KL25Z/kl25z_soc_public.h>
+#   include <BoardSupport/FRDM-KL25Z/frdm_board.h>
 
 #elif defined(K20D5_SOC)
 

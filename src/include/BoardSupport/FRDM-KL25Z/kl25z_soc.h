@@ -3,20 +3,20 @@
  *
  * Freescale KL25Z SOC declarations
  *
- * @author German Rivera 
- */ 
+ * @author German Rivera
+ */
 
 #ifndef __KL25Z_SOC_H
 #define __KL25Z_SOC_H
 
-#include "kl25z_soc_public.h"
-#include "McRTOS_kernel_services.h"
+#include <BoardSupport/FRDM-KL25Z/kl25z_soc_public.h>
+#include <McRTOS/McRTOS_kernel_services.h>
 
 struct rtos_interrupt;  /* opaque type */
 
 /**
  * Const fields of a KL25 TPM device (to be placed in flash)
- * 
+ *
  * NOTE: struct tpm_device implements the abstract struct pwm_device.
  */
 struct tpm_device {
@@ -34,7 +34,7 @@ struct tpm_device {
     uint32_t tpm_mmio_pin_mux_selector_mask;
     uint32_t tpm_mmio_clock_gate_mask;
     uint32_t tpm_clock_freq_hz;
-    uint16_t tpm_clock_prescale; 
+    uint16_t tpm_clock_prescale;
     uint16_t tpm_overflow_freq_hz;
     uint32_t tpm_initial_duty_cycle_us;
     struct rtos_interrupt_registration_params tpm_rtos_interrupt_params;
@@ -70,16 +70,16 @@ struct tpm_device_var {
 /**
  * Number of A/D converter channels
  */
-#define NUM_ADC_CHANNELS    14 
+#define NUM_ADC_CHANNELS    14
 
-#define ADC_CHANNEL_NONE    NUM_ADC_CHANNELS   
+#define ADC_CHANNEL_NONE    NUM_ADC_CHANNELS
 
 /**
  * ADC_CFG1 register MODE field
- * 0x0 - single-ended 8-bit conversion 
- * 0x1 - single-ended 12-bit conversion 
- * 0x2 - single-ended 10-bit conversion 
- * 0x3 - single-ended 16-bit conversion 
+ * 0x0 - single-ended 8-bit conversion
+ * 0x1 - single-ended 12-bit conversion
+ * 0x2 - single-ended 10-bit conversion
+ * 0x3 - single-ended 16-bit conversion
  */
 #if ADC_RESOLUTION == 8
 #   define ADC_CFG1_MODE_VALUE   0x0
@@ -130,7 +130,7 @@ struct adc_channel {
 
     /**
      * ADC Mux selector
-     */ 
+     */
     const uint8_t adc_mux_selector;
 #   define ADC_MUX_SIDE_A   0
 #   define ADC_MUX_SIDE_B   1
@@ -160,7 +160,7 @@ struct adc_device_var {
      * Mutex to serialize software-triggered conversions.
      *
      * NOTE: For the KL25 ADC, only one software-triggered
-     * conversion can be done at one time, regardless of 
+     * conversion can be done at one time, regardless of
      * using different channels.
      */
     struct rtos_mutex ad_mutex;

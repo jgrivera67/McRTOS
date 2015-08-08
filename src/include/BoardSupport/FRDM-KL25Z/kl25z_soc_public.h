@@ -9,9 +9,9 @@
 #ifndef __KL25Z_SOC_PUBLIC_H
 #define __KL25Z_SOC_PUBLIC_H
 
-#include "MKL25Z4.h"
-#include "arm_defs.h"
-#include "compile_time_checks.h"
+#include <BoardSupport/FRDM-KL25Z/MKL25Z4.h>
+#include <McRTOS/arm_defs.h>
+#include <McRTOS/compile_time_checks.h>
 #include <stdint.h>
 
 /**
@@ -19,7 +19,7 @@
  * controller
  */
 #define SOC_NUM_INTERRUPT_CHANNELS INT32_C(32)
-#include "cortex_m_nvic.h"
+#include <BoardSupport/cortex_m_nvic.h>
 
 /**
  * CPU clock frequency in MHz
@@ -50,10 +50,10 @@ C_ASSERT(ADC_INTERRUPT_PRIORITY > SOC_HIGHEST_INTERRUPT_PRIORITY);
 //#pragma GCC diagnostic warning "-Wcpp"
 #pragma GCC diagnostic ignored "-Wcpp"
 
-#define __VTOR_PRESENT  1
 #define __MPU_PRESENT   1
+#define __VTOR_PRESENT  1
 #define __CHECK_DEVICE_DEFINES
-#include "core_cm0plus.h"
+#include <BoardSupport/CMSIS/core_cm0plus.h>
 
 #pragma GCC diagnostic pop
 
@@ -144,17 +144,26 @@ C_ASSERT(ADC_INTERRUPT_PRIORITY > SOC_HIGHEST_INTERRUPT_PRIORITY);
         (MICRO_TRACE_BUFFER_SIZE_IN_BYTES / sizeof(uint64_t))
 
 /**
- * Initialize a configurable pin
+ * Initializer for a pin_info structure
  */
-#define PIN_COFIG_INFO_INITIALIZER(                                     \
-            _pin_bit_index, _pcr_value, _pin_is_active_high,            \
-            _port_base_p, _gpio_base_p)                                 \
+#define PIN_INITIALIZER(						\
+            _pin_port, _pin_index, _pin_function)            		\
     {                                                                   \
-        .pin_port_base_p = (_port_base_p),                              \
-        .pin_gpio_base_p = (_gpio_base_p),                              \
-        .pin_pcr_value = (_pcr_value),                                  \
-        .pin_bit_index = _pin_bit_index,                                \
-        .pin_bit_mask = BIT(_pin_bit_index),                            \
+	.pin_port = (_pin_port),					\
+	.pin_index = (_pin_index),					\
+	.pin_function = (_pin_function),				\
+    }
+
+/**
+ * Initializer for a gpio_pin structure
+ */
+#define GPIO_PIN_INITIALIZER(						\
+            _pin_port, _pin_index, _pin_function,			\
+	    _pin_is_active_high)					\
+    {                                                                   \
+        .pin_info = PIN_INITIALIZER(_pin_port, _pin_index,		\
+				    _pin_function),			\
+        .pin_bit_mask = BIT(_pin_index),				\
         .pin_is_active_high = (_pin_is_active_high),                    \
     }
 
@@ -173,18 +182,64 @@ C_ASSERT(ADC_INTERRUPT_PRIORITY > SOC_HIGHEST_INTERRUPT_PRIORITY);
 
 C_ASSERT(sizeof(adc_result_t) * 8 >= ADC_RESOLUTION);
 
+#define NUM_PINS_PER_PORT   32
+
+typedef _RANGE_(0, NUM_PINS_PER_PORT - 1)
+        uint8_t pin_index_t;
+
+/**
+ * Pin ports
+ */
+enum pin_ports {
+	PIN_PORT_A = 0,
+	PIN_PORT_B,
+	PIN_PORT_C,
+	PIN_PORT_D,
+	PIN_PORT_E,
+	NUM_PIN_PORTS
+};
+
+typedef enum pin_ports pin_port_t;
+
+/**
+ * Pin configuration registers
+ */
+struct pin_config_registers {
+    PORT_MemMapPtr pin_port_regs_p;
+    GPIO_MemMapPtr pin_gpio_regs_p;
+};
+
+enum pin_functions {
+	PIN_FUNCTION_ALT0 = 0,
+	PIN_FUNCTION_ALT1,
+	PIN_FUNCTION_ALT2,
+	PIN_FUNCTION_ALT3,
+	PIN_FUNCTION_ALT4,
+	PIN_FUNCTION_ALT5,
+	PIN_FUNCTION_ALT6,
+	PIN_FUNCTION_ALT7,
+};
+
+typedef enum pin_functions pin_function_t;
+
 /**
  * Pin configuration parameters
  */
-struct pin_config_info {
-    PORT_MemMapPtr pin_port_base_p;
-    GPIO_MemMapPtr pin_gpio_base_p;
-    uint32_t pin_pcr_value;
-    uint32_t pin_bit_mask;
-    uint8_t pin_bit_index;
-    uint8_t pin_is_active_high; /*  false - low, true - high */
-    uint16_t reserved;
+struct pin_info {
+    pin_port_t pin_port;
+    pin_index_t pin_index;
+    pin_function_t pin_function;
 };
+
+/**
+ * GPIO pin
+ */
+struct gpio_pin {
+    struct pin_info pin_info;
+    uint32_t pin_bit_mask;
+    uint8_t pin_is_active_high; /*  false - low, true - high */
+};
+
 
 void micro_trace_init(void);
 
