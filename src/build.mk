@@ -20,6 +20,7 @@ endif
 BASE_DIR := $(dir $(CURDIR))
 SOURCE_DIR := $(BASE_DIR)src
 INCLUDE_DIR := $(BASE_DIR)src/include
+GIT_COMMIT := $(shell git describe --always)
 
 #
 # Check that this makefile is not being run from the source directory
@@ -157,7 +158,8 @@ lst_files = 	$(subst .elf,.lst,$(programs))
 include_dirs := $(INCLUDE_DIR)
 
 CPPFLAGS     += $(addprefix -I ,$(include_dirs)) \
-		-D$(SYSTEM_ON_CHIP)
+		-D$(SYSTEM_ON_CHIP) \
+		-DGIT_COMMIT=\"$(GIT_COMMIT)\"
 
 ifeq "$(BUILD_FLAVOR)" "debug"
     CPPFLAGS += -DDEBUG \
