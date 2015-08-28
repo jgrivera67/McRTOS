@@ -20,7 +20,7 @@ endif
 BASE_DIR := $(dir $(CURDIR))
 SOURCE_DIR := $(BASE_DIR)src
 INCLUDE_DIR := $(BASE_DIR)src/include
-GIT_COMMIT := $(shell git describe --always)
+GIT_COMMIT := $(shell git describe --always --dirty)
 
 #
 # Check that this makefile is not being run from the source directory
