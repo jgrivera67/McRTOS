@@ -15,6 +15,59 @@
 struct rtos_interrupt;  /* opaque type */
 
 /**
+ * Const fields of a K64F TPM device (to be placed in flash)
+ *
+ * NOTE: struct tpm_device implements the abstract struct pwm_device.
+ */
+struct tpm_device {
+#   define TPM_DEVICE_SIGNATURE  GEN_SIGNATURE('T', 'P', 'M', 'x')
+    uint32_t tpm_signature;
+    struct tpm_device_var *tpm_var_p;
+    const char *tpm_name_p;
+    TPM_MemMapPtr tpm_mmio_p;
+    bool tpm_wait_pwm_cycle_completion;
+    struct tpm_channel {
+        volatile uint32_t *tpm_mmio_pcr_p;
+        uint32_t tpm_mmio_CnSC_value;
+    } tpm_channels[PWM_MAX_NUM_CHANNELS];
+
+    uint32_t tpm_mmio_pin_mux_selector_mask;
+    uint32_t tpm_mmio_clock_gate_mask;
+    uint32_t tpm_clock_freq_hz;
+    uint16_t tpm_clock_prescale;
+    uint16_t tpm_overflow_freq_hz;
+    uint32_t tpm_initial_duty_cycle_us;
+    struct rtos_interrupt_registration_params tpm_rtos_interrupt_params;
+    struct rtos_interrupt **tpm_rtos_interrupt_pp;
+    const char *tpm_condvar_name;
+};
+
+/**
+ * Non-const fields of a KL25 TPM device (to be placed in SRAM)
+ */
+struct tpm_device_var {
+    /**
+     * Flag indicating if kl25_tpm_init() has been called for this TPM device
+     */
+    bool tpm_initialized;
+
+    /**
+     * Flag set when a pwm cycle has completed
+     */
+    bool tpm_pwm_cycle_completed;
+
+    /**
+     * cached copy of the TPM_MOD reg value
+     */
+    uint32_t tpm_mod_reg_value;
+
+    /**
+     * Condvar to signal a thread waiting in kl25_tpm_set_duty_cycle()
+     */
+    struct rtos_condvar tpm_condvar;
+};
+
+/**
  * Const fields of the CRC device (to be placed in flash)
  */
 struct crc_device {
@@ -305,6 +358,10 @@ void k64f_ftm_set_duty_cycle(
 extern isr_function_t k64f_uart0_rx_tx_isr;
 
 extern isr_function_t k64f_uart0_err_isr;
+
+extern isr_function_t k64f_uart4_rx_tx_isr;
+
+extern isr_function_t k64f_uart4_err_isr;
 
 extern isr_function_t k64f_adc0_isr;
 

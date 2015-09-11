@@ -372,6 +372,16 @@ struct rtos_interrupt *g_rtos_interrupt_uart0_rx_tx_p = NULL;
 struct rtos_interrupt *g_rtos_interrupt_uart0_err_p = NULL;
 
 /**
+ * McRTOS interrupt object for the UART4 Receive/Transmit interrupts
+ */
+struct rtos_interrupt *g_rtos_interrupt_uart4_rx_tx_p = NULL;
+
+/**
+ * McRTOS interrupt object for the UART4 Error interrupts
+ */
+struct rtos_interrupt *g_rtos_interrupt_uart4_err_p = NULL;
+
+/**
  * Global array of non-const structures for UART devices
  * (allocated in SRAM space)
  */
@@ -392,6 +402,8 @@ static struct uart_device_var g_uart_devices_var[] =
 
 static uint8_t uart0_transmit_queue_storage[UART_TRANSMIT_QUEUE_SIZE_IN_BYTES];
 static uint8_t uart0_receive_queue_storage[UART_RECEIVE_QUEUE_SIZE_IN_BYTES];
+static uint8_t uart4_transmit_queue_storage[UART_TRANSMIT_QUEUE_SIZE_IN_BYTES];
+static uint8_t uart4_receive_queue_storage[UART_RECEIVE_QUEUE_SIZE_IN_BYTES];
 
 /**
  * Global array of const structures for UART devices for the K64F SoC
@@ -447,6 +459,32 @@ static const struct uart_device g_uart_devices[] =
         .urt_mmio_clock_gate_reg_p = &SIM_SCGC1,
         .urt_mmio_clock_gate_mask = SIM_SCGC1_UART4_MASK,
 	.urt_source_clock_freq_in_hz = CPU_CLOCK_FREQ_IN_HZ / 2,
+        .urt_rtos_interrupt_rx_tx_params = {
+            .irp_name_p = "UART4 Receive/Transmit Interrupt",
+            .irp_isr_function_p = k64f_uart4_rx_tx_isr,
+            .irp_arg_p =  (void *)&g_uart_devices[4],
+            .irp_channel = VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART4_RX_TX),
+            .irp_priority = UART4_INTERRUPT_PRIORITY,
+            .irp_cpu_id = 0,
+        },
+
+        .urt_rtos_interrupt_rx_tx_pp = &g_rtos_interrupt_uart4_rx_tx_p,
+
+	.urt_rtos_interrupt_err_params = {
+            .irp_name_p = "UART4 Error Interrupt",
+            .irp_isr_function_p = k64f_uart4_err_isr,
+            .irp_arg_p =  (void *)&g_uart_devices[4],
+            .irp_channel = VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART4_ERR),
+            .irp_priority = UART4_INTERRUPT_PRIORITY,
+            .irp_cpu_id = 0,
+        },
+
+        .urt_rtos_interrupt_err_pp = &g_rtos_interrupt_uart4_err_p,
+
+        .urt_transmit_queue_name_p = "UART4 transmit queue",
+        .urt_receive_queue_name_p = "UART4 receive queue",
+        .urt_transmit_queue_storage_p = uart4_transmit_queue_storage,
+        .urt_receive_queue_storage_p = uart4_receive_queue_storage,
     },
 };
 
@@ -2121,8 +2159,7 @@ k64f_uart_rx_tx_interrupt_e_handler(
 
     DBG_ASSERT(
         uart_mmio_registers_p == UART0_BASE_PTR ||
-        uart_mmio_registers_p == UART1_BASE_PTR ||
-        uart_mmio_registers_p == UART2_BASE_PTR,
+        uart_mmio_registers_p == UART4_BASE_PTR,
         uart_mmio_registers_p, uart_device_p);
 
     DBG_ASSERT(

@@ -30,6 +30,18 @@ GEN_ISR_FUNCTION k64f_uart0_rx_tx_isr, g_rtos_interrupt_uart0_rx_tx_p, \
 GEN_ISR_FUNCTION k64f_uart0_err_isr, g_rtos_interrupt_uart0_err_p, \
                  k64f_uart_err_interrupt_e_handler
 
+/**
+ * UART4 Receive/Transmit ISR
+ */
+GEN_ISR_FUNCTION k64f_uart4_rx_tx_isr, g_rtos_interrupt_uart4_rx_tx_p, \
+                 k64f_uart_rx_tx_interrupt_e_handler
+
+/**
+ * UART0 Error ISR
+ */
+GEN_ISR_FUNCTION k64f_uart4_err_isr, g_rtos_interrupt_uart4_err_p, \
+                 k64f_uart_err_interrupt_e_handler
+
 #if 0 // ???
 /**
  * ADC0 ISR
