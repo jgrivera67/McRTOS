@@ -17,6 +17,9 @@
 #include <BoardSupport/FRDM-K64F/frdm_board.h>
 #include <BoardSupport/FRDM-K64F/fxos8700cq_accelerometer.h>
 
+#define BLUETOOTH_SERIAL_PORT_BAUD_RATE   9600
+#define BLUETOOTH_SERIAL_PORT_MODE        0 /* default: 8-bits, no-parity, 1 stop bit */
+
 /**
  * Const fields of the Accelerometer device (to be placed in flash)
  */
@@ -788,4 +791,72 @@ accelerometer_detect_motion(
 }
 #endif
 
+
+void bluetooth_terminal_init(void)
+{
+    bool caller_was_privileged = rtos_enter_privileged_mode();
+    cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
+
+    uart_init(
+        g_bluetooth_serial_port_p,
+        BLUETOOTH_SERIAL_PORT_BAUD_RATE,
+        BLUETOOTH_SERIAL_PORT_MODE);
+
+    rtos_k_restore_cpu_interrupts(cpu_status_register);
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
+    }
+}
+
+
+uint8_t bluetooth_terminal_getchar(void)
+{
+    uint8_t c;
+    bool caller_was_privileged = rtos_enter_privileged_mode();
+
+    c = uart_getchar(g_bluetooth_serial_port_p);
+
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
+    }
+
+    return c;
+}
+
+
+void bluetooth_terminal_putchar(uint8_t c)
+{
+    bool caller_was_privileged = rtos_enter_privileged_mode();
+
+
+    uart_putchar(g_bluetooth_serial_port_p, c);
+
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
+    }
+}
+
+
+void bluetooth_terminal_printf(const char *fmt, ...)
+{
+    va_list va;
+
+    bool caller_was_privileged = rtos_enter_privileged_mode();
+
+    va_start(va, fmt);
+    embedded_vprintf((putchar_func_t *)uart_putchar,
+                      (void *)g_bluetooth_serial_port_p,
+                      fmt, va);
+    va_end(va);
+
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
+    }
+}
+
+
+void bluetooth_terminal_stop(void)
+{
+    uart_stop(g_bluetooth_serial_port_p);
+}
 

@@ -94,7 +94,7 @@ function my_stack([string]$raw_stack_trace_file)
         return 1
     }
 
-    perl scripts/print_stack_trace.pl $env:bin_file_prefix`.elf $raw_stack_trace_file
+    cat $raw_stack_trace_file | perl scripts/print_stack_trace.pl $env:bin_file_prefix`.elf
 }
 
 cd $env:src_tree_dir

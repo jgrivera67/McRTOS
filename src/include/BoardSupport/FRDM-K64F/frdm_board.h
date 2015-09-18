@@ -65,4 +65,14 @@ bool accelerometer_detect_motion(
     int8_t *y_p,
     int8_t *z_p);
 
+void bluetooth_terminal_init(void);
+
+uint8_t bluetooth_terminal_getchar(void);
+
+void bluetooth_terminal_putchar(uint8_t c);
+
+void bluetooth_terminal_printf(const char *fmt, ...);
+
+void bluetooth_terminal_stop(void);
+
 #endif /* __FRDM_BOARD_H */

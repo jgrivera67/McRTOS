@@ -32,6 +32,7 @@ TODO("Remove these pragmas")
 enum app_thread_priorities
 {
     ACCELEROMETER_THREAD_PRIORITY = RTOS_HIGHEST_THREAD_PRIORITY + 1,
+    BLUETOOTH_TERMINAL_THREAD_PRIORITY = RTOS_HIGHEST_THREAD_PRIORITY + 2,
 };
 
 static void app_hardware_init(void);
@@ -46,6 +47,7 @@ static void demo_udp_ipv6_server_command(void);
 
 static fdc_error_t hello_world_thread_f(void *arg);
 static fdc_error_t accelerometer_thread_f(void *arg);
+static fdc_error_t bluetooth_terminal_thread_f(void *arg);
 static fdc_error_t demo_ping_thread_f(void *arg);
 static fdc_error_t demo_udp_server_thread_f(void *arg);
 static fdc_error_t demo_udp_client_thread_f(void *arg);
@@ -149,6 +151,14 @@ static const struct rtos_thread_creation_params g_app_thread_creation_params[] =
         .p_function_p = accelerometer_thread_f,
         .p_function_arg_p = NULL,
         .p_priority = ACCELEROMETER_THREAD_PRIORITY,
+    },
+
+    [3] =
+    {
+        .p_name_p = "Bluetooth terminal I/O thread",
+        .p_function_p = bluetooth_terminal_thread_f,
+        .p_function_arg_p = NULL,
+        .p_priority = BLUETOOTH_TERMINAL_THREAD_PRIORITY,
     },
 };
 
@@ -912,6 +922,40 @@ accelerometer_thread_f(void *arg)
 	accelerometer_stop();
     }
 
+    return fdc_error;
+}
+
+
+/**
+ * Bluetooth terminal thread
+ */
+static fdc_error_t
+bluetooth_terminal_thread_f(void *arg)
+{
+    uint8_t c;
+    fdc_error_t fdc_error;
+    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
+
+    FDC_ASSERT(arg == NULL, arg, cpu_id);
+    console_printf("Initializing bluetooth terminal I/O thread ...\n");
+
+    bluetooth_terminal_init();
+    rtos_thread_set_comp_region(&g_app,
+                                sizeof g_app,
+                                0,
+                                NULL);
+
+    bluetooth_terminal_printf("Hello bluetooth!!!\n");
+    for ( ; ; ) {
+        c = bluetooth_terminal_getchar();
+        bluetooth_terminal_putchar(c);
+    }
+
+    fdc_error = CAPTURE_FDC_ERROR(
+        "thread should not have terminated",
+        cpu_id, rtos_thread_self());
+
+    bluetooth_terminal_stop();
     return fdc_error;
 }
 

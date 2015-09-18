@@ -79,9 +79,6 @@ static cpu_reset_cause_t find_reset_cause(void);
 static void init_cpu_clock_cycles_counter(void);
 #endif
 
-static void uart_stop(
-    const struct uart_device *uart_device_p);
-
 #if 0 // ???
 static void
 k64f_adc_calibrate(const struct adc_device *adc_device_p);
@@ -149,8 +146,6 @@ static isr_function_t dummy_port_d_isr;
 static isr_function_t dummy_port_e_isr;
 static isr_function_t dummy_swi_isr;
 static isr_function_t dummy_spi2_isr;
-static isr_function_t dummy_uart4_rx_tx_isr;
-static isr_function_t dummy_uart4_err_isr;
 static isr_function_t dummy_uart5_rx_tx_isr;
 static isr_function_t dummy_uart5_err_isr;
 static isr_function_t dummy_cmp2_isr;
@@ -255,8 +250,8 @@ isr_function_t *const g_interrupt_vector_table[] __attribute__ ((section(".vecto
     [INT_PORTE] = dummy_port_e_isr, /* Port E interrupt */
     [INT_SWI] = dummy_swi_isr, /* Software interrupt */
     [INT_SPI2] = dummy_spi2_isr, /* SPI2 Interrupt */
-    [INT_UART4_RX_TX] = dummy_uart4_rx_tx_isr, /* UART4 Receive/Transmit interrupt */
-    [INT_UART4_ERR] = dummy_uart4_err_isr, /* UART4 Error interrupt */
+    [INT_UART4_RX_TX] = k64f_uart4_rx_tx_isr, /* UART4 Receive/Transmit interrupt */
+    [INT_UART4_ERR] = k64f_uart4_err_isr, /* UART4 Error interrupt */
     [INT_UART5_RX_TX] = dummy_uart5_rx_tx_isr, /* UART5 Receive/Transmit interrupt */
     [INT_UART5_ERR] = dummy_uart5_err_isr, /* UART5 Error interrupt */
     [INT_CMP2] = dummy_cmp2_isr, /* CMP2 interrupt */
@@ -416,8 +411,8 @@ static const struct uart_device g_uart_devices[] =
 	.urt_name = "UART0",
         .urt_var_p = &g_uart_devices_var[0],
         .urt_mmio_uart_p = UART0_BASE_PTR,
-        .urt_tx_pin = PIN_INITIALIZER(PIN_PORT_B, 16, PIN_FUNCTION_ALT3),
-        .urt_rx_pin = PIN_INITIALIZER(PIN_PORT_B, 17, PIN_FUNCTION_ALT3),
+        .urt_tx_pin = PIN_INITIALIZER(PIN_PORT_B, 17, PIN_FUNCTION_ALT3),
+        .urt_rx_pin = PIN_INITIALIZER(PIN_PORT_B, 16, PIN_FUNCTION_ALT3),
         .urt_mmio_clock_gate_reg_p = &SIM_SCGC4,
         .urt_mmio_clock_gate_mask = SIM_SCGC4_UART0_MASK,
 	.urt_source_clock_freq_in_hz = CPU_CLOCK_FREQ_IN_HZ,
@@ -453,9 +448,9 @@ static const struct uart_device g_uart_devices[] =
         .urt_signature = UART_DEVICE_SIGNATURE,
 	.urt_name = "UART4",
         .urt_var_p = &g_uart_devices_var[4],
-        .urt_mmio_uart_p = UART2_BASE_PTR,
-        .urt_tx_pin = PIN_INITIALIZER(PIN_PORT_C, 14, PIN_FUNCTION_ALT3),
-        .urt_rx_pin = PIN_INITIALIZER(PIN_PORT_C, 15, PIN_FUNCTION_ALT3),
+        .urt_mmio_uart_p = UART4_BASE_PTR,
+        .urt_tx_pin = PIN_INITIALIZER(PIN_PORT_C, 15, PIN_FUNCTION_ALT3),
+        .urt_rx_pin = PIN_INITIALIZER(PIN_PORT_C, 14, PIN_FUNCTION_ALT3),
         .urt_mmio_clock_gate_reg_p = &SIM_SCGC1,
         .urt_mmio_clock_gate_mask = SIM_SCGC1_UART4_MASK,
 	.urt_source_clock_freq_in_hz = CPU_CLOCK_FREQ_IN_HZ / 2,
@@ -492,6 +487,7 @@ C_ASSERT(
     ARRAY_SIZE(g_uart_devices) == ARRAY_SIZE(g_uart_devices_var));
 
 const struct uart_device *const g_console_serial_port_p = &g_uart_devices[0];
+const struct uart_device *const g_bluetooth_serial_port_p = &g_uart_devices[4];
 
 /**
  * McRTOS interrupt object for the I2C0 controller interrupts
@@ -1725,9 +1721,9 @@ uart_init(
     /*
      * Enable clock for the UART:
      */
-    reg_value = read_32bit_mmio_register(&SIM_SCGC4);
+    reg_value = read_32bit_mmio_register(uart_device_p->urt_mmio_clock_gate_reg_p);
     reg_value |= uart_device_p->urt_mmio_clock_gate_mask;
-    write_32bit_mmio_register(&SIM_SCGC4, reg_value);
+    write_32bit_mmio_register(uart_device_p->urt_mmio_clock_gate_reg_p, reg_value);
 
     /*
      * Disable UART's transmitter and receiver, while UART is being
@@ -1792,7 +1788,11 @@ uart_init(
      * Configure Tx and Rx pins:
      */
     set_pin_function(&uart_device_p->urt_tx_pin, PORT_PCR_DSE_MASK);
-    set_pin_function(&uart_device_p->urt_rx_pin, PORT_PCR_DSE_MASK);
+    if (uart_device_p == g_bluetooth_serial_port_p) { //???
+        set_pin_function(&uart_device_p->urt_rx_pin, PORT_PCR_DSE_MASK|PORT_PCR_PS_MASK|PORT_PCR_PE_MASK);
+    } else {
+        set_pin_function(&uart_device_p->urt_rx_pin, PORT_PCR_DSE_MASK);
+    }
 
     /*
     * Calculate baud rate settings:
@@ -1819,6 +1819,7 @@ uart_init(
         &UART_BDL_REG(uart_mmio_registers_p),
         sbr_val & UART_BDL_SBR_MASK);
 
+#   if 0 //???
     /*
      * Determine if a fractional divider is needed to fine tune closer to the
      * desired baud rate. Each value of brfa is in 1/32 increments, hence the
@@ -1833,6 +1834,7 @@ uart_init(
     SET_BIT_FIELD(
         reg_value, UART_C4_BRFA_MASK, UART_C4_BRFA_SHIFT, brfa_val);
     write_8bit_mmio_register(&UART_C4_REG(uart_mmio_registers_p), reg_value); // TODO: check if this works????
+#   endif
 
     /*
      * Enable UART's transmitter and receiver:
@@ -1875,6 +1877,7 @@ uart_init(
     /*
      * Register McRTOS interrupt handler for UART error interrupt:
      */
+
     rtos_k_register_interrupt(
         &uart_device_p->urt_rtos_interrupt_err_params,
         uart_device_p->urt_rtos_interrupt_err_pp);
@@ -1891,7 +1894,7 @@ uart_init(
 }
 
 
-static void
+void
 uart_stop(
     const struct uart_device *uart_device_p)
 {
@@ -3676,8 +3679,6 @@ GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_port_d_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(I
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_port_e_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_PORTE))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_swi_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_SWI))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_spi2_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_SPI2))
-GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_uart4_rx_tx_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART4_RX_TX))
-GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_uart4_err_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART4_ERR))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_uart5_rx_tx_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART5_RX_TX))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_uart5_err_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_UART5_ERR))
 GENERATE_DUMMY_NVIC_ISR_FUNCTION(dummy_cmp2_isr, VECTOR_NUMBER_TO_IRQ_NUMBER(INT_CMP2))

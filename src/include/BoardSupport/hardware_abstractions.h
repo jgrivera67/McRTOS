@@ -474,6 +474,9 @@ void uart_init(
         _IN_ uint32_t baud,
         _IN_ uint8_t mode);
 
+void uart_stop(
+        _IN_ const struct uart_device *uart_device_p);
+
 void uart_enable_tx_rx_fifos(
     _IN_ const struct uart_device *uart_device_p);
 
@@ -641,6 +644,7 @@ void write_8bit_mmio_register(volatile uint8_t *io_reg_p, uint8_t value);
  */
 
 extern const struct uart_device *const g_console_serial_port_p;
+extern const struct uart_device *const g_bluetooth_serial_port_p;
 extern const struct buttons_device *const g_buttons_device_p;
 extern const struct adc_device *const g_adc_device_p;
 

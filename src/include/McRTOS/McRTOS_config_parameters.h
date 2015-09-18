@@ -71,7 +71,7 @@
 /*
  * Maximum number of McRTOS interrupt objects in the system
  */
-#define RTOS_MAX_NUM_INTERRUPTS 8
+#define RTOS_MAX_NUM_INTERRUPTS     16
 
 C_ASSERT(RTOS_MAX_NUM_INTERRUPTS < SOC_NUM_INTERRUPT_CHANNELS);
 

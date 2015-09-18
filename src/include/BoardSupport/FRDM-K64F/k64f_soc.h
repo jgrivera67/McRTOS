@@ -14,6 +14,7 @@
 
 struct rtos_interrupt;  /* opaque type */
 
+#if 0 // ???
 /**
  * Const fields of a K64F TPM device (to be placed in flash)
  *
@@ -66,6 +67,7 @@ struct tpm_device_var {
      */
     struct rtos_condvar tpm_condvar;
 };
+#endif // ???
 
 /**
  * Const fields of the CRC device (to be placed in flash)
