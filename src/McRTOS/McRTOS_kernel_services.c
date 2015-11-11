@@ -2681,7 +2681,7 @@ rtos_k_thread_set_comp_region(
     FDC_ASSERT((flags & MPU_REGION_INACTIVE) == 0,
                flags, 0);
 
-    void *end_addr = (void *)((uintptr_t)start_addr + size);
+    void *end_addr = (void *)((uintptr_t)start_addr + size - 1);
 
     /* check for wrap-around */
     FDC_ASSERT(start_addr < end_addr, start_addr, end_addr);

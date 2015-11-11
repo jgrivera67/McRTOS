@@ -409,6 +409,15 @@ mpu_set_all_thread_data_regions(
 }
 
 
+/**
+ * Sets the MPU region descriptor specified by 'region_index' for the give CPU
+ *
+ * @param cpu_id: CPU ID
+ * @param region_index: Index of the corresponding MPU region descriptor
+ * @param start_addr: Address of fist byte of the memory region
+ * @param end_addr: Address of the last byte of the memory region
+ * @param flags: permission flags
+ */
 void
 mpu_set_thread_data_region(
     cpu_id_t cpu_id,

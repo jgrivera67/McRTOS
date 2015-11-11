@@ -627,6 +627,20 @@ void wait_for_interrupts(void);
 
 void send_inter_processor_interrupt(cpu_id_t cpu_id);
 
+#define READ_MMIO_REGISTER(_io_reg_p) \
+        _Generic((_io_reg_p), \
+                 uint32_t *: read_32bit_mmio_register, \
+                 uint16_t *: read_16bit_mmio_register, \
+                 uint8_t *: read_8bit_mmio_register, \
+                 default: -1)(_io_reg_p)
+
+#define WRITE_MMIO_REGISTER(_io_reg_p, _value) \
+        _Generic((_io_reg_p), \
+                 uint32_t *: write_32bit_mmio_register, \
+                 uint16_t *: write_16bit_mmio_register, \
+                 uint8_t *: write_8bit_mmio_register, \
+                 default: -1)(_io_reg_p, _value)
+
 uint32_t read_32bit_mmio_register(const volatile uint32_t *io_reg_p);
 
 void write_32bit_mmio_register(volatile uint32_t *io_reg_p, uint32_t value);

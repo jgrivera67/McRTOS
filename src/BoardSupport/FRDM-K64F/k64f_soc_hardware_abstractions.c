@@ -776,7 +776,7 @@ k64f_set_mpu_region_for_cpu(
 
     DBG_ASSERT(start_addr < end_addr &&
 	       (uintptr_t)start_addr % K64F_MPU_REGION_ALIGNMENT == 0 &&
-	       (uintptr_t)end_addr % K64F_MPU_REGION_ALIGNMENT == 0,
+	       (uintptr_t)end_addr + 1 % K64F_MPU_REGION_ALIGNMENT == 0,
 	       start_addr, end_addr);
 
     /*
@@ -1121,6 +1121,15 @@ mpu_set_all_thread_data_regions(
 }
 
 
+/**
+ * Sets the MPU region descriptor specified by 'region_index' for the give CPU
+ *
+ * @param cpu_id: CPU ID
+ * @param region_index: Index of the corresponding MPU region descriptor
+ * @param start_addr: Address of fist byte of the memory region
+ * @param end_addr: Address of the last byte of the memory region
+ * @param flags: permission flags
+ */
 void
 mpu_set_thread_data_region(
     cpu_id_t cpu_id,

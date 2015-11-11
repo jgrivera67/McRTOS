@@ -577,6 +577,12 @@ void
 tfc_camera_read_frame(
     _OUT_ struct tfc_camera_frame *camera_frame_p)
 {
+    /*
+     * TODO: doing manual pulse generation with delay_loop() is not very
+     * precise. It is better to use ADC completion interrupt to pase
+     * the pulses for the camera clk and for the SI pulses. Or maybe use
+     * a TPM with cycle completion interrupt.
+     */
     activate_output_pin(&g_tfc_camera_si_pin);
     delay_loop(TFC_CAMERA_CLK_PULSE_DELAY / 2);
     activate_output_pin(&g_tfc_camera_clk_pin);
