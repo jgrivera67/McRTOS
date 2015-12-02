@@ -258,7 +258,7 @@ rtos_k_thread_init(
      */
 
     rtos_thread_p->thr_stack_region.start_addr = thread_stack_p;
-    rtos_thread_p->thr_stack_region.end_addr = thread_stack_p + 1;
+    rtos_thread_p->thr_stack_region.end_addr = (void *)((uintptr_t)(thread_stack_p + 1) - 1);
     rtos_thread_p->thr_stack_region.flags = 0;
 
     rtos_thread_p->thr_comp_region.flags = MPU_REGION_INACTIVE;
@@ -2743,7 +2743,7 @@ rtos_k_thread_restore_comp_region(
                (old_comp_region_p->start_addr < old_comp_region_p->end_addr &&
                 old_comp_region_p->start_addr != NULL &&
                 (uintptr_t)old_comp_region_p->start_addr % MIN_MPU_REGION_ALIGNMENT == 0 &&
-                (uintptr_t)old_comp_region_p->end_addr % MIN_MPU_REGION_ALIGNMENT == 0),
+                ((uintptr_t)old_comp_region_p->end_addr + 1) % MIN_MPU_REGION_ALIGNMENT == 0),
                old_comp_region_p->start_addr, old_comp_region_p->end_addr);
 
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
@@ -2814,7 +2814,7 @@ rtos_k_thread_set_tmp_region(
 
     FDC_ASSERT(start_addr != NULL && size != 0, start_addr, size);
 
-    void *end_addr = (void *)((uintptr_t)start_addr + size);
+    void *end_addr = (void *)((uintptr_t)start_addr + size - 1);
 
     /* check for wrap-around */
     FDC_ASSERT(start_addr < end_addr, start_addr, end_addr);
@@ -2837,6 +2837,7 @@ rtos_k_thread_set_tmp_region(
     mpu_get_enclosing_region_boundaries(start_addr, end_addr,
                                         &aligned_start_addr, &aligned_end_addr);
 
+    aligned_end_addr = (void *)((uintptr_t)aligned_end_addr - 1);
     /*
      * Disable interrupts in the ARM core
      */

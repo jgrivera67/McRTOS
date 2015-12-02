@@ -334,7 +334,7 @@ void rtos_thread_scheduler(
 static inline void
 toggle_heartbeat_led(void)
 {
-    toggle_rgb_led(LED_COLOR_BLUE);
+    //??? toggle_rgb_led(LED_COLOR_BLUE);
 }
 
 

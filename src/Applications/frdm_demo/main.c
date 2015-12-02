@@ -26,6 +26,8 @@ TODO("Remove these pragmas")
 
 #define MY_UDP_SERVER_PORT  8888
 
+#define MY_UDP_MULTICAST_RECEIVER_PORT 8889
+
 /**
  * Application thread priorities
  */
@@ -44,13 +46,13 @@ static void demo_udp_server_command(void);
 static void demo_ping_ipv6_command(void);
 static void demo_udp_ipv6_client_command(void);
 static void demo_udp_ipv6_server_command(void);
-
 static fdc_error_t hello_world_thread_f(void *arg);
 static fdc_error_t accelerometer_thread_f(void *arg);
 static fdc_error_t bluetooth_terminal_thread_f(void *arg);
 static fdc_error_t demo_ping_thread_f(void *arg);
 static fdc_error_t demo_udp_server_thread_f(void *arg);
 static fdc_error_t demo_udp_client_thread_f(void *arg);
+static fdc_error_t demo_udp_multicast_receiver_thread_f(void *arg);
 static fdc_error_t demo_ping_ipv6_thread_f(void *arg);
 static fdc_error_t demo_udp_ipv6_server_thread_f(void *arg);
 static fdc_error_t demo_udp_ipv6_client_thread_f(void *arg);
@@ -84,12 +86,14 @@ struct app_state_vars {
     bool demo_ping_started;
     bool demo_udp_client_started;
     bool demo_udp_server_started;
+    bool demo_udp_multicast_receiver_started;
     bool demo_ping_ipv6_started;
     bool demo_udp_ipv6_client_started;
     bool demo_udp_ipv6_server_started;
     struct rtos_thread demo_ping_thread;
     struct rtos_thread demo_udp_client_thread;
     struct rtos_thread demo_udp_server_thread;
+    struct rtos_thread demo_udp_multicast_receiver_thread;
     struct rtos_thread demo_ping_ipv6_thread;
     struct rtos_thread demo_udp_ipv6_client_thread;
     struct rtos_thread demo_udp_ipv6_server_thread;
@@ -129,6 +133,7 @@ struct rtos_thread g_app_threads[RTOS_NUM_APP_THREADS];
  */
 static const struct rtos_thread_creation_params g_app_thread_creation_params[] =
 {
+#if 0
     [0] =
     {
 	.p_name_p = "Hello World thread 1",
@@ -144,8 +149,8 @@ static const struct rtos_thread_creation_params g_app_thread_creation_params[] =
         .p_function_arg_p = (void *)2,
         .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 2,
     },
-
-    [2] =
+#endif
+    [0] =
     {
         .p_name_p = "accelerometer thread",
         .p_function_p = accelerometer_thread_f,
@@ -153,12 +158,20 @@ static const struct rtos_thread_creation_params g_app_thread_creation_params[] =
         .p_priority = ACCELEROMETER_THREAD_PRIORITY,
     },
 
-    [3] =
+    [1] =
     {
         .p_name_p = "Bluetooth terminal I/O thread",
         .p_function_p = bluetooth_terminal_thread_f,
         .p_function_arg_p = NULL,
         .p_priority = BLUETOOTH_TERMINAL_THREAD_PRIORITY,
+    },
+
+    [2] =
+    {
+        .p_name_p = "IPv4 UDP multicast receiver thread",
+        .p_function_p = demo_udp_multicast_receiver_thread_f,
+        .p_function_arg_p = NULL,
+        .p_priority = RTOS_HIGHEST_THREAD_PRIORITY + 3,
     },
 };
 
@@ -229,6 +242,9 @@ static const struct rtos_startup_app_configuration g_rtos_app_config =
     .stc_app_console_commands_p = g_app_console_commands,
 };
 
+static const struct ipv4_address g_multicast_ip_addr = {
+    .bytes = { 224, 0, 0, 8 }
+};
 
 /**
  * Application's main()
@@ -885,11 +901,12 @@ accelerometer_thread_f(void *arg)
 	    }
 
 	    if (motion_detected) {
+#               if 0
 		CONSOLE_POS_PRINTF(41, 1, "Local accelerometer reading: x: %8d y: %8d z: %8d",
 		    g_app.accel_reading.x_acceleration,
 		    g_app.accel_reading.y_acceleration,
 		    g_app.accel_reading.z_acceleration);
-
+#               endif
                 rtos_mutex_acquire(&g_app.accel_reading_mutex);
                 g_app.accel_reading_ready = true;
                 rtos_mutex_release(&g_app.accel_reading_mutex);
@@ -926,14 +943,38 @@ accelerometer_thread_f(void *arg)
 }
 
 
+static void
+send_led_color_to_other_boards(struct local_l4_end_point *local_end_point_p,
+                               struct network_packet *tx_packet_p,
+                               uint32_t led_color_mask)
+{
+    fdc_error_t fdc_error;
+    uint32_t *msg_payload_p;
+    rtos_thread_set_tmp_region(tx_packet_p,
+                               sizeof *tx_packet_p,
+                               0);
+
+    msg_payload_p = net_get_udp_data_payload_area(tx_packet_p);
+    *msg_payload_p = led_color_mask;
+
+    rtos_thread_unset_tmp_region(); /* tx_packet_p */
+    fdc_error = net_send_ipv4_udp_datagram(local_end_point_p,
+                                           &g_multicast_ip_addr,
+                                           hton16(MY_UDP_MULTICAST_RECEIVER_PORT),
+                                           tx_packet_p, sizeof *msg_payload_p);
+    FDC_ASSERT(fdc_error == 0, fdc_error, tx_packet_p);
+}
+
+
 /**
  * Bluetooth terminal thread
  */
 static fdc_error_t
 bluetooth_terminal_thread_f(void *arg)
 {
-    uint8_t c;
+    char buffer[9];
     fdc_error_t fdc_error;
+    struct local_l4_end_point *local_end_point_p;
     cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
 
     FDC_ASSERT(arg == NULL, arg, cpu_id);
@@ -945,10 +986,61 @@ bluetooth_terminal_thread_f(void *arg)
                                 0,
                                 NULL);
 
+    fdc_error = net_create_local_l4_end_point(TRANSPORT_PROTO_UDP, 0,
+					      &local_end_point_p);
+    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+    net_join_ipv4_multicast_group(&g_multicast_ip_addr);
+
+    struct network_packet *tx_packet_p = net_allocate_tx_packet(false);
+
     bluetooth_terminal_printf("Hello bluetooth!!!\n");
     for ( ; ; ) {
-        c = bluetooth_terminal_getchar();
-        bluetooth_terminal_putchar(c);
+        uint_fast8_t i;
+        uint32_t led_color_mask;
+
+        for (i = 0; i < sizeof(buffer); i ++) {
+            uint_fast8_t c = bluetooth_terminal_getchar();
+
+            bluetooth_terminal_putchar(c);
+            if (c == '.' || c == '\n') {
+                buffer[i] = '\0';
+                break;
+            }
+
+            buffer[i] = c;
+        };
+
+        if (i == sizeof(buffer)) {
+            buffer[i - 1] = '\0';
+        }
+
+        if (strcmp(buffer, "blue") == 0) {
+            led_color_mask = LED_COLOR_BLUE;
+        } else if (strcmp(buffer, "red") == 0) {
+            led_color_mask = LED_COLOR_RED;
+        } else if (strcmp(buffer, "green") == 0) {
+            led_color_mask = LED_COLOR_GREEN;
+        } else if (strcmp(buffer, "yellow") == 0) {
+            led_color_mask = LED_COLOR_YELLOW;
+        } else if (strcmp(buffer, "cyan") == 0) {
+            led_color_mask = LED_COLOR_CYAN;
+        } else if (strcmp(buffer, "magenta") == 0) {
+            led_color_mask = LED_COLOR_MAGENTA;
+        } else if (strcmp(buffer, "white") == 0) {
+            led_color_mask = LED_COLOR_WHITE;
+        } else if (strcmp(buffer, "black") == 0) {
+            led_color_mask = LED_COLOR_BLACK;
+        } else {
+            continue;
+        }
+
+        set_rgb_led_color(led_color_mask);
+
+        /*
+         * Send led_color_mask to the other boards:
+         */
+        send_led_color_to_other_boards(local_end_point_p, tx_packet_p,
+                                       led_color_mask);
     }
 
     fdc_error = CAPTURE_FDC_ERROR(
@@ -976,7 +1068,7 @@ demo_udp_server_thread_f(void *arg)
                                 NULL);
 
     fdc_error = net_create_local_l4_end_point(TRANSPORT_PROTO_UDP,
-					      MY_UDP_SERVER_PORT,
+					      hton16(MY_UDP_SERVER_PORT),
 					      &server_end_point_p);
     FDC_ASSERT(fdc_error == 0, fdc_error, 0);
 
@@ -1091,8 +1183,8 @@ demo_udp_client_thread_f(void *arg)
         rtos_thread_unset_tmp_region(); /* tx_packet_p */
 
 	fdc_error = net_send_ipv4_udp_datagram(client_end_point_p, &dest_ip_addr,
-		                   MY_UDP_SERVER_PORT,
-		                   tx_packet_p, sizeof *out_msg_p);
+		                               hton16(MY_UDP_SERVER_PORT),
+		                               tx_packet_p, sizeof *out_msg_p);
 
         if (fdc_error != 0) {
 	    capture_fdc_msg_printf("net_send_ipv4_udp_datagram() failed with error %#x\n",
@@ -1137,6 +1229,65 @@ demo_udp_client_thread_f(void *arg)
     }
 
     net_free_tx_packet(tx_packet_p);
+    fdc_error = CAPTURE_FDC_ERROR(
+        "thread should not have terminated",
+        cpu_id, rtos_thread_self());
+
+    return fdc_error;
+}
+
+
+static fdc_error_t
+demo_udp_multicast_receiver_thread_f(void *arg)
+{
+    fdc_error_t fdc_error;
+    cpu_id_t cpu_id = SOC_GET_CURRENT_CPU_ID();
+
+    uint32_t seq_num = 0;
+
+    struct local_l4_end_point *local_end_point_p;
+
+    rtos_thread_set_comp_region(&g_app,
+                                sizeof g_app,
+                                0,
+                                NULL);
+
+    fdc_error = net_create_local_l4_end_point(TRANSPORT_PROTO_UDP,
+					      hton16(MY_UDP_MULTICAST_RECEIVER_PORT),
+					      &local_end_point_p);
+    FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+    net_join_ipv4_multicast_group(&g_multicast_ip_addr);
+
+    for ( ; ; ) {
+	struct network_packet *rx_packet_p = NULL;
+	struct ipv4_address remote_ip_addr;
+	uint16_t remote_port;
+	uint32_t *in_msg_p;
+	size_t in_msg_size;
+        uint32_t led_color_mask;
+
+	fdc_error = net_receive_ipv4_udp_datagram(local_end_point_p,
+                                                  0,
+                                                  &remote_ip_addr,
+                                                  &remote_port,
+                                                  &rx_packet_p);
+        FDC_ASSERT(fdc_error == 0, fdc_error, 0);
+
+        rtos_thread_set_tmp_region(rx_packet_p,
+                                   sizeof *rx_packet_p,
+                                   MPU_REGION_READ_ONLY);
+
+	in_msg_size = net_get_udp_data_payload_length(rx_packet_p);
+	FDC_ASSERT(in_msg_size == sizeof(uint32_t), in_msg_size, 0);
+	in_msg_p = net_get_udp_data_payload_area(rx_packet_p);
+        led_color_mask = *in_msg_p;
+        rtos_thread_unset_tmp_region(); /* rx_packet_p */
+	net_recycle_rx_packet(rx_packet_p);
+
+        console_printf("Received LED color mask: %#x\n", led_color_mask);
+        set_rgb_led_color(led_color_mask);
+    }
+
     fdc_error = CAPTURE_FDC_ERROR(
         "thread should not have terminated",
         cpu_id, rtos_thread_self());
@@ -1241,7 +1392,7 @@ demo_udp_ipv6_server_thread_f(void *arg)
     struct local_l4_end_point *server_end_point_p;
 
     fdc_error = net_create_local_l4_end_point(TRANSPORT_PROTO_UDP,
-					      MY_UDP_SERVER_PORT,
+					      hton16(MY_UDP_SERVER_PORT),
 					      &server_end_point_p);
     FDC_ASSERT(fdc_error == 0, fdc_error, 0);
 
@@ -1356,7 +1507,7 @@ demo_udp_ipv6_client_thread_f(void *arg)
         rtos_thread_unset_tmp_region(); /* tx_packet_p */
 
 	fdc_error = net_send_ipv6_udp_datagram(client_end_point_p, dest_ipv6_addr_p,
-		                   MY_UDP_SERVER_PORT,
+		                   hton16(MY_UDP_SERVER_PORT),
 		                   tx_packet_p, sizeof *out_msg_p);
 
         if (fdc_error != 0) {

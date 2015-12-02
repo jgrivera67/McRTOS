@@ -410,11 +410,60 @@ net_send_ipv4_dhcp_discovery(struct local_l3_end_point *local_l3_end_point_p,
     struct ipv4_address dest_ip_addr = { .value = IPV4_BROADCAST_ADDR };
 
     net_send_ipv4_udp_datagram(client_end_point_p, &dest_ip_addr,
-			       DHCP_UDP_SERVER_PORT,
+			       hton16(DHCP_UDP_SERVER_PORT),
 			       tx_packet_p,
 			       sizeof(struct dhcp_message) + 16);
 
     DEBUG_PRINTF("DHCP client sent discovery message\n");
+}
+
+
+/**
+ * Maps multicast IPv4 address to multicast Ethernet MAC address
+ */
+static inline void
+map_ipv4_multicast_addr_to_ethernet_multicast_addr(
+    const struct ipv4_address *ipv4_multicast_addr_p,
+    struct ethernet_mac_address *enet_multicast_addr_p)
+{
+    FDC_ASSERT(IPV4_ADDR_IS_MULTICAST(ipv4_multicast_addr_p),
+               ipv4_multicast_addr_p->value, 0);
+
+    enet_multicast_addr_p->bytes[0] = 0x01;
+    enet_multicast_addr_p->bytes[1] = 0x00;
+    enet_multicast_addr_p->bytes[2] = 0x5e;
+    enet_multicast_addr_p->bytes[3] = (ipv4_multicast_addr_p->bytes[1] & 0x7f);
+    enet_multicast_addr_p->hwords[2] = ipv4_multicast_addr_p->hwords[1];
+}
+
+
+static void
+join_ipv4_multicast_group(struct local_l3_end_point *local_l3_end_point_p,
+                          const struct ipv4_address *multicast_addr_p)
+{
+    struct ethernet_mac_address enet_multicast_addr;
+
+    map_ipv4_multicast_addr_to_ethernet_multicast_addr(multicast_addr_p,
+                                                       &enet_multicast_addr);
+
+    enet_add_multicast_mac_addr(local_l3_end_point_p->enet_device_p,
+                                &enet_multicast_addr);
+}
+
+
+void
+net_join_ipv4_multicast_group(const struct ipv4_address *multicast_addr_p)
+{
+    struct mpu_region_range old_comp_region;
+
+    rtos_thread_set_comp_region(&g_networking,
+                                sizeof g_networking,
+                                0,
+                                &old_comp_region);
+
+    join_ipv4_multicast_group(&g_networking.local_l3_end_point,
+                              multicast_addr_p);
+    rtos_thread_restore_comp_region(&old_comp_region);
 }
 
 
@@ -482,6 +531,21 @@ join_ipv6_multicast_group(struct local_l3_end_point *local_l3_end_point_p,
                                 &enet_multicast_addr);
 }
 
+
+void
+net_join_ipv6_multicast_group(const struct ipv6_address *multicast_addr_p)
+{
+    struct mpu_region_range old_comp_region;
+
+    rtos_thread_set_comp_region(&g_networking,
+                                sizeof g_networking,
+                                0,
+                                &old_comp_region);
+
+    join_ipv6_multicast_group(&g_networking.local_l3_end_point,
+                              multicast_addr_p);
+    rtos_thread_restore_comp_region(&old_comp_region);
+}
 
 /**
  * Build solicited-node multicast address for a given unicast address
@@ -648,7 +712,7 @@ net_send_ipv4_dhcp_request(struct local_l3_end_point *local_l3_end_point_p,
     struct ipv4_address dest_ip_addr = { .value = IPV4_BROADCAST_ADDR };
 
     net_send_ipv4_udp_datagram(client_end_point_p, &dest_ip_addr,
-			       DHCP_UDP_SERVER_PORT,
+			       hton16(DHCP_UDP_SERVER_PORT),
 			       tx_packet_p,
 			       sizeof(struct dhcp_message) + 28);
 
@@ -1354,6 +1418,11 @@ net_send_ipv4_packet(const struct ipv4_address *dest_ip_addr_p,
 	fdc_error = CAPTURE_FDC_ERROR("IPv4 Loopback not supported", 0, 0);
     } else if (dest_ip_addr_p->value == IPV4_BROADCAST_ADDR) {
 	dest_mac_addr = enet_broadcast_mac_addr;
+        fdc_error = 0;
+    } else if (IPV4_ADDR_IS_MULTICAST(dest_ip_addr_p)) {
+        map_ipv4_multicast_addr_to_ethernet_multicast_addr(dest_ip_addr_p,
+                                                           &dest_mac_addr);
+        fdc_error = 0;
     } else if (SAME_IPv4_SUBNET(&local_l3_end_point_p->ipv4.local_ip_addr,
 		         dest_ip_addr_p,
 			 local_l3_end_point_p->ipv4.subnet_mask)) {
@@ -1384,7 +1453,7 @@ net_send_ipv4_packet(const struct ipv4_address *dest_ip_addr_p,
 
 fdc_error_t
 net_create_local_l4_end_point(enum l4_protocols l4_protocol,
-	                      uint16_t l4_port,
+	                      uint16_t l4_port, /* big endian */
 			      struct local_l4_end_point **local_l4_end_point_pp)
 {
     fdc_error_t fdc_error;
@@ -1461,7 +1530,7 @@ error_release_mutex:
 fdc_error_t
 net_send_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
 		           const struct ipv4_address *dest_ip_addr_p,
-			   uint16_t dest_port,
+			   uint16_t dest_port, /* big endian */
 		           struct network_packet *tx_packet_p,
 		           size_t data_payload_length)
 {
@@ -2929,7 +2998,7 @@ net_process_incoming_udp_datagram(struct network_packet *rx_packet_p)
 		         &rx_packet_p->node);
     } else {
 	capture_fdc_msg_printf("Received UDP datagram ignored: unknown port %u\n",
-			       udp_header_p->dest_port);
+			       ntoh16(udp_header_p->dest_port));
 	net_recycle_rx_packet(rx_packet_p);
     }
 }

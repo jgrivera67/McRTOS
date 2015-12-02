@@ -77,6 +77,12 @@
  */
 #define IPV4_BROADCAST_ADDR UINT32_C(0xffffffff)
 
+/*
+ * Mask for first octet of an IPv4 multicast address
+ * (224.0.0.0 to 239.255.255.255)
+ */
+#define IPV4_MULTICAST_ADDRESS_MASK UINT8_C(0xe0)
+
 /**
  * Number of entries for the IPv4 ARP cache table
  */
@@ -214,6 +220,13 @@
         ((void *)((_net_packet_p)->data_buffer +    \
 		  (sizeof(struct ethernet_header) + \
                    sizeof(struct ipv4_header))))
+
+/**
+ * Tell if a given IPv4 address is a multicast address
+ */
+#define IPV4_ADDR_IS_MULTICAST(_ipv4_addr_p) \
+        (((_ipv4_addr_p)->bytes[0] & IPV4_MULTICAST_ADDRESS_MASK) == \
+         IPV4_MULTICAST_ADDRESS_MASK)
 
 /**
  * Compares two IPv6 addresses. Their storage must be 4-byte aligned
@@ -1403,6 +1416,9 @@ net_create_local_l4_end_point(enum l4_protocols l4_protocol,
 	                      uint16_t l4_port,
 			      struct local_l4_end_point **local_l4_end_point_pp);
 
+void
+net_join_ipv4_multicast_group(const struct ipv4_address *multicast_addr_p);
+
 fdc_error_t
 net_send_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
 		           const struct ipv4_address *dest_ip_addr_p,
@@ -1447,6 +1463,9 @@ net_send_ipv6_packet(const struct ipv6_address *dest_ip_addr_p,
 		     struct network_packet *tx_packet_p,
 		     size_t data_payload_length,
 		     enum l4_protocols l4_protocol);
+
+void
+net_join_ipv6_multicast_group(const struct ipv6_address *multicast_addr_p);
 
 fdc_error_t
 net_send_ipv6_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,

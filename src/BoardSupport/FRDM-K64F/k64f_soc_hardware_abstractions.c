@@ -776,7 +776,7 @@ k64f_set_mpu_region_for_cpu(
 
     DBG_ASSERT(start_addr < end_addr &&
 	       (uintptr_t)start_addr % K64F_MPU_REGION_ALIGNMENT == 0 &&
-	       (uintptr_t)end_addr + 1 % K64F_MPU_REGION_ALIGNMENT == 0,
+	       ((uintptr_t)end_addr + 1) % K64F_MPU_REGION_ALIGNMENT == 0,
 	       start_addr, end_addr);
 
     /*
@@ -1013,7 +1013,7 @@ k64f_mpu_init(void)
     for (cpu_id_t cpu_id = 0; cpu_id < SOC_NUM_CPU_CORES; cpu_id ++) {
 	k64f_set_mpu_region_for_cpu(mpu_var_p, mpu_regs_p, cpu_id, 1,
 				    (void *)__flash_text_start,
-				    (void *)__flash_text_end,
+				    (void *)((uintptr_t)__flash_text_end - 1),
 				    0x5); /* unprivileged r-x */
     }
 
@@ -1224,7 +1224,7 @@ mpu_register_dma_region(
     mpu_var_p->num_defined_global_regions ++;
     rtos_k_restore_cpu_interrupts(cpu_status_register);
 
-    void *end_addr = (void *)((uintptr_t)start_addr + size);
+    void *end_addr = (void *)((uintptr_t)start_addr + size - 1);
 
     k64f_mpu_set_dma_region(region_index, dma_bus_master,
                             start_addr, end_addr);

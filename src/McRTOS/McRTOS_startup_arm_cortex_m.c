@@ -332,10 +332,10 @@ cortex_m_set_mpu_region(
 
     DBG_ASSERT(start_addr < end_addr, start_addr, end_addr);
 
-    size_t region_size = (uintptr_t)end_addr - (uintptr_t)start_addr;
+    size_t region_size = ((uintptr_t)end_addr - (uintptr_t)start_addr) + 1;
 
     DBG_ASSERT((uintptr_t)start_addr % MIN_MPU_REGION_ALIGNMENT == 0 &&
-               (uintptr_t)end_addr % MIN_MPU_REGION_ALIGNMENT == 0,
+               ((uintptr_t)end_addr  + 1) % MIN_MPU_REGION_ALIGNMENT == 0,
 	       start_addr, end_addr);
 
     DBG_ASSERT(is_power_of_2(region_size), region_size, 0);
