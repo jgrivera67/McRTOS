@@ -1436,8 +1436,9 @@ static cpu_reset_cause_t
 find_reset_cause(void)
 {
     uint8_t generic_cause = GRC_INVALID_RESET_CAUSE;
+    uint8_t reg_rcm_srs0 = read_8bit_mmio_register(&RCM_SRS0);
+    uint8_t reg_rcm_srs1 = read_8bit_mmio_register(&RCM_SRS1);
 
-     uint8_t reg_rcm_srs0 = read_8bit_mmio_register(&RCM_SRS0);
     if (reg_rcm_srs0 & RCM_SRS0_POR_MASK) {
         generic_cause = GRC_POWER_ON_RESET;
     } else if (reg_rcm_srs0 & RCM_SRS0_PIN_MASK) {
@@ -1446,10 +1447,7 @@ find_reset_cause(void)
         generic_cause = GRC_WATCHDOG_RESET;
     } else if (reg_rcm_srs0 != 0) {
         generic_cause = GRC_OTHER_HW_REASON_RESET;
-    }
-
-    uint8_t reg_rcm_srs1 = read_8bit_mmio_register(&RCM_SRS1);
-    if (generic_cause == GRC_INVALID_RESET_CAUSE) {
+    } else {
         if (reg_rcm_srs1 & RCM_SRS1_SW_MASK) {
             generic_cause = GRC_SOFTWARE_RESET;
         } else if (reg_rcm_srs1 & RCM_SRS1_MDM_AP_MASK) {
