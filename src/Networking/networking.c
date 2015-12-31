@@ -2003,6 +2003,9 @@ net_send_ipv6_packet(const struct ipv6_address *dest_ip_addr_p,
 
     const struct enet_device *enet_device_p = local_l3_end_point_p->enet_device_p;
 
+    rtos_thread_set_tmp_region(dest_ip_addr_p, sizeof *dest_ip_addr_p,
+                               MPU_REGION_READ_ONLY);
+
     if (!is_ipv6_solicited_node_multicast_addr(dest_ip_addr_p)) {
         rtos_mutex_acquire(&local_l3_end_point_p->ipv6.mutex);
         while ((local_l3_end_point_p->ipv6.flags & IPV6_LINK_LOCAL_ADDR_READY) == 0) {
@@ -2078,7 +2081,7 @@ net_send_ipv6_packet(const struct ipv6_address *dest_ip_addr_p,
             fdc_error = select_ipv6_router(local_l3_end_point_p, dest_ip_addr_p,
                                            &router_ip_addr);
             if (fdc_error != 0) {
-                return fdc_error;
+                goto common_exit;
             }
 
             fdc_error = resolve_dest_ipv6_addr(local_l3_end_point_p,
@@ -2088,7 +2091,7 @@ net_send_ipv6_packet(const struct ipv6_address *dest_ip_addr_p,
     }
 
     if (fdc_error != 0) {
-	return fdc_error;
+	goto common_exit;
     }
 
     COPY_MAC_ADDRESS(&tx_frame_p->enet_header.dest_mac_addr, &dest_mac_addr);
@@ -2097,7 +2100,11 @@ net_send_ipv6_packet(const struct ipv6_address *dest_ip_addr_p,
      * Transmit packet:
      */
     enet_start_xmit(enet_device_p, tx_packet_p);
-    return 0;
+    fdc_error = 0;
+
+common_exit:
+    rtos_thread_unset_tmp_region();
+    return fdc_error;
 }
 
 
