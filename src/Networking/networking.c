@@ -625,8 +625,8 @@ autoconfigure_ipv6_link_local_addr(struct local_l3_end_point *local_l3_end_point
     /*
      * Build link-local unicast address:
      */
-    local_l3_end_point_p->ipv6.link_local_ip_addr =
-        ipv6_link_local_unicast_prefix;
+    local_l3_end_point_p->ipv6.link_local_ip_addr.dwords[0] =
+        ipv6_link_local_unicast_prefix.dwords[0];
     local_l3_end_point_p->ipv6.link_local_ip_addr.dwords[1] =
         local_l3_end_point_p->ipv6.interface_id;
 
@@ -1970,6 +1970,16 @@ common_exit:
 }
 
 
+static bool
+is_ipv6_solicited_node_multicast_addr(const struct ipv6_address *ip_addr_p)
+{
+    return ip_addr_p->bytes[0] == ipv6_link_local_solicited_node_prefix.bytes[0] &&
+           ip_addr_p->bytes[1] == ipv6_link_local_solicited_node_prefix.bytes[1] &&
+           ip_addr_p->bytes[11] == ipv6_link_local_solicited_node_prefix.bytes[11] &&
+           ip_addr_p->bytes[12] == ipv6_link_local_solicited_node_prefix.bytes[12];
+}
+
+
 fdc_error_t
 net_send_ipv6_packet(const struct ipv6_address *dest_ip_addr_p,
 		     struct network_packet *tx_packet_p,
@@ -1991,23 +2001,21 @@ net_send_ipv6_packet(const struct ipv6_address *dest_ip_addr_p,
     struct local_l3_end_point *local_l3_end_point_p =
 	choose_ipv6_local_l3_end_point(dest_ip_addr_p);
 
-    rtos_mutex_acquire(&local_l3_end_point_p->ipv6.mutex);
-    while ((local_l3_end_point_p->ipv6.flags & IPV6_LINK_LOCAL_ADDR_READY) == 0) {
-         rtos_condvar_wait(
-                &local_l3_end_point_p->ipv6.flags_changed_condvar,
-                &local_l3_end_point_p->ipv6.mutex,
-                NULL);
-    }
-
-    rtos_mutex_release(&local_l3_end_point_p->ipv6.mutex);
-
-    const struct ipv6_address *source_ip_addr_p =
-        &local_l3_end_point_p->ipv6.link_local_ip_addr;
-
     const struct enet_device *enet_device_p = local_l3_end_point_p->enet_device_p;
 
-    FDC_ASSERT(!IPV6_ADDRESSES_EQUAL(dest_ip_addr_p, &ipv6_unspecified_address),
-               dest_ip_addr_p, tx_packet_p);
+    if (!is_ipv6_solicited_node_multicast_addr(dest_ip_addr_p)) {
+        rtos_mutex_acquire(&local_l3_end_point_p->ipv6.mutex);
+        while ((local_l3_end_point_p->ipv6.flags & IPV6_LINK_LOCAL_ADDR_READY) == 0) {
+             rtos_condvar_wait(
+                    &local_l3_end_point_p->ipv6.flags_changed_condvar,
+                    &local_l3_end_point_p->ipv6.mutex,
+                    NULL);
+        }
+
+        rtos_mutex_release(&local_l3_end_point_p->ipv6.mutex);
+        FDC_ASSERT(!IPV6_ADDRESSES_EQUAL(dest_ip_addr_p, &ipv6_unspecified_address),
+                   dest_ip_addr_p, tx_packet_p);
+    }
 
     /*
      * Populate IPv6 header
@@ -2680,6 +2688,7 @@ net_receive_ipv6_neighbor_solicitation(struct network_packet *rx_packet_p)
 	       rx_packet_p->total_length, rx_packet_p);
 
     bool duplicate_ip_addr_detected = false;
+    bool send_neighbor_ad = false;
     struct local_l3_end_point *local_l3_end_point_p = rx_packet_p->local_l3_end_point_p;
     struct ipv6_header *ipv6_header_p = GET_IPV6_HEADER(rx_packet_p);
     struct icmpv6_neighbor_solicitation *neighbor_sol_p =
@@ -2738,12 +2747,7 @@ net_receive_ipv6_neighbor_solicitation(struct network_packet *rx_packet_p)
 		rx_frame_p->enet_header.source_mac_addr.bytes[5]);
         }
 
-        /*
-         * Send Neighbor Advertisement
-         */
-        net_send_ipv6_neighbor_advertisement(local_l3_end_point_p,
-                                             NEIGHBOR_ADVERT_FLAG_S,
-                                             &ipv6_header_p->source_ipv6_addr);
+        send_neighbor_ad = true;
     }
 
     if (!IPV6_ADDRESSES_EQUAL(
@@ -2755,6 +2759,15 @@ net_receive_ipv6_neighbor_solicitation(struct network_packet *rx_packet_p)
 	neighbor_cache_update(&local_l3_end_point_p->ipv6.neighbor_cache,
 			      &ipv6_header_p->source_ipv6_addr,
 			      &rx_frame_p->enet_header.source_mac_addr);
+    }
+
+    if (send_neighbor_ad) {
+        /*
+         * Send Neighbor Advertisement
+         */
+        net_send_ipv6_neighbor_advertisement(local_l3_end_point_p,
+                                             NEIGHBOR_ADVERT_FLAG_S,
+                                             &ipv6_header_p->source_ipv6_addr);
     }
 }
 
