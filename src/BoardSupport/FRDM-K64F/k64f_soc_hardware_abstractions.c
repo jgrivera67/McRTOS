@@ -2283,8 +2283,10 @@ uart_putchar_with_polling(
     UART_MemMapPtr uart_mmio_registers_p = uart_device_p->urt_mmio_uart_p;
     uint32_t reg_value;
 
+    bool caller_was_privileged = rtos_enter_privileged_mode();
+
     if (!uart_var_p->urt_initialized) {
-        return;
+        goto exit;
     }
 
     /*
@@ -2305,6 +2307,10 @@ uart_putchar_with_polling(
     }
 
     write_8bit_mmio_register(&UART_D_REG(uart_mmio_registers_p), c);
+exit:
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
+    }
 }
 
 #pragma GCC diagnostic push
