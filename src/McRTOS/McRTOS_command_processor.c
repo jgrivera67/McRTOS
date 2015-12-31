@@ -884,28 +884,6 @@ cmd_ping_remote_ip6_addr(const struct ipv6_address *dest_ipv6_addr_p)
 	    return;
 	}
 
-//???
-console_printf("*** remote addr %x:%x:%x:%x:%x:%x:%x:%x\n",
-		       ntoh16(remote_ipv6_addr.hwords[0]),
-		       ntoh16(remote_ipv6_addr.hwords[1]),
-		       ntoh16(remote_ipv6_addr.hwords[2]),
-		       ntoh16(remote_ipv6_addr.hwords[3]),
-		       ntoh16(remote_ipv6_addr.hwords[4]),
-		       ntoh16(remote_ipv6_addr.hwords[5]),
-		       ntoh16(remote_ipv6_addr.hwords[6]),
-		       ntoh16(remote_ipv6_addr.hwords[7]));
-
-console_printf("*** dest_ipv6_addr %x:%x:%x:%x:%x:%x:%x:%x\n",
-		       ntoh16(dest_ipv6_addr_p->hwords[0]),
-		       ntoh16(dest_ipv6_addr_p->hwords[1]),
-		       ntoh16(dest_ipv6_addr_p->hwords[2]),
-		       ntoh16(dest_ipv6_addr_p->hwords[3]),
-		       ntoh16(dest_ipv6_addr_p->hwords[4]),
-		       ntoh16(dest_ipv6_addr_p->hwords[5]),
-		       ntoh16(dest_ipv6_addr_p->hwords[6]),
-		       ntoh16(dest_ipv6_addr_p->hwords[7]));
-
-//???
 	FDC_ASSERT(IPV6_ADDRESSES_EQUAL(&remote_ipv6_addr, dest_ipv6_addr_p),
 		   remote_ipv6_addr.words[2], remote_ipv6_addr.words[3]);
 	FDC_ASSERT(reply_identifier == identifier,
