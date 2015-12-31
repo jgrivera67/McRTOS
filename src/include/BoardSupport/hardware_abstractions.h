@@ -393,12 +393,12 @@ struct mpu_region_range {
     /**
      * Address of the first byte of the region
      */
-    void *start_addr;
+    const void *start_addr;
 
     /**
      * Address of the first byte after the region
      */
-    void *end_addr;
+    const void *end_addr;
 
     /**
      * Access flags for the region
@@ -419,19 +419,19 @@ void mpu_set_all_thread_data_regions(
 void mpu_set_thread_data_region(
     cpu_id_t cpu_id,
     mpu_region_index_t region_index,
-    void *start_addr,
-    void *end_addr,
+    const void *start_addr,
+    const void *end_addr,
     uint32_t flags);
 
 void mpu_unset_thread_data_region(mpu_region_index_t region_index);
 
 void mpu_register_dma_region(
     enum mpu_bus_masters dma_bus_master,
-    void *start_addr,
+    const void *start_addr,
     size_t size);
 
 void mpu_get_enclosing_region_boundaries(
-        void *start_addr, void *end_addr,
+        const void *start_addr, const void *end_addr,
         void **region_start_addr, void **region_end_addr);
 
 uint32_t calc_crc_32(const void *data_buf_p, size_t num_bytes);

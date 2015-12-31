@@ -750,8 +750,8 @@ k64f_set_mpu_region_for_cpu(
     volatile MPU_Type *mpu_regs_p,
     cpu_id_t cpu_id,
     uint8_t region_index,
-    void *start_addr,
-    void *end_addr,
+    const void *start_addr,
+    const void *end_addr,
     uint32_t unprivileged_permissions)
 {
     struct permissions_bit_field {
@@ -813,8 +813,8 @@ static void
 k64f_mpu_set_dma_region(
     uint8_t region_index,
     enum mpu_bus_masters mpu_bus_master,
-    void *start_addr,
-    void *end_addr)
+    const void *start_addr,
+    const void *end_addr)
 {
     struct bus_master_type1_permissions_bit_field {
 	uint32_t mask;
@@ -1134,8 +1134,8 @@ void
 mpu_set_thread_data_region(
     cpu_id_t cpu_id,
     mpu_region_index_t region_index,
-    void *start_addr,
-    void *end_addr,
+    const void *start_addr,
+    const void *end_addr,
     uint32_t flags)
 {
     uint32_t unprivileged_permissions;
@@ -1196,7 +1196,7 @@ mpu_unset_thread_data_region(mpu_region_index_t region_index)
 void
 mpu_register_dma_region(
     enum mpu_bus_masters dma_bus_master,
-    void *start_addr,
+    const void *start_addr,
     size_t size)
 {
     FDC_ASSERT(
@@ -1236,7 +1236,7 @@ mpu_register_dma_region(
 
 
 void
-mpu_get_enclosing_region_boundaries(void *start_addr, void *end_addr,
+mpu_get_enclosing_region_boundaries(const void *start_addr, const void *end_addr,
                                     void **region_start_addr, void **region_end_addr)
 {
     DBG_ASSERT(start_addr < end_addr, start_addr, end_addr);

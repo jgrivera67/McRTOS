@@ -1068,7 +1068,7 @@ rtos_k_lcd_draw_tile(
 _THREAD_CALLERS_ONLY_
 void
 rtos_k_thread_set_comp_region(
-    _IN_ void *start_addr,
+    _IN_ const void *start_addr,
     _IN_ size_t size,
     _IN_ uint32_t flags,
     _OUT_ struct mpu_region_range *old_comp_region_p);
@@ -1081,7 +1081,7 @@ rtos_k_thread_restore_comp_region(
 _THREAD_CALLERS_ONLY_
 void
 rtos_k_thread_set_tmp_region(
-    _IN_ void *start_addr,
+    _IN_ const void *start_addr,
     _IN_ size_t size,
     _IN_ uint32_t flags);
 
