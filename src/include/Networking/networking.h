@@ -214,6 +214,15 @@
 				sizeof(struct ethernet_header)))
 
 /**
+ * Return IP version number for a given network packet:
+ * - 4 for IPv4
+ * - 6 for IPv6
+ */
+#define GET_IP_VERSION(_ipv4_header_p) \
+        GET_BIT_FIELD((_ipv4_header_p)->version_and_header_length, \
+                      IP_VERSION_MASK, IP_VERSION_SHIFT)
+
+/**
  * Returns pointer to the data payload area of an IPv4 packet
  */
 #define GET_IPV4_DATA_PAYLOAD_AREA(_net_packet_p)   \
@@ -598,17 +607,14 @@ C_ASSERT(sizeof(struct ipv4_header) == 20);
 struct ipv6_header {
     /**
      * First 32-bit word:
-     * - Version is 6 for IPv6
-     * - Header length is in 32-bit words and if there are
-     *   no options, its value is 5
+     * - Top 4 bits of first byte is IP version, which is 6 for IPv6
      */
-    uint32_t first_word;
-#   define IPv6_VERSION_MASK	    MULTI_BIT_MASK(3, 0)
-#   define IPv6_VERSION_SHIFT	    0
-#   define IPv6_TRAFFIC_CLASS_MASK  MULTI_BIT_MASK(11, 4)
-#   define IPv6_TRAFFIC_CLASS_SHIFT 4
-#   define IPv6_FLOW_LABEL_MASK	    MULTI_BIT_MASK(31, 12)
-#   define IPv6_FLOW_LABEL_SHIFT    12
+    union {
+        uint32_t value;
+        uint8_t bytes[4];
+#       define IPv6_VERSION_MASK	    MULTI_BIT_MASK(7, 4)
+#       define IPv6_VERSION_SHIFT	    4
+    } first_word;
 
     /**
      * Payload length
@@ -1338,14 +1344,17 @@ static inline uint32_t byte_swap32(uint32_t value)
 }
 
 /**
- * Returns pointer to the data payload area of a UDP datagram
+ * Returns pointer to the data payload area of an IPv4 UDP datagram
  */
-static inline void *net_get_udp_data_payload_area(struct network_packet *net_packet_p)
+static inline void *net_get_ipv4_udp_data_payload_area(struct network_packet *net_packet_p)
 {
     if (net_packet_p->signature == NET_RX_PACKET_SIGNATURE) {
 #   ifdef _RELIABILITY_CHECKS_
 	struct ipv4_header *ipv4_header_p = GET_IPV4_HEADER(net_packet_p);
+        uint_fast8_t ip_version = GET_IP_VERSION(ipv4_header_p);
 #   endif
+
+        FDC_ASSERT(ip_version == 4, ip_version, net_packet_p);
 	FDC_ASSERT(ipv4_header_p->protocol_type == TRANSPORT_PROTO_UDP,
 		   ipv4_header_p->protocol_type, net_packet_p);
     } else {
@@ -1359,22 +1368,72 @@ static inline void *net_get_udp_data_payload_area(struct network_packet *net_pac
 
 
 /**
- * Returns the data payload length of an incoming UDP datagram
+ * Returns the data payload length of an IPv4 incoming UDP datagram
  */
-static inline size_t net_get_udp_data_payload_length(struct network_packet *net_packet_p)
+static inline size_t net_get_ipv4_udp_data_payload_length(struct network_packet *net_packet_p)
 {
     FDC_ASSERT(net_packet_p->signature == NET_RX_PACKET_SIGNATURE,
 	       net_packet_p->signature, net_packet_p);
 
-#ifdef _RELIABILITY_CHECKS_
+#   ifdef _RELIABILITY_CHECKS_
     struct ipv4_header *ipv4_header_p = GET_IPV4_HEADER(net_packet_p);
-#endif
+    uint_fast8_t ip_version = GET_IP_VERSION(ipv4_header_p);
+#   endif
 
+    FDC_ASSERT(ip_version == 4, ip_version, net_packet_p);
     FDC_ASSERT(ipv4_header_p->protocol_type == TRANSPORT_PROTO_UDP,
-	       ipv4_header_p->protocol_type, net_packet_p);
+                   ipv4_header_p->protocol_type, net_packet_p);
 
     struct udp_header *udp_header_p =
-	(struct udp_header *)GET_IPV4_DATA_PAYLOAD_AREA(net_packet_p);
+        (struct udp_header *)GET_IPV4_DATA_PAYLOAD_AREA(net_packet_p);
+
+    return ntoh16(udp_header_p->datagram_length) - sizeof(struct udp_header);
+}
+
+
+/**
+ * Returns pointer to the data payload area of an IPv6 UDP datagram
+ */
+static inline void *net_get_ipv6_udp_data_payload_area(struct network_packet *net_packet_p)
+{
+    if (net_packet_p->signature == NET_RX_PACKET_SIGNATURE) {
+#   ifdef _RELIABILITY_CHECKS_
+        uint_fast8_t ip_version = GET_IP_VERSION(GET_IPV4_HEADER(net_packet_p));
+	struct ipv6_header *ipv6_header_p = GET_IPV6_HEADER(net_packet_p);
+#   endif
+
+        FDC_ASSERT(ip_version == 6, ip_version, net_packet_p);
+	FDC_ASSERT(ipv6_header_p->next_header == TRANSPORT_PROTO_UDP,
+		   ipv6_header_p->next_header, net_packet_p);
+    } else {
+	FDC_ASSERT(net_packet_p->signature == NET_TX_PACKET_SIGNATURE,
+		   net_packet_p->signature, net_packet_p);
+    }
+
+    return (void *)((uint8_t *)GET_IPV6_DATA_PAYLOAD_AREA(net_packet_p) +
+		    sizeof(struct udp_header));
+}
+
+
+/**
+ * Returns the data payload length of an incoming IPv6 UDP datagram
+ */
+static inline size_t net_get_ipv6_udp_data_payload_length(struct network_packet *net_packet_p)
+{
+    FDC_ASSERT(net_packet_p->signature == NET_RX_PACKET_SIGNATURE,
+	       net_packet_p->signature, net_packet_p);
+
+#   ifdef _RELIABILITY_CHECKS_
+    uint_fast8_t ip_version = GET_IP_VERSION(GET_IPV4_HEADER(net_packet_p));
+    struct ipv6_header *ipv6_header_p = GET_IPV6_HEADER(net_packet_p);
+#   endif
+
+    FDC_ASSERT(ip_version == 6, ip_version, net_packet_p);
+    FDC_ASSERT(ipv6_header_p->next_header == TRANSPORT_PROTO_UDP,
+               ipv6_header_p->next_header, net_packet_p);
+
+    struct udp_header *udp_header_p =
+        (struct udp_header *)GET_IPV6_DATA_PAYLOAD_AREA(net_packet_p);
 
     return ntoh16(udp_header_p->datagram_length) - sizeof(struct udp_header);
 }

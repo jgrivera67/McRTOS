@@ -24,9 +24,9 @@ TODO("Remove these pragmas")
 #pragma GCC diagnostic ignored "-Wunused-function"
 #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
 
-#define MY_UDP_SERVER_PORT  8888
-
-#define MY_UDP_MULTICAST_RECEIVER_PORT 8889
+#define MY_IP4_UDP_SERVER_PORT              8887
+#define MY_IP6_UDP_SERVER_PORT              8888
+#define MY_IP4_UDP_MULTICAST_RECEIVER_PORT  8889
 
 /**
  * Application thread priorities
@@ -954,13 +954,13 @@ send_led_color_to_other_boards(struct local_l4_end_point *local_end_point_p,
                                sizeof *tx_packet_p,
                                0);
 
-    msg_payload_p = net_get_udp_data_payload_area(tx_packet_p);
+    msg_payload_p = net_get_ipv4_udp_data_payload_area(tx_packet_p);
     *msg_payload_p = led_color_mask;
 
     rtos_thread_unset_tmp_region(); /* tx_packet_p */
     fdc_error = net_send_ipv4_udp_datagram(local_end_point_p,
                                            &g_multicast_ip_addr,
-                                           hton16(MY_UDP_MULTICAST_RECEIVER_PORT),
+                                           hton16(MY_IP4_UDP_MULTICAST_RECEIVER_PORT),
                                            tx_packet_p, sizeof *msg_payload_p);
     FDC_ASSERT(fdc_error == 0, fdc_error, tx_packet_p);
 }
@@ -1068,7 +1068,7 @@ demo_udp_server_thread_f(void *arg)
                                 NULL);
 
     fdc_error = net_create_local_l4_end_point(TRANSPORT_PROTO_UDP,
-					      hton16(MY_UDP_SERVER_PORT),
+					      hton16(MY_IP4_UDP_SERVER_PORT),
 					      &server_end_point_p);
     FDC_ASSERT(fdc_error == 0, fdc_error, 0);
 
@@ -1093,9 +1093,9 @@ demo_udp_server_thread_f(void *arg)
                                    sizeof *rx_packet_p,
                                    MPU_REGION_READ_ONLY);
 
-	in_msg_size = net_get_udp_data_payload_length(rx_packet_p);
+	in_msg_size = net_get_ipv4_udp_data_payload_length(rx_packet_p);
 	FDC_ASSERT(in_msg_size == sizeof(struct accel_reading_msg), in_msg_size, 0);
-	in_msg_p = net_get_udp_data_payload_area(rx_packet_p);
+	in_msg_p = net_get_ipv4_udp_data_payload_area(rx_packet_p);
 	seq_num = in_msg_p->seq_num;
         CONSOLE_POS_PRINTF(41, 81, "Remote accelerometer reading: x: %8d y: %8d z: %8d",
                            in_msg_p->accel_reading.x_acceleration,
@@ -1111,7 +1111,7 @@ demo_udp_server_thread_f(void *arg)
                                    sizeof *tx_packet_p,
                                    0);
 
-	out_msg_p = net_get_udp_data_payload_area(tx_packet_p);
+	out_msg_p = net_get_ipv4_udp_data_payload_area(tx_packet_p);
 	*out_msg_p = seq_num;
         rtos_thread_unset_tmp_region(); /* tx_packet_p */
 
@@ -1168,7 +1168,7 @@ demo_udp_client_thread_f(void *arg)
                                    sizeof *tx_packet_p,
                                    0);
 
-	out_msg_p = net_get_udp_data_payload_area(tx_packet_p);
+	out_msg_p = net_get_ipv4_udp_data_payload_area(tx_packet_p);
 	out_msg_p->seq_num = seq_num;
 
         rtos_mutex_acquire(&g_app.accel_reading_mutex);
@@ -1183,7 +1183,7 @@ demo_udp_client_thread_f(void *arg)
         rtos_thread_unset_tmp_region(); /* tx_packet_p */
 
 	fdc_error = net_send_ipv4_udp_datagram(client_end_point_p, &dest_ip_addr,
-		                               hton16(MY_UDP_SERVER_PORT),
+		                               hton16(MY_IP4_UDP_SERVER_PORT),
 		                               tx_packet_p, sizeof *out_msg_p);
 
         if (fdc_error != 0) {
@@ -1208,16 +1208,16 @@ demo_udp_client_thread_f(void *arg)
 
 	FDC_ASSERT(server_ip_addr.value == dest_ip_addr.value,
 	           server_ip_addr.value, dest_ip_addr.value);
-	FDC_ASSERT(server_port == MY_UDP_SERVER_PORT,
-		   server_port, 0);
+	FDC_ASSERT(ntoh16(server_port) == MY_IP4_UDP_SERVER_PORT,
+		   ntoh16(server_port), 0);
 
         rtos_thread_set_tmp_region(rx_packet_p,
                                    sizeof *rx_packet_p,
                                    MPU_REGION_READ_ONLY);
 
-	in_msg_size = net_get_udp_data_payload_length(rx_packet_p);
+	in_msg_size = net_get_ipv4_udp_data_payload_length(rx_packet_p);
 	FDC_ASSERT(in_msg_size == sizeof(uint32_t), in_msg_size, 0);
-	in_msg_p = net_get_udp_data_payload_area(rx_packet_p);
+	in_msg_p = net_get_ipv4_udp_data_payload_area(rx_packet_p);
 	FDC_ASSERT(*in_msg_p == seq_num, *in_msg_p, seq_num);
 
 	CONSOLE_POS_PRINTF(43, 1, "UDP client received ack for message %10u", *in_msg_p);
@@ -1253,7 +1253,7 @@ demo_udp_multicast_receiver_thread_f(void *arg)
                                 NULL);
 
     fdc_error = net_create_local_l4_end_point(TRANSPORT_PROTO_UDP,
-					      hton16(MY_UDP_MULTICAST_RECEIVER_PORT),
+					      hton16(MY_IP4_UDP_MULTICAST_RECEIVER_PORT),
 					      &local_end_point_p);
     FDC_ASSERT(fdc_error == 0, fdc_error, 0);
     net_join_ipv4_multicast_group(&g_multicast_ip_addr);
@@ -1277,9 +1277,9 @@ demo_udp_multicast_receiver_thread_f(void *arg)
                                    sizeof *rx_packet_p,
                                    MPU_REGION_READ_ONLY);
 
-	in_msg_size = net_get_udp_data_payload_length(rx_packet_p);
+	in_msg_size = net_get_ipv4_udp_data_payload_length(rx_packet_p);
 	FDC_ASSERT(in_msg_size == sizeof(uint32_t), in_msg_size, 0);
-	in_msg_p = net_get_udp_data_payload_area(rx_packet_p);
+	in_msg_p = net_get_ipv4_udp_data_payload_area(rx_packet_p);
         led_color_mask = *in_msg_p;
         rtos_thread_unset_tmp_region(); /* rx_packet_p */
 	net_recycle_rx_packet(rx_packet_p);
@@ -1320,14 +1320,14 @@ ping_remote_ipv6_addr(const struct ipv6_address *dest_ipv6_addr_p, uint16_t seq_
     if (fdc_error != 0) {
         CONSOLE_POS_PRINTF(39,20, "Ping IPv6 %d for %x:%x:%x:%x:%x:%x:%x:%x timed-out",
                            seq_num,
-                           dest_ipv6_addr_p->hwords[0],
-                           dest_ipv6_addr_p->hwords[1],
-                           dest_ipv6_addr_p->hwords[2],
-                           dest_ipv6_addr_p->hwords[3],
-                           dest_ipv6_addr_p->hwords[4],
-                           dest_ipv6_addr_p->hwords[5],
-                           dest_ipv6_addr_p->hwords[6],
-                           dest_ipv6_addr_p->hwords[7]);
+                           ntoh16(dest_ipv6_addr_p->hwords[0]),
+                           ntoh16(dest_ipv6_addr_p->hwords[1]),
+                           ntoh16(dest_ipv6_addr_p->hwords[2]),
+                           ntoh16(dest_ipv6_addr_p->hwords[3]),
+                           ntoh16(dest_ipv6_addr_p->hwords[4]),
+                           ntoh16(dest_ipv6_addr_p->hwords[5]),
+                           ntoh16(dest_ipv6_addr_p->hwords[6]),
+                           ntoh16(dest_ipv6_addr_p->hwords[7]));
         return false;
     }
 
@@ -1340,14 +1340,14 @@ ping_remote_ipv6_addr(const struct ipv6_address *dest_ipv6_addr_p, uint16_t seq_
 
     CONSOLE_POS_PRINTF(38, 20, "Ping IPv6 %d replied by %x:%x:%x:%x:%x:%x:%x:%x",
                        reply_seq_num,
-                       remote_ipv6_addr.hwords[0],
-                       remote_ipv6_addr.hwords[1],
-                       remote_ipv6_addr.hwords[2],
-                       remote_ipv6_addr.hwords[3],
-                       remote_ipv6_addr.hwords[4],
-                       remote_ipv6_addr.hwords[5],
-                       remote_ipv6_addr.hwords[6],
-                       remote_ipv6_addr.hwords[7]);
+                       ntoh16(remote_ipv6_addr.hwords[0]),
+                       ntoh16(remote_ipv6_addr.hwords[1]),
+                       ntoh16(remote_ipv6_addr.hwords[2]),
+                       ntoh16(remote_ipv6_addr.hwords[3]),
+                       ntoh16(remote_ipv6_addr.hwords[4]),
+                       ntoh16(remote_ipv6_addr.hwords[5]),
+                       ntoh16(remote_ipv6_addr.hwords[6]),
+                       ntoh16(remote_ipv6_addr.hwords[7]));
 
     return true;
 }
@@ -1363,6 +1363,10 @@ demo_ping_ipv6_thread_f(void *arg)
     const struct ipv6_address *dest_ipv6_addr_p = (struct ipv6_address *)arg;
     uint32_t ping_count = 0;
 
+    rtos_thread_set_comp_region(&g_app,
+                                sizeof g_app,
+                                0,
+                                NULL);
     for ( ; ; ) {
 	if (ping_remote_ipv6_addr(dest_ipv6_addr_p, ping_count)) {
 	    ping_count ++;
@@ -1392,7 +1396,7 @@ demo_udp_ipv6_server_thread_f(void *arg)
     struct local_l4_end_point *server_end_point_p;
 
     fdc_error = net_create_local_l4_end_point(TRANSPORT_PROTO_UDP,
-					      hton16(MY_UDP_SERVER_PORT),
+					      hton16(MY_IP6_UDP_SERVER_PORT),
 					      &server_end_point_p);
     FDC_ASSERT(fdc_error == 0, fdc_error, 0);
 
@@ -1417,9 +1421,9 @@ demo_udp_ipv6_server_thread_f(void *arg)
                                    sizeof *rx_packet_p,
                                    MPU_REGION_READ_ONLY);
 
-	in_msg_size = net_get_udp_data_payload_length(rx_packet_p);
+	in_msg_size = net_get_ipv6_udp_data_payload_length(rx_packet_p);
 	FDC_ASSERT(in_msg_size == sizeof(struct accel_reading_msg), in_msg_size, 0);
-	in_msg_p = net_get_udp_data_payload_area(rx_packet_p);
+	in_msg_p = net_get_ipv6_udp_data_payload_area(rx_packet_p);
 	seq_num = in_msg_p->seq_num;
         CONSOLE_POS_PRINTF(44, 81, "Remote accelerometer reading (IPv6): x: %8d y: %8d z: %8d",
                            in_msg_p->accel_reading.x_acceleration,
@@ -1427,7 +1431,6 @@ demo_udp_ipv6_server_thread_f(void *arg)
                            in_msg_p->accel_reading.z_acceleration);
 
 	CONSOLE_POS_PRINTF(45, 81, "UDP IPv6 server received message %10u", seq_num);
-
         rtos_thread_unset_tmp_region(); /* rx_packet_p */
 	net_recycle_rx_packet(rx_packet_p);
 
@@ -1435,7 +1438,7 @@ demo_udp_ipv6_server_thread_f(void *arg)
                                    sizeof *tx_packet_p,
                                    0);
 
-	out_msg_p = net_get_udp_data_payload_area(tx_packet_p);
+	out_msg_p = net_get_ipv6_udp_data_payload_area(tx_packet_p);
 	*out_msg_p = seq_num;
         rtos_thread_unset_tmp_region(); /* tx_packet_p */
 
@@ -1444,7 +1447,7 @@ demo_udp_ipv6_server_thread_f(void *arg)
                                                tx_packet_p, sizeof *out_msg_p);
         FDC_ASSERT(fdc_error == 0, fdc_error, tx_packet_p);
 
-	CONSOLE_POS_PRINTF(43, 81, "UDP server sent ack for message %10u", seq_num);
+	CONSOLE_POS_PRINTF(43, 81, "UDP IPv6 server sent ack for message %10u", seq_num);
     }
 
     net_free_tx_packet(tx_packet_p);
@@ -1492,7 +1495,7 @@ demo_udp_ipv6_client_thread_f(void *arg)
                                    sizeof *tx_packet_p,
                                    0);
 
-	out_msg_p = net_get_udp_data_payload_area(tx_packet_p);
+	out_msg_p = net_get_ipv6_udp_data_payload_area(tx_packet_p);
 	out_msg_p->seq_num = seq_num;
 
         rtos_mutex_acquire(&g_app.accel_reading_mutex);
@@ -1507,8 +1510,8 @@ demo_udp_ipv6_client_thread_f(void *arg)
         rtos_thread_unset_tmp_region(); /* tx_packet_p */
 
 	fdc_error = net_send_ipv6_udp_datagram(client_end_point_p, dest_ipv6_addr_p,
-		                   hton16(MY_UDP_SERVER_PORT),
-		                   tx_packet_p, sizeof *out_msg_p);
+		                               hton16(MY_IP6_UDP_SERVER_PORT),
+		                               tx_packet_p, sizeof *out_msg_p);
 
         if (fdc_error != 0) {
 	    capture_fdc_msg_printf("net_send_ipv6_udp_datagram() failed with error %#x\n",
@@ -1532,16 +1535,16 @@ demo_udp_ipv6_client_thread_f(void *arg)
 
 	FDC_ASSERT(IPV6_ADDRESSES_EQUAL(&server_ipv6_addr, dest_ipv6_addr_p),
 	           server_ipv6_addr.words[2], server_ipv6_addr.words[3]);
-	FDC_ASSERT(server_port == MY_UDP_SERVER_PORT,
-		   server_port, 0);
+	FDC_ASSERT(ntoh16(server_port) == MY_IP6_UDP_SERVER_PORT,
+		   ntoh16(server_port), 0);
 
         rtos_thread_set_tmp_region(rx_packet_p,
                                    sizeof *rx_packet_p,
                                    MPU_REGION_READ_ONLY);
 
-	in_msg_size = net_get_udp_data_payload_length(rx_packet_p);
+	in_msg_size = net_get_ipv6_udp_data_payload_length(rx_packet_p);
 	FDC_ASSERT(in_msg_size == sizeof(uint32_t), in_msg_size, 0);
-	in_msg_p = net_get_udp_data_payload_area(rx_packet_p);
+	in_msg_p = net_get_ipv6_udp_data_payload_area(rx_packet_p);
 	FDC_ASSERT(*in_msg_p == seq_num, *in_msg_p, seq_num);
 
 	CONSOLE_POS_PRINTF(46, 1, "UDP IPv6 client received ack for message %10u", *in_msg_p);
