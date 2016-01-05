@@ -16,6 +16,8 @@ $env:elf_file = "$env:bin_file_prefix.elf"
 
 $env:makefile_dir = "$env:src_tree_dir"
 
+$env:make = "C:\MinGW\msys\1.0\bin\make.exe"
+
 function my_build_all
 {
     run_build build

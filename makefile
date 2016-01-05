@@ -76,6 +76,6 @@ doc:
 clean:
 	#$(RUN_BUILD_MAKEFILE) clean
 	$(RM) -r $(OBJECT_DIR)
-	$(RUN_TESTS_MAKEFILE) clean
+	#$(RUN_TESTS_MAKEFILE) clean
 	$(RUN_DOC_MAKEFILE) clean_obj
 
