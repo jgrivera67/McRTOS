@@ -413,6 +413,7 @@ static const struct uart_device g_uart_devices[] =
         .urt_mmio_uart_p = UART0_BASE_PTR,
         .urt_tx_pin = PIN_INITIALIZER(PIN_PORT_B, 17, PIN_FUNCTION_ALT3),
         .urt_rx_pin = PIN_INITIALIZER(PIN_PORT_B, 16, PIN_FUNCTION_ALT3),
+        .urt_rx_pin_pullup_resisotr_enabled = false,
         .urt_mmio_clock_gate_reg_p = &SIM_SCGC4,
         .urt_mmio_clock_gate_mask = SIM_SCGC4_UART0_MASK,
 	.urt_source_clock_freq_in_hz = CPU_CLOCK_FREQ_IN_HZ,
@@ -451,6 +452,7 @@ static const struct uart_device g_uart_devices[] =
         .urt_mmio_uart_p = UART4_BASE_PTR,
         .urt_tx_pin = PIN_INITIALIZER(PIN_PORT_C, 15, PIN_FUNCTION_ALT3),
         .urt_rx_pin = PIN_INITIALIZER(PIN_PORT_C, 14, PIN_FUNCTION_ALT3),
+        .urt_rx_pin_pullup_resisotr_enabled = true,
         .urt_mmio_clock_gate_reg_p = &SIM_SCGC1,
         .urt_mmio_clock_gate_mask = SIM_SCGC1_UART4_MASK,
 	.urt_source_clock_freq_in_hz = CPU_CLOCK_FREQ_IN_HZ / 2,
@@ -712,31 +714,7 @@ system_clocks_init(void)
 void
 soc_early_init(void)
 {
-    uint32_t reg_value;
-
-    /*
-     * Disable the Watchdog because it will cause reset unless we have
-     * refresh logic in place for the watchdog
-     *
-     * NOTE: First, we need to unlock the Watchdog, and to do so, two
-     * writes must be done on the 'WDOG->UNLOCK' register without using
-     * I/O accessors, due to strict timing requirements.
-     */
-    WDOG->UNLOCK = WDOG_UNLOCK_WDOGUNLOCK(0xC520); /* Key 1 */
-    WDOG->UNLOCK = WDOG_UNLOCK_WDOGUNLOCK(0xD928); /* Key 2 */
-
-    /*
-     * WDOG->STCTRLH: ?=0,DISTESTWDOG=0,BYTESEL=0,TESTSEL=0,TESTWDOG=0,?=0,?=1,
-     *	WAITEN=1,STOPEN=1,DBGEN=0,ALLOWUPDATE=1,WINEN=0,IRQRSTEN=0,CLKSRC=1,
-     *	WDOGEN=0
-     */
-    reg_value = WDOG_STCTRLH_BYTESEL(0x00) |
-                WDOG_STCTRLH_WAITEN_MASK |
-                WDOG_STCTRLH_STOPEN_MASK |
-                WDOG_STCTRLH_ALLOWUPDATE_MASK |
-                WDOG_STCTRLH_CLKSRC_MASK |
-                0x0100U;
-    write_16bit_mmio_register(&WDOG_STCTRLH, reg_value);
+    watchdog_init();
 }
 
 
@@ -1795,7 +1773,7 @@ uart_init(
      * Configure Tx and Rx pins:
      */
     set_pin_function(&uart_device_p->urt_tx_pin, PORT_PCR_DSE_MASK);
-    if (uart_device_p == g_bluetooth_serial_port_p) { //???
+    if (uart_device_p->urt_rx_pin_pullup_resisotr_enabled) {
         set_pin_function(&uart_device_p->urt_rx_pin, PORT_PCR_DSE_MASK|PORT_PCR_PS_MASK|PORT_PCR_PE_MASK);
     } else {
         set_pin_function(&uart_device_p->urt_rx_pin, PORT_PCR_DSE_MASK);
@@ -1919,9 +1897,9 @@ uart_stop(
     /*
      * Disable clock for the UART:
      */
-    reg_value = read_32bit_mmio_register(&SIM_SCGC4);
+    reg_value = read_32bit_mmio_register(uart_device_p->urt_mmio_clock_gate_reg_p);
     reg_value &= ~uart_device_p->urt_mmio_clock_gate_mask;
-    write_32bit_mmio_register(&SIM_SCGC4, reg_value);
+    write_32bit_mmio_register(uart_device_p->urt_mmio_clock_gate_reg_p, reg_value);
 
     uart_var_p->urt_initialized = false;
 }
@@ -3600,6 +3578,56 @@ k64f_port_c_interrupt_e_handler(
     struct rtos_interrupt *rtos_interrupt_p)
 {
     FDC_ASSERT_RTOS_INTERRUPT_E_HANDLER_PRECONDITIONS(rtos_interrupt_p);
+}
+
+
+void
+watchdog_init(void)
+{
+    uint32_t reg_value;
+
+    /*
+     * NOTE: First, we need to unlock the Watchdog, and to do so, two
+     * writes must be done on the 'WDOG->UNLOCK' register without using
+     * I/O accessors, due to strict timing requirements.
+     */
+
+    cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
+
+    WDOG->UNLOCK = WDOG_UNLOCK_WDOGUNLOCK(0xC520); /* Key 1 */
+    WDOG->UNLOCK = WDOG_UNLOCK_WDOGUNLOCK(0xD928); /* Key 2 */
+
+    rtos_k_restore_cpu_interrupts(cpu_status_register);
+
+    /*
+     * Select LPO as clock source for the watchdog:
+     */
+    reg_value = read_16bit_mmio_register(&WDOG_STCTRLH);
+    reg_value &= ~WDOG_STCTRLH_CLKSRC_MASK;
+    write_16bit_mmio_register(&WDOG_STCTRLH, reg_value);
+}
+
+
+void
+watchdog_restart(void)
+{
+    bool caller_was_privileged = rtos_enter_privileged_mode();
+    cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
+
+    /*
+     * Write the "watchdog refresh" sequence to Watchdog refresh register:
+     *
+     * NOTE: WRITE_MMIO_REGISTER() is not used due to strict timing
+     * requirements (second write must happen within 20 bus clock cycles
+     * of the first write).
+     */
+    WDOG->REFRESH = 0xA602;
+    WDOG->REFRESH = 0xB480;
+
+    rtos_k_restore_cpu_interrupts(cpu_status_register);
+    if (!caller_was_privileged) {
+        rtos_exit_privileged_mode();
+    }
 }
 
 

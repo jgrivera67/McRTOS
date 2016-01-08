@@ -235,6 +235,12 @@ cortex_m_reset_handler(void)
     cortex_m_set_ccr();
     cortex_m_fpu_init();
 
+    /*
+     * Restart wathdog timer to prevent a reset before the RTOS idle task gets
+     * the chance to run. (The idle task restarts the watchdog timer)
+     */
+    watchdog_restart();
+
     main();
 
     /*

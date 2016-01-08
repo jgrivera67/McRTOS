@@ -627,6 +627,10 @@ void wait_for_interrupts(void);
 
 void send_inter_processor_interrupt(cpu_id_t cpu_id);
 
+void watchdog_init(void);
+
+void watchdog_restart(void);
+
 #define READ_MMIO_REGISTER(_io_reg_p) \
         _Generic((_io_reg_p), \
                  uint32_t *: read_32bit_mmio_register, \

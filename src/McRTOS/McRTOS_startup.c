@@ -630,6 +630,8 @@ rtos_idle_thread_f(void *arg)
          * McRTOS timers
          */
 
+        watchdog_restart();
+
         /*
          * Wait for interrupts:
          */

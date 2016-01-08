@@ -97,6 +97,7 @@ struct uart_device {
     UART_MemMapPtr urt_mmio_uart_p;
     struct pin_info urt_tx_pin;
     struct pin_info urt_rx_pin;
+    bool urt_rx_pin_pullup_resisotr_enabled;
     volatile uint32_t *urt_mmio_clock_gate_reg_p;
     uint32_t urt_mmio_clock_gate_mask;
     uint32_t urt_source_clock_freq_in_hz;
