@@ -601,6 +601,13 @@ find_previous_stack_frame(_IN_ const cpu_instruction_t *program_counter,
     const rtos_execution_stack_entry_t *frame_pointer = *frame_pointer_p;
     uint_fast16_t stop_count = UINT16_MAX;
 
+    if (program_counter == NULL) {
+        uintptr_t return_address;
+
+        CAPTURE_ARM_LR_REGISTER(return_address);
+        program_counter = (cpu_instruction_t *)GET_CALL_ADDRESS(return_address);
+    }
+
     DBG_ASSERT(((uintptr_t)program_counter & 0x1) == 0 &&
 	       VALID_CODE_ADDRESS(program_counter),
 	       program_counter, 0);
@@ -811,9 +818,9 @@ get_stack_trace(_IN_ const struct rtos_execution_context *execution_context_p,
 	        _OUT_ uintptr_t trace_buff[],
 	        _INOUT_ uint8_t *num_entries_p)
 {
-    const cpu_instruction_t *program_counter;
     const rtos_execution_stack_entry_t *frame_pointer;
     uintptr_t return_address;
+    uintptr_t in_stack_return_address;
     fdc_error_t fdc_error;
     uint8_t num_entries = *num_entries_p;
     struct rtos_cpu_controller *cpu_controller_p =
@@ -829,15 +836,19 @@ get_stack_trace(_IN_ const struct rtos_execution_context *execution_context_p,
 	/*
 	 * Latest context state has not been saved:
 	 */
+        *num_entries_p = 0;
+        CAPTURE_ARM_LR_REGISTER(return_address);
 	CAPTURE_ARM_FRAME_POINTER_REGISTER(frame_pointer);
-
-	program_counter = get_program_counter();
-	fdc_error = find_previous_stack_frame(program_counter,
+	fdc_error = find_previous_stack_frame(NULL,
 					      &frame_pointer,
-					      &return_address);
+					      &in_stack_return_address);
 	if (fdc_error != 0) {
 	    return;
 	}
+
+        if (in_stack_return_address != return_address) {
+            return;
+        }
 
 	unwind_execution_stack(num_entries_to_skip,
                                return_address,
@@ -853,6 +864,7 @@ get_stack_trace(_IN_ const struct rtos_execution_context *execution_context_p,
 	 * Latest context state has been saved:
 	 */
 	const rtos_execution_stack_entry_t *stack_pointer;
+        const cpu_instruction_t *program_counter;
 	bool old_preemption_state;
 	bool restore_preemption_state = false;
         bool one_more_entry = false;
