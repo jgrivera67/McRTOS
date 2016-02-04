@@ -64,8 +64,11 @@
         (NET_PACKET_DATA_BUFFER_SIZE - \
          (sizeof(struct ethernet_header) + sizeof(struct ipv6_header)))
 
-#define NET_MAX_UDP_PACKET_PAYLOAD_SIZE \
+#define NET_MAX_IPV4_UDP_PACKET_PAYLOAD_SIZE \
         (NET_MAX_IPV4_PACKET_PAYLOAD_SIZE - sizeof(struct udp_header))
+
+#define NET_MAX_IPV6_UDP_PACKET_PAYLOAD_SIZE \
+        (NET_MAX_IPV6_PACKET_PAYLOAD_SIZE - sizeof(struct udp_header))
 
 /**
  * Null IPv4 address (0.0.0.0)
@@ -1235,12 +1238,12 @@ struct __networking {
     uint32_t received_ipv6_packets_count;
 
     /**
-     * Queue of received IPPv4 ping replies
+     * Queue of received IPv4 ping replies
      */
     struct rtos_queue rx_ipv4_ping_reply_packet_queue;
 
     /**
-     * Queue of received IPPv6 ping replies
+     * Queue of received IPv6 ping replies
      */
     struct rtos_queue rx_ipv6_ping_reply_packet_queue;
 

@@ -1328,7 +1328,6 @@ net_send_ipv4_packet(const struct ipv4_address *dest_ip_addr_p,
 		     size_t data_payload_length,
 		     enum l4_protocols l4_protocol)
 {
-    struct arp_cache_entry *arp_entry_p = NULL;
     struct ethernet_mac_address dest_mac_addr;
     fdc_error_t fdc_error;
 
@@ -1589,7 +1588,7 @@ net_send_ipv4_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
     FDC_ASSERT(local_l4_end_point_p->l4_protocol == TRANSPORT_PROTO_UDP,
 	       local_l4_end_point_p->l4_protocol, local_l4_end_point_p);
 
-    FDC_ASSERT(data_payload_length <= NET_MAX_UDP_PACKET_PAYLOAD_SIZE,
+    FDC_ASSERT(data_payload_length <= NET_MAX_IPV4_UDP_PACKET_PAYLOAD_SIZE,
                data_payload_length, tx_packet_p);
 
     udp_header_p->source_port = local_l4_end_point_p->l4_port;
@@ -2169,7 +2168,7 @@ net_send_ipv6_udp_datagram(struct local_l4_end_point *local_l4_end_point_p,
     FDC_ASSERT(local_l4_end_point_p->l4_protocol == TRANSPORT_PROTO_UDP,
 	       local_l4_end_point_p->l4_protocol, local_l4_end_point_p);
 
-    FDC_ASSERT(data_payload_length <= NET_MAX_UDP_PACKET_PAYLOAD_SIZE,
+    FDC_ASSERT(data_payload_length <= NET_MAX_IPV6_UDP_PACKET_PAYLOAD_SIZE,
                data_payload_length, tx_packet_p);
 
     udp_header_p->source_port = local_l4_end_point_p->l4_port;

@@ -3590,21 +3590,36 @@ watchdog_init(void)
      * NOTE: First, we need to unlock the Watchdog, and to do so, two
      * writes must be done on the 'WDOG->UNLOCK' register without using
      * I/O accessors, due to strict timing requirements.
+     * Since this function is to be called very early in the reset sequence,
+     * no interrupts should be happening, so the sequence of two
+     * writes is atomic. We cannot use rtos_k_disable_cpu_interrupts(),
+     * as McRTOS has not been initialized yet.
      */
-
-    cpu_status_register_t cpu_status_register = rtos_k_disable_cpu_interrupts();
-
     WDOG->UNLOCK = WDOG_UNLOCK_WDOGUNLOCK(0xC520); /* Key 1 */
     WDOG->UNLOCK = WDOG_UNLOCK_WDOGUNLOCK(0xD928); /* Key 2 */
 
-    rtos_k_restore_cpu_interrupts(cpu_status_register);
-
+#if 0
     /*
      * Select LPO as clock source for the watchdog:
      */
     reg_value = read_16bit_mmio_register(&WDOG_STCTRLH);
     reg_value &= ~WDOG_STCTRLH_CLKSRC_MASK;
     write_16bit_mmio_register(&WDOG_STCTRLH, reg_value);
+#else
+    /*
+     * For now, disable the watchdog because it will cause a reset,
+     * unless we have refresh logic in place for the watchdog
+     *
+     * NOTE: Upon reset, the watchdog is enabled by default.
+     * Reset value of WDOG->STCTRLH:
+     *  ?=0,DISTESTWDOG=0,BYTESEL=0,TESTSEL=0,TESTWDOG=0,?=0,?=1,
+     *	WAITEN=1,STOPEN=1,DBGEN=0,ALLOWUPDATE=1,WINEN=0,IRQRSTEN=0,CLKSRC=1,
+     *	WDOGEN=1
+     */
+    reg_value = read_16bit_mmio_register(&WDOG_STCTRLH);
+    reg_value &= ~WDOG_STCTRLH_WDOGEN_MASK;
+    write_16bit_mmio_register(&WDOG_STCTRLH, reg_value);
+#endif
 }
 
 
