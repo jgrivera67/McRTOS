@@ -584,7 +584,7 @@ cortex_m_mpu_init(void)
     /*
      * Set remaining regions as invalid to save power
      */
-    for (uint_fast8_t region_index = 2; region_index < mpu_var_p->num_regions;
+    for (uint_fast8_t region_index = 1; region_index < mpu_var_p->num_regions;
          region_index ++) {
         write_32bit_mmio_register(&mpu_regs_p->RNR, region_index);
         write_32bit_mmio_register(&mpu_regs_p->RASR, 0x0);

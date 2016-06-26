@@ -974,7 +974,7 @@ k64f_mpu_init(void)
 
     /*
      * Make region 0 non-accessible for CPU unprivileged mode and for DMA.
-     * Region 0 is used a background region accessible only for CPU
+     * Region 0 is used as a background region accessible only for CPU
      * privileged mode.
      *
      * NOTE: Region 0 is defined by default as the whole address space.
