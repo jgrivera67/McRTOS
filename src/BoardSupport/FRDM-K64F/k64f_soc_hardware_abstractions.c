@@ -975,12 +975,12 @@ k64f_mpu_init(void)
     /*
      * Make region 0 non-accessible for CPU unprivileged mode and for DMA.
      * Region 0 is used as a background region accessible only for CPU
-     * privileged mode.
+     * privileged mode with "rwx" permissions.
      *
      * NOTE: Region 0 is defined by default as the whole address space.
      * Only its permissions can be changed. To avoid disabling region
      * region 0, while changing its access permissions, modify register
-     * RGDAAC[0] instead of WORD[0][2]
+     * RGDAAC[0] instead of WORD[0][2].
      */
     write_32bit_mmio_register(&mpu_regs_p->RGDAAC[0], 0);
     mpu_var_p->num_defined_global_regions ++;

@@ -11,20 +11,20 @@
 
 #
 # Application subdirectory
-# This variable must be set via an environment variable
+# This variable must be set via an environment variable or command-line make variable
 #
 APPLICATION ?=
 
 #
 # PLATFORM values: LPC2478-STK, LaunchPad-LM4F120, FRDM-KL25Z, FRDM-K20D50,
 # FRDM-K64F
-# This variable must be set via an environment variable
+# This variable must be set via an environment variable or command-line make variable
 #
 PLATFORM ?=
 
 #
 # BUILD_FLAVOR values: debug, reliability, performance
-# This variable must be set via an environment variable
+# This variable must be set via an environment variable or command-line make variable
 #
 BUILD_FLAVOR ?=
 
